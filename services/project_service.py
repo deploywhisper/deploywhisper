@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import logging
 import re
 from collections.abc import Callable, Iterator
 from contextlib import ExitStack, contextmanager
@@ -1144,12 +1145,14 @@ def authorized_session(session_factory=None) -> Iterator[Session]:
     factory = session_factory or (
         credentials.service.session_factory if credentials else SessionLocal
     )
+    commit_callbacks: list[Callable[[Callable[[], Session]], None]] = []
     with factory() as session:
         if session.get_bind().dialect.name != "sqlite":
             raise TrustedAuthorizationError()
         context_token = _operation_session.set(session)
         rollback_callbacks = ExitStack()
         session.info["project_operation_rollback"] = rollback_callbacks
+        session.info["project_operation_commit"] = commit_callbacks
         transaction_token = None
         connection = None
         try:
@@ -1171,15 +1174,36 @@ def authorized_session(session_factory=None) -> Iterator[Session]:
             raise
         finally:
             session.info.pop("project_operation_rollback", None)
+            session.info.pop("project_operation_commit", None)
             if transaction_token is not None:
                 _operation_transaction.reset(transaction_token)
             _operation_session.reset(context_token)
+    # The original transaction has committed and its context is gone. Deferred
+    # filesystem cleanup must reserve a fresh transaction from this same factory
+    # before deciding whether an ID is still absent or has been reused.
+    for callback in commit_callbacks:
+        try:
+            callback(factory)
+        except Exception:
+            # Database deletion already succeeded. An orphan is safer than
+            # claiming rollback or retrying cleanup without the reservation.
+            logging.getLogger(__name__).warning(
+                "Deferred operation cleanup failed; retained artifacts may remain."
+            )
 
 
 def register_operation_rollback(session: Session, callback: Callable[[], None]) -> None:
     """Compensate an authorized side effect if the outer operation cannot commit."""
     _require_operation(session)
     session.info["project_operation_rollback"].callback(callback)
+
+
+def register_operation_commit(
+    session: Session, callback: Callable[[Callable[[], Session]], None]
+) -> None:
+    """Run cleanup after the outer commit, passing its captured session factory."""
+    _require_operation(session)
+    session.info["project_operation_commit"].append(callback)
 
 
 def _require_operation(session: Session) -> None:

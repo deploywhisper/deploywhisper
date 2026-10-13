@@ -73,6 +73,7 @@ from services.confidence_ledger import (
 )
 from services.project_service import (
     authorized_session,
+    register_operation_commit,
     register_operation_rollback,
     guard_project,
     guard_report,
@@ -4896,6 +4897,11 @@ def persist_analysis_report(
                 )
                 for item in submission_manifest.items:
                     item.provenance["actor"] = trusted_scope.principal.principal_id
+            if session.info.get("pending_report_deletions"):
+                # A new SQLite row can reuse an ID deleted in this transaction.
+                # Reject before insertion: even a caller catching this error must
+                # not commit a replacement attached to the original snapshots.
+                raise RuntimeError("Report persistence requires a committed deletion.")
             report = create_analysis_report(
                 session,
                 commit=False,
@@ -6121,6 +6127,14 @@ def fetch_active_dashboard_report(
     return payload
 
 
+def _delete_artifacts_for_committed_report(report_id: int, session_factory) -> None:
+    with authorized_session(session_factory) as session:
+        # A new writer may have reused the ID between commit and this reservation.
+        # Never remove that writer's replacement snapshots.
+        if get_analysis_report(session, report_id) is None:
+            _delete_report_artifacts_after_authorization(report_id)
+
+
 def remove_analysis_report(report_id: int) -> bool:
     with authorized_session(SessionLocal) as session:
         report = guard_report(session, report_id, "report.review", mutation=True)
@@ -6137,11 +6151,18 @@ def remove_analysis_report(report_id: int) -> bool:
             )
 
             _invalidate_backtesting_snapshot_after_authorization(project_id=project_id)
-            _delete_report_artifacts_after_authorization(report_id)
+            session.info.setdefault("pending_report_deletions", set()).add(report_id)
+            register_operation_commit(
+                session,
+                lambda factory: _delete_artifacts_for_committed_report(
+                    report_id, factory
+                ),
+            )
         return removed
 
 
 def remove_analysis_reports(report_ids: list[int]) -> int:
+    report_ids = list(dict.fromkeys(report_ids))
     with authorized_session(SessionLocal) as session:
         # Validate the complete batch before touching any row or snapshot.
         for report_id in report_ids:

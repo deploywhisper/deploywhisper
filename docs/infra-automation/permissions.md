@@ -235,6 +235,13 @@ reports. New report artifact writes register compensation with the outer
 operation, so commit failure or a later enclosing rollback removes snapshots
 before releasing the SQLite reservation. New report IDs also clear orphaned
 snapshot directories before writing, including submissions without snapshots.
+Report deletion defers artifact cleanup until the outer commit succeeds. Cleanup
+uses a fresh writer reservation and skips IDs already reused by another report.
+Bulk deletion deduplicates IDs. Creating a report inside an operation with pending
+report deletions is rejected before insertion; commit the deletion first.
+Filesystem cleanup failures are logged and may retain orphan files, which remain
+unreadable through report APIs and are cleared before that ID is reused.
+
 
 Topology collection authorizes and captures source state in a short transaction,
 collects outside the database writer reservation, then rechecks authority and

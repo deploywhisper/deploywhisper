@@ -356,6 +356,189 @@ class ReportAuthorizationTests(unittest.TestCase):
             (Path(artifacts.settings.artifact_snapshot_dir) / "1").exists()
         )
 
+    def _seed_deletion_snapshot(self):
+        self.member("admin", workspace=1)
+        with self.context(mutation=True):
+            artifacts.save_report_artifacts(1, {"safe.txt": b"retained original"})
+        self.member("reviewer", workspace=1)
+
+    def _assert_deletion_rolled_back(self):
+        with self.factory() as db:
+            self.assertIsNotNone(db.get(AnalysisReport, 1))
+        with self.context():
+            snapshot = artifacts.load_report_artifact(1, "safe.txt")
+            self.assertIsNotNone(snapshot)
+            self.assertEqual(snapshot.content, "retained original")
+
+    def test_deletion_commit_failure_retains_row_and_snapshot(self):
+        self._seed_deletion_snapshot()
+        with self.context(mutation=True):
+            with (
+                self.assertRaises(OperationalError),
+                patch.object(
+                    Session,
+                    "commit",
+                    side_effect=OperationalError("COMMIT", {}, Exception("disk full")),
+                ),
+            ):
+                reports.remove_analysis_report(1)
+        self._assert_deletion_rolled_back()
+
+    def test_deletion_enclosing_rollback_retains_row_and_snapshot(self):
+        self._seed_deletion_snapshot()
+        with self.context(mutation=True):
+            with self.assertRaisesRegex(ValueError, "later failure"):
+                with auth.authorized_session(self.factory):
+                    self.assertTrue(reports.remove_analysis_report(1))
+                    raise ValueError("later failure")
+        self._assert_deletion_rolled_back()
+
+    def test_deletion_later_batch_failure_retains_row_and_snapshot(self):
+        self._seed_deletion_snapshot()
+        original_delete = reports.delete_analysis_report
+
+        def delete(session, report_id, **kwargs):
+            if report_id == 3:
+                raise ValueError("later failure")
+            return original_delete(session, report_id, **kwargs)
+
+        with (
+            self.context(mutation=True),
+            patch.object(reports, "delete_analysis_report", side_effect=delete),
+            self.assertRaisesRegex(ValueError, "later failure"),
+        ):
+            reports.remove_analysis_reports([1, 3])
+        self._assert_deletion_rolled_back()
+
+    def test_deletion_duplicate_ids_delete_once(self):
+        self._seed_deletion_snapshot()
+        with (
+            self.context(mutation=True),
+            patch.object(
+                reports,
+                "_delete_report_artifacts_after_authorization",
+                wraps=reports._delete_report_artifacts_after_authorization,
+            ) as cleanup,
+        ):
+            self.assertEqual(reports.remove_analysis_reports([1, 1]), 1)
+        cleanup.assert_called_once_with(1)
+        with self.factory() as db:
+            self.assertIsNone(db.get(AnalysisReport, 1))
+        self.assertFalse(
+            (Path(artifacts.settings.artifact_snapshot_dir) / "1").exists()
+        )
+
+    def test_deletion_does_not_erase_replacement_before_deferred_cleanup(self):
+        self._seed_deletion_snapshot()
+        original_commit = Session.commit
+        replaced = False
+        root = Path(artifacts.settings.artifact_snapshot_dir) / "1"
+
+        def commit(session):
+            nonlocal replaced
+            original_commit(session)
+            if not replaced:
+                replaced = True
+                with self.factory.begin() as db:
+                    db.add(
+                        AnalysisReport(
+                            id=1,
+                            project_id=1,
+                            workspace_id=1,
+                            risk_score=0,
+                            severity="low",
+                            recommendation="go",
+                            top_risk="replacement",
+                            parse_summary="replacement",
+                            narrative_opening="replacement",
+                            narrative_explanation="replacement",
+                        )
+                    )
+                root.mkdir(parents=True, exist_ok=True)
+                (root / "replacement.txt").write_text("replacement artifact")
+
+        with self.context(mutation=True), patch.object(Session, "commit", commit):
+            self.assertTrue(reports.remove_analysis_report(1))
+        self.assertEqual((root / "replacement.txt").read_text(), "replacement artifact")
+
+    def test_deletion_cleanup_failure_leaves_committed_row_absent(self):
+        self._seed_deletion_snapshot()
+        with (
+            self.context(mutation=True),
+            patch.object(
+                reports,
+                "_delete_report_artifacts_after_authorization",
+                side_effect=OSError("filesystem unavailable"),
+            ),
+        ):
+            self.assertTrue(reports.remove_analysis_report(1))
+        with self.factory() as db:
+            self.assertIsNone(db.get(AnalysisReport, 1))
+        with self.context(), self.assertRaises(auth.TrustedAuthorizationError):
+            artifacts.load_report_artifact(1, "safe.txt")
+
+    def test_deletion_then_id_reuse_in_same_operation_preserves_original_on_rollback(
+        self,
+    ):
+        artifacts.save_report_artifacts(3, {"safe.txt": b"retained original"})
+        with self.assertRaisesRegex(RuntimeError, "committed deletion"):
+            with auth.authorized_session(self.factory):
+                self.assertTrue(reports.remove_analysis_report(3))
+                self._persist_report(project_id=3)
+        with self.factory() as db:
+            self.assertIsNotNone(db.get(AnalysisReport, 3))
+        self.assertEqual(
+            artifacts.load_report_artifact(3, "safe.txt").content, "retained original"
+        )
+
+    def test_deletion_cleanup_uses_outer_factory_after_context_reset(self):
+        self._seed_deletion_snapshot()
+        original_cleanup = reports._delete_report_artifacts_after_authorization
+        outer = None
+        cleanup_state = []
+
+        def cleanup(report_id):
+            current = auth._operation_session.get()
+            cleanup_state.append(
+                (
+                    current is outer,
+                    current.connection().connection.in_transaction,
+                    current.get_bind() is self.engine,
+                )
+            )
+            original_cleanup(report_id)
+
+        with self.context(mutation=True):
+            with (
+                patch.object(
+                    reports,
+                    "SessionLocal",
+                    side_effect=AssertionError("wrong database"),
+                ),
+                patch.object(
+                    reports,
+                    "_delete_report_artifacts_after_authorization",
+                    side_effect=cleanup,
+                ) as cleaned,
+                auth.authorized_session(self.factory) as outer,
+            ):
+                self.assertTrue(reports.remove_analysis_report(1))
+                cleaned.assert_not_called()
+            cleaned.assert_called_once_with(1)
+        self.assertEqual(cleanup_state, [(False, True, True)])
+
+    def test_caught_persistence_reuse_error_cannot_commit_replacement_row(self):
+        artifacts.save_report_artifacts(3, {"safe.txt": b"retained original"})
+        with auth.authorized_session(self.factory):
+            reports.remove_analysis_report(3)
+            with self.assertRaisesRegex(RuntimeError, "committed deletion"):
+                self._persist_report(project_id=3)
+        with self.factory() as db:
+            self.assertIsNone(db.get(AnalysisReport, 3))
+        self.assertFalse(
+            (Path(artifacts.settings.artifact_snapshot_dir) / "3").exists()
+        )
+
     def test_deleting_last_marked_report_keeps_project_context_protected(self):
         self.member("reviewer", project=3)
         with self.factory.begin() as db:

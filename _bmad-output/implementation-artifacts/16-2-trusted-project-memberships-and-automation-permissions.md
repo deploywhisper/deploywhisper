@@ -58,6 +58,8 @@ Execute packets in listed dependency order; assign one named owner per packet an
 - [x] [Review][Patch][Medium] Derive protected report provenance actor from the verified principal [services/report_service.py:4887; api/routes/analyses.py:948]. An authenticated contributor can persist and return another actor's label through caller audit metadata.
 - [x] [Review][Patch][Medium] Release the SQLite writer reservation during external topology collection and revalidate before persistence [services/topology_service.py:2542,2872]. A slow collector blocks unrelated reads and identity/membership writes beyond the five-second SQLite timeout.
 
+- [x] [Review][Patch][Medium][Rerun] Preserve report artifacts when report deletion rolls back [services/report_service.py:6132-6149]. Failed commit, enclosing rollback or duplicate protected bulk-delete IDs restores the report row after its snapshot directory has already been removed. Defer artifact cleanup until commit and protect against report-ID reuse.
+
 ## Dev Notes
 
 Reuse services/project_service.py PROJECT_ROLE_CAPABILITIES, authorize_project_action and require_project_permission after supplying trusted server membership. Their role argument and normalize_project_role(None) are not authenticators. models/repositories/projects.py owns project/workspace existence. api/routes/analyses.py _authorization_context currently parses caller scope: audit every linked report/shared route; a UI button restriction is insufficient.
@@ -269,3 +271,27 @@ Final post-review validation (source SHA256 verified against the isolated checko
 Logs: `/tmp/dw-16-2-reviewed-{smoke,api-cli-infra,services,local-ci,mypy,docker,container-smoke}.log`. Git Flow branch is `feature/16-2-trusted-project-permissions`, based on current develop `67c9518`; closure commit/push and PR target `develop`. This review does not merge or release the feature.
 
 BMad help: Story16.2 is done; the next ready implementation slice is Story16.3. Its own scope and prerequisites still apply.
+
+
+### Re-review — 2026-10-13
+
+Fresh Blind Hunter, Edge Case Hunter and Acceptance Auditor reviewed PR157 at `18d22fb` against develop. Acceptance audit passed all owned ACs and independently ran 130 tests / 1,619 subtests. Defect layers independently confirmed **one new medium patch finding**: failed or enclosing-rolled-back deletion restored a report after its snapshots had already been removed. Duplicate protected bulk IDs reproduced the loss deterministically. Triage: 1 patch, 0 decisions, 0 deferred; the already documented final-administrator policy remains intentional.
+
+Correction: deduplicate bulk IDs and defer filesystem cleanup until successful outer commit. Cleanup runs after resetting the old session/context, captures the original database factory, reserves a fresh writer, and deletes only while the report ID remains absent. A reused ID preserves the replacement report's files. Persistence after pending deletions in the same operation is rejected before INSERT, including when a caller catches the error. Cleanup failures log a generic warning and can retain inaccessible orphan files; later ID reuse clears those files before writing new snapshots. No dependency, schema or API change was introduced.
+
+Both original defect reviewers independently verified closure. Added regressions cover commit failure, enclosing rollback, later batch failure, duplicate IDs, postcommit ID reuse, same-operation reuse and caught rejection, the captured database factory, and cleanup failure. Focused report/core suites: **240 passed / 225 subtests passed**.
+
+Final verification of this correction used a fresh detached `18d22fb` checkout with the six changed files overlaid, no application `.env` or data, and verified Python source digests:
+
+- Root `unittest discover -q`: **676 tests passed**, 2 existing skips.
+- Exact API/CLI/infra pytest shard: **629 passed / 2,146 subtests**, 1 existing skip.
+- Exact services pytest shard: **1,232 passed / 2,248 subtests**.
+- Documentation: **51 passed / 312 subtests**.
+- Ruff check, repository-wide format (345 files), configured Bandit high/high gate and diff whitespace: **PASS**.
+- Fresh nonincremental mypy comparison: **311 diagnostics on both `18d22fb` and corrected code**, zero new diagnostics. The extra diagnostic versus the earlier cached count is the existing missing PyYAML-stub diagnostic, not a code change.
+- Container build passed. Production Python3.11 container executed migration030 and verified that deletion rollback preserves the original snapshot and committed deletion removes it. Disposable container removed.
+- UI validation not applicable.
+
+The earlier full local CI run and all GitHub checks at `18d22fb` remain recorded above; this bounded correction reran the affected complete shards rather than repeating unchanged parser/LLM suites locally. Logs: `/tmp/dw-s162-rerun-{smoke,api-cli-infra,services,docs,security,mypy-clean,mypy-baseline-clean,docker,container}.log`.
+
+**Re-review outcome: APPROVED; one new finding fixed, zero unresolved findings.** Story/sprint remain `done`; follow-up commit belongs to `feature/16-2-trusted-project-permissions` and existing PR https://github.com/deploywhisper/deploywhisper/pull/157. BMad help still routes next implementation to ready Story16.3; no other story was promoted.
