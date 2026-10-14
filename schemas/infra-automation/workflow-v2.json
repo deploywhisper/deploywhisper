@@ -1,0 +1,965 @@
+{
+  "$defs": {
+    "AdmittedCollectionStep": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.:-]*(?![\\s\\S])",
+          "title": "Id",
+          "type": "string"
+        },
+        "depends_on": {
+          "items": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.:-]*(?![\\s\\S])",
+            "type": "string"
+          },
+          "maxItems": 50,
+          "title": "Depends On",
+          "type": "array"
+        },
+        "kind": {
+          "const": "admitted_collection",
+          "title": "Kind",
+          "type": "string"
+        },
+        "source": {
+          "$ref": "#/$defs/CollectedSource"
+        },
+        "parameters": {
+          "$ref": "#/$defs/CollectionParameters"
+        }
+      },
+      "required": [
+        "id",
+        "depends_on",
+        "kind",
+        "source"
+      ],
+      "title": "AdmittedCollectionStep",
+      "type": "object"
+    },
+    "BooleanInput": {
+      "additionalProperties": false,
+      "properties": {
+        "required": {
+          "default": true,
+          "title": "Required",
+          "type": "boolean"
+        },
+        "default": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Default"
+        },
+        "type": {
+          "const": "boolean",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "title": "BooleanInput",
+      "type": "object"
+    },
+    "CollectedSource": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "collected",
+          "title": "Kind",
+          "type": "string"
+        },
+        "repository_id": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.:-]*(?![\\s\\S])",
+              "type": "string"
+            },
+            {
+              "discriminator": {
+                "mapping": {
+                  "input": "#/$defs/InputReference",
+                  "project": "#/$defs/ProjectReference",
+                  "run": "#/$defs/RunReference"
+                },
+                "propertyName": "ref"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/InputReference"
+                },
+                {
+                  "$ref": "#/$defs/ProjectReference"
+                },
+                {
+                  "$ref": "#/$defs/RunReference"
+                }
+              ]
+            }
+          ],
+          "title": "Repository Id"
+        },
+        "commit_sha": {
+          "anyOf": [
+            {
+              "maxLength": 40,
+              "minLength": 40,
+              "pattern": "^[0-9a-f]{40}(?![\\s\\S])",
+              "type": "string"
+            },
+            {
+              "$ref": "#/$defs/InputReference"
+            }
+          ],
+          "title": "Commit Sha"
+        },
+        "profile_digest": {
+          "maxLength": 71,
+          "minLength": 71,
+          "pattern": "^sha256:[0-9a-f]{64}(?![\\s\\S])",
+          "title": "Profile Digest",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "repository_id",
+        "commit_sha",
+        "profile_digest"
+      ],
+      "title": "CollectedSource",
+      "type": "object"
+    },
+    "CollectionParameters": {
+      "additionalProperties": false,
+      "properties": {
+        "max_artifact_bytes": {
+          "anyOf": [
+            {
+              "maximum": 8388608,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "$ref": "#/$defs/InputReference"
+            }
+          ],
+          "default": 8388608,
+          "title": "Max Artifact Bytes"
+        },
+        "timeout_seconds": {
+          "anyOf": [
+            {
+              "maximum": 600,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "$ref": "#/$defs/InputReference"
+            }
+          ],
+          "default": 600,
+          "title": "Timeout Seconds"
+        }
+      },
+      "title": "CollectionParameters",
+      "type": "object"
+    },
+    "CommitShaInput": {
+      "additionalProperties": false,
+      "properties": {
+        "required": {
+          "default": true,
+          "title": "Required",
+          "type": "boolean"
+        },
+        "default": {
+          "anyOf": [
+            {
+              "maxLength": 40,
+              "minLength": 40,
+              "pattern": "^[0-9a-f]{40}(?![\\s\\S])",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Default"
+        },
+        "type": {
+          "const": "commit_sha",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "title": "CommitShaInput",
+      "type": "object"
+    },
+    "HumanDecisionStep": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.:-]*(?![\\s\\S])",
+          "title": "Id",
+          "type": "string"
+        },
+        "depends_on": {
+          "items": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.:-]*(?![\\s\\S])",
+            "type": "string"
+          },
+          "maxItems": 50,
+          "title": "Depends On",
+          "type": "array"
+        },
+        "kind": {
+          "const": "human_decision",
+          "title": "Kind",
+          "type": "string"
+        },
+        "binding": {
+          "$ref": "#/$defs/StepReference"
+        }
+      },
+      "required": [
+        "id",
+        "depends_on",
+        "kind",
+        "binding"
+      ],
+      "title": "HumanDecisionStep",
+      "type": "object"
+    },
+    "IdentifierInput": {
+      "additionalProperties": false,
+      "properties": {
+        "required": {
+          "default": true,
+          "title": "Required",
+          "type": "boolean"
+        },
+        "default": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.:-]*(?![\\s\\S])",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Default"
+        },
+        "type": {
+          "const": "identifier",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "title": "IdentifierInput",
+      "type": "object"
+    },
+    "InputReference": {
+      "additionalProperties": false,
+      "properties": {
+        "ref": {
+          "const": "input",
+          "title": "Ref",
+          "type": "string"
+        },
+        "name": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.:-]*(?![\\s\\S])",
+          "title": "Name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "ref",
+        "name"
+      ],
+      "title": "InputReference",
+      "type": "object"
+    },
+    "IntegerInput": {
+      "additionalProperties": false,
+      "properties": {
+        "required": {
+          "default": true,
+          "title": "Required",
+          "type": "boolean"
+        },
+        "default": {
+          "anyOf": [
+            {
+              "maximum": 9007199254740991,
+              "minimum": -9007199254740991,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Default"
+        },
+        "type": {
+          "const": "integer",
+          "title": "Type",
+          "type": "string"
+        },
+        "minimum": {
+          "default": -9007199254740991,
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "title": "Minimum",
+          "type": "integer"
+        },
+        "maximum": {
+          "default": 9007199254740991,
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "title": "Maximum",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "title": "IntegerInput",
+      "type": "object"
+    },
+    "PolicyEvaluationStep": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.:-]*(?![\\s\\S])",
+          "title": "Id",
+          "type": "string"
+        },
+        "depends_on": {
+          "items": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.:-]*(?![\\s\\S])",
+            "type": "string"
+          },
+          "maxItems": 50,
+          "title": "Depends On",
+          "type": "array"
+        },
+        "kind": {
+          "const": "policy_evaluation",
+          "title": "Kind",
+          "type": "string"
+        },
+        "report": {
+          "$ref": "#/$defs/StepReference"
+        },
+        "target_id": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.:-]*(?![\\s\\S])",
+              "type": "string"
+            },
+            {
+              "discriminator": {
+                "mapping": {
+                  "input": "#/$defs/InputReference",
+                  "project": "#/$defs/ProjectReference",
+                  "run": "#/$defs/RunReference"
+                },
+                "propertyName": "ref"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/InputReference"
+                },
+                {
+                  "$ref": "#/$defs/ProjectReference"
+                },
+                {
+                  "$ref": "#/$defs/RunReference"
+                }
+              ]
+            }
+          ],
+          "title": "Target Id"
+        },
+        "environment": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.:-]*(?![\\s\\S])",
+              "type": "string"
+            },
+            {
+              "discriminator": {
+                "mapping": {
+                  "input": "#/$defs/InputReference",
+                  "project": "#/$defs/ProjectReference",
+                  "run": "#/$defs/RunReference"
+                },
+                "propertyName": "ref"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/InputReference"
+                },
+                {
+                  "$ref": "#/$defs/ProjectReference"
+                },
+                {
+                  "$ref": "#/$defs/RunReference"
+                }
+              ]
+            }
+          ],
+          "title": "Environment"
+        },
+        "authorization_kind": {
+          "enum": [
+            "advisory_request",
+            "exact_plan"
+          ],
+          "title": "Authorization Kind",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "depends_on",
+        "kind",
+        "report",
+        "target_id",
+        "environment",
+        "authorization_kind"
+      ],
+      "title": "PolicyEvaluationStep",
+      "type": "object"
+    },
+    "ProjectReference": {
+      "additionalProperties": false,
+      "properties": {
+        "ref": {
+          "const": "project",
+          "title": "Ref",
+          "type": "string"
+        },
+        "field": {
+          "enum": [
+            "id",
+            "workspace_id"
+          ],
+          "title": "Field",
+          "type": "string"
+        }
+      },
+      "required": [
+        "ref",
+        "field"
+      ],
+      "title": "ProjectReference",
+      "type": "object"
+    },
+    "RegisteredGithubHandoffStep": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.:-]*(?![\\s\\S])",
+          "title": "Id",
+          "type": "string"
+        },
+        "depends_on": {
+          "items": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.:-]*(?![\\s\\S])",
+            "type": "string"
+          },
+          "maxItems": 50,
+          "title": "Depends On",
+          "type": "array"
+        },
+        "kind": {
+          "const": "registered_github_handoff",
+          "title": "Kind",
+          "type": "string"
+        },
+        "binding": {
+          "$ref": "#/$defs/StepReference"
+        },
+        "decision": {
+          "$ref": "#/$defs/StepReference"
+        },
+        "target_id": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.:-]*(?![\\s\\S])",
+              "type": "string"
+            },
+            {
+              "discriminator": {
+                "mapping": {
+                  "input": "#/$defs/InputReference",
+                  "project": "#/$defs/ProjectReference",
+                  "run": "#/$defs/RunReference"
+                },
+                "propertyName": "ref"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/InputReference"
+                },
+                {
+                  "$ref": "#/$defs/ProjectReference"
+                },
+                {
+                  "$ref": "#/$defs/RunReference"
+                }
+              ]
+            }
+          ],
+          "title": "Target Id"
+        },
+        "environment": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.:-]*(?![\\s\\S])",
+              "type": "string"
+            },
+            {
+              "discriminator": {
+                "mapping": {
+                  "input": "#/$defs/InputReference",
+                  "project": "#/$defs/ProjectReference",
+                  "run": "#/$defs/RunReference"
+                },
+                "propertyName": "ref"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/InputReference"
+                },
+                {
+                  "$ref": "#/$defs/ProjectReference"
+                },
+                {
+                  "$ref": "#/$defs/RunReference"
+                }
+              ]
+            }
+          ],
+          "title": "Environment"
+        },
+        "authorization_kind": {
+          "enum": [
+            "advisory_request",
+            "exact_plan"
+          ],
+          "title": "Authorization Kind",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "depends_on",
+        "kind",
+        "binding",
+        "decision",
+        "target_id",
+        "environment",
+        "authorization_kind"
+      ],
+      "title": "RegisteredGithubHandoffStep",
+      "type": "object"
+    },
+    "RunReference": {
+      "additionalProperties": false,
+      "properties": {
+        "ref": {
+          "const": "run",
+          "title": "Ref",
+          "type": "string"
+        },
+        "field": {
+          "enum": [
+            "project_id",
+            "workspace_id",
+            "environment"
+          ],
+          "title": "Field",
+          "type": "string"
+        }
+      },
+      "required": [
+        "ref",
+        "field"
+      ],
+      "title": "RunReference",
+      "type": "object"
+    },
+    "SharedAnalysisStep": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.:-]*(?![\\s\\S])",
+          "title": "Id",
+          "type": "string"
+        },
+        "depends_on": {
+          "items": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.:-]*(?![\\s\\S])",
+            "type": "string"
+          },
+          "maxItems": 50,
+          "title": "Depends On",
+          "type": "array"
+        },
+        "kind": {
+          "const": "shared_analysis",
+          "title": "Kind",
+          "type": "string"
+        },
+        "artifact": {
+          "$ref": "#/$defs/StepReference"
+        }
+      },
+      "required": [
+        "id",
+        "depends_on",
+        "kind",
+        "artifact"
+      ],
+      "title": "SharedAnalysisStep",
+      "type": "object"
+    },
+    "StepReference": {
+      "additionalProperties": false,
+      "properties": {
+        "ref": {
+          "const": "step",
+          "title": "Ref",
+          "type": "string"
+        },
+        "step_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.:-]*(?![\\s\\S])",
+          "title": "Step Id",
+          "type": "string"
+        },
+        "output": {
+          "enum": [
+            "screened_artifacts",
+            "report",
+            "action_binding",
+            "decision_receipt"
+          ],
+          "title": "Output",
+          "type": "string"
+        }
+      },
+      "required": [
+        "ref",
+        "step_id",
+        "output"
+      ],
+      "title": "StepReference",
+      "type": "object"
+    },
+    "StringInput": {
+      "additionalProperties": false,
+      "properties": {
+        "required": {
+          "default": true,
+          "title": "Required",
+          "type": "boolean"
+        },
+        "default": {
+          "anyOf": [
+            {
+              "maxLength": 1024,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Default"
+        },
+        "type": {
+          "const": "string",
+          "title": "Type",
+          "type": "string"
+        },
+        "max_length": {
+          "default": 1024,
+          "maximum": 1024,
+          "minimum": 1,
+          "title": "Max Length",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "title": "StringInput",
+      "type": "object"
+    },
+    "UploadedIntakeStep": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.:-]*(?![\\s\\S])",
+          "title": "Id",
+          "type": "string"
+        },
+        "depends_on": {
+          "items": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.:-]*(?![\\s\\S])",
+            "type": "string"
+          },
+          "maxItems": 50,
+          "title": "Depends On",
+          "type": "array"
+        },
+        "kind": {
+          "const": "uploaded_intake",
+          "title": "Kind",
+          "type": "string"
+        },
+        "source": {
+          "$ref": "#/$defs/UploadedSource"
+        },
+        "parameters": {
+          "$ref": "#/$defs/CollectionParameters"
+        }
+      },
+      "required": [
+        "id",
+        "depends_on",
+        "kind",
+        "source"
+      ],
+      "title": "UploadedIntakeStep",
+      "type": "object"
+    },
+    "UploadedSource": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "uploaded",
+          "title": "Kind",
+          "type": "string"
+        },
+        "repository_id": {
+          "default": null,
+          "title": "Repository Id",
+          "type": "null"
+        },
+        "commit_sha": {
+          "default": null,
+          "title": "Commit Sha",
+          "type": "null"
+        },
+        "limitation": {
+          "const": "Uploaded evidence does not establish repository identity or exact-plan custody.",
+          "default": "Uploaded evidence does not establish repository identity or exact-plan custody.",
+          "title": "Limitation",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "title": "UploadedSource",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "workflow_version": {
+      "const": 2,
+      "maximum": 2,
+      "minimum": 2,
+      "title": "Workflow Version",
+      "type": "integer"
+    },
+    "project_id": {
+      "maxLength": 128,
+      "minLength": 1,
+      "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.:-]*(?![\\s\\S])",
+      "title": "Project Id",
+      "type": "string"
+    },
+    "workspace_id": {
+      "anyOf": [
+        {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.:-]*(?![\\s\\S])",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Workspace Id"
+    },
+    "environment": {
+      "anyOf": [
+        {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.:-]*(?![\\s\\S])",
+          "type": "string"
+        },
+        {
+          "$ref": "#/$defs/InputReference"
+        }
+      ],
+      "title": "Environment"
+    },
+    "inputs": {
+      "additionalProperties": false,
+      "maxProperties": 32,
+      "patternProperties": {
+        "^[a-zA-Z0-9][a-zA-Z0-9_.:-]*(?![\\s\\S])": {
+          "discriminator": {
+            "mapping": {
+              "boolean": "#/$defs/BooleanInput",
+              "commit_sha": "#/$defs/CommitShaInput",
+              "identifier": "#/$defs/IdentifierInput",
+              "integer": "#/$defs/IntegerInput",
+              "string": "#/$defs/StringInput"
+            },
+            "propertyName": "type"
+          },
+          "oneOf": [
+            {
+              "$ref": "#/$defs/IdentifierInput"
+            },
+            {
+              "$ref": "#/$defs/CommitShaInput"
+            },
+            {
+              "$ref": "#/$defs/StringInput"
+            },
+            {
+              "$ref": "#/$defs/IntegerInput"
+            },
+            {
+              "$ref": "#/$defs/BooleanInput"
+            }
+          ]
+        }
+      },
+      "propertyNames": {
+        "maxLength": 128,
+        "minLength": 1
+      },
+      "title": "Inputs",
+      "type": "object"
+    },
+    "steps": {
+      "items": {
+        "discriminator": {
+          "mapping": {
+            "admitted_collection": "#/$defs/AdmittedCollectionStep",
+            "human_decision": "#/$defs/HumanDecisionStep",
+            "policy_evaluation": "#/$defs/PolicyEvaluationStep",
+            "registered_github_handoff": "#/$defs/RegisteredGithubHandoffStep",
+            "shared_analysis": "#/$defs/SharedAnalysisStep",
+            "uploaded_intake": "#/$defs/UploadedIntakeStep"
+          },
+          "propertyName": "kind"
+        },
+        "oneOf": [
+          {
+            "$ref": "#/$defs/UploadedIntakeStep"
+          },
+          {
+            "$ref": "#/$defs/AdmittedCollectionStep"
+          },
+          {
+            "$ref": "#/$defs/SharedAnalysisStep"
+          },
+          {
+            "$ref": "#/$defs/PolicyEvaluationStep"
+          },
+          {
+            "$ref": "#/$defs/HumanDecisionStep"
+          },
+          {
+            "$ref": "#/$defs/RegisteredGithubHandoffStep"
+          }
+        ]
+      },
+      "maxItems": 50,
+      "minItems": 1,
+      "title": "Steps",
+      "type": "array"
+    }
+  },
+  "required": [
+    "workflow_version",
+    "project_id",
+    "environment",
+    "steps"
+  ],
+  "title": "Workflow",
+  "type": "object"
+}

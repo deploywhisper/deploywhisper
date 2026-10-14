@@ -1,0 +1,2413 @@
+[
+  {
+    "case": "old-major",
+    "definition": {
+      "workflow_version": 1,
+      "project_id": "project-demo",
+      "workspace_id": "workspace-prod",
+      "environment": "production",
+      "inputs": {
+        "target": {
+          "type": "identifier",
+          "required": false,
+          "default": "delivery"
+        },
+        "commit": {
+          "type": "commit_sha",
+          "required": false,
+          "default": "1111111111111111111111111111111111111111"
+        }
+      },
+      "steps": [
+        {
+          "id": "source",
+          "kind": "uploaded_intake",
+          "depends_on": [],
+          "source": {
+            "kind": "uploaded"
+          }
+        },
+        {
+          "id": "analysis",
+          "kind": "shared_analysis",
+          "depends_on": [
+            "source"
+          ],
+          "artifact": {
+            "ref": "step",
+            "step_id": "source",
+            "output": "screened_artifacts"
+          }
+        },
+        {
+          "id": "gate",
+          "kind": "policy_evaluation",
+          "depends_on": [
+            "analysis"
+          ],
+          "report": {
+            "ref": "step",
+            "step_id": "analysis",
+            "output": "report"
+          },
+          "target_id": {
+            "ref": "input",
+            "name": "target"
+          },
+          "environment": {
+            "ref": "run",
+            "field": "environment"
+          },
+          "authorization_kind": "advisory_request"
+        },
+        {
+          "id": "decision",
+          "kind": "human_decision",
+          "depends_on": [
+            "gate"
+          ],
+          "binding": {
+            "ref": "step",
+            "step_id": "gate",
+            "output": "action_binding"
+          }
+        },
+        {
+          "id": "handoff",
+          "kind": "registered_github_handoff",
+          "depends_on": [
+            "decision"
+          ],
+          "binding": {
+            "ref": "step",
+            "step_id": "gate",
+            "output": "action_binding"
+          },
+          "decision": {
+            "ref": "step",
+            "step_id": "decision",
+            "output": "decision_receipt"
+          },
+          "target_id": {
+            "ref": "input",
+            "name": "target"
+          },
+          "environment": "production",
+          "authorization_kind": "advisory_request"
+        }
+      ]
+    },
+    "profiles": []
+  },
+  {
+    "case": "boolean-version",
+    "definition": {
+      "workflow_version": true,
+      "project_id": "project-demo",
+      "workspace_id": "workspace-prod",
+      "environment": "production",
+      "inputs": {
+        "target": {
+          "type": "identifier",
+          "required": false,
+          "default": "delivery"
+        },
+        "commit": {
+          "type": "commit_sha",
+          "required": false,
+          "default": "1111111111111111111111111111111111111111"
+        }
+      },
+      "steps": [
+        {
+          "id": "source",
+          "kind": "uploaded_intake",
+          "depends_on": [],
+          "source": {
+            "kind": "uploaded"
+          }
+        },
+        {
+          "id": "analysis",
+          "kind": "shared_analysis",
+          "depends_on": [
+            "source"
+          ],
+          "artifact": {
+            "ref": "step",
+            "step_id": "source",
+            "output": "screened_artifacts"
+          }
+        },
+        {
+          "id": "gate",
+          "kind": "policy_evaluation",
+          "depends_on": [
+            "analysis"
+          ],
+          "report": {
+            "ref": "step",
+            "step_id": "analysis",
+            "output": "report"
+          },
+          "target_id": {
+            "ref": "input",
+            "name": "target"
+          },
+          "environment": {
+            "ref": "run",
+            "field": "environment"
+          },
+          "authorization_kind": "advisory_request"
+        },
+        {
+          "id": "decision",
+          "kind": "human_decision",
+          "depends_on": [
+            "gate"
+          ],
+          "binding": {
+            "ref": "step",
+            "step_id": "gate",
+            "output": "action_binding"
+          }
+        },
+        {
+          "id": "handoff",
+          "kind": "registered_github_handoff",
+          "depends_on": [
+            "decision"
+          ],
+          "binding": {
+            "ref": "step",
+            "step_id": "gate",
+            "output": "action_binding"
+          },
+          "decision": {
+            "ref": "step",
+            "step_id": "decision",
+            "output": "decision_receipt"
+          },
+          "target_id": {
+            "ref": "input",
+            "name": "target"
+          },
+          "environment": "production",
+          "authorization_kind": "advisory_request"
+        }
+      ]
+    },
+    "profiles": []
+  },
+  {
+    "case": "unknown-root-field",
+    "definition": {
+      "workflow_version": 2,
+      "project_id": "project-demo",
+      "workspace_id": "workspace-prod",
+      "environment": "production",
+      "inputs": {
+        "target": {
+          "type": "identifier",
+          "required": false,
+          "default": "delivery"
+        },
+        "commit": {
+          "type": "commit_sha",
+          "required": false,
+          "default": "1111111111111111111111111111111111111111"
+        }
+      },
+      "steps": [
+        {
+          "id": "source",
+          "kind": "uploaded_intake",
+          "depends_on": [],
+          "source": {
+            "kind": "uploaded"
+          }
+        },
+        {
+          "id": "analysis",
+          "kind": "shared_analysis",
+          "depends_on": [
+            "source"
+          ],
+          "artifact": {
+            "ref": "step",
+            "step_id": "source",
+            "output": "screened_artifacts"
+          }
+        },
+        {
+          "id": "gate",
+          "kind": "policy_evaluation",
+          "depends_on": [
+            "analysis"
+          ],
+          "report": {
+            "ref": "step",
+            "step_id": "analysis",
+            "output": "report"
+          },
+          "target_id": {
+            "ref": "input",
+            "name": "target"
+          },
+          "environment": {
+            "ref": "run",
+            "field": "environment"
+          },
+          "authorization_kind": "advisory_request"
+        },
+        {
+          "id": "decision",
+          "kind": "human_decision",
+          "depends_on": [
+            "gate"
+          ],
+          "binding": {
+            "ref": "step",
+            "step_id": "gate",
+            "output": "action_binding"
+          }
+        },
+        {
+          "id": "handoff",
+          "kind": "registered_github_handoff",
+          "depends_on": [
+            "decision"
+          ],
+          "binding": {
+            "ref": "step",
+            "step_id": "gate",
+            "output": "action_binding"
+          },
+          "decision": {
+            "ref": "step",
+            "step_id": "decision",
+            "output": "decision_receipt"
+          },
+          "target_id": {
+            "ref": "input",
+            "name": "target"
+          },
+          "environment": "production",
+          "authorization_kind": "advisory_request"
+        }
+      ],
+      "script": "not executable"
+    },
+    "profiles": []
+  },
+  {
+    "case": "unknown-command-kind",
+    "definition": {
+      "workflow_version": 2,
+      "project_id": "project-demo",
+      "workspace_id": "workspace-prod",
+      "environment": "production",
+      "inputs": {
+        "target": {
+          "type": "identifier",
+          "required": false,
+          "default": "delivery"
+        },
+        "commit": {
+          "type": "commit_sha",
+          "required": false,
+          "default": "1111111111111111111111111111111111111111"
+        }
+      },
+      "steps": [
+        {
+          "id": "source",
+          "kind": "apply",
+          "depends_on": [],
+          "source": {
+            "kind": "uploaded"
+          }
+        },
+        {
+          "id": "analysis",
+          "kind": "shared_analysis",
+          "depends_on": [
+            "source"
+          ],
+          "artifact": {
+            "ref": "step",
+            "step_id": "source",
+            "output": "screened_artifacts"
+          }
+        },
+        {
+          "id": "gate",
+          "kind": "policy_evaluation",
+          "depends_on": [
+            "analysis"
+          ],
+          "report": {
+            "ref": "step",
+            "step_id": "analysis",
+            "output": "report"
+          },
+          "target_id": {
+            "ref": "input",
+            "name": "target"
+          },
+          "environment": {
+            "ref": "run",
+            "field": "environment"
+          },
+          "authorization_kind": "advisory_request"
+        },
+        {
+          "id": "decision",
+          "kind": "human_decision",
+          "depends_on": [
+            "gate"
+          ],
+          "binding": {
+            "ref": "step",
+            "step_id": "gate",
+            "output": "action_binding"
+          }
+        },
+        {
+          "id": "handoff",
+          "kind": "registered_github_handoff",
+          "depends_on": [
+            "decision"
+          ],
+          "binding": {
+            "ref": "step",
+            "step_id": "gate",
+            "output": "action_binding"
+          },
+          "decision": {
+            "ref": "step",
+            "step_id": "decision",
+            "output": "decision_receipt"
+          },
+          "target_id": {
+            "ref": "input",
+            "name": "target"
+          },
+          "environment": "production",
+          "authorization_kind": "advisory_request"
+        }
+      ]
+    },
+    "profiles": []
+  },
+  {
+    "case": "duplicate-step-id",
+    "definition": {
+      "workflow_version": 2,
+      "project_id": "project-demo",
+      "workspace_id": "workspace-prod",
+      "environment": "production",
+      "inputs": {
+        "target": {
+          "type": "identifier",
+          "required": false,
+          "default": "delivery"
+        },
+        "commit": {
+          "type": "commit_sha",
+          "required": false,
+          "default": "1111111111111111111111111111111111111111"
+        }
+      },
+      "steps": [
+        {
+          "id": "source",
+          "kind": "uploaded_intake",
+          "depends_on": [],
+          "source": {
+            "kind": "uploaded"
+          }
+        },
+        {
+          "id": "source",
+          "kind": "shared_analysis",
+          "depends_on": [
+            "source"
+          ],
+          "artifact": {
+            "ref": "step",
+            "step_id": "source",
+            "output": "screened_artifacts"
+          }
+        },
+        {
+          "id": "gate",
+          "kind": "policy_evaluation",
+          "depends_on": [
+            "analysis"
+          ],
+          "report": {
+            "ref": "step",
+            "step_id": "analysis",
+            "output": "report"
+          },
+          "target_id": {
+            "ref": "input",
+            "name": "target"
+          },
+          "environment": {
+            "ref": "run",
+            "field": "environment"
+          },
+          "authorization_kind": "advisory_request"
+        },
+        {
+          "id": "decision",
+          "kind": "human_decision",
+          "depends_on": [
+            "gate"
+          ],
+          "binding": {
+            "ref": "step",
+            "step_id": "gate",
+            "output": "action_binding"
+          }
+        },
+        {
+          "id": "handoff",
+          "kind": "registered_github_handoff",
+          "depends_on": [
+            "decision"
+          ],
+          "binding": {
+            "ref": "step",
+            "step_id": "gate",
+            "output": "action_binding"
+          },
+          "decision": {
+            "ref": "step",
+            "step_id": "decision",
+            "output": "decision_receipt"
+          },
+          "target_id": {
+            "ref": "input",
+            "name": "target"
+          },
+          "environment": "production",
+          "authorization_kind": "advisory_request"
+        }
+      ]
+    },
+    "profiles": []
+  },
+  {
+    "case": "missing-dependency",
+    "definition": {
+      "workflow_version": 2,
+      "project_id": "project-demo",
+      "workspace_id": "workspace-prod",
+      "environment": "production",
+      "inputs": {
+        "target": {
+          "type": "identifier",
+          "required": false,
+          "default": "delivery"
+        },
+        "commit": {
+          "type": "commit_sha",
+          "required": false,
+          "default": "1111111111111111111111111111111111111111"
+        }
+      },
+      "steps": [
+        {
+          "id": "source",
+          "kind": "uploaded_intake",
+          "depends_on": [],
+          "source": {
+            "kind": "uploaded"
+          }
+        },
+        {
+          "id": "analysis",
+          "kind": "shared_analysis",
+          "depends_on": [
+            "absent"
+          ],
+          "artifact": {
+            "ref": "step",
+            "step_id": "source",
+            "output": "screened_artifacts"
+          }
+        },
+        {
+          "id": "gate",
+          "kind": "policy_evaluation",
+          "depends_on": [
+            "analysis"
+          ],
+          "report": {
+            "ref": "step",
+            "step_id": "analysis",
+            "output": "report"
+          },
+          "target_id": {
+            "ref": "input",
+            "name": "target"
+          },
+          "environment": {
+            "ref": "run",
+            "field": "environment"
+          },
+          "authorization_kind": "advisory_request"
+        },
+        {
+          "id": "decision",
+          "kind": "human_decision",
+          "depends_on": [
+            "gate"
+          ],
+          "binding": {
+            "ref": "step",
+            "step_id": "gate",
+            "output": "action_binding"
+          }
+        },
+        {
+          "id": "handoff",
+          "kind": "registered_github_handoff",
+          "depends_on": [
+            "decision"
+          ],
+          "binding": {
+            "ref": "step",
+            "step_id": "gate",
+            "output": "action_binding"
+          },
+          "decision": {
+            "ref": "step",
+            "step_id": "decision",
+            "output": "decision_receipt"
+          },
+          "target_id": {
+            "ref": "input",
+            "name": "target"
+          },
+          "environment": "production",
+          "authorization_kind": "advisory_request"
+        }
+      ]
+    },
+    "profiles": []
+  },
+  {
+    "case": "cycle",
+    "definition": {
+      "workflow_version": 2,
+      "project_id": "project-demo",
+      "workspace_id": "workspace-prod",
+      "environment": "production",
+      "inputs": {
+        "target": {
+          "type": "identifier",
+          "required": false,
+          "default": "delivery"
+        },
+        "commit": {
+          "type": "commit_sha",
+          "required": false,
+          "default": "1111111111111111111111111111111111111111"
+        }
+      },
+      "steps": [
+        {
+          "id": "source",
+          "kind": "uploaded_intake",
+          "depends_on": [
+            "handoff"
+          ],
+          "source": {
+            "kind": "uploaded"
+          }
+        },
+        {
+          "id": "analysis",
+          "kind": "shared_analysis",
+          "depends_on": [
+            "source"
+          ],
+          "artifact": {
+            "ref": "step",
+            "step_id": "source",
+            "output": "screened_artifacts"
+          }
+        },
+        {
+          "id": "gate",
+          "kind": "policy_evaluation",
+          "depends_on": [
+            "analysis"
+          ],
+          "report": {
+            "ref": "step",
+            "step_id": "analysis",
+            "output": "report"
+          },
+          "target_id": {
+            "ref": "input",
+            "name": "target"
+          },
+          "environment": {
+            "ref": "run",
+            "field": "environment"
+          },
+          "authorization_kind": "advisory_request"
+        },
+        {
+          "id": "decision",
+          "kind": "human_decision",
+          "depends_on": [
+            "gate"
+          ],
+          "binding": {
+            "ref": "step",
+            "step_id": "gate",
+            "output": "action_binding"
+          }
+        },
+        {
+          "id": "handoff",
+          "kind": "registered_github_handoff",
+          "depends_on": [
+            "decision"
+          ],
+          "binding": {
+            "ref": "step",
+            "step_id": "gate",
+            "output": "action_binding"
+          },
+          "decision": {
+            "ref": "step",
+            "step_id": "decision",
+            "output": "decision_receipt"
+          },
+          "target_id": {
+            "ref": "input",
+            "name": "target"
+          },
+          "environment": "production",
+          "authorization_kind": "advisory_request"
+        }
+      ]
+    },
+    "profiles": []
+  },
+  {
+    "case": "unrelated-decision-branch",
+    "definition": {
+      "workflow_version": 2,
+      "project_id": "project-demo",
+      "workspace_id": "workspace-prod",
+      "environment": "production",
+      "inputs": {
+        "target": {
+          "type": "identifier",
+          "required": false,
+          "default": "delivery"
+        },
+        "commit": {
+          "type": "commit_sha",
+          "required": false,
+          "default": "1111111111111111111111111111111111111111"
+        }
+      },
+      "steps": [
+        {
+          "id": "a_source",
+          "kind": "uploaded_intake",
+          "depends_on": [],
+          "source": {
+            "kind": "uploaded"
+          }
+        },
+        {
+          "id": "a_analysis",
+          "kind": "shared_analysis",
+          "depends_on": [
+            "a_source"
+          ],
+          "artifact": {
+            "ref": "step",
+            "step_id": "a_source",
+            "output": "screened_artifacts"
+          }
+        },
+        {
+          "id": "a_gate",
+          "kind": "policy_evaluation",
+          "depends_on": [
+            "a_analysis"
+          ],
+          "report": {
+            "ref": "step",
+            "step_id": "a_analysis",
+            "output": "report"
+          },
+          "target_id": {
+            "ref": "input",
+            "name": "target"
+          },
+          "environment": {
+            "ref": "run",
+            "field": "environment"
+          },
+          "authorization_kind": "advisory_request"
+        },
+        {
+          "id": "a_decision",
+          "kind": "human_decision",
+          "depends_on": [
+            "a_gate"
+          ],
+          "binding": {
+            "ref": "step",
+            "step_id": "a_gate",
+            "output": "action_binding"
+          }
+        },
+        {
+          "id": "a_handoff",
+          "kind": "registered_github_handoff",
+          "depends_on": [
+            "a_decision"
+          ],
+          "binding": {
+            "ref": "step",
+            "step_id": "a_gate",
+            "output": "action_binding"
+          },
+          "decision": {
+            "ref": "step",
+            "step_id": "b_decision",
+            "output": "decision_receipt"
+          },
+          "target_id": {
+            "ref": "input",
+            "name": "target"
+          },
+          "environment": "production",
+          "authorization_kind": "advisory_request"
+        },
+        {
+          "id": "b_source",
+          "kind": "admitted_collection",
+          "depends_on": [],
+          "source": {
+            "kind": "collected",
+            "repository_id": {
+              "ref": "project",
+              "field": "id"
+            },
+            "commit_sha": {
+              "ref": "input",
+              "name": "commit"
+            },
+            "profile_digest": "sha256:b38c7304938ee5d5ad082e74c05b1d325e30145f1fb9e3d16bc42cc47d116772"
+          }
+        },
+        {
+          "id": "b_analysis",
+          "kind": "shared_analysis",
+          "depends_on": [
+            "b_source"
+          ],
+          "artifact": {
+            "ref": "step",
+            "step_id": "b_source",
+            "output": "screened_artifacts"
+          }
+        },
+        {
+          "id": "b_gate",
+          "kind": "policy_evaluation",
+          "depends_on": [
+            "b_analysis"
+          ],
+          "report": {
+            "ref": "step",
+            "step_id": "b_analysis",
+            "output": "report"
+          },
+          "target_id": {
+            "ref": "input",
+            "name": "target"
+          },
+          "environment": {
+            "ref": "run",
+            "field": "environment"
+          },
+          "authorization_kind": "exact_plan"
+        },
+        {
+          "id": "b_decision",
+          "kind": "human_decision",
+          "depends_on": [
+            "b_gate"
+          ],
+          "binding": {
+            "ref": "step",
+            "step_id": "b_gate",
+            "output": "action_binding"
+          }
+        },
+        {
+          "id": "b_handoff",
+          "kind": "registered_github_handoff",
+          "depends_on": [
+            "b_decision"
+          ],
+          "binding": {
+            "ref": "step",
+            "step_id": "b_gate",
+            "output": "action_binding"
+          },
+          "decision": {
+            "ref": "step",
+            "step_id": "b_decision",
+            "output": "decision_receipt"
+          },
+          "target_id": {
+            "ref": "input",
+            "name": "target"
+          },
+          "environment": "production",
+          "authorization_kind": "exact_plan"
+        }
+      ]
+    },
+    "profiles": [
+      {
+        "digest": "sha256:b38c7304938ee5d5ad082e74c05b1d325e30145f1fb9e3d16bc42cc47d116772",
+        "tool": "opentofu",
+        "authorization_kinds": [
+          "advisory_request",
+          "exact_plan"
+        ]
+      }
+    ]
+  },
+  {
+    "case": "unrelated-analysis-evidence",
+    "definition": {
+      "workflow_version": 2,
+      "project_id": "project-demo",
+      "workspace_id": "workspace-prod",
+      "environment": "production",
+      "inputs": {
+        "target": {
+          "type": "identifier",
+          "required": false,
+          "default": "delivery"
+        },
+        "commit": {
+          "type": "commit_sha",
+          "required": false,
+          "default": "1111111111111111111111111111111111111111"
+        }
+      },
+      "steps": [
+        {
+          "id": "a_source",
+          "kind": "uploaded_intake",
+          "depends_on": [],
+          "source": {
+            "kind": "uploaded"
+          }
+        },
+        {
+          "id": "a_analysis",
+          "kind": "shared_analysis",
+          "depends_on": [
+            "a_source"
+          ],
+          "artifact": {
+            "ref": "step",
+            "step_id": "a_source",
+            "output": "screened_artifacts"
+          }
+        },
+        {
+          "id": "a_gate",
+          "kind": "policy_evaluation",
+          "depends_on": [
+            "a_analysis"
+          ],
+          "report": {
+            "ref": "step",
+            "step_id": "b_analysis",
+            "output": "report"
+          },
+          "target_id": {
+            "ref": "input",
+            "name": "target"
+          },
+          "environment": {
+            "ref": "run",
+            "field": "environment"
+          },
+          "authorization_kind": "advisory_request"
+        },
+        {
+          "id": "a_decision",
+          "kind": "human_decision",
+          "depends_on": [
+            "a_gate"
+          ],
+          "binding": {
+            "ref": "step",
+            "step_id": "a_gate",
+            "output": "action_binding"
+          }
+        },
+        {
+          "id": "a_handoff",
+          "kind": "registered_github_handoff",
+          "depends_on": [
+            "a_decision"
+          ],
+          "binding": {
+            "ref": "step",
+            "step_id": "a_gate",
+            "output": "action_binding"
+          },
+          "decision": {
+            "ref": "step",
+            "step_id": "a_decision",
+            "output": "decision_receipt"
+          },
+          "target_id": {
+            "ref": "input",
+            "name": "target"
+          },
+          "environment": "production",
+          "authorization_kind": "advisory_request"
+        },
+        {
+          "id": "b_source",
+          "kind": "admitted_collection",
+          "depends_on": [],
+          "source": {
+            "kind": "collected",
+            "repository_id": {
+              "ref": "project",
+              "field": "id"
+            },
+            "commit_sha": {
+              "ref": "input",
+              "name": "commit"
+            },
+            "profile_digest": "sha256:b38c7304938ee5d5ad082e74c05b1d325e30145f1fb9e3d16bc42cc47d116772"
+          }
+        },
+        {
+          "id": "b_analysis",
+          "kind": "shared_analysis",
+          "depends_on": [
+            "b_source"
+          ],
+          "artifact": {
+            "ref": "step",
+            "step_id": "b_source",
+            "output": "screened_artifacts"
+          }
+        },
+        {
+          "id": "b_gate",
+          "kind": "policy_evaluation",
+          "depends_on": [
+            "b_analysis"
+          ],
+          "report": {
+            "ref": "step",
+            "step_id": "b_analysis",
+            "output": "report"
+          },
+          "target_id": {
+            "ref": "input",
+            "name": "target"
+          },
+          "environment": {
+            "ref": "run",
+            "field": "environment"
+          },
+          "authorization_kind": "exact_plan"
+        },
+        {
+          "id": "b_decision",
+          "kind": "human_decision",
+          "depends_on": [
+            "b_gate"
+          ],
+          "binding": {
+            "ref": "step",
+            "step_id": "b_gate",
+            "output": "action_binding"
+          }
+        },
+        {
+          "id": "b_handoff",
+          "kind": "registered_github_handoff",
+          "depends_on": [
+            "b_decision"
+          ],
+          "binding": {
+            "ref": "step",
+            "step_id": "b_gate",
+            "output": "action_binding"
+          },
+          "decision": {
+            "ref": "step",
+            "step_id": "b_decision",
+            "output": "decision_receipt"
+          },
+          "target_id": {
+            "ref": "input",
+            "name": "target"
+          },
+          "environment": "production",
+          "authorization_kind": "exact_plan"
+        }
+      ]
+    },
+    "profiles": [
+      {
+        "digest": "sha256:b38c7304938ee5d5ad082e74c05b1d325e30145f1fb9e3d16bc42cc47d116772",
+        "tool": "opentofu",
+        "authorization_kinds": [
+          "advisory_request",
+          "exact_plan"
+        ]
+      }
+    ]
+  },
+  {
+    "case": "wrong-output-type",
+    "definition": {
+      "workflow_version": 2,
+      "project_id": "project-demo",
+      "workspace_id": "workspace-prod",
+      "environment": "production",
+      "inputs": {
+        "target": {
+          "type": "identifier",
+          "required": false,
+          "default": "delivery"
+        },
+        "commit": {
+          "type": "commit_sha",
+          "required": false,
+          "default": "1111111111111111111111111111111111111111"
+        }
+      },
+      "steps": [
+        {
+          "id": "source",
+          "kind": "uploaded_intake",
+          "depends_on": [],
+          "source": {
+            "kind": "uploaded"
+          }
+        },
+        {
+          "id": "analysis",
+          "kind": "shared_analysis",
+          "depends_on": [
+            "source"
+          ],
+          "artifact": {
+            "ref": "step",
+            "step_id": "source",
+            "output": "report"
+          }
+        },
+        {
+          "id": "gate",
+          "kind": "policy_evaluation",
+          "depends_on": [
+            "analysis"
+          ],
+          "report": {
+            "ref": "step",
+            "step_id": "analysis",
+            "output": "report"
+          },
+          "target_id": {
+            "ref": "input",
+            "name": "target"
+          },
+          "environment": {
+            "ref": "run",
+            "field": "environment"
+          },
+          "authorization_kind": "advisory_request"
+        },
+        {
+          "id": "decision",
+          "kind": "human_decision",
+          "depends_on": [
+            "gate"
+          ],
+          "binding": {
+            "ref": "step",
+            "step_id": "gate",
+            "output": "action_binding"
+          }
+        },
+        {
+          "id": "handoff",
+          "kind": "registered_github_handoff",
+          "depends_on": [
+            "decision"
+          ],
+          "binding": {
+            "ref": "step",
+            "step_id": "gate",
+            "output": "action_binding"
+          },
+          "decision": {
+            "ref": "step",
+            "step_id": "decision",
+            "output": "decision_receipt"
+          },
+          "target_id": {
+            "ref": "input",
+            "name": "target"
+          },
+          "environment": "production",
+          "authorization_kind": "advisory_request"
+        }
+      ]
+    },
+    "profiles": []
+  },
+  {
+    "case": "mismatched-environment",
+    "definition": {
+      "workflow_version": 2,
+      "project_id": "project-demo",
+      "workspace_id": "workspace-prod",
+      "environment": "production",
+      "inputs": {
+        "target": {
+          "type": "identifier",
+          "required": false,
+          "default": "delivery"
+        },
+        "commit": {
+          "type": "commit_sha",
+          "required": false,
+          "default": "1111111111111111111111111111111111111111"
+        }
+      },
+      "steps": [
+        {
+          "id": "source",
+          "kind": "uploaded_intake",
+          "depends_on": [],
+          "source": {
+            "kind": "uploaded"
+          }
+        },
+        {
+          "id": "analysis",
+          "kind": "shared_analysis",
+          "depends_on": [
+            "source"
+          ],
+          "artifact": {
+            "ref": "step",
+            "step_id": "source",
+            "output": "screened_artifacts"
+          }
+        },
+        {
+          "id": "gate",
+          "kind": "policy_evaluation",
+          "depends_on": [
+            "analysis"
+          ],
+          "report": {
+            "ref": "step",
+            "step_id": "analysis",
+            "output": "report"
+          },
+          "target_id": {
+            "ref": "input",
+            "name": "target"
+          },
+          "environment": {
+            "ref": "run",
+            "field": "environment"
+          },
+          "authorization_kind": "advisory_request"
+        },
+        {
+          "id": "decision",
+          "kind": "human_decision",
+          "depends_on": [
+            "gate"
+          ],
+          "binding": {
+            "ref": "step",
+            "step_id": "gate",
+            "output": "action_binding"
+          }
+        },
+        {
+          "id": "handoff",
+          "kind": "registered_github_handoff",
+          "depends_on": [
+            "decision"
+          ],
+          "binding": {
+            "ref": "step",
+            "step_id": "gate",
+            "output": "action_binding"
+          },
+          "decision": {
+            "ref": "step",
+            "step_id": "decision",
+            "output": "decision_receipt"
+          },
+          "target_id": {
+            "ref": "input",
+            "name": "target"
+          },
+          "environment": "other",
+          "authorization_kind": "advisory_request"
+        }
+      ]
+    },
+    "profiles": []
+  },
+  {
+    "case": "unknown-input",
+    "definition": {
+      "workflow_version": 2,
+      "project_id": "project-demo",
+      "workspace_id": "workspace-prod",
+      "environment": "production",
+      "inputs": {
+        "target": {
+          "type": "identifier",
+          "required": false,
+          "default": "delivery"
+        },
+        "commit": {
+          "type": "commit_sha",
+          "required": false,
+          "default": "1111111111111111111111111111111111111111"
+        }
+      },
+      "steps": [
+        {
+          "id": "source",
+          "kind": "uploaded_intake",
+          "depends_on": [],
+          "source": {
+            "kind": "uploaded"
+          }
+        },
+        {
+          "id": "analysis",
+          "kind": "shared_analysis",
+          "depends_on": [
+            "source"
+          ],
+          "artifact": {
+            "ref": "step",
+            "step_id": "source",
+            "output": "screened_artifacts"
+          }
+        },
+        {
+          "id": "gate",
+          "kind": "policy_evaluation",
+          "depends_on": [
+            "analysis"
+          ],
+          "report": {
+            "ref": "step",
+            "step_id": "analysis",
+            "output": "report"
+          },
+          "target_id": {
+            "ref": "input",
+            "name": "target"
+          },
+          "environment": {
+            "ref": "run",
+            "field": "environment"
+          },
+          "authorization_kind": "advisory_request"
+        },
+        {
+          "id": "decision",
+          "kind": "human_decision",
+          "depends_on": [
+            "gate"
+          ],
+          "binding": {
+            "ref": "step",
+            "step_id": "gate",
+            "output": "action_binding"
+          }
+        },
+        {
+          "id": "handoff",
+          "kind": "registered_github_handoff",
+          "depends_on": [
+            "decision"
+          ],
+          "binding": {
+            "ref": "step",
+            "step_id": "gate",
+            "output": "action_binding"
+          },
+          "decision": {
+            "ref": "step",
+            "step_id": "decision",
+            "output": "decision_receipt"
+          },
+          "target_id": {
+            "ref": "input",
+            "name": "absent"
+          },
+          "environment": "production",
+          "authorization_kind": "advisory_request"
+        }
+      ]
+    },
+    "profiles": []
+  },
+  {
+    "case": "string-cannot-stand-in-for-identifier",
+    "definition": {
+      "workflow_version": 2,
+      "project_id": "project-demo",
+      "workspace_id": "workspace-prod",
+      "environment": "production",
+      "inputs": {
+        "target": {
+          "type": "string",
+          "required": false,
+          "default": "delivery"
+        },
+        "commit": {
+          "type": "commit_sha",
+          "required": false,
+          "default": "1111111111111111111111111111111111111111"
+        }
+      },
+      "steps": [
+        {
+          "id": "source",
+          "kind": "uploaded_intake",
+          "depends_on": [],
+          "source": {
+            "kind": "uploaded"
+          }
+        },
+        {
+          "id": "analysis",
+          "kind": "shared_analysis",
+          "depends_on": [
+            "source"
+          ],
+          "artifact": {
+            "ref": "step",
+            "step_id": "source",
+            "output": "screened_artifacts"
+          }
+        },
+        {
+          "id": "gate",
+          "kind": "policy_evaluation",
+          "depends_on": [
+            "analysis"
+          ],
+          "report": {
+            "ref": "step",
+            "step_id": "analysis",
+            "output": "report"
+          },
+          "target_id": {
+            "ref": "input",
+            "name": "target"
+          },
+          "environment": {
+            "ref": "run",
+            "field": "environment"
+          },
+          "authorization_kind": "advisory_request"
+        },
+        {
+          "id": "decision",
+          "kind": "human_decision",
+          "depends_on": [
+            "gate"
+          ],
+          "binding": {
+            "ref": "step",
+            "step_id": "gate",
+            "output": "action_binding"
+          }
+        },
+        {
+          "id": "handoff",
+          "kind": "registered_github_handoff",
+          "depends_on": [
+            "decision"
+          ],
+          "binding": {
+            "ref": "step",
+            "step_id": "gate",
+            "output": "action_binding"
+          },
+          "decision": {
+            "ref": "step",
+            "step_id": "decision",
+            "output": "decision_receipt"
+          },
+          "target_id": {
+            "ref": "input",
+            "name": "target"
+          },
+          "environment": "production",
+          "authorization_kind": "advisory_request"
+        }
+      ]
+    },
+    "profiles": []
+  },
+  {
+    "case": "unattended-decision",
+    "definition": {
+      "workflow_version": 2,
+      "project_id": "project-demo",
+      "workspace_id": "workspace-prod",
+      "environment": "production",
+      "inputs": {
+        "target": {
+          "type": "identifier",
+          "required": false,
+          "default": "delivery"
+        },
+        "commit": {
+          "type": "commit_sha",
+          "required": false,
+          "default": "1111111111111111111111111111111111111111"
+        }
+      },
+      "steps": [
+        {
+          "id": "source",
+          "kind": "uploaded_intake",
+          "depends_on": [],
+          "source": {
+            "kind": "uploaded"
+          }
+        },
+        {
+          "id": "analysis",
+          "kind": "shared_analysis",
+          "depends_on": [
+            "source"
+          ],
+          "artifact": {
+            "ref": "step",
+            "step_id": "source",
+            "output": "screened_artifacts"
+          }
+        },
+        {
+          "id": "gate",
+          "kind": "policy_evaluation",
+          "depends_on": [
+            "analysis"
+          ],
+          "report": {
+            "ref": "step",
+            "step_id": "analysis",
+            "output": "report"
+          },
+          "target_id": {
+            "ref": "input",
+            "name": "target"
+          },
+          "environment": {
+            "ref": "run",
+            "field": "environment"
+          },
+          "authorization_kind": "advisory_request"
+        },
+        {
+          "id": "decision",
+          "kind": "human_decision",
+          "depends_on": [
+            "gate"
+          ],
+          "binding": {
+            "ref": "step",
+            "step_id": "gate",
+            "output": "action_binding"
+          },
+          "auto_approve": true
+        },
+        {
+          "id": "handoff",
+          "kind": "registered_github_handoff",
+          "depends_on": [
+            "decision"
+          ],
+          "binding": {
+            "ref": "step",
+            "step_id": "gate",
+            "output": "action_binding"
+          },
+          "decision": {
+            "ref": "step",
+            "step_id": "decision",
+            "output": "decision_receipt"
+          },
+          "target_id": {
+            "ref": "input",
+            "name": "target"
+          },
+          "environment": "production",
+          "authorization_kind": "advisory_request"
+        }
+      ]
+    },
+    "profiles": []
+  },
+  {
+    "case": "skipped-gate",
+    "definition": {
+      "workflow_version": 2,
+      "project_id": "project-demo",
+      "workspace_id": "workspace-prod",
+      "environment": "production",
+      "inputs": {
+        "target": {
+          "type": "identifier",
+          "required": false,
+          "default": "delivery"
+        },
+        "commit": {
+          "type": "commit_sha",
+          "required": false,
+          "default": "1111111111111111111111111111111111111111"
+        }
+      },
+      "steps": [
+        {
+          "id": "source",
+          "kind": "uploaded_intake",
+          "depends_on": [],
+          "source": {
+            "kind": "uploaded"
+          }
+        },
+        {
+          "id": "analysis",
+          "kind": "shared_analysis",
+          "depends_on": [
+            "source"
+          ],
+          "artifact": {
+            "ref": "step",
+            "step_id": "source",
+            "output": "screened_artifacts"
+          }
+        },
+        {
+          "id": "gate",
+          "kind": "policy_evaluation",
+          "depends_on": [
+            "analysis"
+          ],
+          "report": {
+            "ref": "step",
+            "step_id": "analysis",
+            "output": "report"
+          },
+          "target_id": {
+            "ref": "input",
+            "name": "target"
+          },
+          "environment": {
+            "ref": "run",
+            "field": "environment"
+          },
+          "authorization_kind": "advisory_request",
+          "when": "false"
+        },
+        {
+          "id": "decision",
+          "kind": "human_decision",
+          "depends_on": [
+            "gate"
+          ],
+          "binding": {
+            "ref": "step",
+            "step_id": "gate",
+            "output": "action_binding"
+          }
+        },
+        {
+          "id": "handoff",
+          "kind": "registered_github_handoff",
+          "depends_on": [
+            "decision"
+          ],
+          "binding": {
+            "ref": "step",
+            "step_id": "gate",
+            "output": "action_binding"
+          },
+          "decision": {
+            "ref": "step",
+            "step_id": "decision",
+            "output": "decision_receipt"
+          },
+          "target_id": {
+            "ref": "input",
+            "name": "target"
+          },
+          "environment": "production",
+          "authorization_kind": "advisory_request"
+        }
+      ]
+    },
+    "profiles": []
+  },
+  {
+    "case": "uploaded-exact-plan-gate",
+    "definition": {
+      "workflow_version": 2,
+      "project_id": "project-demo",
+      "workspace_id": "workspace-prod",
+      "environment": "production",
+      "inputs": {
+        "target": {
+          "type": "identifier",
+          "required": false,
+          "default": "delivery"
+        },
+        "commit": {
+          "type": "commit_sha",
+          "required": false,
+          "default": "1111111111111111111111111111111111111111"
+        }
+      },
+      "steps": [
+        {
+          "id": "source",
+          "kind": "uploaded_intake",
+          "depends_on": [],
+          "source": {
+            "kind": "uploaded"
+          }
+        },
+        {
+          "id": "analysis",
+          "kind": "shared_analysis",
+          "depends_on": [
+            "source"
+          ],
+          "artifact": {
+            "ref": "step",
+            "step_id": "source",
+            "output": "screened_artifacts"
+          }
+        },
+        {
+          "id": "gate",
+          "kind": "policy_evaluation",
+          "depends_on": [
+            "analysis"
+          ],
+          "report": {
+            "ref": "step",
+            "step_id": "analysis",
+            "output": "report"
+          },
+          "target_id": {
+            "ref": "input",
+            "name": "target"
+          },
+          "environment": {
+            "ref": "run",
+            "field": "environment"
+          },
+          "authorization_kind": "exact_plan"
+        },
+        {
+          "id": "decision",
+          "kind": "human_decision",
+          "depends_on": [
+            "gate"
+          ],
+          "binding": {
+            "ref": "step",
+            "step_id": "gate",
+            "output": "action_binding"
+          }
+        },
+        {
+          "id": "handoff",
+          "kind": "registered_github_handoff",
+          "depends_on": [
+            "decision"
+          ],
+          "binding": {
+            "ref": "step",
+            "step_id": "gate",
+            "output": "action_binding"
+          },
+          "decision": {
+            "ref": "step",
+            "step_id": "decision",
+            "output": "decision_receipt"
+          },
+          "target_id": {
+            "ref": "input",
+            "name": "target"
+          },
+          "environment": "production",
+          "authorization_kind": "advisory_request"
+        }
+      ]
+    },
+    "profiles": []
+  },
+  {
+    "case": "function-reference",
+    "definition": {
+      "workflow_version": 2,
+      "project_id": "project-demo",
+      "workspace_id": "workspace-prod",
+      "environment": "production",
+      "inputs": {
+        "target": {
+          "type": "identifier",
+          "required": false,
+          "default": "delivery"
+        },
+        "commit": {
+          "type": "commit_sha",
+          "required": false,
+          "default": "1111111111111111111111111111111111111111"
+        }
+      },
+      "steps": [
+        {
+          "id": "source",
+          "kind": "uploaded_intake",
+          "depends_on": [],
+          "source": {
+            "kind": "uploaded"
+          }
+        },
+        {
+          "id": "analysis",
+          "kind": "shared_analysis",
+          "depends_on": [
+            "source"
+          ],
+          "artifact": {
+            "ref": "step",
+            "step_id": "source",
+            "output": "screened_artifacts"
+          }
+        },
+        {
+          "id": "gate",
+          "kind": "policy_evaluation",
+          "depends_on": [
+            "analysis"
+          ],
+          "report": {
+            "ref": "step",
+            "step_id": "analysis",
+            "output": "report"
+          },
+          "target_id": {
+            "ref": "input",
+            "name": "target"
+          },
+          "environment": {
+            "ref": "run",
+            "field": "environment"
+          },
+          "authorization_kind": "advisory_request"
+        },
+        {
+          "id": "decision",
+          "kind": "human_decision",
+          "depends_on": [
+            "gate"
+          ],
+          "binding": {
+            "ref": "step",
+            "step_id": "gate",
+            "output": "action_binding"
+          }
+        },
+        {
+          "id": "handoff",
+          "kind": "registered_github_handoff",
+          "depends_on": [
+            "decision"
+          ],
+          "binding": {
+            "ref": "step",
+            "step_id": "gate",
+            "output": "action_binding"
+          },
+          "decision": {
+            "ref": "step",
+            "step_id": "decision",
+            "output": "decision_receipt"
+          },
+          "target_id": {
+            "ref": "input",
+            "name": "eval(target)"
+          },
+          "environment": "production",
+          "authorization_kind": "advisory_request"
+        }
+      ]
+    },
+    "profiles": []
+  },
+  {
+    "case": "unadmitted-profile",
+    "definition": {
+      "workflow_version": 2,
+      "project_id": "project-demo",
+      "workspace_id": "workspace-prod",
+      "environment": "production",
+      "inputs": {
+        "target": {
+          "type": "identifier",
+          "required": false,
+          "default": "delivery"
+        },
+        "commit": {
+          "type": "commit_sha",
+          "required": false,
+          "default": "1111111111111111111111111111111111111111"
+        }
+      },
+      "steps": [
+        {
+          "id": "source",
+          "kind": "admitted_collection",
+          "depends_on": [],
+          "source": {
+            "kind": "collected",
+            "repository_id": {
+              "ref": "project",
+              "field": "id"
+            },
+            "commit_sha": {
+              "ref": "input",
+              "name": "commit"
+            },
+            "profile_digest": "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+          }
+        },
+        {
+          "id": "analysis",
+          "kind": "shared_analysis",
+          "depends_on": [
+            "source"
+          ],
+          "artifact": {
+            "ref": "step",
+            "step_id": "source",
+            "output": "screened_artifacts"
+          }
+        },
+        {
+          "id": "gate",
+          "kind": "policy_evaluation",
+          "depends_on": [
+            "analysis"
+          ],
+          "report": {
+            "ref": "step",
+            "step_id": "analysis",
+            "output": "report"
+          },
+          "target_id": {
+            "ref": "input",
+            "name": "target"
+          },
+          "environment": {
+            "ref": "run",
+            "field": "environment"
+          },
+          "authorization_kind": "exact_plan"
+        },
+        {
+          "id": "decision",
+          "kind": "human_decision",
+          "depends_on": [
+            "gate"
+          ],
+          "binding": {
+            "ref": "step",
+            "step_id": "gate",
+            "output": "action_binding"
+          }
+        },
+        {
+          "id": "handoff",
+          "kind": "registered_github_handoff",
+          "depends_on": [
+            "decision"
+          ],
+          "binding": {
+            "ref": "step",
+            "step_id": "gate",
+            "output": "action_binding"
+          },
+          "decision": {
+            "ref": "step",
+            "step_id": "decision",
+            "output": "decision_receipt"
+          },
+          "target_id": {
+            "ref": "input",
+            "name": "target"
+          },
+          "environment": "production",
+          "authorization_kind": "exact_plan"
+        }
+      ]
+    },
+    "profiles": [
+      {
+        "digest": "sha256:b38c7304938ee5d5ad082e74c05b1d325e30145f1fb9e3d16bc42cc47d116772",
+        "tool": "opentofu",
+        "authorization_kinds": [
+          "advisory_request",
+          "exact_plan"
+        ]
+      }
+    ]
+  },
+  {
+    "case": "unrelated-decision-with-both-ancestors",
+    "definition": {
+      "workflow_version": 2,
+      "project_id": "project-demo",
+      "workspace_id": "workspace-prod",
+      "environment": "production",
+      "inputs": {
+        "target": {
+          "type": "identifier",
+          "required": false,
+          "default": "delivery"
+        },
+        "commit": {
+          "type": "commit_sha",
+          "required": false,
+          "default": "1111111111111111111111111111111111111111"
+        }
+      },
+      "steps": [
+        {
+          "id": "a_source",
+          "kind": "uploaded_intake",
+          "depends_on": [],
+          "source": {
+            "kind": "uploaded"
+          }
+        },
+        {
+          "id": "a_analysis",
+          "kind": "shared_analysis",
+          "depends_on": [
+            "a_source"
+          ],
+          "artifact": {
+            "ref": "step",
+            "step_id": "a_source",
+            "output": "screened_artifacts"
+          }
+        },
+        {
+          "id": "a_gate",
+          "kind": "policy_evaluation",
+          "depends_on": [
+            "a_analysis"
+          ],
+          "report": {
+            "ref": "step",
+            "step_id": "a_analysis",
+            "output": "report"
+          },
+          "target_id": {
+            "ref": "input",
+            "name": "target"
+          },
+          "environment": {
+            "ref": "run",
+            "field": "environment"
+          },
+          "authorization_kind": "advisory_request"
+        },
+        {
+          "id": "a_decision",
+          "kind": "human_decision",
+          "depends_on": [
+            "a_gate"
+          ],
+          "binding": {
+            "ref": "step",
+            "step_id": "a_gate",
+            "output": "action_binding"
+          }
+        },
+        {
+          "id": "a_handoff",
+          "kind": "registered_github_handoff",
+          "depends_on": [
+            "a_decision",
+            "b_decision"
+          ],
+          "binding": {
+            "ref": "step",
+            "step_id": "a_gate",
+            "output": "action_binding"
+          },
+          "decision": {
+            "ref": "step",
+            "step_id": "b_decision",
+            "output": "decision_receipt"
+          },
+          "target_id": {
+            "ref": "input",
+            "name": "target"
+          },
+          "environment": "production",
+          "authorization_kind": "advisory_request"
+        },
+        {
+          "id": "b_source",
+          "kind": "admitted_collection",
+          "depends_on": [],
+          "source": {
+            "kind": "collected",
+            "repository_id": {
+              "ref": "project",
+              "field": "id"
+            },
+            "commit_sha": {
+              "ref": "input",
+              "name": "commit"
+            },
+            "profile_digest": "sha256:b38c7304938ee5d5ad082e74c05b1d325e30145f1fb9e3d16bc42cc47d116772"
+          }
+        },
+        {
+          "id": "b_analysis",
+          "kind": "shared_analysis",
+          "depends_on": [
+            "b_source"
+          ],
+          "artifact": {
+            "ref": "step",
+            "step_id": "b_source",
+            "output": "screened_artifacts"
+          }
+        },
+        {
+          "id": "b_gate",
+          "kind": "policy_evaluation",
+          "depends_on": [
+            "b_analysis"
+          ],
+          "report": {
+            "ref": "step",
+            "step_id": "b_analysis",
+            "output": "report"
+          },
+          "target_id": {
+            "ref": "input",
+            "name": "target"
+          },
+          "environment": {
+            "ref": "run",
+            "field": "environment"
+          },
+          "authorization_kind": "exact_plan"
+        },
+        {
+          "id": "b_decision",
+          "kind": "human_decision",
+          "depends_on": [
+            "b_gate"
+          ],
+          "binding": {
+            "ref": "step",
+            "step_id": "b_gate",
+            "output": "action_binding"
+          }
+        },
+        {
+          "id": "b_handoff",
+          "kind": "registered_github_handoff",
+          "depends_on": [
+            "b_decision"
+          ],
+          "binding": {
+            "ref": "step",
+            "step_id": "b_gate",
+            "output": "action_binding"
+          },
+          "decision": {
+            "ref": "step",
+            "step_id": "b_decision",
+            "output": "decision_receipt"
+          },
+          "target_id": {
+            "ref": "input",
+            "name": "target"
+          },
+          "environment": "production",
+          "authorization_kind": "exact_plan"
+        }
+      ]
+    },
+    "profiles": [
+      {
+        "digest": "sha256:b38c7304938ee5d5ad082e74c05b1d325e30145f1fb9e3d16bc42cc47d116772",
+        "tool": "opentofu",
+        "authorization_kinds": [
+          "advisory_request",
+          "exact_plan"
+        ]
+      }
+    ]
+  },
+  {
+    "case": "equal-input-default-does-not-equal-literal-binding",
+    "definition": {
+      "workflow_version": 2,
+      "project_id": "project-demo",
+      "workspace_id": "workspace-prod",
+      "environment": "production",
+      "inputs": {
+        "target": {
+          "type": "identifier",
+          "required": false,
+          "default": "delivery"
+        },
+        "commit": {
+          "type": "commit_sha",
+          "required": false,
+          "default": "1111111111111111111111111111111111111111"
+        },
+        "env": {
+          "type": "identifier",
+          "required": false,
+          "default": "production"
+        }
+      },
+      "steps": [
+        {
+          "id": "source",
+          "kind": "uploaded_intake",
+          "depends_on": [],
+          "source": {
+            "kind": "uploaded"
+          }
+        },
+        {
+          "id": "analysis",
+          "kind": "shared_analysis",
+          "depends_on": [
+            "source"
+          ],
+          "artifact": {
+            "ref": "step",
+            "step_id": "source",
+            "output": "screened_artifacts"
+          }
+        },
+        {
+          "id": "gate",
+          "kind": "policy_evaluation",
+          "depends_on": [
+            "analysis"
+          ],
+          "report": {
+            "ref": "step",
+            "step_id": "analysis",
+            "output": "report"
+          },
+          "target_id": {
+            "ref": "input",
+            "name": "target"
+          },
+          "environment": {
+            "ref": "input",
+            "name": "env"
+          },
+          "authorization_kind": "advisory_request"
+        },
+        {
+          "id": "decision",
+          "kind": "human_decision",
+          "depends_on": [
+            "gate"
+          ],
+          "binding": {
+            "ref": "step",
+            "step_id": "gate",
+            "output": "action_binding"
+          }
+        },
+        {
+          "id": "handoff",
+          "kind": "registered_github_handoff",
+          "depends_on": [
+            "decision"
+          ],
+          "binding": {
+            "ref": "step",
+            "step_id": "gate",
+            "output": "action_binding"
+          },
+          "decision": {
+            "ref": "step",
+            "step_id": "decision",
+            "output": "decision_receipt"
+          },
+          "target_id": {
+            "ref": "input",
+            "name": "target"
+          },
+          "environment": "production",
+          "authorization_kind": "advisory_request"
+        }
+      ]
+    },
+    "profiles": []
+  },
+  {
+    "case": "legacy-wire-is-not-auto-converted",
+    "definition": {
+      "project_id": "project-demo",
+      "workspace_id": "workspace-prod",
+      "environment": "production",
+      "inputs": {
+        "target": {
+          "type": "identifier",
+          "required": false,
+          "default": "delivery"
+        },
+        "commit": {
+          "type": "commit_sha",
+          "required": false,
+          "default": "1111111111111111111111111111111111111111"
+        }
+      },
+      "steps": [
+        {
+          "id": "source",
+          "kind": "uploaded_intake",
+          "depends_on": [],
+          "source": {
+            "kind": "uploaded"
+          }
+        },
+        {
+          "id": "analysis",
+          "kind": "shared_analysis",
+          "depends_on": [
+            "source"
+          ],
+          "artifact": {
+            "ref": "step",
+            "step_id": "source",
+            "output": "screened_artifacts"
+          }
+        },
+        {
+          "id": "gate",
+          "kind": "policy_evaluation",
+          "depends_on": [
+            "analysis"
+          ],
+          "report": {
+            "ref": "step",
+            "step_id": "analysis",
+            "output": "report"
+          },
+          "target_id": {
+            "ref": "input",
+            "name": "target"
+          },
+          "environment": {
+            "ref": "run",
+            "field": "environment"
+          },
+          "authorization_kind": "advisory_request"
+        },
+        {
+          "id": "decision",
+          "kind": "human_decision",
+          "depends_on": [
+            "gate"
+          ],
+          "binding": {
+            "ref": "step",
+            "step_id": "gate",
+            "output": "action_binding"
+          }
+        },
+        {
+          "id": "handoff",
+          "kind": "registered_github_handoff",
+          "depends_on": [
+            "decision"
+          ],
+          "binding": {
+            "ref": "step",
+            "step_id": "gate",
+            "output": "action_binding"
+          },
+          "decision": {
+            "ref": "step",
+            "step_id": "decision",
+            "output": "decision_receipt"
+          },
+          "target_id": {
+            "ref": "input",
+            "name": "target"
+          },
+          "environment": "production",
+          "authorization_kind": "advisory_request"
+        }
+      ],
+      "version": 1
+    },
+    "profiles": []
+  }
+]

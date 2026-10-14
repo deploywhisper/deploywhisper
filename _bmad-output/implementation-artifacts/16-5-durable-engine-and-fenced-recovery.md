@@ -5,6 +5,10 @@ Preparation: refined
 Release: v1.5.0 — P0 highest-priority feature
 Dependencies: 16.4; public RFC and 16.0 qualification required
 
+### Consumer contract amendment — 2026-10-13
+
+Consume explicit `workflow_version: 2` from [workflow-contract-v2.md](../../docs/infra-automation/workflow-contract-v2.md) under the [approved course correction](../planning-artifacts/sprint-change-proposal-2026-10-13-workflow-v2.md). There is no nested version and no automatic conversion of historical v1 bytes or revisions. Preserve canonical revision/input digests with `tuple-json-utf8-v1` and the declared source/profile/environment constraints. A null definition workspace supports project-scoped drafts; the operation owner must resolve a concrete authorized workspace and bind it in the immutable run snapshot before any runner/receiver message. Independent runner/enrollment, receiver, provenance, state, error and cursor protocols stay v1; reports stay v2. Only receiver bindings directly carry workflow revision/input digests. Frozen v1 evidence remains unchanged history, and this amendment does not promote this story or claim implementation.
+
 ## Story
 
 As an operator, I want to retain run progress, deadlines and ownership across crashes, so that overlapping workers cannot lose state or complete stale/duplicate work.

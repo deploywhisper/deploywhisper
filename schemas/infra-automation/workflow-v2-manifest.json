@@ -1,0 +1,40 @@
+{
+  "workflow_version": 2,
+  "status": "frozen-contract",
+  "decision": "_bmad-output/planning-artifacts/sprint-change-proposal-2026-10-13-workflow-v2.md",
+  "canonicalization": "tuple-json-utf8-v1",
+  "owners": [
+    "16.3",
+    "16.4",
+    "16.5"
+  ],
+  "independent_protocol_versions": {
+    "runner": 1,
+    "enrollment": 1,
+    "receiver": 1,
+    "provenance": 1,
+    "state": 1,
+    "error": 1,
+    "cursor": 1,
+    "report": 2
+  },
+  "limits": {
+    "max_bytes": 131072,
+    "max_depth": 16,
+    "max_steps": 50,
+    "max_inputs": 32,
+    "max_errors": 50,
+    "max_profiles": 16,
+    "max_outputs": 50,
+    "max_string_length": 1024
+  },
+  "default_admitted_profiles": [],
+  "files": {
+    "docs/infra-automation/workflow-contract-v2.md": "sha256:2dd4be122ef9136aa46452707c0d4186bd86dd8006b13755b235ad204d0df7a0",
+    "schemas/infra-automation/workflow-v2.json": "sha256:907fa44001d98e8b13ed4228e284eb7d7719cbe713871b6fda7a1f65e64d23fd",
+    "tests/fixtures/infra_automation/workflow_v2/valid.json": "sha256:1fd5823fbaa860b44a81c77a0d961c3658f6fbfda1c581464ead475bf67f1a2c",
+    "tests/fixtures/infra_automation/workflow_v2/invalid.json": "sha256:b63bb48b9c7a08c2a651b12d2f040c4ab63a2b131d264f7a165408b3bf632a3f"
+  },
+  "qualification_scope": "Contract freeze only; implementation and standalone measurement evidence belong to Story16.3; integrated production qualification remains16.19.",
+  "migration": "No automatic v1 conversion; frozen-v1 history remains byte-identical."
+}

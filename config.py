@@ -5,6 +5,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 import math
 import os
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from infra_automation.contracts import ValidationLimits
 
 
 PROVIDER_ENV_API_KEYS: dict[str, tuple[str, ...]] = {
@@ -100,6 +104,21 @@ class Settings:
     app_base_url: str | None = os.getenv("APP_BASE_URL") or os.getenv("PUBLIC_APP_URL")
     log_level: str = os.getenv("LOG_LEVEL", "INFO")
     database_url: str = os.getenv("DATABASE_URL", "sqlite:///data/deploywhisper.db")
+    workflow_validation_max_bytes: int = int(
+        os.getenv("DEPLOYWHISPER_WORKFLOW_MAX_BYTES", "131072")
+    )
+    workflow_validation_max_depth: int = int(
+        os.getenv("DEPLOYWHISPER_WORKFLOW_MAX_DEPTH", "16")
+    )
+    workflow_validation_max_steps: int = int(
+        os.getenv("DEPLOYWHISPER_WORKFLOW_MAX_STEPS", "50")
+    )
+    workflow_validation_max_inputs: int = int(
+        os.getenv("DEPLOYWHISPER_WORKFLOW_MAX_INPUTS", "32")
+    )
+    workflow_validation_max_errors: int = int(
+        os.getenv("DEPLOYWHISPER_WORKFLOW_MAX_ERRORS", "50")
+    )
     identity_profile: str = os.getenv("DEPLOYWHISPER_IDENTITY_PROFILE", "disabled")
     identity_origin: str = os.getenv("DEPLOYWHISPER_IDENTITY_ORIGIN", "")
     authorization_profile: str = os.getenv(
@@ -190,3 +209,16 @@ class Settings:
 
 
 settings = Settings()
+
+
+def workflow_validation_limits() -> ValidationLimits:
+    """Build configured ceilings outside the pure validator; invalid values deny."""
+    from infra_automation.contracts import ValidationLimits
+
+    return ValidationLimits(
+        max_bytes=settings.workflow_validation_max_bytes,
+        max_depth=settings.workflow_validation_max_depth,
+        max_steps=settings.workflow_validation_max_steps,
+        max_inputs=settings.workflow_validation_max_inputs,
+        max_errors=settings.workflow_validation_max_errors,
+    )

@@ -27,6 +27,10 @@ This whole-document addendum **supersedes the planning scope, old phase/release 
 
 The accepted v1.4.0 tracking baseline is 101 stories: 84 done, 15 ready-for-dev and 2 review. Keep existing identifiers, especially 12.5 SBOM and Release Checksums and delivered 12.6/13.8. New Epic 16 contains 20 planning stories 16.0–16.19; release priority changes delivery order, not history. See the [release plan](infra-automation-v1.5.0-release-plan.md), [research](research/technical-infra-automation-research-2026-10-07.md) and [per-ID dispositions](infra-automation-requirement-dispositions.json).
 
+## Workflow version decision — 2026-10-13
+
+The maintainer selected contract revision to fulfil the existing broader schema/reference requirements, recorded in the [course correction](sprint-change-proposal-2026-10-13-workflow-v2.md). [Workflow contract v2](../../docs/infra-automation/workflow-contract-v2.md) is the production authoring authority: explicit `workflow_version: 2`, bounded typed inputs, root environment, source/profile constraints and typed input/step/run/project references. There is no nested version or automatic v1 conversion. Frozen Story 16.0 v1 artifacts remain unchanged qualification history; runner/enrollment, receiver, provenance, state, error and cursor protocols stay v1, and reports stay v2. Only receiver bindings directly carry workflow revision/input digests. Canonical requirement text/IDs, the 20-story scope, execution trust boundaries and later release qualification obligations are unchanged; this is not a claim of v2 implementation or production qualification.
+
 ## Success Criteria
 
 The supported release is accepted only when a real authenticated operator completes both uploaded-evidence review and isolated collected-plan review, a second verified operator approves in shared mode, the qualified receiver verifies the exact locally retained plan, and unknown delivery reconciles without a duplicate action. A single-operator profile must explicitly label acknowledgement rather than separation of duties. Multi-unit demonstrations cover only declared preflight dependencies and combined evidence.

@@ -11,6 +11,12 @@ implementation_gate: story-16.0-contract-spikes-and-readiness
 
 This planning contract adopts the bounded v1.5.0 feature in the [release plan](../../_bmad-output/planning-artifacts/infra-automation-v1.5.0-release-plan.md). It specifies the supported journeys and acceptance obligations; it does not certify implemented screens, production behavior, or visual parity. Story 16.0 must resolve authentication, receiver, collection isolation and saved-plan custody contracts before dependent UI work is ready. No feature screenshots or Compose/browser results exist yet.
 
+## Workflow editor contract amendment — 2026-10-13
+
+The [workflow v2 contract](../infra-automation/workflow-contract-v2.md), adopted through [course correction](../../_bmad-output/planning-artifacts/sprint-change-proposal-2026-10-13-workflow-v2.md), governs future editor templates, validation and publication. Require explicit `workflow_version: 2` with no nested version; expose only the closed typed input/step/project/run reference vocabulary and explicit environment/source/profile fields. A project-scoped draft may leave workspace unset, but starting a machine operation must resolve an authorized concrete workspace and show the immutable resolved scope. Historical v1 is inspectable only; do not silently convert it or present it as executable v2. Existing schema/error locations remain bounded and must not reflect sensitive submitted values.
+
+This amendment changes the design's contract authority only. Story 16.3 creates no screen, browser flow, route or UI validation claim; editor/runtime integration remains in its owning stories. Runner/enrollment, receiver, provenance, state, error and cursor protocols stay independently v1, reports stay v2, and only the receiver binding directly carries workflow revision/input digests. Frozen Story 16.0 evidence remains historical.
+
 ## Product and design authority
 
 The experience is a project-scoped preflight followed by an authenticated human decision and a handoff to an existing delivery pipeline. DeployWhisper does not apply or destroy infrastructure. Canonical reports remain advisory; workflow eligibility, human decisions and external delivery outcomes are separate facts.

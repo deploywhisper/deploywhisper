@@ -36,7 +36,7 @@ fi
 "$PYTHON_BIN" -m pip check
 if [ -n "$BANDIT_BIN" ]; then
   "$BANDIT_BIN" \
-    -r api/ analysis/ services/ parsers/ llm/ models/ cli/ evidence/ \
+    -r api/ analysis/ services/ parsers/ llm/ models/ cli/ evidence/ infra_automation/ \
     -f json \
     -o bandit-report.json \
     --severity-level medium \
@@ -44,7 +44,7 @@ if [ -n "$BANDIT_BIN" ]; then
     -x tests/ \
     2>&1 | tee bandit.log || true
   "$BANDIT_BIN" \
-    -r api/ analysis/ services/ parsers/ llm/ models/ cli/ evidence/ \
+    -r api/ analysis/ services/ parsers/ llm/ models/ cli/ evidence/ infra_automation/ \
     --severity-level high \
     --confidence-level high \
     -x tests/
@@ -54,6 +54,7 @@ fi
   analysis \
   cli \
   evidence \
+  infra_automation \
   llm \
   models \
   parsers \
@@ -71,6 +72,7 @@ PYTHON_BIN="$PYTHON_BIN" bash scripts/run-test-targets.sh \
   tests/test_cli \
   tests/test_docs \
   tests/test_infra \
+  tests/test_infra_automation \
   tests/test_llm \
   tests/test_models \
   tests/test_parsers \

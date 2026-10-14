@@ -34,6 +34,7 @@ packages = [
   "api",
   "services",
   "integrations",
+  "infra_automation",
   "parsers",
   "analysis",
   "evidence",
