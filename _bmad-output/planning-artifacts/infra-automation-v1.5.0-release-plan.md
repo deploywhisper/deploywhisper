@@ -22,6 +22,20 @@ This release scope and priority were **adopted for planning by explicit user ins
 
 Adopted scope: Tier 0 collection plus Tier 1 human-approved handoff, following the draft's own D1 recommendation. Direct apply/deployment is excluded from the recommended release. Engineering capacity and a calendar deadline are not established; estimates below are preliminary planning ranges.
 
+### Current version matrix — 2026-10-13
+
+The maintainer-authorized [course correction](sprint-change-proposal-2026-10-13-workflow-v2.md) adopts [workflow contract v2](../../docs/infra-automation/workflow-contract-v2.md) for Story 16.3 and downstream consumers without altering frozen v1 qualification artifacts or story identities/statuses.
+
+| Contract | Current authority |
+| --- | --- |
+| Workflow authoring/validation | Explicit strict integer `workflow_version: 2`; `schemas/infra-automation/workflow-v2.json`; no nested version or automatic v1 conversion |
+| Canonical serialization | `tuple-json-utf8-v1`, independent of workflow major |
+| Runner/enrollment, receiver, provenance, state, error, cursor | Independent v1 contracts; only receiver binding directly carries workflow revision/input digests |
+| Reports | Existing report v2; provenance remains separately versioned |
+| Frozen Story 16.0 manifest/schema/fixtures | Unchanged historical v1 qualification evidence, not v2 acceptance proof |
+
+A project-scoped draft may omit workspace; the run owner must resolve and snapshot a concrete authorized workspace before machine operations. v2 authoring does not qualify collectors, receiver execution, UI or the integrated release; their owning stories retain those gates.
+
 ## 2. Baseline and release priority
 
 The current baseline is stable v1.4.0, not “implemented through 12.2.” Current delivery tracking contains **101 stories: 84 done, 15 ready-for-dev, 2 review** across 16 epics. Stories 12.3, 12.4, 12.6 and 13.8 are already done. Epic 15's implementation shipped; 15.6/15.7 retain acceptance-documentation follow-up. The [release verification record](../../docs/verification/v1.4.0-release.json) and [status map](../implementation-artifacts/story-implementation-status-map.md) distinguish accepted delivery from remaining work.

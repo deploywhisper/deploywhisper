@@ -1,0 +1,66 @@
+{
+  "started_at": "2026-10-14T05:21:44Z",
+  "completed_at": "2026-10-14T05:21:46Z",
+  "workflow_version": 2,
+  "case": "fifty-step-mixed-and-corpus",
+  "step_count": 50,
+  "warmup": 100,
+  "samples": 1000,
+  "failures": {
+    "warmup": 0,
+    "measured": 0
+  },
+  "percentile_method": "nearest rank",
+  "p50_ms": 1.502083,
+  "p95_ms": 1.714917,
+  "p99_ms": 2.15025,
+  "timed_scope": "validate_workflow only; preloaded bytes and immutable registry; correctness checked after every invocation",
+  "corpus_file_digest": "sha256:1fd5823fbaa860b44a81c77a0d961c3658f6fbfda1c581464ead475bf67f1a2c",
+  "case_payload_digest": "sha256:2217ce94b9ee41101d9b7724c3b111733fe815bfca6a41e24eae26e7900c8276",
+  "canonical_workflow_digest": "sha256:6d2ac7e858e904abcca0635ee44b58c608b5ea5942bbe74372e6220829eb4906",
+  "canonicalization": "tuple-json-utf8-v1",
+  "harness_digest": "sha256:952de0c9a26344fc9b18dc7d9a9447d2d3ba255ff4fec149b9bf14b2fe401427",
+  "source_files": {
+    "__init__.py": "sha256:fc6b7705456394ad97bfb6b1ad0b77e657bdd210b91525c34de0124cb64718f8",
+    "contracts.py": "sha256:3da30388df66306b3adad1f3fa278f3f05a578506a9bd278cd20cab1676bc89a",
+    "workflow_schema.py": "sha256:24b4aaf3832b50b727a3c6712bb2a36b4363b4aeaed69a8d0c53ddb042e67a0b",
+    "workflow_validation.py": "sha256:95b5e078dad5dda70d5bd34d0bccde3bcaaf1af820a0f5c92c349e90ea9519f8"
+  },
+  "source_digest": "sha256:156cfa3db0c6191c7da4bc0b0809b1a8475430fca7775be2d3eb78df1eb34574",
+  "environment": {
+    "os": "Linux",
+    "platform": "Linux-6.12.54-linuxkit-aarch64-with-glibc2.41",
+    "machine": "aarch64",
+    "cpu_model": "unreported",
+    "logical_cpu_count": 12,
+    "affinity_cpus": [
+      0,
+      1,
+      2,
+      3
+    ],
+    "effective_cpu_ceiling": 4.0,
+    "memory_ceiling_bytes": 8589934592,
+    "kernel_visible_memory_bytes": 8217165824,
+    "rlimit_address_space_bytes": {
+      "soft": -1,
+      "hard": -1
+    },
+    "cgroup_controls": {
+      "cpu.max": "400000 100000",
+      "cpuset.cpus.effective": "0-3",
+      "memory.max": "8589934592",
+      "cpu/cpu.cfs_quota_us": null,
+      "cpu/cpu.cfs_period_us": null,
+      "cpuset/cpuset.cpus": null,
+      "memory/memory.limit_in_bytes": null
+    },
+    "python": "3.11.17",
+    "pydantic": "2.13.3",
+    "pyyaml": "6.0.3",
+    "virtualization": "Host/container boundary is reported by the invoking operator; affinity and quotas are recorded, not inferred hardware ownership."
+  },
+  "qualified": true,
+  "qualification_failures": [],
+  "qualification_scope": "Standalone structural validator only; no production execution, isolation or mixed-runner qualification."
+}

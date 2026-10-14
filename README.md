@@ -680,6 +680,7 @@ Project documentation currently lives in a few places:
 - [DeployWhisper Alongside Security Tools](./docs/comparisons/deploywhisper-alongside-security-tools.md)
 - [Kubernetes Live-State Connector](./docs/kubernetes-live-state-connector.md)
 - [Evidence Model Foundation](./docs/evidence-model.md)
+- [Workflow v2 Schema and Validation](./docs/infra-automation/workflow-schema.md)
 - [CI Guide](./docs/ci.md)
 - [CI Secrets Checklist](./docs/ci-secrets-checklist.md)
 
@@ -695,6 +696,7 @@ llm/          Narrative generation and skill context
 models/       ORM tables and repositories
 parsers/      Tool-specific parsers
 services/     Shared orchestration and persistence logic
+infra_automation/ Closed workflow contracts and side-effect-free validation
 frontend/     React 18 + Vite + TypeScript SPA workspace
 tests/        API, CLI, parser, service, frontend, and infra tests
 ```

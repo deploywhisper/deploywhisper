@@ -82,6 +82,7 @@ jobs:
             api/ \
             analysis/ \
             services/ \
+            infra_automation/ \
             parsers/ \
             models/ \
             config.py \
@@ -102,6 +103,7 @@ jobs:
             api \
             analysis \
             cli \
+            infra_automation \
             llm \
             models \
             parsers \
@@ -163,7 +165,7 @@ jobs:
       - name: Static security analysis with Bandit
         run: |
           bandit \
-            -r api/ analysis/ services/ parsers/ llm/ models/ cli/ evidence/ \
+            -r api/ analysis/ services/ parsers/ llm/ models/ cli/ evidence/ infra_automation/ \
             -f json \
             -o bandit-report.json \
             --severity-level medium \
@@ -172,7 +174,7 @@ jobs:
             2>&1 | tee bandit.log || true
           # Review report — fail on high severity
           bandit \
-            -r api/ analysis/ services/ parsers/ llm/ models/ cli/ evidence/ \
+            -r api/ analysis/ services/ parsers/ llm/ models/ cli/ evidence/ infra_automation/ \
             --severity-level high \
             --confidence-level high \
             -x tests/
@@ -315,7 +317,7 @@ jobs:
           - shard: analysis-parsers
             targets: tests/test_analysis tests/test_parsers
           - shard: services
-            targets: tests/test_services
+            targets: tests/test_services tests/test_infra_automation
           - shard: llm
             targets: tests/test_llm
     steps:
