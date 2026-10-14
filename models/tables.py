@@ -13,6 +13,7 @@ from sqlalchemy import (
     ForeignKeyConstraint,
     Index,
     Integer,
+    LargeBinary,
     String,
     Text,
     UniqueConstraint,
@@ -930,4 +931,168 @@ if "ProjectAuthorizationAudit" not in globals():
         object_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
         before_json: Mapped[str] = mapped_column(Text, default="{}")
         after_json: Mapped[str] = mapped_column(Text, default="{}")
+        created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+if "InfraWorkflow" not in globals():
+
+    class InfraWorkflow(Base):
+        """Scoped automation persistence owned by caller transactions."""
+
+        __tablename__ = "infra_workflows"
+        __table_args__ = (
+            UniqueConstraint("id", "project_id", name="uq_infra_workflows_id_project"),
+            CheckConstraint("draft_version > 0", name="ck_infra_workflow_version"),
+            CheckConstraint(
+                "length(draft_definition) BETWEEN 1 AND 131072",
+                name="ck_infra_workflow_bytes",
+            ),
+            CheckConstraint(
+                "length(name) BETWEEN 1 AND 120", name="ck_infra_workflow_name"
+            ),
+            ForeignKeyConstraint(
+                ["project_id", "workspace_id"],
+                ["project_workspaces.project_id", "project_workspaces.id"],
+                ondelete="RESTRICT",
+                name="fk_infra_workflows_workspace",
+            ),
+            {"sqlite_autoincrement": True},
+        )
+        sequence: Mapped[int] = mapped_column(
+            Integer, primary_key=True, autoincrement=True
+        )
+        id: Mapped[str] = mapped_column(String(64), unique=True)
+        project_id: Mapped[int] = mapped_column(
+            ForeignKey("projects.id", ondelete="RESTRICT"), index=True
+        )
+        workspace_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+        name: Mapped[str] = mapped_column(String(120))
+        draft_definition: Mapped[bytes] = mapped_column(LargeBinary)
+        draft_digest: Mapped[str] = mapped_column(String(71))
+        draft_version: Mapped[int] = mapped_column(Integer, default=1)
+        archived: Mapped[bool] = mapped_column(Boolean, default=False)
+        created_by: Mapped[str] = mapped_column(
+            ForeignKey("identity_accounts.id", ondelete="RESTRICT")
+        )
+        created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+        updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+if "InfraWorkflowRevision" not in globals():
+
+    class InfraWorkflowRevision(Base):
+        """Scoped automation persistence owned by caller transactions."""
+
+        __tablename__ = "infra_workflow_revisions"
+        __table_args__ = (
+            UniqueConstraint(
+                "workflow_id",
+                "revision_number",
+                name="uq_infra_workflow_revision_number",
+            ),
+            UniqueConstraint(
+                "published_by",
+                "idempotency_key_digest",
+                name="uq_infra_workflow_publication_key",
+            ),
+            ForeignKeyConstraint(
+                ["workflow_id", "project_id"],
+                ["infra_workflows.id", "infra_workflows.project_id"],
+                ondelete="RESTRICT",
+                name="fk_infra_revision_workflow_project",
+            ),
+            CheckConstraint("revision_number > 0", name="ck_infra_revision_number"),
+            CheckConstraint(
+                "length(canonical_definition) BETWEEN 1 AND 131072",
+                name="ck_infra_revision_bytes",
+            ),
+            ForeignKeyConstraint(
+                ["project_id", "workspace_id"],
+                ["project_workspaces.project_id", "project_workspaces.id"],
+                ondelete="RESTRICT",
+                name="fk_infra_workflow_revisions_workspace",
+            ),
+            {"sqlite_autoincrement": True},
+        )
+        sequence: Mapped[int] = mapped_column(
+            Integer, primary_key=True, autoincrement=True
+        )
+        id: Mapped[str] = mapped_column(String(64), unique=True)
+        workflow_id: Mapped[str] = mapped_column(
+            ForeignKey("infra_workflows.id", ondelete="RESTRICT"), index=True
+        )
+        project_id: Mapped[int] = mapped_column(
+            ForeignKey("projects.id", ondelete="RESTRICT"), index=True
+        )
+        workspace_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+        revision_number: Mapped[int] = mapped_column(Integer)
+        canonical_definition: Mapped[bytes] = mapped_column(LargeBinary)
+        digest: Mapped[str] = mapped_column(String(71))
+        published_by: Mapped[str] = mapped_column(
+            ForeignKey("identity_accounts.id", ondelete="RESTRICT")
+        )
+        idempotency_key_digest: Mapped[str] = mapped_column(String(71))
+        request_digest: Mapped[str] = mapped_column(String(71))
+        created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+if "InfraAutomationPolicy" not in globals():
+
+    class InfraAutomationPolicy(Base):
+        """Scoped automation persistence owned by caller transactions."""
+
+        __tablename__ = "infra_automation_policies"
+        __table_args__ = (
+            CheckConstraint(
+                "version > 0 AND authorization_epoch > 0 AND restore_epoch > 0",
+                name="ck_infra_policy_versions",
+            ),
+        )
+        project_id: Mapped[int] = mapped_column(
+            ForeignKey("projects.id", ondelete="RESTRICT"), primary_key=True
+        )
+        settings_json: Mapped[str] = mapped_column(Text)
+        version: Mapped[int] = mapped_column(Integer)
+        authorization_epoch: Mapped[int] = mapped_column(Integer)
+        restore_epoch: Mapped[int] = mapped_column(Integer)
+        created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+        updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+if "InfraAutomationAudit" not in globals():
+
+    class InfraAutomationAudit(Base):
+        """Scoped automation persistence owned by caller transactions."""
+
+        __tablename__ = "infra_automation_audit"
+        __table_args__ = (
+            CheckConstraint(
+                "length(reason) BETWEEN 1 AND 256", name="ck_infra_audit_reason"
+            ),
+            ForeignKeyConstraint(
+                ["project_id", "workspace_id"],
+                ["project_workspaces.project_id", "project_workspaces.id"],
+                ondelete="RESTRICT",
+                name="fk_infra_automation_audit_workspace",
+            ),
+            {"sqlite_autoincrement": True},
+        )
+        sequence: Mapped[int] = mapped_column(
+            Integer, primary_key=True, autoincrement=True
+        )
+        id: Mapped[str] = mapped_column(String(64), unique=True)
+        project_id: Mapped[int] = mapped_column(
+            ForeignKey("projects.id", ondelete="RESTRICT"), index=True
+        )
+        workspace_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+        actor_principal_id: Mapped[str] = mapped_column(
+            ForeignKey("identity_accounts.id", ondelete="RESTRICT")
+        )
+        actor_type: Mapped[str] = mapped_column(String(20))
+        actor_role: Mapped[str] = mapped_column(String(20))
+        event_type: Mapped[str] = mapped_column(String(80))
+        target_id: Mapped[str] = mapped_column(String(128))
+        reason: Mapped[str] = mapped_column(String(256))
+        before_digest: Mapped[str | None] = mapped_column(String(71), nullable=True)
+        after_digest: Mapped[str | None] = mapped_column(String(71), nullable=True)
         created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))

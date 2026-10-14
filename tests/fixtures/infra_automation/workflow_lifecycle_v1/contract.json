@@ -1,0 +1,116 @@
+{
+  "contract_version": 1,
+  "workflow_version": 2,
+  "project_scope": "numeric IDs encoded as exact decimal strings in workflow-v2",
+  "capabilities": {
+    "draft": "automation.draft",
+    "validate": "automation.draft",
+    "publish": "automation.publish",
+    "read": "automation.read",
+    "archive": "automation.admin",
+    "restore": "automation.admin",
+    "settings_read": "automation.draft",
+    "settings_write": "automation.admin",
+    "audit_export": "automation.admin",
+    "snapshot": "automation.request"
+  },
+  "settings_defaults": {
+    "enabled": false,
+    "max_workflows": 100,
+    "max_revisions_per_workflow": 100,
+    "max_active_runs": 10,
+    "max_queued_runs": 100,
+    "max_artifact_bytes": 8388608,
+    "retention_seconds": 604800,
+    "evidence_ttl_seconds": 3600,
+    "approval_ttl_seconds": 900,
+    "credential_ttl_seconds": 900
+  },
+  "hard_bounds": {
+    "transport_bytes": 131072,
+    "transport_depth": 16,
+    "snapshot_bytes": 524288,
+    "page_default": 25,
+    "page_max": 100,
+    "cursor_lifetime_seconds": 900,
+    "cursor_states": 1024,
+    "retention_floor_seconds": 86400,
+    "ttl_floor_seconds": 60,
+    "ttl_ceiling_seconds": 3600
+  },
+  "epoch_matrix": {
+    "disabled": [
+      "deny:start",
+      "deny:claim",
+      "deny:dispatch",
+      "deny:consume",
+      "allow:authorized-read",
+      "allow:authorized-reconcile"
+    ],
+    "revoked_membership": [
+      "deny:effects",
+      "deny:revoked-caller-read",
+      "allow:other-authorized-reconcile"
+    ],
+    "stale_restore_epoch": [
+      "deny:effects",
+      "allow:authorized-read",
+      "allow:authorized-reconcile"
+    ],
+    "policy_reduction": [
+      "advance-authorization-epoch-before-deletion",
+      "retain:accepted",
+      "retain:unknown"
+    ],
+    "advisory_policy_edit": [
+      "advance-authorization-epoch-in-same-transaction",
+      "append-audit",
+      "never-revive-on-restore"
+    ],
+    "archived_after_snapshot": [
+      "deny:start",
+      "allow:authorized-accepted-reconcile"
+    ]
+  },
+  "publication": {
+    "unique": [
+      "workflow_id/revision_number",
+      "publisher/key_digest"
+    ],
+    "same_key_same_request": "same revision after live authorization",
+    "same_key_changed_request": "409",
+    "stale_draft_version": "409",
+    "missing_or_cross_scope": "403",
+    "invalid_definition": "422",
+    "draft_snapshot": "deny",
+    "success": "advance optimistic draft version atomically",
+    "replay_after_edit": "compute incoming tuple using stored revision definition digest"
+  },
+  "immutability": [
+    "published revision update/delete denied",
+    "audit update/delete denied",
+    "restore creates a new draft version",
+    "exported snapshot bytes remain unchanged"
+  ],
+  "validation_envelope": {
+    "data": {
+      "valid": false,
+      "digest": null,
+      "errors": [
+        {
+          "code": "schema_version",
+          "message": "Workflow major version must be the strict integer 2.",
+          "path": [
+            "workflow_version"
+          ],
+          "step_index": null,
+          "line": null,
+          "column": null
+        }
+      ],
+      "truncated": false
+    },
+    "meta": "existing build_meta"
+  },
+  "fixtures_are": "interface acceptance expectations; executable proof required during story implementation"
+}

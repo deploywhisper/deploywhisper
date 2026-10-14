@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from infra_automation.contracts import ValidationLimits
+    from infra_automation.lifecycle import AutomationSettings
 
 
 PROVIDER_ENV_API_KEYS: dict[str, tuple[str, ...]] = {
@@ -119,6 +120,33 @@ class Settings:
     workflow_validation_max_errors: int = int(
         os.getenv("DEPLOYWHISPER_WORKFLOW_MAX_ERRORS", "50")
     )
+    automation_max_workflows: int = int(
+        os.getenv("DEPLOYWHISPER_AUTOMATION_MAX_WORKFLOWS", "100")
+    )
+    automation_max_revisions_per_workflow: int = int(
+        os.getenv("DEPLOYWHISPER_AUTOMATION_MAX_REVISIONS_PER_WORKFLOW", "100")
+    )
+    automation_max_active_runs: int = int(
+        os.getenv("DEPLOYWHISPER_AUTOMATION_MAX_ACTIVE_RUNS", "10")
+    )
+    automation_max_queued_runs: int = int(
+        os.getenv("DEPLOYWHISPER_AUTOMATION_MAX_QUEUED_RUNS", "100")
+    )
+    automation_max_artifact_bytes: int = int(
+        os.getenv("DEPLOYWHISPER_AUTOMATION_MAX_ARTIFACT_BYTES", "8388608")
+    )
+    automation_retention_seconds: int = int(
+        os.getenv("DEPLOYWHISPER_AUTOMATION_RETENTION_SECONDS", "604800")
+    )
+    automation_evidence_ttl_seconds: int = int(
+        os.getenv("DEPLOYWHISPER_AUTOMATION_EVIDENCE_TTL_SECONDS", "3600")
+    )
+    automation_approval_ttl_seconds: int = int(
+        os.getenv("DEPLOYWHISPER_AUTOMATION_APPROVAL_TTL_SECONDS", "900")
+    )
+    automation_credential_ttl_seconds: int = int(
+        os.getenv("DEPLOYWHISPER_AUTOMATION_CREDENTIAL_TTL_SECONDS", "900")
+    )
     identity_profile: str = os.getenv("DEPLOYWHISPER_IDENTITY_PROFILE", "disabled")
     identity_origin: str = os.getenv("DEPLOYWHISPER_IDENTITY_ORIGIN", "")
     authorization_profile: str = os.getenv(
@@ -221,4 +249,22 @@ def workflow_validation_limits() -> ValidationLimits:
         max_steps=settings.workflow_validation_max_steps,
         max_inputs=settings.workflow_validation_max_inputs,
         max_errors=settings.workflow_validation_max_errors,
+    )
+
+
+def automation_settings_defaults() -> AutomationSettings:
+    """Validated defaults for unconfigured projects; execution always starts off."""
+    from infra_automation.lifecycle import AutomationSettings
+
+    return AutomationSettings(
+        enabled=False,
+        max_workflows=settings.automation_max_workflows,
+        max_revisions_per_workflow=settings.automation_max_revisions_per_workflow,
+        max_active_runs=settings.automation_max_active_runs,
+        max_queued_runs=settings.automation_max_queued_runs,
+        max_artifact_bytes=settings.automation_max_artifact_bytes,
+        retention_seconds=settings.automation_retention_seconds,
+        evidence_ttl_seconds=settings.automation_evidence_ttl_seconds,
+        approval_ttl_seconds=settings.automation_approval_ttl_seconds,
+        credential_ttl_seconds=settings.automation_credential_ttl_seconds,
     )
