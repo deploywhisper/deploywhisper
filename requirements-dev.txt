@@ -18,9 +18,9 @@ annotated-types==0.8.0 \
     # via
     #   -c requirements.txt
     #   pydantic
-anthropic==0.97.0 \
-    --hash=sha256:021e79fd8e21e90ad94dc5ba2bbbd8b1599f424f5b1fab6c06204009cab764be \
-    --hash=sha256:8a1a472dfabcfc0c52ff6a3eecf724ac7e07107a2f6e2367be55ceb42f5d5613
+anthropic==1.13.0 \
+    --hash=sha256:157bd74dbf6a595cf9e5fcac557c791fd297924dc48261f57470c2ed6f4e6671 \
+    --hash=sha256:ad11d9bb9adafdfea26113943bcde9973e2a439ebeeda6c89ff3e3d85bb2f5c1
     # via
     #   -c requirements.txt
     #   -r requirements-runtime.txt
