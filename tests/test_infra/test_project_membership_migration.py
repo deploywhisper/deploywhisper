@@ -17,7 +17,7 @@ from alembic.config import Config
 import config
 import models.database as database
 
-HEAD = "030_add_project_memberships"
+HEAD = "031_add_infra_workflows"
 PREVIOUS = "029_add_identity_lifecycle"
 
 

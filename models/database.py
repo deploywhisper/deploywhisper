@@ -61,6 +61,7 @@ _KNOWN_ALEMBIC_REVISIONS = {
     "028_add_narrative_guidance_payload",
     "029_add_identity_lifecycle",
     "030_add_project_memberships",
+    "031_add_infra_workflows",
 }
 _BASELINE_TABLES = {"analysis_reports", "app_settings"}
 _EVIDENCE_TABLES = {
@@ -1056,9 +1057,98 @@ def _project_authorization_schema_complete(connection, tables: set[str]) -> bool
     return True
 
 
+def _infra_automation_schema_complete(connection, tables: set[str]) -> bool:
+    """Never let create_all disguise an interrupted security-sensitive migration."""
+    migration = import_module("migrations.versions.031_add_infra_workflows")
+    names = set(migration.TABLES)
+    actual_triggers = dict(
+        connection.exec_driver_sql(
+            "SELECT name, sql FROM sqlite_master WHERE type='trigger' AND name LIKE 'infra_%'"
+        ).all()
+    )
+    if not names & tables and not actual_triggers:
+        return False
+
+    def incomplete() -> None:
+        raise RuntimeError(
+            "Detected a partial infra automation schema. Manual recovery is required."
+        )
+
+    def normalized(sql: str) -> str:
+        return re.sub(r"\s+", "", sql).lower().replace('"', "").rstrip(";")
+
+    if not names <= tables:
+        incomplete()
+    inspector = inspect(connection)
+    for name in names:
+        expected = Base.metadata.tables[name]
+        actual = {c["name"]: c for c in inspector.get_columns(name)}
+        for column in expected.columns:
+            found = actual.get(column.name)
+            if (
+                found is None
+                or found["type"]._type_affinity is not column.type._type_affinity
+                or found["nullable"] != column.nullable
+                or bool(found["primary_key"]) != bool(column.primary_key)
+            ):
+                incomplete()
+        foreign_keys = {
+            (
+                tuple(k["constrained_columns"]),
+                k["referred_table"],
+                tuple(k["referred_columns"]),
+                (k.get("options") or {}).get("ondelete"),
+            )
+            for k in inspector.get_foreign_keys(name)
+        }
+        for constraint in expected.foreign_key_constraints:
+            key = (
+                tuple(e.parent.name for e in constraint.elements),
+                constraint.referred_table.name,
+                tuple(e.column.name for e in constraint.elements),
+                constraint.ondelete,
+            )
+            if key not in foreign_keys:
+                incomplete()
+        from sqlalchemy import CheckConstraint, UniqueConstraint
+
+        checks = {
+            normalized(c["sqltext"]) for c in inspector.get_check_constraints(name)
+        }
+        unique = {
+            tuple(c["column_names"]) for c in inspector.get_unique_constraints(name)
+        }
+        for constraint in expected.constraints:
+            if (
+                isinstance(constraint, CheckConstraint)
+                and normalized(str(constraint.sqltext)) not in checks
+            ):
+                incomplete()
+            if (
+                isinstance(constraint, UniqueConstraint)
+                and tuple(c.name for c in constraint.columns) not in unique
+            ):
+                incomplete()
+        table_sql = (
+            connection.exec_driver_sql(
+                "SELECT sql FROM sqlite_master WHERE type='table' AND name=?", (name,)
+            ).scalar()
+            or ""
+        )
+        if "sequence" in actual and "autoincrement" not in table_sql.lower():
+            incomplete()
+    for name, body in migration.GUARDS.items():
+        if normalized(actual_triggers.get(name, "")) != normalized(
+            f"CREATE TRIGGER {name} {body}"
+        ):
+            incomplete()
+    return True
+
+
 def _bootstrap_brownfield_revision() -> None:
     with engine.begin() as connection:
         tables = set(inspect(connection).get_table_names())
+        has_complete_automation = _infra_automation_schema_complete(connection, tables)
         tables = _repair_partial_evidence_schema(connection, tables)
 
         has_baseline_tables = _BASELINE_TABLES.issubset(tables)
@@ -1092,16 +1182,25 @@ def _bootstrap_brownfield_revision() -> None:
             if revision in {
                 "029_add_identity_lifecycle",
                 "030_add_project_memberships",
+                "031_add_infra_workflows",
             } and not _identity_schema_complete(connection, tables):
                 raise RuntimeError(
                     "Detected a partial identity schema. Manual recovery is required."
                 )
             if (
-                revision == "030_add_project_memberships"
+                revision in {"030_add_project_memberships", "031_add_infra_workflows"}
                 and not has_complete_authorization
             ):
                 raise RuntimeError(
                     "Detected a partial project authorization schema. Manual recovery is required."
+                )
+            if revision == "031_add_infra_workflows" and not has_complete_automation:
+                raise RuntimeError(
+                    "Detected a partial infra automation schema. Manual recovery is required."
+                )
+            if has_complete_automation and revision != "031_add_infra_workflows":
+                raise RuntimeError(
+                    "Detected a partial infra automation migration history. Manual recovery is required."
                 )
             return
 
@@ -1319,6 +1418,12 @@ def _bootstrap_brownfield_revision() -> None:
                         "Detected a partial project authorization schema. Manual recovery is required."
                     )
                 revision = "030_add_project_memberships"
+            if has_complete_automation:
+                if not has_complete_authorization:
+                    raise RuntimeError(
+                        "Detected a partial infra automation schema. Manual recovery is required."
+                    )
+                revision = "031_add_infra_workflows"
             _write_alembic_revision(connection, revision)
             return
         if scoped_learning_columns_present and not has_complete_learning_context_scope:

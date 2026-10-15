@@ -250,15 +250,17 @@ def save_policy_adapter_settings(
             reporting_default=reporting_default,
             enforcement_mode=enforcement_mode,
         )
-        upsert_setting(
-            session,
-            key=_policy_adapter_settings_key(
-                project_key=normalized_project_key,
-                integration=normalized_integration,
-            ),
-            value=json.dumps(resolved.model_dump(mode="json"), sort_keys=True),
-            commit=False,
+        key = _policy_adapter_settings_key(
+            project_key=normalized_project_key, integration=normalized_integration
         )
+        value = json.dumps(resolved.model_dump(mode="json"), sort_keys=True)
+        previous = get_setting(session, key)
+        changed = previous is None or previous.value != value
+        upsert_setting(session, key=key, value=value, commit=False)
+        if changed:
+            from services.infra_automation_policy import advisory_policy_changed
+
+            advisory_policy_changed(session, normalized_project_key)
         return resolved
 
 
@@ -319,14 +321,15 @@ def delete_policy_adapter_settings(
             if integration is not None
             else None
         )
-        delete_setting(
-            session,
-            _policy_adapter_settings_key(
-                project_key=normalized_project_key,
-                integration=normalized_integration,
-            ),
-            commit=False,
+        key = _policy_adapter_settings_key(
+            project_key=normalized_project_key, integration=normalized_integration
         )
+        existed = get_setting(session, key) is not None
+        delete_setting(session, key, commit=False)
+        if existed:
+            from services.infra_automation_policy import advisory_policy_changed
+
+            advisory_policy_changed(session, normalized_project_key)
         return get_policy_adapter_settings(
             project_key=normalized_project_key,
             integration=normalized_integration,

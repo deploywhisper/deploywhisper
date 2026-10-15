@@ -681,6 +681,7 @@ Project documentation currently lives in a few places:
 - [Kubernetes Live-State Connector](./docs/kubernetes-live-state-connector.md)
 - [Evidence Model Foundation](./docs/evidence-model.md)
 - [Workflow v2 Schema and Validation](./docs/infra-automation/workflow-schema.md)
+- [Scoped Workflow Lifecycle and Configuration](./docs/infra-automation/workflows.md)
 - [CI Guide](./docs/ci.md)
 - [CI Secrets Checklist](./docs/ci-secrets-checklist.md)
 

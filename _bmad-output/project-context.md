@@ -1,11 +1,11 @@
 ---
 project_name: 'deploywhisper'
 user_name: 'psaho01'
-date: '2026-10-13'
+date: '2026-10-14'
 sections_completed:
   ['technology_stack', 'language_rules', 'framework_rules', 'testing_rules', 'quality_rules', 'workflow_rules', 'anti_patterns']
 status: 'complete'
-rule_count: 48
+rule_count: 49
 optimized_for_llm: true
 ---
 
@@ -105,6 +105,7 @@ The owner adopted the bounded preflight/handoff plan on 2026-10-07. This is futu
 - Preserve existing IDs and completed history. Epic 16 is the highest-priority v1.5.0 feature; 12.5 SBOM remains a separate release enabler. All 20 contexts are prepared. Story16.0 is complete for governance/disposable qualification; consult each story and the sprint tracker for current delivery/review state. Story16.2 passed its scoped 2026-10-13 readiness assessment; later stories remain gated by their own dependencies.
 - RFC 0001 is Accepted by direct maintainer decision with a documented RFC-specific early-window exception. Use the final Story 16.0 evidence/readiness record and frozen `docs/infra-automation/contract-v1.md`; production implementation remains in the owning dependent stories. Qualification applies to the declared disposable Linux ARM64/OpenTofu profile and controlled process/container restart, not host-power-loss or universal production support.
 - Current workflow authority (2026-10-13): use [workflow-contract-v2.md](../docs/infra-automation/workflow-contract-v2.md) and the [approved course correction](planning-artifacts/sprint-change-proposal-2026-10-13-workflow-v2.md) for Story16.3 and consumers. Require explicit strict integer `workflow_version: 2`; no nested version and no automatic v1 conversion. Frozen v1 artifacts/results remain unchanged historical evidence. Runner/enrollment, receiver, provenance, state, error and cursor stay independently v1; reports stay v2. Only receiver binding directly carries workflow revision/input digests. Keep typed input/step/project/run references, source/profile/environment constraints and `tuple-json-utf8-v1` canonicalization. Null definition workspace is project-scoped authoring only: later owners resolve an authorized concrete workspace before runner/receiver messages and bind it in the run snapshot.
+- Story16.4 lifecycle uses `services/infra_automation_service.py`, immutable revision/audit storage in migration031, and [workflow-lifecycle-contract-v1.md](../docs/infra-automation/workflow-lifecycle-contract-v1.md). Publication advances the draft version and binds publisher/key to its original request and definition digest. Consume snapshots through `export_run_snapshot`; authoritative bytes are immutable and typed views are fresh. Feature execution defaults off while authoring/history remain available. `infra_automation_policy.check_live_policy` is an additional deny check, never a credential: later consumers authenticate their own operation/audience and hold the same `authorized_session` through live checking and mutation. Settings/advisory edits advance epochs atomically with audit; accepted/unknown work stays readable and retention-protected. No run, runner, grant or outbox persistence is supplied by this slice. Resolve authorization types/functions through the `project_service` module so configuration reloads cannot leave stale exception identities.
 - Automation authority must resolve verified sessions/memberships and separate credential audiences. Never reuse caller role/actor headers or missing-role-to-admin behavior as authenticated approval. Story16.1 supplies `services/identity_service.py`, `api/dependencies.py::require_human_principal`, `/api/v1/auth` and the local `python -m cli.identity` bootstrap/recovery commands. Identity defaults to disabled; sessions bind exact origin/profile and local-development cannot become HTTPS authority. Identity alone grants no project permission. Follow `docs/infra-automation/identity.md` for cookie/CSRF, protected credential files and explicit proxy trust, and `docs/infra-automation/permissions.md` for Story16.2 membership/capability contracts.
 - Protected service operations use `services/project_service.py::authorized_session` and live scope guards; nested services reuse the operation transaction and repositories flush rather than commit. Bind credentials, never a cached grant. Mutations explicitly require mutation credentials/CSRF even when reusing a read-capability helper. Filter collection/aggregate rows before pagination/counting, and retain `outcome.read` on outcome-derived history/trend/calibration data independently of `report.read`.
 - A protected report also protects its parent context and sibling reports. Deleting the last marked report must persist the parent's protection flag. Artifact access requires a live authorized report row. Share tokens/passwords cannot replace membership. Protected topology drift reads return matching cached status or unavailable; refreshing sources/persisting drift requires `topology.manage` with mutation authority.
@@ -132,4 +133,4 @@ The owner adopted the bounded preflight/handoff plan on 2026-10-07. This is futu
 - Update it when tooling, validation commands, or architecture boundaries materially change.
 - Remove rules that become obsolete or are contradicted by the current codebase.
 
-Last Updated: 2026-10-13
+Last Updated: 2026-10-14
