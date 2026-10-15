@@ -404,9 +404,9 @@ google-auth==2.60.0 \
     --hash=sha256:34aa0283ef72c99cd410e35db4417211fa3e6aaa5399183227bbe3b82bd15192 \
     --hash=sha256:e78414cd2e22cc02884768707def024ca32da17695f2c0e6194cdbe1316c4cd4
     # via google-genai
-google-genai==1.73.1 \
-    --hash=sha256:af2d2287d25e42a187de19811ef33beb2e347c7e2bdb4dc8c467d78254e43a2c \
-    --hash=sha256:b637e3a3b9e2eccc46f27136d470165803de84eca52abfed2e7352081a4d5a15
+google-genai==2.29.0 \
+    --hash=sha256:124d3eef9ff6b9e4ea548f95ff5b7721683e7990c0a936b006d9e2ab61ea897d \
+    --hash=sha256:7adda55cb6746fb46d38ad3202c3372840b96eede964b5fb3df1469cd4998570
     # via -r requirements-runtime.txt
 greenlet==3.5.6 ; platform_machine == 'AMD64' or platform_machine == 'WIN32' or platform_machine == 'aarch64' or platform_machine == 'amd64' or platform_machine == 'ppc64le' or platform_machine == 'win32' or platform_machine == 'x86_64' \
     --hash=sha256:0616b8f878098c5681fd8f0dc92d887551717402342a70f0abcbfea5f5ad8a44 \
