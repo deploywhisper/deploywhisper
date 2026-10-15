@@ -29,7 +29,7 @@ from services import project_service as authorization
 def get_settings(project_id: int) -> dict:
     with authorization.authorized_session() as session:
         support.scope(session, project_id, None, "automation.draft", mutation=False)
-        return support.policy_view(session, project_id)
+        return support.bounded_payload(support.policy_view(session, project_id))
 
 
 def _counters(row) -> None:
@@ -78,7 +78,9 @@ def update_settings(request: UpdateSettingsRequest) -> dict:
         if row:
             _counters(row)
             if current == request.settings:
-                return support.policy_view(session, request.project_id)
+                return support.bounded_payload(
+                    support.policy_view(session, request.project_id)
+                )
         maximum = (
             session.scalar(
                 select(func.count(InfraWorkflowRevision.sequence))
@@ -95,13 +97,15 @@ def update_settings(request: UpdateSettingsRequest) -> dict:
             or maximum > request.settings.max_revisions_per_workflow
         ):
             raise LifecycleError(409)
-        return _write(
-            session,
-            grant,
-            request.settings,
-            request.expected_version,
-            request.reason,
-            event="automation_settings_changed",
+        return support.bounded_payload(
+            _write(
+                session,
+                grant,
+                request.settings,
+                request.expected_version,
+                request.reason,
+                event="automation_settings_changed",
+            )
         )
 
 
@@ -118,14 +122,18 @@ def advance_epoch(request: AdvanceEpochRequest, *, restore: bool = False) -> dic
         if row is None or row.version != request.expected_version:
             raise LifecycleError(409)
         _counters(row)
-        return _write(
-            session,
-            grant,
-            settings,
-            request.expected_version,
-            request.reason,
-            event="automation_restore_invalidated" if restore else "automation_revoked",
-            restore=restore,
+        return support.bounded_payload(
+            _write(
+                session,
+                grant,
+                settings,
+                request.expected_version,
+                request.reason,
+                event="automation_restore_invalidated"
+                if restore
+                else "automation_revoked",
+                restore=restore,
+            )
         )
 
 

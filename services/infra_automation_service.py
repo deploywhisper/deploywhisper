@@ -341,6 +341,9 @@ def publish_workflow(
         )
         if changed is None:
             raise LifecycleError(409)
+        # The revision response is smaller; a version digit must not make the
+        # updated draft unreadable after an otherwise successful publication.
+        _view(changed)
         revision = repository.append_revision(
             session,
             workflow_id=row.id,

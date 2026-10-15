@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from contextlib import ExitStack
 import json
+from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
@@ -178,6 +179,113 @@ class InfraAutomationWorkflowApiTests(unittest.TestCase):
             "/api/v1/infra-automation/workflows?project_id=1", headers=self.headers()
         )
         self.assertEqual(len(workflows.json()["data"]["items"]), 2)
+
+        exact_path = "/api/v1/infra-automation/workflows/" + exact.json()["data"]["id"]
+        for version in range(1, 9):
+            published = self.client.post(
+                exact_path + "/revisions",
+                json={
+                    "expected_version": version,
+                    "idempotency_key": f"exact-{version}",
+                    "reason": "Publish exact-limit draft",
+                },
+                headers=self.headers(),
+            )
+            self.assertEqual(published.status_code, 200, published.text)
+        before = self.client.get(audit_path, headers=self.headers()).json()["data"][
+            "items"
+        ]
+        rejected = self.client.post(
+            exact_path + "/revisions",
+            json={
+                "expected_version": 9,
+                "idempotency_key": "exact-9",
+                "reason": "Publish",
+            },
+            headers=self.headers(),
+        )
+        self.assert_error(rejected, 429)
+        unchanged = self.client.get(exact_path, headers=self.headers())
+        self.assertEqual(unchanged.status_code, 200, unchanged.text)
+        self.assertEqual(unchanged.json()["data"]["draft_version"], 9)
+        self.assertEqual(len(unchanged.content), 131072)
+        revisions = self.client.get(exact_path + "/revisions", headers=self.headers())
+        self.assertEqual(len(revisions.json()["data"]["items"]), 8)
+        after = self.client.get(audit_path, headers=self.headers()).json()["data"][
+            "items"
+        ]
+        self.assertEqual(after, before)
+
+    def test_settings_response_ceiling_checks_reads_noops_and_rolls_back_mutations(
+        self,
+    ):
+        large_metadata = SimpleNamespace(
+            **{**vars(config.settings), "app_name": "a" * 131000}
+        )
+        path = "/api/v1/infra-automation/settings"
+        audit_path = "/api/v1/infra-automation/audit?project_id=1"
+        payload = {
+            "project_id": 1,
+            "expected_version": 0,
+            "settings": AutomationSettings(enabled=True).model_dump(),
+            "reason": "Enable fixture",
+        }
+        with patch("api.schemas.settings", large_metadata):
+            self.assert_error(
+                self.client.patch(path, json=payload, headers=self.headers()), 429
+            )
+        initial = self.client.get(path + "?project_id=1", headers=self.headers())
+        self.assertEqual(initial.json()["data"]["version"], 0)
+        self.assertEqual(
+            self.client.get(audit_path, headers=self.headers()).json()["data"]["items"],
+            [],
+        )
+
+        configured = self.client.patch(path, json=payload, headers=self.headers())
+        self.assertEqual(configured.status_code, 200, configured.text)
+        expected = configured.json()["data"]
+        audit = self.client.get(audit_path, headers=self.headers()).json()["data"][
+            "items"
+        ]
+        payload["expected_version"] = 1
+        requests = [
+            ("GET", path + "?project_id=1", None),
+            ("PATCH", path, payload),
+            (
+                "PATCH",
+                path,
+                {**payload, "settings": AutomationSettings(enabled=False).model_dump()},
+            ),
+            *[
+                (
+                    "POST",
+                    path + "/" + action,
+                    {"project_id": 1, "expected_version": 1, "reason": "Invalidate"},
+                )
+                for action in ("revoke", "restore-epoch")
+            ],
+        ]
+        for method, url, body in requests:
+            with (
+                self.subTest(method=method, url=url),
+                patch("api.schemas.settings", large_metadata),
+            ):
+                response = self.client.request(
+                    method, url, json=body, headers=self.headers()
+                )
+                self.assert_error(response, 429)
+            self.assertEqual(
+                self.client.get(path + "?project_id=1", headers=self.headers()).json()[
+                    "data"
+                ],
+                expected,
+            )
+            self.assertEqual(
+                self.client.get(audit_path, headers=self.headers()).json()["data"][
+                    "items"
+                ],
+                audit,
+            )
 
     def test_success_responses_include_fresh_nonsecret_correlation_ids(self):
         created = self.create()

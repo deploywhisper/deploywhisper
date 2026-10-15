@@ -1,9 +1,9 @@
 {
-  "captured_at": "2026-10-14T12:07:05.740189+00:00",
+  "captured_at": "2026-10-14T13:47:56.650514+00:00",
   "story": "16.4",
   "baseline": "ce4416dcef2022cf933da303a75cb979ecf7c5b0",
   "branch": "feature/16-4-scoped-workflow-revisions",
-  "runtime_image": "sha256:46a5c6803819ed6b06fb16b5e5a846c40e2c5b9fd096925dea009069de1732c5",
+  "runtime_image": "sha256:bdaa2d5f42fb5f7915227eea283a944f5c448b53c824367c7142ed2db201a9bf",
   "runtime_files": {
     "api/routes/infra_automation.py": "sha256:69e1640e0792e902c671ef00dc715a1ac768bc5a2cc5bad7954aed398763fe7a",
     "api/schemas.py": "sha256:8a9da9374ca81561225ee2e208c4cc3acada835c2c083eae66e8af627a1abf72",
@@ -15,8 +15,8 @@
     "models/database.py": "sha256:5a39b4d2a49ff78f7f606adbb00ce96d075e0a70737b36e8aec7b1b2c50fdbcf",
     "models/repositories/infra_automation_workflows.py": "sha256:53bd2e2fd78c46653d8c49653035a783478b2456913c6dc00fb173f6eb35d7da",
     "models/tables.py": "sha256:b561eef6f3ac24df54c46b9a2ba8f9e1e6e46d1330965175502a664038a227ea",
-    "services/infra_automation_policy.py": "sha256:2e299a4d21c54ba0eb0c1fb22e46bffbe550cdf175a83c67150da59d3c122991",
-    "services/infra_automation_service.py": "sha256:6abfbd03abef935b980156f0a575bc0d2b99381bcdeb776ec86a4cca34957222",
+    "services/infra_automation_policy.py": "sha256:7adf586249e37698868ae98083f339c5bec3d6c58c9462e7dd97a4fb0e61e444",
+    "services/infra_automation_service.py": "sha256:7cad01be46c1457137cc5d835de306c8bd020a9f6ebb8e2195fc6d8c4b4a1a94",
     "services/infra_automation_snapshots.py": "sha256:9135b41143573f2a265690fd57badc5026b5755cb7abb2c4eb675e49f0b0af10",
     "services/infra_automation_support.py": "sha256:12de42c8da952f9f9a0d42591762125d357413f8ab6ff35a252b6dc004b577a4",
     "services/settings_service.py": "sha256:cd1336aa2014f57238927922397bdfa49d5ffa5a8c7411931b0210d8c694d3b9"

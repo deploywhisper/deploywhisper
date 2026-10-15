@@ -60,6 +60,9 @@ Execute packets in listed dependency order; assign one named owner per packet an
 
 - [x] [Review][Patch][P2] Measure the complete response envelope against the declared 128-KiB ceiling; the undocumented 130,000-byte detail ceiling rejects valid drafts whose complete response fits. [services/infra_automation_support.py:90]
 
+- [x] [Review][Patch][P2][Re-review] Check the updated draft response before publication commits; version 9→10 must not turn a readable exact-limit workflow into a 429 response. [services/infra_automation_service.py:339]
+- [x] [Review][Patch][P3][Re-review] Apply the complete response ceiling to settings reads, no-op updates and mutations inside their transaction, including configured metadata. [services/infra_automation_policy.py:28]
+
 ## Dev Notes
 
 ### Derived settings UX ownership
@@ -236,8 +239,41 @@ analytics-only commit `29a7310` does not overlap these files.
 BMad Help next step: assess Story 16.5 readiness against the completed 16.4 ports
 before promoting it from backlog; do not start its engine implementation here.
 
+## Re-review closure — 2026-10-15
+
+Outcome: **Approved; one P2 and one P3 corrected, no open findings.** Fresh Blind
+Hunter, Edge Case Hunter and Acceptance Auditor layers reviewed the full branch
+change. Publication now checks the updated draft before committing its version;
+settings reads, no-op writes and mutations enforce the complete response ceiling
+inside their transaction. Both fixes reuse existing checks and add rollback proofs,
+with no new abstraction or dependency. Reporting reviewers independently approved
+the corrections; see [the review report](16-4-code-review-2026-10-14.md).
+
+| Verification | Result |
+| --- | --- |
+| `python -m pytest tests/test_api tests/test_cli tests/test_infra -v --tb=short` | **648 passed, one skipped, 2,181 subtests**. |
+| `python -m pytest tests/test_services tests/test_infra_automation -v --tb=short` | **1,362 passed, 2,692 subtests**. |
+| `python -m unittest discover -q` | **825 tests, OK**, two expected skips. |
+| Focused automation/API/migration pytest | **149 passed, 479 subtests**. |
+| Production Python 3.11 lifecycle/API/migration unittest | **87 tests, OK**, one optional schema-validator skip. |
+| Ruff lint/format, diff check, touched-module mypy and Bandit | Passed; 375 Python files format-clean. |
+| Final documentation/schema/frozen-contract pytest | **66 passed, 391 subtests**. |
+| Rebuilt Docker image, startup/restart, migration 031 and source hashes | Passed; all 15 runtime files match the recorded image. |
+
+All application/DB checks used isolated synthetic databases and excluded local
+`.env` and application data. Closure confirmed source hashes and test bytes still
+match the checked revision after the interrupted session. The prior full local CI
+run of 2,270 tests and hosted checks on `b2f8051` remain baseline evidence; both
+affected shards and root/production suites above were rerun after these fixes.
+The full local CI command was not repeated. Existing typing debt remains;
+**UI validation not applicable**. Later engine/receiver/retention integration stays
+with its owning stories. Story 16.4 remains **done** on the existing feature branch,
+with corrections committed/pushed to PR #159 targeting `develop`.
+
 ## Change Log
 
 - 2026-10-14: Closed scoped readiness and interface gates; implemented persistence, HTTP/service lifecycle, immutable snapshots, policy invalidation, audit and qualification. Completed all owned acceptance criteria and moved story/sprint to **review** on `feature/16-4-scoped-workflow-revisions`.
 
 - 2026-10-14: Completed three-layer BMad review, corrected the complete-response byte boundary with red/green and rollback proof, reran all required gates, and moved story/sprint to **done**.
+
+- 2026-10-15: Closed the re-review after verifying publication/readability and settings-envelope fixes, rollback regressions, both affected CI shards and production qualification; no findings remain open.

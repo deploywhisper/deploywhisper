@@ -23,13 +23,13 @@ was copied into validation or Docker build contexts.
 | Transport/cursors | Bounded JSON rejects duplicates, excessive depth/bytes, nonfinite numbers and extra fields; errors remain closed and nonreflective. Signed cursors bind principal/scope/filter/snapshot/limit and cover tampering, expiry, eviction, restart and equal/backward timestamp inserts. |
 | Screening | Recognizable/configured secrets are rejected before canonical persistence or snapshot export; audit contains verified metadata and digests rather than raw definitions or inputs. |
 
-Fresh repository checks:
+First-review baseline checks (before the later re-review corrections):
 
 - `bash scripts/ci-local.sh`: **2,270 tests across all ten directories passed**,
   two expected skips, plus eight prompt-injection tests / 96 subtests, skill tests,
   dependency consistency, compilation, Ruff and configured Bandit.
 - API/CLI/infrastructure pytest shard: **647 passed, one skipped, 2,176 subtests**.
-- Final-source root discovery: **824 tests, OK (two skips)**.
+- First-review root discovery: **824 tests, OK (two skips)**.
 - Pre-review services/workflow pytest shard: **1,362 passed, 2,692 subtests**;
   all those service/automation tests also pass in the post-fix full local CI run.
 - Production Python3.11 lifecycle/migration suite: **86 tests, OK (one optional
@@ -51,7 +51,7 @@ through the module, and the list includes 031. Subsequent checks pass. The final
 snapshot JSON Schema also rejects keys outside the bounded input-name pattern;
 an independent JSON Schema validator proves this alongside runtime validation.
 
-The final BMad review used three fresh independent layers. It found one medium
+The first BMad review used three fresh independent layers. It found one medium
 response-size discrepancy: an arbitrary metadata allowance rejected a valid
 workflow whose complete response fit the declared ceiling. The correction measures
 the exact shared response envelope before commit. Its regression first failed, then
@@ -67,3 +67,35 @@ Application append-only guards are not tamper-proof against a host/database
 administrator. Actual machine authentication, runtime quota enforcement, deletion
 workers and coordinated restore remain later-story responsibilities. UI validation
 is not applicable; no React surface or browser interaction changed.
+
+## Re-review qualification — completed 2026-10-15
+
+A second complete three-layer review found two related boundary interactions.
+Publication now checks the updated draft as well as the revision response, so
+version 9→10 cannot commit an unreadable exact-limit draft. Public policy reads,
+no-op writes and mutations also enforce the complete response limit, including
+configured application metadata. The latter defect required unusually large
+operator-controlled metadata and was low severity. Both fixes reuse existing
+helpers; no additional abstraction or dependency was introduced.
+
+Both regressions failed before the fixes. Tests now prove unchanged workflow
+versions, revision counts, settings and audit records on overflow. Independent
+correction reviews found no remaining issues.
+
+| Verification | Result |
+| --- | --- |
+| `python -m pytest tests/test_api tests/test_cli tests/test_infra -v --tb=short` | **648 passed, one skipped, 2,181 subtests**. |
+| `python -m pytest tests/test_services tests/test_infra_automation -v --tb=short` | **1,362 passed, 2,692 subtests**. |
+| `python -m unittest discover -q` | **825 tests, OK**, two expected skips. |
+| Focused automation/API/migration pytest | **149 passed, 479 subtests**. |
+| Production Python 3.11 lifecycle/API/migration unittest | **87 tests, OK**, one optional schema-validator skip. |
+| Ruff lint/format, diff check, touched-module mypy and Bandit | Passed; 375 Python files format-clean. |
+| Final documentation/schema/frozen-contract pytest | **66 passed, 391 subtests**. |
+| Rebuilt Docker image, startup/restart, migration 031 and source hashes | Passed; all 15 runtime files match the recorded image. |
+
+These post-fix checks ran on October 14; closure on October 15 confirmed the runtime
+hashes and code/test bytes still match the verified isolated checkout. The source
+manifest identifies the rebuilt image. Both affected CI shards were rerun, while
+the first-review full local CI and hosted checks remain baseline evidence.
+No full local CI rerun was performed after these two bounded fixes. UI validation
+is not applicable. Existing repository-wide typing debt remains unchanged.

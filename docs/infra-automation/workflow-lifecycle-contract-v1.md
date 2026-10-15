@@ -79,6 +79,9 @@ revalidates schema, scope, screening and admitted profiles inside its transactio
 Successful publication advances the optimistic draft version in the same transaction, so two different keys using one expected version cannot both publish. Replay looks up the original publisher/key first after scope authorization and computes the incoming request digest using that stored revision’s definition digest, not today’s draft; identical retries after edits still return the original revision. No update/delete API for published rows; database guards reject revision mutation
 and audit update/delete through ordinary application SQL. DB/host administrators
 remain outside tamper-proof guarantees. Parent deletion cannot erase history.
+Publication checks both the returned revision and the updated draft envelope before
+commit: a version gaining a digit must not leave a previously readable draft over
+the transport ceiling. Such publication rejects atomically with 429.
 
 Archive and restore require expected draft version and append audit in the same
 transaction. Restoring any old revision copies it to a new draft version; it does
