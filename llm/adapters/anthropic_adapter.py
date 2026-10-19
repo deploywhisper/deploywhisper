@@ -43,7 +43,6 @@ class AnthropicProviderAdapter:
             "model": runtime.model,
             "api_base": runtime.api_base,
             "messages": anthropic_messages,
-            "temperature": 0,
             "max_tokens": 1024,
             "request_timeout_seconds": runtime.request_timeout_seconds,
         }
@@ -77,7 +76,6 @@ class AnthropicProviderAdapter:
         request_kwargs = {
             "model": kwargs["model"],
             "messages": kwargs["messages"],
-            "temperature": kwargs["temperature"],
             "max_tokens": kwargs["max_tokens"],
         }
         if kwargs.get("system"):

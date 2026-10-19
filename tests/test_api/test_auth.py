@@ -315,7 +315,7 @@ class AuthApiTests(unittest.TestCase):
 
     def test_auth_errors_are_uniform_rate_limited_and_secret_free(self):
         bodies = []
-        with self.assertLogs("httpx", level="INFO") as logs:
+        with self.assertLogs(level="INFO") as logs:
             for username in ("operator", "missing-account"):
                 response = self.client.post(
                     "/api/v1/auth/login",

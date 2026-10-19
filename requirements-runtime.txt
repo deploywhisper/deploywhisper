@@ -3,7 +3,7 @@ uvicorn==0.54.0
 python-multipart==0.0.32
 sqlalchemy==2.0.54
 alembic==1.18.4
-pydantic==2.13.3
+pydantic==2.14.1
 openai==2.32.0
 anthropic==1.13.0
 google-genai==2.29.0

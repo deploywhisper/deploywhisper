@@ -107,7 +107,7 @@ class DirectProviderAdapterTests(unittest.TestCase):
         self.assertEqual(captured["model"], "claude-3-5-sonnet-latest")
         self.assertEqual(captured["api_base"], "https://api.anthropic.com")
         self.assertEqual(captured["api_key"], "sk-test")
-        self.assertEqual(captured["temperature"], 0)
+        self.assertNotIn("temperature", captured)
         self.assertEqual(captured["max_tokens"], 1024)
         self.assertEqual(
             captured["messages"],
@@ -330,10 +330,56 @@ class DirectProviderAdapterTests(unittest.TestCase):
                 {"role": "user", "content": "{}"},
                 {"role": "assistant", "content": "{"},
             ],
-            temperature=0,
             max_tokens=1024,
             system="Return JSON.",
         )
+
+    def test_anthropic_sdk_round_trip_uses_supported_arguments(self) -> None:
+        import json
+
+        import anthropic
+        import httpx2
+
+        requests = []
+
+        def respond(request):
+            requests.append(json.loads(request.content))
+            return httpx2.Response(
+                200,
+                json={
+                    "id": "msg_synthetic",
+                    "type": "message",
+                    "role": "assistant",
+                    "model": "claude-3-5-sonnet-latest",
+                    "content": [{"type": "text", "text": '"opening_sentence":"ok"}'}],
+                    "stop_reason": "end_turn",
+                    "stop_sequence": None,
+                    "usage": {"input_tokens": 1, "output_tokens": 1},
+                },
+            )
+
+        with anthropic.Anthropic(
+            api_key="synthetic-unused",
+            base_url="https://provider.invalid",
+            http_client=httpx2.Client(transport=httpx2.MockTransport(respond)),
+        ) as client:
+            with patch("anthropic.Anthropic", return_value=client):
+                content = AnthropicProviderAdapter().generate_completion(
+                    [{"role": "user", "content": "{}"}],
+                    runtime=ProviderRuntimeConfig(
+                        provider="anthropic",
+                        model="claude-3-5-sonnet-latest",
+                        api_base="https://provider.invalid",
+                        api_key="synthetic-unused",
+                        local_mode=False,
+                    ),
+                )
+        self.assertEqual(content, '{"opening_sentence":"ok"}')
+        self.assertEqual(len(requests), 1)
+        self.assertEqual(
+            requests[0]["messages"][-1], {"role": "assistant", "content": "{"}
+        )
+        self.assertNotIn("temperature", requests[0])
 
     @patch("anthropic.Anthropic")
     def test_anthropic_sdk_completion_rejects_invalid_timeout(

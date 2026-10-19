@@ -105,6 +105,14 @@ class HashLockedDependenciesTests(unittest.TestCase):
         }
         self.assertEqual(declared, roots)
 
+    def test_fuzzer_validation_stack_matches_application_lock(self) -> None:
+        runtime = requirements("requirements.txt")
+        fuzzer = requirements(".clusterfuzzlite/requirements.txt")
+        sources = requirements(".clusterfuzzlite/requirements-source.txt")
+        for name in ("pydantic", "pydantic-core"):
+            self.assertEqual(runtime[name].split()[0], fuzzer[name].split()[0])
+        self.assertEqual(sources["pydantic"].split()[0], fuzzer["pydantic"].split()[0])
+
     def test_workflow_installs_enforce_hashes(self) -> None:
         for filename in ("ci.yml", "release.yml", "publish-skills-registry.yml"):
             workflow = yaml.safe_load(
