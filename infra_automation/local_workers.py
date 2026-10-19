@@ -5,7 +5,10 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 import multiprocessing
 import os
+from pathlib import Path
 import signal
+import sys
+import time
 from typing import Callable
 
 from sqlalchemy import create_engine, event
@@ -104,6 +107,11 @@ class WorkerCompletion:
     handle: AttemptHandle = field(repr=False)
     result: WorkerResult
     crashed: bool = False
+
+
+class WorkerTerminationError(RuntimeError):
+    def __init__(self):
+        super().__init__("Owned local worker termination could not be confirmed.")
 
 
 def _worker_main(database_url, handle, registration, value, bounds, channel):
@@ -221,6 +229,8 @@ class _OwnedProcess:
     channel: object
     handle: AttemptHandle = field(repr=False)
     ready: bool = False
+    result: WorkerResult | None = None
+    crashed: bool = False
 
 
 class SpawnProcessWorkers:
@@ -287,11 +297,11 @@ class SpawnProcessWorkers:
     def poll(self):
         completed = []
         for attempt_id, item in tuple(self._owned.items()):
-            result = None
-            crashed = False
+            result = item.result
+            crashed = item.crashed
             try:
                 # At most a ready marker and one bounded result per child.
-                for _ in range(2):
+                for _ in range(0 if result is not None else 2):
                     if not item.channel.poll():
                         break
                     payload = item.channel.recv_bytes(2048)
@@ -307,25 +317,72 @@ class SpawnProcessWorkers:
             if result is None:
                 crashed = True
                 result = WorkerResult(outcome="permanent_local_failure")
-            completed.append(WorkerCompletion(item.handle, result, crashed))
+            item.result, item.crashed = result, crashed
             self._dispose(item)
+            completed.append(WorkerCompletion(item.handle, result, crashed))
             del self._owned[attempt_id]
         return tuple(completed)
 
     def _dispose(self, item):
-        # A worker group is created by our child, never selected by request data.
-        process = item.process
-        if process.is_alive():
-            process.join(timeout=0.02)
-        if process.is_alive():
-            self._signal(item, signal.SIGTERM)
+        # Two owned groups share at most four seconds of cancellation budget.
+        process, deadline = item.process, time.monotonic() + 2
+        try:
+            self._refresh_group(item)
+            if process.is_alive():
+                self._signal(item, signal.SIGTERM)
             process.join(timeout=0.1)
-        # Kill a remaining owned group as well as a noncooperative root process.
-        self._signal(item, signal.SIGKILL)
-        process.join(timeout=0.2)
-        item.channel.close()
-        if not process.is_alive():
-            process.close()
+            while True:
+                self._refresh_group(item)
+                if not process.is_alive() and not self._group_alive(item):
+                    item.channel.close()
+                    process.close()
+                    return
+                self._signal(item, signal.SIGKILL)
+                process.join(timeout=0.02)
+                if time.monotonic() >= deadline:
+                    raise WorkerTerminationError()
+                time.sleep(0.02)
+        except (OSError, ValueError, IndexError):
+            raise WorkerTerminationError() from None
+
+    @staticmethod
+    def _refresh_group(item):
+        if item.ready:
+            return
+        try:
+            if os.name == "posix" and os.getpgid(item.process.pid) == item.process.pid:
+                item.ready = True
+        except ProcessLookupError:
+            pass
+        if not item.ready:
+            try:
+                if item.channel.poll() and item.channel.recv_bytes(2048) == b"ready":
+                    item.ready = True
+            except (OSError, EOFError):
+                pass
+
+    @staticmethod
+    def _group_alive(item):
+        if os.name != "posix" or not item.ready:
+            return item.process.is_alive()
+        try:
+            os.killpg(item.process.pid, 0)
+        except ProcessLookupError:
+            return False
+        if sys.platform != "linux":
+            return True
+        # Unreaped Linux zombies have exited and cannot execute or hold a slot.
+        # Other POSIX hosts confirm disappearance of the whole process group.
+        for entry in Path("/proc").iterdir():
+            if not entry.name.isdigit():
+                continue
+            try:
+                fields = (entry / "stat").read_text().rsplit(")", 1)[1].split()
+            except FileNotFoundError:
+                continue
+            if int(fields[2]) == item.process.pid and fields[0] != "Z":
+                return True
+        return False
 
     @staticmethod
     def _signal(item, signum):
@@ -341,11 +398,18 @@ class SpawnProcessWorkers:
             pass
 
     def cancel(self, attempt_id):
-        item = self._owned.pop(attempt_id, None)
+        item = self._owned.get(attempt_id)
         if item is not None:
             self._dispose(item)
+            del self._owned[attempt_id]
 
     def close(self):
         self._closed = True
+        failed = False
         for attempt_id in tuple(self._owned):
-            self.cancel(attempt_id)
+            try:
+                self.cancel(attempt_id)
+            except WorkerTerminationError:
+                failed = True
+        if failed:
+            raise WorkerTerminationError()

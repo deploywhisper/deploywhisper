@@ -209,3 +209,93 @@ class EngineServiceTests(LifecycleCase):
             self.admit(request)
         self.assertEqual(error.exception.status_code, 429)
         self.assertEqual(self.counts(), before)
+
+    def test_steps_logs_use_scoped_snapshot_pagination_and_byte_bound(self):
+        from infra_automation import claims
+        from infra_automation.state import LogChunk
+
+        run = self.admit()
+        with authorization.authorized_session(self.factory) as session:
+            owner = claims.acquire_coordinator(
+                session, project_id=100, workspace_id=100
+            )
+            current = repository.get_run(session, run["id"])
+            claims.start_run(
+                session, owner, run_id=current.id, expected_version=current.version
+            )
+            attempt = claims.prepare_attempt(
+                session,
+                owner,
+                run_id=current.id,
+                step_id="upload",
+                handler_id="synthetic",
+                handler_version="1",
+                retry_safe=True,
+            )
+            handle = claims.claim_attempt(
+                session, owner, attempt_id=attempt.id, expected_version=attempt.version
+            )
+            attempt = repository.get_attempt(session, handle.attempt_id)
+            attempt = claims.start_attempt(
+                session, handle, expected_version=attempt.version
+            )
+            for sequence in range(1, 10):
+                attempt = claims.append_log(
+                    session,
+                    handle,
+                    expected_version=attempt.version,
+                    chunk=LogChunk(sequence=sequence, text="a" * 16000),
+                )
+        with self.credentials(mutation=False):
+            steps = service.list_steps(run["id"], limit=100)
+            first = service.get_logs(run["id"], attempt.id, limit=100)
+        self.assertEqual([item["id"] for item in steps["items"]], [attempt.id])
+        self.assertNotIn("owner_secret", json.dumps(steps))
+        self.assertTrue(first["cursor"]["truncated"])
+        self.assertFalse(first["cursor"]["gap"])
+        self.assertLessEqual(len(service.support.canonical(first)), 131072)
+        with authorization.authorized_session(self.factory) as session:
+            current = repository.get_attempt(session, attempt.id)
+            claims.append_log(
+                session,
+                handle,
+                expected_version=current.version,
+                chunk=LogChunk(sequence=10, text="new-log"),
+            )
+        chunks = list(first["items"])
+        cursor = first["cursor"]["next_cursor"]
+        while cursor:
+            with self.credentials(mutation=False):
+                page = service.get_logs(run["id"], attempt.id, limit=100, cursor=cursor)
+            chunks.extend(page["items"])
+            cursor = page["cursor"]["next_cursor"]
+        self.assertEqual([item["sequence"] for item in chunks], list(range(9, 0, -1)))
+        self.member("read-only", workspace=101)
+        with (
+            self.credentials(mutation=False),
+            self.assertRaises(authorization.TrustedAuthorizationError),
+        ):
+            service.get_logs(run["id"], attempt.id)
+
+    def test_existing_audit_response_accepts_truthful_background_service_actor(self):
+        from api.schemas import AutomationAuditItem
+        from infra_automation import claims
+        from services.infra_automation_service import export_audit
+
+        self.admit()
+        with authorization.authorized_session(self.factory) as session:
+            claims.acquire_coordinator(session, project_id=100, workspace_id=100)
+        with self.credentials(mutation=False):
+            exported = export_audit(100, 100)
+        system_events = [
+            item for item in exported["items"] if item["actor_type"] == "service"
+        ]
+        self.assertTrue(system_events)
+        for item in exported["items"]:
+            typed = AutomationAuditItem.model_validate(item)
+            if typed.actor_type == "service":
+                self.assertEqual(typed.actor_role, "coordinator")
+        with self.assertRaises(ValueError):
+            AutomationAuditItem.model_validate(
+                {**system_events[0], "actor_type": "human"}
+            )

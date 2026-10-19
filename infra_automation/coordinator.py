@@ -11,7 +11,11 @@ from sqlalchemy import func, select
 
 from infra_automation import claims
 from infra_automation.lifecycle import LifecycleError, SnapshotDocument
-from infra_automation.local_workers import DEFAULT_REGISTRY, WorkerInput
+from infra_automation.local_workers import (
+    DEFAULT_REGISTRY,
+    WorkerInput,
+    WorkerTerminationError,
+)
 from infra_automation.state import ACTIVE_STATES, EngineBounds
 from models.repositories import infra_automation_runs as repository
 from models.tables import InfraAutomationRun
@@ -69,6 +73,55 @@ class Coordinator:
     def _operation(self, function, *args, **kwargs):
         with authorization.authorized_session(self.factory) as session:
             return function(session, *args, **kwargs)
+
+    def _signal_committed_cancel(self, run_id):
+        self._pending_completions = {
+            attempt_id: completion
+            for attempt_id, completion in self._pending_completions.items()
+            if completion.handle.run_id != run_id
+        }
+        failed = False
+        for handle in self.workers.handles:
+            if handle.run_id == run_id:
+                try:
+                    self.workers.cancel(handle.attempt_id)
+                except WorkerTerminationError:
+                    failed = True
+        if failed:
+            raise WorkerTerminationError()
+
+    def cancel_run(self, run_id):
+        """Signal this process's workers only after observing durable cancellation."""
+        if authorization.has_authorized_session():
+            raise LifecycleError(409)
+        with self._lock:
+            with authorization.authorized_session(self.factory) as session:
+                run = repository.get_run(session, run_id)
+                cancelled = run is not None and run.cancel_requested
+            if not cancelled:
+                return False
+            self._signal_committed_cancel(run_id)
+            return True
+
+    def _observe_cancellations(self):
+        run_ids = {handle.run_id for handle in self.workers.handles}
+        run_ids.update(
+            completion.handle.run_id
+            for completion in self._pending_completions.values()
+        )
+        if not run_ids:
+            return
+        with authorization.authorized_session(self.factory) as session:
+            cancelled = tuple(
+                session.scalars(
+                    select(InfraAutomationRun.id).where(
+                        InfraAutomationRun.id.in_(run_ids),
+                        InfraAutomationRun.cancel_requested.is_(True),
+                    )
+                )
+            )
+        for run_id in cancelled:
+            self._signal_committed_cancel(run_id)
 
     def _stop(self, run_id, state, now):
         with authorization.authorized_session(self.factory) as session:
@@ -251,6 +304,7 @@ class Coordinator:
         if not self.registry or self._stopping:
             return
         with self._lock:
+            self._observe_cancellations()
             try:
                 candidates, now = self._ownership()
             except LifecycleError:

@@ -33,6 +33,7 @@ from services.project_service import MembershipView
 
 # Workflow lifecycle values are closed independently of legacy API payloads.
 from infra_automation.contracts import ClosedModel as AutomationClosedModel
+from infra_automation.state import LogPage, RunPage, RunView, StepPage
 from infra_automation.lifecycle import (
     AutomationSettings,
     CursorEnvelope as AutomationCursor,
@@ -2828,14 +2829,22 @@ class AutomationAuditItem(AutomationClosedModel):
     project_id: AutomationPositive
     workspace_id: AutomationPositive | None
     actor_principal_id: AutomationIdentifier
-    actor_type: Literal["human"]
-    actor_role: Literal["admin", "maintainer", "reviewer", "contributor", "read-only"]
+    actor_type: Literal["human", "service"]
+    actor_role: Literal[
+        "admin", "maintainer", "reviewer", "contributor", "read-only", "coordinator"
+    ]
     event_type: str = Field(min_length=1, max_length=64)
     target_id: AutomationIdentifier
     reason: str = Field(min_length=1, max_length=256)
     before_digest: AutomationDigest | None
     after_digest: AutomationDigest | None
     created_at: AutomationTimestamp
+
+    @model_validator(mode="after")
+    def consistent_actor_attribution(self):
+        if (self.actor_type == "service") != (self.actor_role == "coordinator"):
+            raise ValueError("Invalid automation audit attribution.")
+        return self
 
 
 class AutomationWorkflowPage(AutomationClosedModel):
@@ -2885,6 +2894,26 @@ class AutomationRevisionListResponse(AutomationClosedModel):
 
 class AutomationAuditResponse(AutomationClosedModel):
     data: AutomationAuditPage
+    meta: AutomationMeta
+
+
+class AutomationRunResponse(AutomationClosedModel):
+    data: RunView
+    meta: AutomationMeta
+
+
+class AutomationRunListResponse(AutomationClosedModel):
+    data: RunPage
+    meta: AutomationMeta
+
+
+class AutomationStepListResponse(AutomationClosedModel):
+    data: StepPage
+    meta: AutomationMeta
+
+
+class AutomationLogListResponse(AutomationClosedModel):
+    data: LogPage
     meta: AutomationMeta
 
 

@@ -26,7 +26,12 @@ from api.schemas import (
     AutomationRevisionListResponse,
     AutomationAuditResponse,
     AutomationErrorResponse,
+    AutomationRunResponse,
+    AutomationRunListResponse,
+    AutomationStepListResponse,
+    AutomationLogListResponse,
 )
+from infra_automation.state import CancelRunRequest, RunRequest
 from infra_automation.contracts import SAFE_INTEGER
 from infra_automation.lifecycle import (
     AdvanceEpochRequest,
@@ -55,6 +60,9 @@ PageLimit = Annotated[int, Query(ge=1, le=100)]
 PageCursor = Annotated[
     str | None,
     Query(min_length=1, max_length=128, pattern=r"^[a-zA-Z0-9][a-zA-Z0-9_.:-]*$"),
+]
+AttemptId = Annotated[
+    str, Query(min_length=1, max_length=128, pattern=r"^[a-zA-Z0-9][a-zA-Z0-9_.:-]*$")
 ]
 
 
@@ -204,6 +212,52 @@ router = APIRouter(
 
 def _response(data):
     return {"data": data, "meta": build_meta(correlation_id=secrets.token_hex(16))}
+
+
+@router.post("/runs", response_model=AutomationRunResponse)
+def request_run(payload: RunRequest):
+    return _response(service.request_run(payload))
+
+
+@router.get("/runs", response_model=AutomationRunListResponse)
+def list_runs(
+    project_id: ScopeId,
+    workspace_id: OptionalScopeId = None,
+    limit: PageLimit = 25,
+    cursor: PageCursor = None,
+):
+    return _response(
+        service.list_runs(
+            project_id, workspace_id=workspace_id, limit=limit, cursor=cursor
+        )
+    )
+
+
+@router.get("/runs/{run_id}", response_model=AutomationRunResponse)
+def get_run(run_id: ObjectId):
+    return _response(service.get_run(run_id))
+
+
+@router.get("/runs/{run_id}/steps", response_model=AutomationStepListResponse)
+def list_steps(run_id: ObjectId, limit: PageLimit = 25, cursor: PageCursor = None):
+    return _response(service.list_steps(run_id, limit=limit, cursor=cursor))
+
+
+@router.get("/runs/{run_id}/logs", response_model=AutomationLogListResponse)
+def get_logs(
+    run_id: ObjectId,
+    attempt_id: AttemptId,
+    limit: PageLimit = 25,
+    cursor: PageCursor = None,
+):
+    return _response(service.get_logs(run_id, attempt_id, limit=limit, cursor=cursor))
+
+
+@router.post("/runs/{run_id}/cancel", response_model=AutomationRunResponse)
+def cancel_run(run_id: ObjectId, payload: CancelRunRequest, request: Request):
+    coordinator = getattr(request.app.state, "infra_automation_coordinator", None)
+    cancel_port = getattr(coordinator, "cancel_run", None)
+    return _response(service.cancel_run(run_id, payload, cancel_port=cancel_port))
 
 
 @router.post("/workflows", response_model=AutomationWorkflowResponse)

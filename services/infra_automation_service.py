@@ -19,6 +19,7 @@ from infra_automation.lifecycle import (
     ValidateWorkflowRequest,
 )
 from infra_automation.lifecycle_cursors import cursor_store
+from infra_automation.state import CancelRunRequest, RunRequest
 from models.repositories import infra_automation_workflows as repository
 from services import infra_automation_support as support
 from services.content_security import redact_reference
@@ -616,3 +617,46 @@ def export_run_snapshot(
         workspace_id,
         registry_contract=registry_contract,
     )
+
+
+def request_run(request: RunRequest) -> dict:
+    from services.infra_automation_engine_service import request_run as operation
+
+    return operation(request)
+
+
+def get_run(run_id: str) -> dict:
+    from services.infra_automation_engine_service import get_run as operation
+
+    return operation(run_id)
+
+
+def list_runs(
+    project_id: int,
+    workspace_id: int | None = None,
+    limit: int = 25,
+    cursor: str | None = None,
+) -> dict:
+    from services.infra_automation_engine_service import list_runs as operation
+
+    return operation(project_id, workspace_id=workspace_id, limit=limit, cursor=cursor)
+
+
+def list_steps(run_id: str, limit: int = 25, cursor: str | None = None) -> dict:
+    from services.infra_automation_engine_service import list_steps as operation
+
+    return operation(run_id, limit=limit, cursor=cursor)
+
+
+def get_logs(
+    run_id: str, attempt_id: str, limit: int = 25, cursor: str | None = None
+) -> dict:
+    from services.infra_automation_engine_service import get_logs as operation
+
+    return operation(run_id, attempt_id, limit=limit, cursor=cursor)
+
+
+def cancel_run(run_id: str, request: CancelRunRequest, *, cancel_port=None) -> dict:
+    from services.infra_automation_engine_service import cancel_run as operation
+
+    return operation(run_id, request, cancel_port=cancel_port)
