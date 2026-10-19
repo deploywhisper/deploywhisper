@@ -181,3 +181,28 @@ Current planning authority: [feature PRD](../planning-artifacts/prd-infra-automa
 Story preparation: [complete report](epic-16-story-preparation-report.md). Current foundation readiness is restored after the 2026-10-12 review fixes; this qualification is not production or release readiness.
 
 Story16.0 closure on2026-10-10 qualifies only the prepared16.1/16.3 foundations; see the final readiness report and evidence manifest. Later16.2/16.4–16.19 retain backlog.
+
+## Epic 17 — Live Environment Grounding (independent lane)
+
+Added 2026-10-19. Epic 17 is tracked in its own appended section so that Epic 16 rows, the epic inventory table and the baseline narrative above remain untouched while both epics progress in parallel. See the [boundary and parallelization plan](../planning-artifacts/epic-16-17-boundary-and-parallelization-plan.md).
+
+Epic 17 status: `backlog`. Stories done: 0/10. **No story is promoted until [RFC 0002](../../docs/rfcs/0002-live-environment-grounding.md) records a maintainer decision and Story 17.0 closes its feasibility gate.** Preparation is specification only; no implementation, qualification or test evidence exists for any Epic 17 story.
+
+| Story | Status | Dedicated context |
+| --- | --- | --- |
+| 17.0 | `backlog` | [17-0-adopt-and-qualify-the-grounding-contract.md](17-0-adopt-and-qualify-the-grounding-contract.md) |
+| 17.1 | `backlog` | [17-1-cloud-connector-contract-and-snapshot-evidence.md](17-1-cloud-connector-contract-and-snapshot-evidence.md) |
+| 17.2 | `backlog` | [17-2-aws-read-only-session-allowlist-and-dry-run.md](17-2-aws-read-only-session-allowlist-and-dry-run.md) |
+| 17.3 | `backlog` | [17-3-plan-directed-reflection-and-bounded-collection.md](17-3-plan-directed-reflection-and-bounded-collection.md) |
+| 17.4 | `backlog` | [17-4-plan-versus-reality-divergence-and-ci-gate.md](17-4-plan-versus-reality-divergence-and-ci-gate.md) |
+| 17.5 | `backlog` | [17-5-live-dependency-graph-and-grounded-blast-radius.md](17-5-live-dependency-graph-and-grounded-blast-radius.md) |
+| 17.6 | `backlog` | [17-6-grounded-recoverability-and-rollback.md](17-6-grounded-recoverability-and-rollback.md) |
+| 17.7 | `backlog` | [17-7-snapshot-portability-and-air-gapped-grounding.md](17-7-snapshot-portability-and-air-gapped-grounding.md) |
+| 17.8 | `backlog` | [17-8-live-context-ui.md](17-8-live-context-ui.md) |
+| 17.9 | `backlog` | [17-9-extensibility-cli-agent-and-qualification.md](17-9-extensibility-cli-agent-and-qualification.md) |
+
+Epic 17 planning authority: [RFC 0002](../../docs/rfcs/0002-live-environment-grounding.md), [feature PRD](../planning-artifacts/prd-live-environment-grounding.md), [course correction](../planning-artifacts/sprint-change-proposal-2026-10-19-epic-17-live-environment-grounding.md), [architecture §26](../planning-artifacts/architecture.md).
+
+Story preparation: [Epic 17 preparation report](epic-17-story-preparation-report.md).
+
+Epic 17 adds no dependency on Epic 16 and does not change Epic 16 scope, priority or sequencing. The single integration point is one-directional and optional: Epic 16 preflight may consume grounded context if both epics ship. Epic 17 never calls into Epic 16.

@@ -1370,3 +1370,116 @@ Planning coherence: the selected boundaries preserve self-hosting, local-first c
 ### 25.12 Slice qualification versus integrated release proof
 
 Each earlier story proves only its owned contract with scoped fixtures or test-double ports for not-yet-delivered components. Requirement mappings do not create implicit forward dependencies: 16.4 proves feature/epoch policy with a grant-consumer test double; 16.5 proves cancellation ownership with a local worker double; 16.6 proves provenance/intake with authenticated synthetic envelopes; 16.2 proves separation/capability semantics before the 16.9 decision UI exists. Real runner/process/custody/receiver integration is required in 16.14/16.15 and final 16.19 qualification. Story 16.11 proves receiver admission, exact-byte verification and recovery using seeded protected synthetic custody, not the future 16.14 collector. No test double qualifies a production collection profile or advertises exact-plan deployment support. Schema/ports may be fixed earlier, but only entities needed for the current slice are migrated.
+
+---
+
+## 26. v1.6.0 Live Environment Grounding Architecture Amendment
+
+### 26.1 Authority, baseline and supported boundary
+
+This amendment is appended for **Epic 17, Live Environment Grounding**, targeting v1.6.0. Its governance source is [RFC 0002](../../docs/rfcs/0002-live-environment-grounding.md) (**Proposed**, 2026-10-19) and its canonical requirement authority is the [feature PRD](prd-live-environment-grounding.md), requirement IDs `LEG-FR-001..040` and `LEG-NFR-001..012`. Story **17.0** owns RFC acceptance, the dependency decision, the threat model and executable feasibility spikes. **Nothing described below is represented as implemented.**
+
+This amendment is **append-only and does not modify §25**. Epic 16 and Epic 17 are independent in both directions and are intended to run concurrently; the operative contract is the [boundary and parallelization plan](epic-16-17-boundary-and-parallelization-plan.md). Sections 2, 4, 8, 19–23 remain constraints, and the existing shared-core, advisory, local-first and scale ADRs are unchanged.
+
+Supported first release: **read-only, plan-directed observation of an operator's live AWS environment**, feeding the existing shared analysis core with grounded blast radius, plan-versus-reality divergence, verified recoverability and grounded environment classification. Azure and GCP ship as registered stubs behind a published connector contract.
+
+Excluded without exception: any write, apply, destroy, tag, provision or remediate capability; account-wide inventory; continuous or scheduled drift monitoring; cost estimation; cross-account role chaining; a hosted or multi-tenant collection service; and any reuse of or dependency on the Epic 16 runner, enrollment, fencing or receiver protocols. Reports remain advisory (`should_block=False`). Grounding is an **input to analysis**, never a new execution tier.
+
+### 26.2 Accepted architectural decisions
+
+The following **LEG-ADR** records extend the existing ADRs and the §25.2 `IA-ADR` series without collision. Disposition for each is **proposed bounded design**, pending the RFC decision and Story 17.0 qualification.
+
+| Record | Selected design and rationale | Rejected alternative / consequences | Owning stories |
+| --- | --- | --- | --- |
+| LEG-ADR-01 Scope and posture | Read-only inbound context provider feeding the existing analysis core. Grounding is an input, not an output or an execution tier. | A remediation or apply capability would violate the product non-goal and destroy the "we never touch your apply" trust position. No write path exists in the codebase. | 17.0, 17.1 |
+| LEG-ADR-02 Collection strategy | **Plan-directed selective reflection** plus exactly one reverse hop. Scope derives from the change, not the estate. | Account-wide inventory is slow, costly, requires broad IAM, duplicates Steampipe/CloudQuery, and answers a different question than pre-deployment review. | 17.3 |
+| LEG-ADR-03 Read-only enforcement | Four independent layers: deny-by-default in-code action allow-list, an automated CI assertion that every allow-listed action is non-mutating, a published minimal IAM policy, and credential-free dry-run. | Code review alone, or relying on the operator to attach a read-only role, leaves a single point of failure on the highest-stakes property in the design. | 17.2 |
+| LEG-ADR-04 Credentials | Ambient operator chain only — profile, SSO, environment, instance role, IRSA. Never persisted, logged, echoed through the API, or written to a snapshot. Extends the existing `config.py` redaction set. | A credential store would create a high-value target, contradict the local-first posture, and add operational burden the product has deliberately avoided. | 17.2 |
+| LEG-ADR-05 Evidence model | Immutable, redacted, digest-bound, timestamped `LiveContextSnapshot` entering the existing evidence system as `live_state` with `deterministic` determinism, reusing the existing freshness vocabulary. | A parallel context model would fracture Evidence Law. Live state is still a point-in-time observation and is labelled as such, not presented as ground truth. | 17.1 |
+| LEG-ADR-06 Fail-safe degradation | Unreachable, partial, throttled or unauthorized context never lowers severity and never raises confidence; it triggers `insufficient_context` and enumerates unreadable resources with the exact missing permission. | Silent partial success would make grounding actively dangerous: a reviewer would read a thin result as a clean one. Mirrors the proven `_read_kubernetes_live_state()` contract. | 17.3 |
+| LEG-ADR-07 Topology integration | Register an `aws` handler in the existing `TOPOLOGY_SOURCE_REGISTRY`, which already anticipates unimplemented providers via `_build_unimplemented_source_handler`. | A separate parallel graph would duplicate `compute_blast_radius` and split the context model across two incompatible representations. | 17.5 |
+| LEG-ADR-08 Report contract | Optional, separately versioned `live_context` block with its own `live_context_version: 1`; **no report schema version bump**, consistent with IA-ADR-06. | A report minor-version bump is not an established contract and would break existing consumers for an optional additive field. | 17.1, 17.8 |
+| LEG-ADR-09 Extensibility | Provider-neutral connector contract, registry, and an executable conformance suite; Azure and GCP as explicit stubs. | An AWS-only implementation forfeits the community contribution surface that makes multi-cloud coverage sustainable for a volunteer-maintained project. | 17.1, 17.9 |
+| LEG-ADR-10 Epic independence | Grounding executes in-application as a short synchronous inbound read. It does not use the Epic 16 runner; private-network operators use snapshot import instead. | Reusing the runner would import the enrollment/fencing/lease protocol for a read that does not need it and would block all Epic 17 value behind 16.12–16.14. | 17.0, 17.7 |
+
+An AWS SDK is a **new runtime dependency** and requires an explicit approved dependency decision recorded in Story 17.0 before any implementation. Preserve the repository Python floor and locked dependencies; do not introduce unrelated framework upgrades.
+
+### 26.3 Components and repository placement
+
+```mermaid
+flowchart LR
+    Artifacts[Parsed artifacts + recorded prior state] --> Identity[ResourceIdentity extraction]
+    Identity --> Reflector[Plan-directed reflector]
+    Reflector -->|allow-listed read-only calls| Provider[(Operator cloud account)]
+    Provider --> Snapshot[Redacted immutable LiveContextSnapshot]
+    Import[Imported snapshot file] --> Snapshot
+    Snapshot --> Graph[Live dependency graph]
+    Snapshot --> Divergence[Plan vs reality comparison]
+    Snapshot --> Recover[Recoverability facts]
+    Graph --> Blast[compute_blast_radius]
+    Divergence --> Scorer[risk_scorer]
+    Recover --> Rollback[rollback_planner]
+    Blast --> Report[Advisory report + live_context block]
+    Scorer --> Report
+    Rollback --> Report
+```
+
+```text
+cloud/
+  base.py             CloudConnector protocol, LiveContextSnapshot, ResourceIdentity, ReadStatus
+  registry.py         provider registry, mirrors parsers/registry.py
+  redaction.py        snapshot redaction over services/content_security.py
+  aws/
+    connector.py      ambient session resolution and client construction
+    allowlist.py      permitted read-only actions, deny by default
+    reflector.py      identity set -> bounded concurrent read-only calls
+    graph.py          live dependency edges for supported families
+    recoverability.py protection attributes and restore-path classification
+  azure/ gcp/         registered stubs mirroring the cloudformation/ansible pattern
+
+services/cloud_context_service.py   orchestration, caching, freshness, degradation, budget
+api/                                live-context routes under a distinct prefix
+frontend/src/screens/               Live Context tab and Cloud Context settings
+tests/test_cloud/                   registered in scripts/ci-local.sh and the relevant GitHub shard
+docs/live-environment-grounding/    operator guide, minimal IAM policy, connector contract
+```
+
+Rules from §19 continue to apply: shared logic stays in `services`/`analysis`/`evidence`; provider-specific logic stays behind `cloud/<provider>/`; UI, API and CLI remain thin adapters over one shared path.
+
+### 26.4 Trust boundary
+
+The connector sits at a new outbound trust boundary. Its security contract is:
+
+1. **Deny by default.** No call is constructed unless its action is present in the provider allow-list.
+2. **Mechanically verified read-only.** A test asserts every allow-listed action matches the provider's read-only verb set; a mutating verb fails CI. This is a build gate, not a review convention.
+3. **No credential custody.** Credentials resolve from the ambient chain, are used transiently, and never reach storage, logs, API responses, snapshots or CLI output.
+4. **No caller-controlled targeting.** Endpoints resolve only through provider-canonical resolution; configuration cannot retarget the client at an arbitrary endpoint, host, role or account.
+5. **Bounded and interruptible.** Per-call timeout, total deadline, concurrency cap, call budget, backoff and cancellation, with the actual budget reported to the operator.
+6. **Redacted at rest.** Snapshots are redacted before persistence; account identifiers are maskable.
+
+An independent security review is a **required gate before Story 17.3 merges**, that being the first story to issue live calls with real credentials.
+
+### 26.5 Data and persistence
+
+Only the entities required by the current slice are migrated; the full grounding schema is not created in one foundational migration. Snapshots are project-scoped, immutable, digest-addressed and retained under an explicit policy decided in Story 17.0. Reports reference a snapshot digest rather than embedding live payloads. Runtime schema or constructor changes require a repository-wide fixture search and the affected CI shards, per the existing validation requirements.
+
+### 26.6 Degradation contract
+
+| Condition | Required behaviour |
+| --- | --- |
+| Grounding disabled | Byte-identical existing behaviour; no cloud call issued |
+| Provider unreachable | `insufficient_context`; severity unchanged; confidence not raised |
+| Partial read | Labelled partial; unreadable resources enumerated with the exact missing permission |
+| Permission denied | Actionable remedy naming the specific missing action |
+| Throttled | Backoff within deadline, then partial labelled result |
+| Deadline exceeded | Partial labelled result returned; analysis never blocks indefinitely |
+| Imported snapshot stale | Labelled `imported` with age; freshness state `stale` |
+| Unknown recoverability | Never rendered as recoverable |
+
+### 26.7 Slice qualification versus integrated release proof
+
+Each story proves only its owned contract. Story 17.1 proves the contract, registry and snapshot model against a reference stub provider with no network access. Story 17.2 proves credential, allow-list and dry-run behaviour without issuing production reads. Story 17.3 is the first story issuing live calls and is gated on an independent security review. Stories 17.5 and 17.6 prove graph and recoverability semantics against recorded provider fixtures. Real end-to-end grounding against a live account, multi-provider conformance and release-wide NFR proof are owned by Story 17.9. **Recorded fixtures never qualify a production provider profile.**
+
+### 26.8 Implementation readiness
+
+**Blocked pending RFC 0002 acceptance, the Story 17.0 dependency decision, feasibility spike results and an independent security review.** This is an architecture amendment with documented blockers, not an implementation certificate. Begin with the Story 17.0 governance and spike workstream; promote later stories only after their dependencies are independently prepared and reviewed. Apply existing story branch and PR conventions under `feature/17-*`, and avoid a feature-wide speculative rewrite.

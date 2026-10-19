@@ -49,6 +49,23 @@ DeployWhisper is a self-hosted, advisory-first deployment-risk briefing tool. Th
 - Improve AI-agent interfaces and prompt-injection test coverage.
 - Track CNCF readiness through public governance, security, release, adoption, benchmark, and community-health evidence.
 
+### Phase 5: Live Environment Grounding (proposed)
+
+Status: proposed, pending a maintainer decision on [RFC 0002](docs/rfcs/0002-live-environment-grounding.md). Nothing in this phase is implemented.
+
+DeployWhisper reasons well about change but currently has a thin supply of real environment facts: blast radius depends on a hand-authored topology, and severity is derived from resource categories rather than from the specific instance being changed. This phase closes that gap with a read-only, plan-directed cloud context provider, starting with AWS.
+
+- Ground blast radius in real dependency edges instead of a missing-mapping warning.
+- Detect plan-versus-reality divergence so a stale plan is never approved as if it were current.
+- Verify recoverability from actual protection, backup and snapshot attributes rather than inferring it from resource type.
+- Ground environment and ownership classification in the real account, live tags and network placement, surfacing disagreement rather than silently preferring one source.
+- Publish a provider connector contract and conformance suite so the community can extend grounding without core changes.
+- Preserve air-gapped parity through digest-bound snapshot export and import.
+
+Boundaries for this phase: read-only by construction and by mechanical CI enforcement; opt-in per project and disabled by default; plan-directed rather than account-wide; local-first with direct operator-to-provider calls and no intermediary; and advisory, with the only gate being a CI exit code the caller opts into. No apply, destroy, remediation, drift daemon, cost estimation or policy engine is in scope.
+
+Tracked as Epic 17, independent of Epic 16. See the [feature PRD](_bmad-output/planning-artifacts/prd-live-environment-grounding.md), [architecture §26](_bmad-output/planning-artifacts/architecture.md) and the [operator guide](docs/live-environment-grounding/README.md).
+
 ## Non-Goals
 
 - DeployWhisper should not automatically approve, deploy, or remediate production changes.

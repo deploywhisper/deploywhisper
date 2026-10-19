@@ -2781,3 +2781,359 @@ Only add persistence/entities needed for this slice; do not create all future au
 ## v1.5.0 Dedicated Story Preparation — 2026-10-07
 
 The owner requested refinement of all readiness work and preparation of Story 16.0. [The complete context index](../implementation-artifacts/epic-16-story-preparation-report.md) now links all 20 files. IR-04 document refinement is complete; real spike-based sizing and named implementer assignment remain execution obligations. Story 16.0 alone is ready to begin governance/disposable qualification. 16.1–16.19 remain backlog. Public RFC acceptance, actual feasibility results and frozen contracts remain open; no production readiness or completed story is claimed.
+
+---
+
+## Epic 17: Live Environment Grounding
+
+**Release priority:** Independent parallel workstream targeting v1.6.0. **Delivery status:** proposed for story preparation; no implementation started.
+
+A reviewer analyzing an infrastructure change receives evidence grounded in the operator's **actual running environment** instead of a hand-authored topology: real blast radius from live dependency edges, detection of plans computed against stale reality, verified recoverability for destructive changes, and grounded environment classification. Collection is read-only, plan-directed, bounded, opt-in and local-first. AWS is supported; Azure and GCP ship as registered stubs behind a published connector contract.
+
+**Requirements:** `LEG-FR-001..040` and `LEG-NFR-001..012` from [the canonical feature PRD](prd-live-environment-grounding.md). Every proof below describes required future acceptance, not a test result from this planning update. **Slice responsibility:** each story proves its owned contract through recorded fixtures or a reference stub provider; release-wide proof is owned by 17.9. Recorded fixtures never qualify a production provider profile.
+
+**Gates:** [RFC 0002](../../docs/rfcs/0002-live-environment-grounding.md) is **Proposed** and requires a recorded maintainer decision before any downstream story is promoted. Story 17.0 owns the approved AWS SDK dependency decision, the threat model and executable feasibility spikes. An **independent security review is a required gate before Story 17.3 merges**, that being the first story issuing live calls with real credentials.
+
+**Epic independence:** Epic 17 has **zero dependencies on Epic 16**, and Epic 16 has zero dependencies on Epic 17. They are developed concurrently under the [boundary and parallelization plan](epic-16-17-boundary-and-parallelization-plan.md). Epic 17 must not import from `infra_automation/` or `services/infra_automation_*`, and must not reuse the Epic 16 runner, enrollment, fencing or receiver protocols. The single intended integration — Story 16.9 rendering the optional `live_context` block — is a one-directional, presentation-time, post-both-epics follow-up and is not an acceptance criterion of either epic.
+
+**Supported release boundary:** read-only observation only; plan-directed scope with one reverse hop; approximately the top twenty-five risk-bearing AWS families; ambient credentials with no storage; opt-in per project and disabled by default; air-gapped parity through snapshot import. **Excluded without exception:** any write, apply, destroy, tag, provision or remediate capability; account-wide inventory; scheduled drift monitoring; cost estimation; cross-account role chaining; and hosted or multi-tenant collection.
+
+### Story 17.0: Adopt and Qualify the Grounding Contract
+
+As a maintainer,
+I want to settle the read-only grounding contract with governance, a dependency decision and executable feasibility evidence,
+So that implementation starts with a proven trust boundary rather than assumptions about credentials and provider behaviour.
+
+**Status:** backlog (proposed; RFC decision unmet).
+
+**Dedicated context:** [17-0-adopt-and-qualify-the-grounding-contract.md](../implementation-artifacts/17-0-adopt-and-qualify-the-grounding-contract.md).
+
+**Dependencies:** current released baseline. **No Epic 16 dependency.**
+
+**Acceptance Criteria:**
+
+1. **Given** the RFC and parent PRD, **when** governance review completes, **then** RFC 0002 has a recorded maintainer decision, scope agrees with the parent PRD, and the feature boundary excludes every write capability in reviewable terms.
+2. **Given a missing RFC decision, approved dependency decision or feasibility result, when release implementation readiness is evaluated, then the gate remains NOT READY and no downstream Epic 17 story is promoted.**
+3. **Given** executable spikes, **when** qualification runs, **then** ambient credential resolution, deny-by-default allow-list enforcement, credential-free dry-run, prior-state extraction across Terraform and OpenTofu plan formats, and measured latency, call count and cost on a realistic large plan are all demonstrated with recorded evidence.
+4. **Given** the spike results, **when** the readiness report is written, **then** every unresolved question in RFC 0002 is closed by evidence, the AWS SDK dependency decision is explicitly approved or rejected, and the initial resource-family coverage list and per-capability permission map are frozen.
+
+**Slice acceptance boundary:** This is governance and feasibility qualification, not production implementation. Isolated prototypes demonstrate the selected contracts without depending on future product APIs and without marking any downstream story done. RFC acceptance remains required before downstream implementation.
+
+**Requirement-specific acceptance coverage:**
+
+| Requirement | Contract owned or verified by this story | Required acceptance proof |
+| --- | --- | --- |
+| LEG-FR-009 | Deny-by-default read-only allow-list is enforceable before call construction, and a published minimal policy can cover exactly the allow-listed actions. | Prototype refusing a non-allow-listed action; policy-to-allow-list equivalence spike |
+| LEG-FR-010 | Dry-run can enumerate intended calls without resolving or using credentials. | Credential-free dry-run spike against a recorded plan |
+| LEG-NFR-001 | Every allow-listed action can be mechanically asserted non-mutating, and a mutating verb fails the check. | Verb-assertion prototype including a deliberate failing case |
+| LEG-NFR-003 | A realistic large plan can be grounded within a defensible total deadline, concurrency cap and call budget. | Measured latency, call count and cost on a named plan fixture |
+| LEG-NFR-005 | A minimal-privilege policy is achievable for the proposed coverage list. | Frozen per-capability permission map |
+
+Only add persistence and entities needed for this slice. New dependencies require an explicit approved dependency decision.
+
+### Story 17.1: Cloud Connector Contract, Registry and Snapshot Evidence
+
+As a maintainer,
+I want a provider-neutral read-only connector contract and an immutable redacted snapshot that enters the existing evidence system,
+So that grounding is governed by Evidence Law from the first line of code and new providers never require core changes.
+
+**Status:** backlog.
+
+**Dedicated context:** [17-1-cloud-connector-contract-and-snapshot-evidence.md](../implementation-artifacts/17-1-cloud-connector-contract-and-snapshot-evidence.md).
+
+**Dependencies:** 17.0. **No Epic 16 dependency.**
+
+**Acceptance Criteria:**
+
+1. **Given** a registered reference stub provider, **when** grounding runs with no network access, **then** the connector contract, registry, snapshot model and evidence linkage work end to end without any provider SDK present.
+2. **Given an unregistered or unimplemented provider, when grounding is requested, then it fails explicitly and never silently returns a successful empty result.**
+3. **Given** a snapshot containing sensitive values, **when** it is persisted, **then** redaction removes secret values, credential material, user data and raw state, and account identifiers are maskable.
+4. **Given** grounding disabled, **when** the full existing suite runs, **then** every existing report, fixture, schema, API consumer, CLI output and agent output is unchanged.
+5. **Given** the same observation twice, **when** snapshots are produced, **then** digests match and every grounded claim references its snapshot digest.
+
+**Slice acceptance boundary:** Prove the contract against a reference stub provider only. No live provider calls, no credentials and no AWS SDK are exercised in this slice.
+
+**Requirement-specific acceptance coverage:**
+
+| Requirement | Contract owned by this story | Required acceptance proof |
+| --- | --- | --- |
+| LEG-FR-001 | Provider-neutral contract and registry; explicit failure for unregistered and unimplemented providers. | Registry tests including stub, unimplemented and unknown provider cases |
+| LEG-FR-002 | Immutable snapshot recording provider, scope, regions, read window, per-resource read status, issued actions and digest. | Snapshot model and immutability tests |
+| LEG-FR-003 | `live_state` evidence source with `deterministic` determinism under Evidence Law. | Evidence Law gate tests for grounded claims |
+| LEG-FR-004 | Redaction before persistence; maskable account identifiers. | Sensitive-value corpus over persisted snapshots |
+| LEG-FR-005 | Freshness integration reusing the existing vocabulary. | Freshness state matrix tests |
+| LEG-FR-006 | Partial reads labelled partial; unreadable resources enumerated with cause. | Partial and unreadable result tests |
+| LEG-FR-007 | Opt-in per project, disabled by default. | Default-off and unconfigured-project tests |
+| LEG-NFR-006 | Deterministic digests and evidence linkage. | Digest reproducibility tests |
+| LEG-NFR-009 | Unchanged behaviour with grounding disabled. | Full existing suite plus legacy consumer contract tests |
+| LEG-NFR-010 | A provider is addable without modifying core analysis. | Reference stub added with no core diff |
+
+### Story 17.2: AWS Read-Only Session, Allow-List Enforcement and Dry-Run
+
+As a security-conscious operator,
+I want DeployWhisper's AWS access to be mechanically read-only, credential-free at rest and reviewable before I grant anything,
+So that I can authorize grounding without expanding my risk surface.
+
+**Status:** backlog.
+
+**Dedicated context:** [17-2-aws-read-only-session-allowlist-and-dry-run.md](../implementation-artifacts/17-2-aws-read-only-session-allowlist-and-dry-run.md).
+
+**Dependencies:** 17.0, 17.1. **No Epic 16 dependency.**
+
+**Acceptance Criteria:**
+
+1. **Given** an action absent from the allow-list, **when** the connector is asked to issue it, **then** the call is refused before construction and the refusal is recorded.
+2. **Given the allow-list, when CI runs, then every entry is asserted non-mutating against the provider read-only verb set, and a deliberately introduced mutating verb fails the build.**
+3. **Given** ambient credentials from profile, SSO, environment, instance role or IRSA, **when** a session is resolved, **then** no credential material appears in any log, snapshot, API response, CLI output or persisted record.
+4. **Given** caller-supplied connector configuration, **when** a client is constructed, **then** endpoint, host, role and account cannot be retargeted, and only provider-canonical resolution is used.
+5. **Given** dry-run, **when** it executes for a recorded plan, **then** it enumerates the exact calls that would be issued **without resolving or using credentials**.
+6. **Given** the published minimal IAM policy, **when** it is compared to the allow-list, **then** they are equivalent, and each capability has a documented required-permission map.
+
+**Slice acceptance boundary:** Prove credential, allow-list, targeting and dry-run contracts using recorded provider fixtures and a local credential harness. Production reads against a live account are owned by 17.3 and 17.9.
+
+**Requirement-specific acceptance coverage:**
+
+| Requirement | Contract owned by this story | Required acceptance proof |
+| --- | --- | --- |
+| LEG-FR-008 | Ambient-only credential resolution with no persistence, logging or echo. | Secret-corpus regression across logs, snapshots, API and CLI |
+| LEG-FR-009 | Deny-by-default allow-list plus published minimal policy. | Refusal tests and policy-to-allow-list equivalence test |
+| LEG-FR-010 | Credential-free dry-run. | Dry-run executed with no credentials available |
+| LEG-FR-011 | No caller-controlled endpoint, host, role or account targeting. | Confused-deputy and SSRF configuration corpus |
+| LEG-FR-012 | Timeout, deadline, concurrency, budget, backoff and cancellation. | Bounded-execution tests against recorded fixtures |
+| LEG-NFR-001 | Mechanically verified read-only guarantee. | Verb assertion with a deliberate failing case |
+| LEG-NFR-002 | No credential material anywhere. | Secret-corpus regression |
+| LEG-NFR-005 | Minimal privilege. | Per-capability denial tests |
+| LEG-NFR-007 | Direct operator-to-provider calls with no intermediary. | Egress inspection in the composed app |
+
+### Story 17.3: Plan-Directed Reflection and Bounded Collection
+
+As a reviewer,
+I want DeployWhisper to read only what my change actually touches, plus one hop of real dependents,
+So that grounding is fast, cheap and minimally privileged instead of an estate-wide scan.
+
+**Status:** backlog. **Independent security review required before merge.**
+
+**Dedicated context:** [17-3-plan-directed-reflection-and-bounded-collection.md](../implementation-artifacts/17-3-plan-directed-reflection-and-bounded-collection.md).
+
+**Dependencies:** 17.1, 17.2, and a passed independent security review. **No Epic 16 dependency.**
+
+**Acceptance Criteria:**
+
+1. **Given** parsed artifacts including recorded prior state, **when** identity extraction runs, **then** a `ResourceIdentity` set is produced with no call issued.
+2. **Given** a pure create with no physical counterpart, **when** reflection runs, **then** it is classified `no_live_counterpart` rather than failed or unreadable.
+3. **Given a connector that attempts account-wide or region-wide enumeration, when conformance runs, then it fails.**
+4. **Given** a touched resource set, **when** reverse expansion runs, **then** exactly one hop is expanded with a recorded bound and reason for each expansion.
+5. **Given** an unreachable, partial, denied, throttled or expired context, **when** grounding completes, **then** severity is never lowered, confidence is never raised, `insufficient_context` is triggered, and unreadable resources carry the exact missing permission.
+6. **Given** any collection, **when** it completes or is cancelled, **then** actual call count, elapsed time and budget consumption are reported.
+
+**Slice acceptance boundary:** Exercise recorded provider fixtures and fault injection. A single named live-account smoke exercise may be recorded as evidence but does not qualify the production profile, which is owned by 17.9.
+
+**Requirement-specific acceptance coverage:**
+
+| Requirement | Contract owned by this story | Required acceptance proof |
+| --- | --- | --- |
+| LEG-FR-013 | Identity extraction without issuing calls. | Extraction tests over Terraform and OpenTofu plan fixtures |
+| LEG-FR-014 | `no_live_counterpart` classification for creates. | Pure-create fixture tests |
+| LEG-FR-015 | No account-wide or region-wide enumeration. | Conformance test rejecting an enumerating connector |
+| LEG-FR-016 | Bounded one-hop reverse expansion with recorded reasons. | Expansion bound and reason tests |
+| LEG-NFR-003 | Bounded, interruptible collection returning partial results within the deadline. | Deadline, cancellation and slow-provider fault injection |
+| LEG-NFR-004 | Fail-safe degradation. | Degradation matrix across unreachable, partial, denied, throttled, expired |
+| LEG-NFR-012 | Visible call count, elapsed time and budget. | Budget reporting assertions in API and CLI |
+
+### Story 17.4: Plan-Versus-Reality Divergence Detection and CI Gate
+
+As a reviewer or CI operator,
+I want to know when a plan was computed against stale reality before I approve it,
+So that I never approve a diff that is not the diff which will apply.
+
+**Status:** backlog. **Highest standalone value in the epic; shippable without any UI.**
+
+**Dedicated context:** [17-4-plan-versus-reality-divergence-and-ci-gate.md](../implementation-artifacts/17-4-plan-versus-reality-divergence-and-ci-gate.md).
+
+**Dependencies:** 17.3. **No Epic 16 dependency.**
+
+**Acceptance Criteria:**
+
+1. **Given** recorded plan prior state and live state, **when** comparison runs, **then** each touched resource is classified `match`, `diverged`, `unknown` or `unreadable`.
+2. **Given** a diverged resource, **when** the report is produced, **then** a `plan_reality_divergence` finding carries per-attribute recorded, live and planned values linked to the snapshot digest and the specific resource.
+3. **Given** a plan generated earlier than the configured threshold, **when** grounding runs, **then** plan freshness is computed and the stale plan is flagged.
+4. **Given divergence on a security-relevant or destructive attribute, when the recommendation is computed, then a severity floor applies and the recommendation is at least `caution`; no reason, acknowledgement or narrative can clear the floor.**
+5. **Given** `--fail-on-divergence`, **when** the CLI or API runs in CI, **then** the gate fails deterministically with a distinct documented exit code and requires no web UI.
+6. **Given** an unreadable or unknown comparison, **when** results are rendered, **then** it is never reported as `match`.
+
+**Slice acceptance boundary:** Prove comparison, severity floor and gate semantics against recorded divergence fixtures covering out-of-band modification, deletion, recreation and tag-only change. UI presentation is owned by 17.8.
+
+**Requirement-specific acceptance coverage:**
+
+| Requirement | Contract owned by this story | Required acceptance proof |
+| --- | --- | --- |
+| LEG-FR-017 | Four-way comparison classification. | Comparison matrix over recorded divergence fixtures |
+| LEG-FR-018 | `plan_reality_divergence` finding with attribute triples and evidence linkage. | Finding shape and Evidence Law tests |
+| LEG-FR-019 | Plan freshness computation and stale-plan flag. | Plan-age fixture tests |
+| LEG-FR-020 | Severity floor that cannot be cleared by reason or narrative. | Floor-enforcement and override-attempt tests |
+| LEG-FR-021 | Deterministic CI gate with a distinct exit code. | CLI gate tests and a documented exit-code contract |
+| LEG-NFR-004 | Unknown and unreadable never presented as match. | Negative-path assertions |
+
+### Story 17.5: Live Dependency Graph and Grounded Blast Radius
+
+As a reviewer,
+I want blast radius computed from real dependency edges in my account,
+So that I learn what this change actually touches instead of reading a "no topology mapping" warning.
+
+**Status:** backlog.
+
+**Dedicated context:** [17-5-live-dependency-graph-and-grounded-blast-radius.md](../implementation-artifacts/17-5-live-dependency-graph-and-grounded-blast-radius.md).
+
+**Dependencies:** 17.3. **No Epic 16 dependency.**
+
+**Acceptance Criteria:**
+
+1. **Given** live reads for supported families, **when** the graph is built, **then** real edges are produced for security-group references, load-balancer to target-group to instance paths, DNS to load-balancer paths, IAM trust relationships, event-source mappings and database replica topology.
+2. **Given** the `aws` handler registered in `TOPOLOGY_SOURCE_REGISTRY`, **when** import runs, **then** it produces a change set compatible with the existing topology payload contract and import metadata.
+3. **Given** grounded resources, **when** `compute_blast_radius` runs, **then** they match, and **genuinely unmatched resources remain explicitly reported**; grounding never conceals an unmatched resource.
+4. **Given** live tags, **when** ownership signals are derived, **then** they supplement `ownership_service` without overriding CODEOWNERS, and conflicts are surfaced rather than silently resolved.
+5. **Given** affected nodes, **when** the result is rendered, **then** liveness facts such as running count, availability-zone spread and last observed activity each carry their own freshness and source.
+6. **Given** declared and live environment classification disagreeing, **when** classification runs, **then** the state is `conflicting` rather than silently preferring one source.
+
+**Slice acceptance boundary:** Prove graph construction and blast-radius integration against recorded provider fixtures per family. Live-account breadth is owned by 17.9.
+
+**Requirement-specific acceptance coverage:**
+
+| Requirement | Contract owned by this story | Required acceptance proof |
+| --- | --- | --- |
+| LEG-FR-022 | Real dependency edges for supported families. | Per-family edge tests over recorded fixtures |
+| LEG-FR-023 | `aws` topology source handler. | Topology payload and import-metadata contract tests |
+| LEG-FR-024 | Grounded matching with unmatched resources still explicit. | Blast-radius tests including a deliberately unmatched resource |
+| LEG-FR-025 | Live tag ownership that never overrides CODEOWNERS. | Ownership precedence and conflict-surfacing tests |
+| LEG-FR-026 | Liveness facts with their own freshness. | Node freshness and source attribution tests |
+| LEG-FR-031 | Grounded environment classification with `conflicting` on disagreement. | Declared-versus-live disagreement tests |
+
+### Story 17.6: Grounded Recoverability and Rollback
+
+As a reviewer,
+I want to know whether a destructive change can actually be undone,
+So that "high risk" becomes a verified statement about restore paths rather than a category label.
+
+**Status:** backlog.
+
+**Dedicated context:** [17-6-grounded-recoverability-and-rollback.md](../implementation-artifacts/17-6-grounded-recoverability-and-rollback.md).
+
+**Dependencies:** 17.3. **No Epic 16 dependency.**
+
+**Acceptance Criteria:**
+
+1. **Given** a destructive change, **when** recoverability collection runs, **then** protection attributes are read, including deletion protection, final-snapshot behaviour, automated backup configuration and recovery-point age, object versioning, MFA delete, termination protection and most recent snapshot age.
+2. **Given** collected attributes, **when** classification runs, **then** the change is classified `recoverable`, `recoverable_with_loss`, `irreversible` or `unknown`, citing the specific attributes that establish it.
+3. **Given** an `irreversible` classification, **when** the rollback plan is produced, **then** it states explicitly that no restore path exists and names the attributes responsible.
+4. **Given unknown or unreadable recoverability, when results are rendered, then they are never presented as recoverable, and absent data never improves a classification.**
+5. **Given** grounding disabled, **when** rollback planning runs, **then** existing complexity-signalling behaviour is unchanged.
+
+**Slice acceptance boundary:** Prove attribute collection and classification against recorded fixtures per family, including deliberately hostile combinations such as protection enabled but backups disabled.
+
+**Requirement-specific acceptance coverage:**
+
+| Requirement | Contract owned by this story | Required acceptance proof |
+| --- | --- | --- |
+| LEG-FR-027 | Protection and recoverability attribute collection. | Per-family attribute fixtures |
+| LEG-FR-028 | Four-way classification citing establishing attributes. | Classification matrix including hostile combinations |
+| LEG-FR-029 | Rollback planner consumption with explicit no-restore-path output. | Rollback output tests for each classification |
+| LEG-FR-030 | Unknown never rendered as recoverable. | Negative-path and absent-data tests |
+
+### Story 17.7: Snapshot Portability and Air-Gapped Grounding
+
+As a restricted-network operator,
+I want to collect on a connected host and analyze on a disconnected one,
+So that network isolation does not cost me grounded evidence.
+
+**Status:** backlog.
+
+**Dedicated context:** [17-7-snapshot-portability-and-air-gapped-grounding.md](../implementation-artifacts/17-7-snapshot-portability-and-air-gapped-grounding.md).
+
+**Dependencies:** 17.1, 17.3. **No Epic 16 dependency.**
+
+**Acceptance Criteria:**
+
+1. **Given** a completed snapshot, **when** it is exported, **then** the file is digest-bound, carries provenance, and contains no credential material, secret values or raw state.
+2. **Given** an exported snapshot, **when** it is imported on a disconnected host, **then** grounding semantics are identical to a live read.
+3. **Given an imported snapshot, when it is used, then it is explicitly labelled `imported` and subject to an age check that can mark it `stale`.**
+4. **Given** a tampered or digest-mismatched snapshot file, **when** import runs, **then** it is rejected with a specific cause and never partially applied.
+5. **Given** a snapshot from a different project or provider scope, **when** import runs, **then** it is rejected rather than silently rescoped.
+
+**Slice acceptance boundary:** Prove export, import, labelling and rejection semantics locally. The full disconnected-host operator exercise is recorded here and re-verified in 17.9.
+
+**Requirement-specific acceptance coverage:**
+
+| Requirement | Contract owned by this story | Required acceptance proof |
+| --- | --- | --- |
+| LEG-FR-032 | Digest-bound export and import with provenance and `imported` labelling. | Round-trip, tamper and age-check tests |
+| LEG-FR-033 | Identical grounding semantics from an imported snapshot. | Live-versus-imported equivalence tests |
+| LEG-NFR-011 | Air-gapped parity. | Disconnected-host equivalence exercise |
+
+### Story 17.8: Live Context UI
+
+As a reviewer,
+I want grounded evidence presented in the React app alongside the existing briefing,
+So that I can see what is actually affected, what diverged and what cannot be undone before I decide.
+
+**Status:** backlog.
+
+**Dedicated context:** [17-8-live-context-ui.md](../implementation-artifacts/17-8-live-context-ui.md).
+
+**Dependencies:** 17.4, 17.5, 17.6. **No Epic 16 dependency.** Must render correctly with no automation run present.
+
+**Acceptance Criteria:**
+
+1. **Given** a grounded report, **when** the Live Context tab opens, **then** the grounding banner, divergence panel, live blast radius, recoverability table and unreadable-resource list render from real API data using existing design primitives.
+2. **Given** an unreadable resource, **when** it is listed, **then** the exact missing permission and an actionable remedy are shown, not a generic warning.
+3. **Given** grounding off, disabled, denied, empty, loading, failed, partial or degraded responses, **when** the view loads, **then** the actual state and the permitted next action are accessible, and no grounded claim is implied.
+4. **Given** the Settings Cloud Context surface, **when** an administrator configures a connector, **then** the credential source is shown but never the secret, and test-connection, dry-run preview and a copyable minimal IAM policy are available.
+5. **Given a project switch, stale snapshot or connection loss, when queries refresh, then previous project data clears and grounded claims are not carried across projects.**
+6. **Given** the composed production app, **when** a keyboard user reviews a grounded report and configures a connector, **then** focus, error and tab semantics, the axe critical and serious gate and screenshots pass at 1440 and 760 widths, with the Dashboard information budget unchanged.
+
+**Slice acceptance boundary:** Bind to real APIs from 17.4–17.6 with seeded data. Never hard-code mockup demo data. Backend-for-UI gaps ship in a separately labelled PR.
+
+**Requirement-specific acceptance coverage:**
+
+| Requirement | Contract owned by this story | Required acceptance proof |
+| --- | --- | --- |
+| LEG-FR-034 | Optional separately versioned `live_context` block with no report schema bump. | Serializer and legacy-consumer contract tests |
+| LEG-FR-035 | Live Context tab with all states and actionable permission remedies. | Compose-built real-data and state-matrix E2E |
+| LEG-FR-036 | Settings surface with credential source, test-connection, dry-run and policy copy. | Compose-built settings E2E and secret-absence assertions |
+| LEG-NFR-008 | Composed-app axe and keyboard-only gates with screenshots. | Compose production build, Playwright, axe, screenshots |
+
+### Story 17.9: Multi-Provider Extensibility, CLI and Agent Surfaces, and Qualification
+
+As a maintainer,
+I want the connector contract published with a conformance suite, the CLI and agent surfaces complete, and the whole feature qualified,
+So that the community can extend grounding and operators receive honest capability and safety evidence.
+
+**Status:** backlog.
+
+**Dedicated context:** [17-9-extensibility-cli-agent-and-qualification.md](../implementation-artifacts/17-9-extensibility-cli-agent-and-qualification.md).
+
+**Dependencies:** all earlier Epic 17 stories. **No Epic 16 dependency.**
+
+**Acceptance Criteria:**
+
+1. **Given** the CLI, **when** grounding commands run, **then** they use the same API authority and the same read-only enforcement as the web surface, including dry-run, export, import and the divergence gate.
+2. **Given** the agent and MCP-compatible interface, **when** grounded facts are returned, **then** determinism and freshness labels are explicit and grounded facts cannot be presented as equivalent to inferred ones.
+3. **Given** Azure and GCP, **when** grounding is requested, **then** they fail explicitly and identically to the existing unimplemented topology sources, with no partial or misleading behaviour.
+4. **Given** the published connector contributor guide and conformance suite, **when** a reference provider is implemented against them, **then** it passes without maintainer-specific knowledge and without modifying core analysis.
+5. **Given a real AWS account and the published minimal IAM policy, when the supported-profile qualification runs, then live grounding, divergence detection, recoverability classification and air-gapped import are all demonstrated end to end.**
+6. **Given** the benchmark corpus, **when** backtesting runs with and without grounding, **then** a published before/after accuracy delta, an `unmatched_resources` rate delta, a determinism-mix delta, and counted divergence and irreversible-destroy detections are recorded.
+7. **Given** full CI, security, contract, fault-injection, end-to-end and accessibility gates, **when** release qualification runs, **then** all pass with no unresolved introduced critical or high defect, and a versioned manifest freezes supported SDK, provider API and application versions.
+
+**Slice acceptance boundary:** This is the only story permitted to claim a qualified production provider profile. Recorded fixtures from earlier slices do not qualify it.
+
+**Requirement-specific acceptance coverage:**
+
+| Requirement | Contract owned by this story | Required acceptance proof |
+| --- | --- | --- |
+| LEG-FR-037 | CLI surface with shared API authority and read-only enforcement. | CLI parity and enforcement tests |
+| LEG-FR-038 | Agent and MCP surfaces with explicit determinism and freshness labels. | Agent output contract tests |
+| LEG-FR-039 | Azure and GCP explicit stubs. | Unimplemented-provider behaviour tests |
+| LEG-FR-040 | Contributor guide and executable conformance suite. | Reference provider passing conformance with no core diff |
+| LEG-NFR-010 | Provider extensibility without core modification. | Conformance suite against the reference stub |
+| All LEG-NFR | Release-wide nonfunctional proof. | Full qualification matrix, measured results and published deltas |
+
+Only add persistence and entities needed for each slice; do not create the full grounding schema in one foundational migration. Runtime schema or constructor changes require a repository-wide fixture search and the affected CI shards. New dependencies require an explicit approved dependency decision.
