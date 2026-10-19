@@ -2804,7 +2804,7 @@ As a maintainer,
 I want to settle the read-only grounding contract with governance, a dependency decision and executable feasibility evidence,
 So that implementation starts with a proven trust boundary rather than assumptions about credentials and provider behaviour.
 
-**Status:** backlog (proposed; RFC decision unmet).
+**Status:** ready-for-dev. RFC 0002 accepted 2026-10-19; acceptance authorizes this story only. Stories 17.1–17.9 remain backlog until 17.0 closes.
 
 **Dedicated context:** [17-0-adopt-and-qualify-the-grounding-contract.md](../implementation-artifacts/17-0-adopt-and-qualify-the-grounding-contract.md).
 

@@ -56,7 +56,7 @@ Architecture §26.2 `LEG-ADR-10` records the deliberate decision **not** to reus
 
 | Item | Owner | Status |
 | --- | --- | --- |
-| RFC 0002 maintainer decision | Maintainers | Open — blocks all promotion |
+| RFC 0002 maintainer decision | Maintainers | **Accepted 2026-10-19** — authorizes Story 17.0 only |
 | AWS SDK runtime dependency decision | Story 17.0 Packet 0.2 | Open |
 | Default deadline, concurrency and call-budget values | Story 17.0 Packet 0.5 | Open — must be measured, not guessed |
 | Resource-family coverage list and per-capability permission map | Story 17.0 Packet 0.6 | Open — frozen at 17.0 close |
@@ -67,8 +67,8 @@ Architecture §26.2 `LEG-ADR-10` records the deliberate decision **not** to reus
 
 ## 6. Readiness verdict
 
-**NOT READY for implementation.** Preparation is complete; the gate is not.
+**Story 17.0 is READY. Stories 17.1-17.9 are NOT READY.**
 
-Epic 17 remains `backlog` in its entirety. Story 17.0 is the only story eligible to begin once RFC 0002 records a positive decision, and it must close its feasibility gate before any downstream story is promoted.
+RFC 0002 was accepted on 2026-10-19, which authorizes Story 17.0 qualification only. Story 17.0 must close its feasibility gate, record the dependency decision and freeze the coverage list before any downstream story is promoted. The open items in the table above remain open.
 
 No code was written, no spike was run, no dependency was installed, no provider was contacted and no test result is claimed anywhere in this preparation set.

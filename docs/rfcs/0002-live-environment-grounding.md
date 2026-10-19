@@ -1,7 +1,8 @@
 # RFC 0002: Live Environment Grounding
 
-- **Status:** Proposed
+- **Status:** Accepted — authorizes Story 17.0 qualification only
 - **Created:** 2026-10-19
+- **Accepted:** 2026-10-19
 - **Epic:** 17
 - **Target release:** v1.6.0 (independent of the v1.5.0 Epic 16 lane)
 - **Supersedes:** nothing
@@ -234,5 +235,8 @@ Each is owned by Story 17.0 and must be closed by executable evidence, not discu
 | Date | Decision | Authority |
 | --- | --- | --- |
 | 2026-10-19 | RFC drafted and opened for public review; Epic 17 scoped as an independent, parallel workstream | Proposed — awaiting maintainer decision |
+| 2026-10-19 | **RFC accepted.** The read-only, plan-directed grounding contract, the four-layer enforcement model, the fail-safe degradation contract and the Epic 16 independence boundary are adopted as scoped. Story 17.0 is authorized to begin. | Accepted — maintainer decision recorded |
+
+Acceptance resolves AC1 of Story 17.0 Packet 0.1. It does **not** resolve the six unresolved questions above, which remain owned by Story 17.0 and must be closed by recorded evidence. In particular, the AWS SDK dependency decision (Packet 0.2) is still open, and no dependency installation is authorized until it is recorded.
 
 **No implementation is authorized by this RFC.** Acceptance of this RFC authorizes Story 17.0 qualification only. Downstream stories require their own dependency evidence, the Story 17.0 feasibility results, an approved dependency decision, and an independent security review before Story 17.3.

@@ -186,11 +186,11 @@ Story16.0 closure on2026-10-10 qualifies only the prepared16.1/16.3 foundations;
 
 Added 2026-10-19. Epic 17 is tracked in its own appended section so that Epic 16 rows, the epic inventory table and the baseline narrative above remain untouched while both epics progress in parallel. See the [boundary and parallelization plan](../planning-artifacts/epic-16-17-boundary-and-parallelization-plan.md).
 
-Epic 17 status: `backlog`. Stories done: 0/10. **No story is promoted until [RFC 0002](../../docs/rfcs/0002-live-environment-grounding.md) records a maintainer decision and Story 17.0 closes its feasibility gate.** Preparation is specification only; no implementation, qualification or test evidence exists for any Epic 17 story.
+Epic 17 status: `in-progress`. Stories done: 0/10. **[RFC 0002](../../docs/rfcs/0002-live-environment-grounding.md) was accepted 2026-10-19, authorizing Story 17.0 qualification only.** Stories 17.1–17.9 remain `backlog` until Story 17.0 closes its feasibility gate and records the dependency decision. Preparation is specification only; no implementation, qualification or test evidence exists for any Epic 17 story.
 
 | Story | Status | Dedicated context |
 | --- | --- | --- |
-| 17.0 | `backlog` | [17-0-adopt-and-qualify-the-grounding-contract.md](17-0-adopt-and-qualify-the-grounding-contract.md) |
+| 17.0 | `ready-for-dev` | [17-0-adopt-and-qualify-the-grounding-contract.md](17-0-adopt-and-qualify-the-grounding-contract.md) |
 | 17.1 | `backlog` | [17-1-cloud-connector-contract-and-snapshot-evidence.md](17-1-cloud-connector-contract-and-snapshot-evidence.md) |
 | 17.2 | `backlog` | [17-2-aws-read-only-session-allowlist-and-dry-run.md](17-2-aws-read-only-session-allowlist-and-dry-run.md) |
 | 17.3 | `backlog` | [17-3-plan-directed-reflection-and-bounded-collection.md](17-3-plan-directed-reflection-and-bounded-collection.md) |

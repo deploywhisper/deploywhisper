@@ -1,6 +1,6 @@
 # Story 17.0: Adopt and Qualify the Grounding Contract
 
-Status: backlog
+Status: ready-for-dev
 Preparation: refined
 Release: v1.6.0 | Priority: P0 within the independent Epic 17 lane
 
@@ -10,7 +10,8 @@ As a maintainer, I want to settle the read-only grounding contract with governan
 
 ## Implementation gates
 
-- Governance source: [RFC 0002](../../docs/rfcs/0002-live-environment-grounding.md), currently **Proposed**. A recorded maintainer decision is required before any downstream Epic 17 story is promoted.
+- Governance source: [RFC 0002](../../docs/rfcs/0002-live-environment-grounding.md), **Accepted 2026-10-19**. Acceptance authorizes this story only; a recorded Story 17.0 close is still required before any downstream Epic 17 story is promoted.
+- AC1 is partially satisfied by the recorded RFC acceptance. Packet 0.1 must still confirm CODEOWNERS coverage for `cloud/` and scope agreement with the parent PRD and architecture §26.
 - Canonical requirements: [feature PRD](../planning-artifacts/prd-live-environment-grounding.md), `LEG-FR-001..040` and `LEG-NFR-001..012`.
 - Hard earlier dependencies: the current released baseline only. **This story has no Epic 16 dependency and must not acquire one.**
 - This story is governance and feasibility qualification. It does **not** implement the product feature and does not mark any downstream story done.
