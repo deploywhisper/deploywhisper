@@ -18,6 +18,7 @@ class EngineLifespanTests(unittest.IsolatedAsyncioTestCase):
     async def test_empty_registry_creates_no_workers_or_coordinator(self):
         with (
             patch("app.init_db"),
+            patch("infra_automation.storage.configure_engine_sqlite") as profile,
             patch("app._topology_drift_scheduler_loop", new=idle_scheduler),
             patch("infra_automation.local_workers.DEFAULT_REGISTRY", HandlerRegistry()),
             patch("infra_automation.local_workers.SpawnProcessWorkers") as workers,
@@ -25,6 +26,7 @@ class EngineLifespanTests(unittest.IsolatedAsyncioTestCase):
         ):
             async with app.lifespan(app.fastapi_app):
                 await asyncio.sleep(0)
+            profile.assert_not_called()
             workers.assert_not_called()
             coordinator.assert_not_called()
 
@@ -32,6 +34,7 @@ class EngineLifespanTests(unittest.IsolatedAsyncioTestCase):
         owned = MagicMock(start=AsyncMock(), stop=AsyncMock())
         with (
             patch("app.init_db"),
+            patch("infra_automation.storage.configure_engine_sqlite") as profile,
             patch("app._topology_drift_scheduler_loop", new=idle_scheduler),
             patch("infra_automation.local_workers.DEFAULT_REGISTRY", object()),
             patch("infra_automation.local_workers.SpawnProcessWorkers") as workers,
@@ -41,6 +44,7 @@ class EngineLifespanTests(unittest.IsolatedAsyncioTestCase):
                 owned.start.assert_awaited_once()
                 owned.stop.assert_not_awaited()
             owned.stop.assert_awaited_once()
+            profile.assert_called_once()
             workers.assert_called_once()
 
     async def test_start_failure_closes_owned_coordinator_and_existing_scheduler(self):
@@ -59,6 +63,7 @@ class EngineLifespanTests(unittest.IsolatedAsyncioTestCase):
 
         with (
             patch("app.init_db"),
+            patch("infra_automation.storage.configure_engine_sqlite"),
             patch("app._topology_drift_scheduler_loop", new=scheduler),
             patch("infra_automation.local_workers.DEFAULT_REGISTRY", object()),
             patch("infra_automation.local_workers.SpawnProcessWorkers"),

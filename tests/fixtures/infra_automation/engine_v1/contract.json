@@ -54,7 +54,9 @@
     "attempt_log_bytes": 1048576,
     "log_chunk_utf8_bytes": 16384,
     "page_items": 25,
-    "max_page_items": 100
+    "max_page_items": 100,
+    "global_queued_runs": 1000,
+    "disk_reserve_bytes": 67108864
   },
   "fault_boundaries": [
     "run_admission",

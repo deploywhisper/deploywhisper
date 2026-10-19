@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from unittest import TestCase
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 import asyncio
 import time
 
@@ -17,6 +17,8 @@ from infra_automation.local_workers import (
     SpawnProcessWorkers,
 )
 from infra_automation.state import OutputReference, WorkerResult
+from infra_automation.state import EngineBounds
+from infra_automation.storage import configure_engine_sqlite
 from models.repositories import infra_automation_runs as repository
 from models.tables import InfraAutomationAttempt
 from services import project_service as authorization
@@ -49,6 +51,13 @@ def dead_handler(value):
 
 
 class EngineCoordinatorContractTests(TestCase):
+    def test_implicit_coordinator_bounds_follow_dynamic_server_reduction(self):
+        with patch(
+            "config.engine_bounds", return_value=EngineBounds(analysis_workers=1)
+        ):
+            coordinator = Coordinator(Mock(), Mock())
+        self.assertEqual(coordinator.bounds.analysis_workers, 1)
+
     def test_empty_registry_never_opens_database_or_workers(self):
         factory, workers = Mock(), Mock()
         coordinator = Coordinator(factory, workers)
@@ -88,6 +97,8 @@ class EngineCoordinatorRuntimeTests(repository_tests.EngineRepositoryTests):
                 session,
                 support.scope(session, 100, 100, "automation.request", mutation=True),
             )
+        # Mirror installed-registry app startup before spawning concurrent children.
+        configure_engine_sqlite(self.engine)
         self.workers = SpawnProcessWorkers(str(self.engine.url))
         self.addCleanup(self.workers.close)
 
@@ -150,6 +161,34 @@ class EngineCoordinatorRuntimeTests(repository_tests.EngineRepositoryTests):
             )
         )
         self.assertEqual(len({row.owner_hash for row in rows}), 2)
+        with self.engine.connect() as connection:
+            self.assertEqual(
+                connection.exec_driver_sql("PRAGMA journal_mode").scalar(), "wal"
+            )
+            self.assertEqual(
+                connection.exec_driver_sql("PRAGMA synchronous").scalar(), 2
+            )
+
+    def test_physical_capacity_backpressure_preserves_unstarted_run(self):
+        run = self.admit()
+        coordinator = self.scheduler()
+        for status in (429, 503):
+            with (
+                self.subTest(status=status),
+                patch(
+                    "infra_automation.coordinator.ensure_capacity",
+                    side_effect=LifecycleError(status),
+                ),
+                self.assertLogs(
+                    "infra_automation.coordinator", level="WARNING"
+                ) as logs,
+            ):
+                coordinator.tick()
+            self.assertTrue(any("backpressure" in entry for entry in logs.output))
+            with self.factory() as session:
+                self.assertEqual(repository.get_run(session, run.id).state, "queued")
+                self.assertEqual(repository.list_attempts(session, run_id=run.id), [])
+        self.assertEqual(self.workers.handles, ())
 
     def test_dead_worker_does_not_complete_another_attempt(self):
         self.two_runs()

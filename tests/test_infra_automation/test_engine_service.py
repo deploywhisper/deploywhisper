@@ -299,3 +299,22 @@ class EngineServiceTests(LifecycleCase):
             AutomationAuditItem.model_validate(
                 {**system_events[0], "actor_type": "human"}
             )
+
+    def test_global_backlog_cap_and_physical_reserve_fail_before_persistence(self):
+        from types import SimpleNamespace
+        from infra_automation import storage
+
+        self.admit(bounds=EngineBounds(global_queued_runs=1))
+        other = self.request.model_copy(update={"idempotency_key": "global-overflow"})
+        before = self.counts()
+        with self.assertRaises(LifecycleError) as error:
+            self.admit(other, bounds=EngineBounds(global_queued_runs=1))
+        self.assertEqual(error.exception.status_code, 429)
+        self.assertEqual(self.counts(), before)
+        with patch.object(
+            storage.shutil, "disk_usage", return_value=SimpleNamespace(free=0)
+        ):
+            with self.assertRaises(LifecycleError) as error:
+                self.admit(other)
+            self.assertEqual(error.exception.status_code, 429)
+        self.assertEqual(self.counts(), before)

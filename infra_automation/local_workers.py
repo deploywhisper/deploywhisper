@@ -15,7 +15,9 @@ from sqlalchemy import create_engine, event
 from sqlalchemy.engine import make_url
 from sqlalchemy.orm import sessionmaker
 
+import config
 from infra_automation import claims
+from infra_automation.storage import configure_engine_sqlite
 from infra_automation.contracts import STEP_CONTRACTS
 from infra_automation.lifecycle import SnapshotDocument
 from infra_automation.state import (
@@ -129,6 +131,7 @@ def _worker_main(database_url, handle, registration, value, bounds, channel):
             connection.execute("PRAGMA foreign_keys=ON")
             connection.execute("PRAGMA synchronous=FULL")
 
+        configure_engine_sqlite(engine)
         factory = sessionmaker(engine, expire_on_commit=False)
 
         def write(function, **kwargs):
@@ -178,9 +181,9 @@ def _worker_main(database_url, handle, registration, value, bounds, channel):
             )
             if value.prerequisites != expected:
                 raise ValueError("Immutable prerequisite binding unavailable.")
-        write(claims.start_attempt)
+        write(claims.start_attempt, bounds=bounds)
         if registration.step_kind == "registered_github_handoff":
-            if write(claims.begin_external) is None:
+            if write(claims.begin_external, bounds=bounds) is None:
                 raise ValueError("External intent unavailable.")
             external_started = True
             # This is a trusted local uncertainty double, with no transport.
@@ -234,7 +237,13 @@ class _OwnedProcess:
 
 
 class SpawnProcessWorkers:
-    def __init__(self, database_url, *, max_workers=2, bounds=None):
+    def __init__(self, database_url, *, max_workers=None, bounds=None):
+        self.bounds = EngineBounds.model_validate(
+            (config.engine_bounds() if bounds is None else bounds).model_dump()
+        )
+        max_workers = (
+            self.bounds.analysis_workers if max_workers is None else max_workers
+        )
         url = make_url(database_url)
         if (
             url.drivername != "sqlite"
@@ -252,9 +261,6 @@ class SpawnProcessWorkers:
             )
         self.database_url = str(url)
         self.max_workers = max_workers
-        self.bounds = EngineBounds.model_validate(
-            (bounds or EngineBounds()).model_dump()
-        )
         if max_workers > self.bounds.analysis_workers:
             raise ValueError("Worker slots exceed server bounds.")
         self._context = multiprocessing.get_context("spawn")

@@ -214,3 +214,32 @@ trusted synthetic adapter result here, permanently prohibiting redispatch. Each
 handler has trusted stable ID/version, supported fixed step kind, output kind or
 none, retry_safe classification and callable. External-capable doubles are never
 retry_safe. No client can register a handler or choose that classification.
+
+### Trusted runtime ceilings and physical storage
+
+`config.engine_bounds()` reads `DEPLOYWHISPER_ENGINE_<FIELD>` dynamically, where
+`FIELD` is an uppercase EngineBounds field name (for example,
+`DEPLOYWHISPER_ENGINE_GLOBAL_QUEUED_RUNS`). Values are ASCII decimal integers from
+1 through the published default; malformed values and increases fail closed.
+Global queued runs default to 1,000, including every project's queued rows.
+Engine payload budgets include immutable snapshot bytes and the exact UTF-8 bytes
+of each attempt's logs/upload/output JSON, including JSON delimiters; initial
+empty logs and uploads cost four bytes. Fixed ORM metadata and audit are excluded
+from this payload budget. Terminal and delivery-unknown evidence still count.
+
+New admission, new local work and growing evidence require known physical free
+space on the SQLite database volume. The default reserve is 64 MiB, in addition
+to the requested payload growth; `disk_reserve_bytes` can only be reduced within
+its published bounds. Unavailable storage measurements fail closed. This check
+provides backpressure and does not guarantee a later filesystem write succeeds;
+actual SQLite-full failures roll back the operation. Safety cancellation and
+unknown-outcome reconciliation remain available without a free-space precheck.
+
+Only explicit installation of a trusted engine handler catalog activates the
+file-SQLite durability helper. It sets and verifies WAL journal mode and FULL
+synchronous mode, and verifies/configures each checked-out connection. Empty
+production catalogs cause no database-profile side effects. This qualifies
+controlled process/container restart only; it does not establish host-power-loss
+support. Project policy changes cannot reduce active or queued limits below the
+actual corresponding project run counts; denial changes no settings, epochs or
+audit history.

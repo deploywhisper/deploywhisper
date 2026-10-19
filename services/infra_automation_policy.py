@@ -18,6 +18,7 @@ from models.repositories import infra_automation_workflows as repository
 from models.repositories import project_memberships
 from models.tables import (
     IdentityAccount,
+    InfraAutomationRun,
     InfraWorkflowRevision,
     Project,
     ProjectWorkspace,
@@ -81,6 +82,35 @@ def update_settings(request: UpdateSettingsRequest) -> dict:
                 return support.bounded_payload(
                     support.policy_view(session, request.project_id)
                 )
+        from infra_automation.state import ACTIVE_STATES
+
+        active_runs = (
+            session.scalar(
+                select(func.count())
+                .select_from(InfraAutomationRun)
+                .where(
+                    InfraAutomationRun.project_id == request.project_id,
+                    InfraAutomationRun.state.in_(ACTIVE_STATES),
+                )
+            )
+            or 0
+        )
+        queued_runs = (
+            session.scalar(
+                select(func.count())
+                .select_from(InfraAutomationRun)
+                .where(
+                    InfraAutomationRun.project_id == request.project_id,
+                    InfraAutomationRun.state == "queued",
+                )
+            )
+            or 0
+        )
+        if (
+            request.settings.max_active_runs < active_runs
+            or request.settings.max_queued_runs < queued_runs
+        ):
+            raise LifecycleError(409)
         maximum = (
             session.scalar(
                 select(func.count(InfraWorkflowRevision.sequence))

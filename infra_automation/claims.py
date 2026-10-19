@@ -15,6 +15,8 @@ import secrets
 from sqlalchemy import select, update, func
 
 from infra_automation.contracts import SAFE_INTEGER, STEP_CONTRACTS
+from infra_automation import storage
+import config
 from infra_automation.lifecycle import LifecycleError, SnapshotDocument
 from infra_automation.state import (
     CoordinatorHandle,
@@ -36,7 +38,6 @@ from services import infra_automation_support as support
 
 LEASE_SECONDS = 30
 MAX_ATTEMPT_SECONDS = 600
-_DEFAULT_BOUNDS = EngineBounds()
 
 
 def _now(value):
@@ -321,11 +322,12 @@ def _run(session, run_id, now, *, live=True, operation="consume", active=True):
     return row, document
 
 
-def start_run(session, coordinator, *, run_id, expected_version, now=None):
+def start_run(session, coordinator, *, run_id, expected_version, now=None, bounds=None):
     timestamp = _now(now)
     _counter(expected_version)
     _coordinator(session, coordinator, timestamp)
     run, _ = _run(session, run_id, timestamp, operation="start")
+    storage.ensure_capacity(session, bounds=bounds)
     if run.version != expected_version or run.state != "queued":
         return None
     return repo.transition_run(
@@ -369,10 +371,14 @@ def _dependencies(session, run, document, step_id):
 def _charge(session, run, delta, now, bounds=None):
     """Count persisted payload bytes including JSON delimiters, never delete evidence."""
     bounds = (
-        _DEFAULT_BOUNDS if bounds is None else support.revalidate(bounds, EngineBounds)
+        config.engine_bounds()
+        if bounds is None
+        else support.revalidate(bounds, EngineBounds)
     )
     if type(delta) is not int or delta < 0 or now < repo.utc(run.last_observed_at):
         _deny()
+    if delta:
+        storage.ensure_capacity(session, additional_bytes=delta, bounds=bounds)
     counters = session.execute(
         select(
             InfraAutomationRun.retained_bytes,
@@ -670,9 +676,10 @@ def _write(session, row, expected_version, values, event, now, bounds=None):
     return repo.get_attempt(session, row.id)
 
 
-def start_attempt(session, handle, *, expected_version, now=None):
+def start_attempt(session, handle, *, expected_version, now=None, bounds=None):
     timestamp = _now(now)
     row = _attempt(session, handle, timestamp)
+    storage.ensure_capacity(session, bounds=bounds)
     if row.state != "claimed":
         _deny()
     return _write(
@@ -706,6 +713,11 @@ def heartbeat_attempt(session, handle, *, expected_version, now=None):
 
 def append_log(session, handle, *, expected_version, chunk, now=None, bounds=None):
     _counter(expected_version)
+    bounds = (
+        config.engine_bounds()
+        if bounds is None
+        else support.revalidate(bounds, EngineBounds)
+    )
     chunk = support.revalidate(chunk, LogChunk)
     timestamp = _now(now)
     row = _attempt(session, handle, timestamp)
@@ -716,7 +728,10 @@ def append_log(session, handle, *, expected_version, chunk, now=None, bounds=Non
     logs.append(chunk.model_dump())
     encoded = support.canonical(logs).decode()
     size = len(encoded.encode("utf-8"))
-    if size > 1048576:
+    if (
+        size > bounds.attempt_log_bytes
+        or len(chunk.text.encode("utf-8")) > bounds.log_chunk_utf8_bytes
+    ):
         raise LifecycleError(429)
     return _write(
         session,
@@ -1071,11 +1086,12 @@ def adopt_committed_output(session, handle, *, expected_version, now=None, bound
         )
 
 
-def begin_external(session, handle, *, expected_version, now=None):
+def begin_external(session, handle, *, expected_version, now=None, bounds=None):
     """Persist uncertainty before the sole trusted external-capable local double."""
     timestamp = _now(now)
     _counter(expected_version)
     row = _attempt(session, handle, timestamp)
+    storage.ensure_capacity(session, bounds=bounds)
     if (
         row.version != expected_version
         or row.state != "running"

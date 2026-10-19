@@ -89,6 +89,20 @@
     "EngineBounds": {
       "additionalProperties": false,
       "properties": {
+        "global_queued_runs": {
+          "default": 1000,
+          "maximum": 1000,
+          "minimum": 1,
+          "title": "Global Queued Runs",
+          "type": "integer"
+        },
+        "disk_reserve_bytes": {
+          "default": 67108864,
+          "maximum": 67108864,
+          "minimum": 1,
+          "title": "Disk Reserve Bytes",
+          "type": "integer"
+        },
         "workflow_active_runs": {
           "default": 5,
           "maximum": 5,

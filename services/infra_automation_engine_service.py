@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
+from typing import cast
 
 from sqlalchemy import func, select, update
+from sqlalchemy.engine import CursorResult
 
 from infra_automation.contracts import RegistryContract, SAFE_INTEGER
 from infra_automation.lifecycle import LifecycleError, SnapshotDocument
@@ -111,8 +113,12 @@ def request_run(
     from infra_automation import claims
 
     request = support.revalidate(request, RunRequest)
+    import config
+
     bounds = (
-        EngineBounds() if bounds is None else support.revalidate(bounds, EngineBounds)
+        config.engine_bounds()
+        if bounds is None
+        else support.revalidate(bounds, EngineBounds)
     )
     timestamp = now or datetime.now(timezone.utc)
     if type(timestamp) is not datetime or timestamp.tzinfo is None:
@@ -160,7 +166,13 @@ def request_run(
         )
         document = snapshot.snapshot
         _require_handlers(document, registry)
+        from infra_automation.storage import ensure_capacity
+
+        ensure_capacity(
+            session, additional_bytes=len(snapshot.canonical_bytes), bounds=bounds
+        )
         for filters, maximum in (
+            ((), bounds.global_queued_runs),
             (
                 (InfraAutomationRun.project_id == workflow.project_id,),
                 document.policy.max_queued_runs,
@@ -498,9 +510,11 @@ def cancel_run(
                     last_observed_at=timestamp,
                 )
             )
-            if changed.rowcount != 1:
+            if cast(CursorResult, changed).rowcount != 1:
                 raise LifecycleError(409)
             row = repository.get_run(session, row.id)
+            if row is None:
+                raise LifecycleError(503)
             actor = AuditActor(grant.principal.principal_id, "human", grant.role)
             repository._audit(
                 session,

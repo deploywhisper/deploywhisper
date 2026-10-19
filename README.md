@@ -682,6 +682,7 @@ Project documentation currently lives in a few places:
 - [Evidence Model Foundation](./docs/evidence-model.md)
 - [Workflow v2 Schema and Validation](./docs/infra-automation/workflow-schema.md)
 - [Scoped Workflow Lifecycle and Configuration](./docs/infra-automation/workflows.md)
+- [Durable Engine, Run API, and Recovery](./docs/infra-automation/engine.md)
 - [CI Guide](./docs/ci.md)
 - [CI Secrets Checklist](./docs/ci-secrets-checklist.md)
 

@@ -6,8 +6,10 @@ from datetime import datetime, timedelta, timezone
 import hashlib
 import json
 import secrets
+from typing import cast
 from sqlalchemy import select, update, func, and_, or_
 from sqlalchemy.orm import Session
+from sqlalchemy.engine import CursorResult
 from infra_automation.contracts import STEP_CONTRACTS
 from infra_automation.lifecycle import SnapshotExport, SnapshotDocument
 from infra_automation.state import (
@@ -30,11 +32,12 @@ from services.infra_automation_support import canonical, digest
 def _atomic(session: Session):
     """A savepoint must never become SQLite's outermost committing transaction."""
     connection = session.connection()
-    if (
-        connection.dialect.name == "sqlite"
-        and not connection.connection.driver_connection.in_transaction
-    ):
-        connection.exec_driver_sql("BEGIN IMMEDIATE")
+    if connection.dialect.name == "sqlite":
+        driver = connection.connection.driver_connection
+        if driver is None:
+            raise ValueError("Database driver unavailable.")
+        if not driver.in_transaction:
+            connection.exec_driver_sql("BEGIN IMMEDIATE")
     with session.begin_nested():
         yield
 
@@ -173,7 +176,10 @@ def create_run(
     if existing:
         if existing.request_digest != request_digest:
             raise ValueError("Request key binding conflict.")
-        return get_run(session, existing.run_id)
+        existing_run = get_run(session, existing.run_id)
+        if existing_run is None:
+            raise ValueError("Request run unavailable.")
+        return existing_run
     with _atomic(session):
         row = InfraAutomationRun(
             id=secrets.token_hex(24),
@@ -428,7 +434,7 @@ def transition_run(
             )
             .values(**values)
         )
-        if result.rowcount != 1:
+        if cast(CursorResult, result).rowcount != 1:
             return None
         _audit(
             session,
@@ -492,7 +498,7 @@ def transition_attempt(
                 state=state, version=expected_version + 1, last_observed_at=timestamp
             )
         )
-        if result.rowcount != 1:
+        if cast(CursorResult, result).rowcount != 1:
             return None
         _audit(
             session,
@@ -551,7 +557,7 @@ def commit_output(
                 last_observed_at=timestamp,
             )
         )
-        if result.rowcount != 1:
+        if cast(CursorResult, result).rowcount != 1:
             return None
         _audit(
             session,

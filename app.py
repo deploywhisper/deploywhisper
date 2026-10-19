@@ -102,14 +102,17 @@ async def _topology_drift_scheduler_loop(stop_event: asyncio.Event) -> None:
 
 async def _start_engine_coordinator():
     """Start only a server-installed registry; an empty registry has no effects."""
+    import config
+
     from infra_automation.coordinator import Coordinator
     from infra_automation.local_workers import DEFAULT_REGISTRY, SpawnProcessWorkers
-    from infra_automation.state import EngineBounds
+    from infra_automation.storage import configure_engine_sqlite
     from models.database import SessionLocal
 
     if not DEFAULT_REGISTRY:
         return None
-    bounds = EngineBounds()
+    bounds = config.engine_bounds()
+    configure_engine_sqlite(SessionLocal.kw["bind"])
     workers = SpawnProcessWorkers(
         str(SessionLocal.kw["bind"].url),
         max_workers=bounds.analysis_workers,

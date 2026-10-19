@@ -9,7 +9,9 @@ import threading
 
 from sqlalchemy import func, select
 
+import config
 from infra_automation import claims
+from infra_automation.storage import ensure_capacity
 from infra_automation.lifecycle import LifecycleError, SnapshotDocument
 from infra_automation.local_workers import (
     DEFAULT_REGISTRY,
@@ -52,7 +54,7 @@ class Coordinator:
         self.workers = workers
         self.registry = registry
         self.bounds = EngineBounds.model_validate(
-            (bounds or EngineBounds()).model_dump()
+            (config.engine_bounds() if bounds is None else bounds).model_dump()
         )
         self.clock = clock or (lambda: datetime.now(timezone.utc))
         self._owner = None
@@ -408,7 +410,13 @@ class Coordinator:
                         )
                         continue
                     self._schedule(candidate.id, now)
-                except Exception:
+                except Exception as error:
+                    if isinstance(error, LifecycleError) and error.status_code in (
+                        429,
+                        503,
+                    ):
+                        logger.warning("Local engine admission backpressure.")
+                        continue
                     logger.warning("Local engine candidate rejected.")
                     try:
                         self._stop(candidate.id, "failed", now)
@@ -452,6 +460,7 @@ class Coordinator:
                     run_id=run.id,
                     expected_version=run.version,
                     now=now,
+                    bounds=self.bounds,
                 )
                 if run is None:
                     return
@@ -549,6 +558,7 @@ class Coordinator:
                     )
                     if attempt is None:
                         continue
+                ensure_capacity(session, bounds=self.bounds)
                 handle = claims.claim_attempt(
                     session,
                     self._owner,

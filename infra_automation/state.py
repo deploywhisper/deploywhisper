@@ -213,6 +213,8 @@ class WorkerResult(ClosedModel):
 
 
 class EngineBounds(ClosedModel):
+    global_queued_runs: Annotated[StrictInt, Field(ge=1, le=1000)] = 1000
+    disk_reserve_bytes: Annotated[StrictInt, Field(ge=1, le=67108864)] = 67108864
     workflow_active_runs: Annotated[StrictInt, Field(ge=1, le=5)] = 5
     workflow_queued_runs: Annotated[StrictInt, Field(ge=1, le=25)] = 25
     analysis_workers: Annotated[StrictInt, Field(ge=1, le=2)] = 2
