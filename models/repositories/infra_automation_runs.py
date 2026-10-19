@@ -58,10 +58,27 @@ def _binding_digest(row):
         "output_digest",
         "cancel_requested",
         "external_possible",
+        "owner_id",
+        "coordinator_generation",
+        "fence",
+        "attempt_number",
+        "lease_until",
+        "last_observed_at",
+        "log_bytes",
+        "last_log_sequence",
+        "retained_bytes",
     )
-    return digest(
-        canonical({key: getattr(row, key) for key in fields if hasattr(row, key)})
-    )
+    values = {}
+    for key in fields:
+        if hasattr(row, key):
+            value = getattr(row, key)
+            values[key] = (
+                utc(value).isoformat() if isinstance(value, datetime) else value
+            )
+    for key in ("logs_json", "uploads_json"):
+        if hasattr(row, key):
+            values[key + "_digest"] = digest(getattr(row, key).encode("utf-8"))
+    return digest(canonical(values))
 
 
 def _audit(session, row, actor, reason, event, before=None, now=None):

@@ -164,3 +164,31 @@ qualification; no UI changed and UI validation not applicable.
 
 PacketB owner:s165_packet_b; root owns service/HTTP/coordinator integration and
 qualification. B may begin after this reviewed packet commit.
+
+### Packet B evidence — 2026-10-19
+
+Owner:s165_packet_b; independent reviewer:s165_packet_a_review. Current coordinator
+and unique per-attempt secrets authenticate separately from public stamp fields.
+Claim/start/heartbeat/log/upload/output/complete check exact scope, generation,
+fence, leases, finite deadlines and current authority under one operation transaction.
+Safety-only cleanup/stop retains current coordinator authentication while allowing
+revoked/expired work to stop without accepting new outputs. Trusted finish_run
+checks current policy and committed required outputs.
+
+Review found two storage defects and both were corrected: evidence growth now
+charges exact persisted UTF8JSON bytes with atomic run-version/audit updates, and
+unknown/corrupt counters in another retained run cause503 rather than being ignored
+by SQLite SUM. Project/global caps include terminal/unknown rows. Replays charge
+zero. Initial attempt creation charges4empty-arraybytes; D must preserve that charge
+when adding retry/adoption. Payload measure excludes fixed ORM/audit overhead;
+physical-disk checks/qualification remain F.
+
+Final automation pytest:165passed,3optional-skips,536subtests. Bfocused:20tests and
+75subtests, including spawned-process claims, sibling forgery, stale writes, epoch/
+clock/restart/dependency/quotas and transaction-boundary rollback/reopen. Independent
+combined A/B review:33tests/122subtests; final finish_run delta1test passed. Ruff
+lint/format and diffcheck passed (385Pythonfiles). Actualprocess fault/capacity
+qualification and full-story acceptance remain pending.
+
+PacketC owner:s165_packet_c for coordinator/local_workers and dedicated tests; root
+owns service admission/read integration and app wiring. No rendered UI changes.

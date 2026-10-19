@@ -82,7 +82,9 @@ unexpired persisted coordinator AND attempt leases. Exact owner identity is mand
 lease expiry alone never grants authority. A caller cannot synthesize a current
 owner by selecting the public comparison fields. Mint256-bit process-held coordinator
 owner secrets; persist only their hash, compare with constant-time equality, and
-rotate on takeover. Local claim handles carry that secret privately and never
+rotate on takeover. Each attempt has an independently minted256-bit secret and
+its own persisted hash. A worker receives only its attempt secret; it cannot mint
+coordinator authority or forge a sibling attempt by changing public binding fields. Local claim handles carry that secret privately and never
 serialize it into responses/logs. This authenticates the internal operation separately
 from the public stamp; do not fabricate a human session. After live authority denial,
 internal safety-only invalidation/cancellation/expiry may still stop local work and
@@ -163,8 +165,10 @@ engine bounds: workflow active<=5(default5), workflow queued<=25(default25), glo
 workers<=2(default2), per-project retained engine bytes64MiB(default), global retained
 engine bytes256MiB(default), per-attempt log<=1MiB and per-chunk UTF8<=16KiB. Config
 values may reduce bounds; invalid/nonpositive/excess values fail closed. Bound JSON
-parsing and canonical bytes before DB writes. Stored snapshot/log/reference bytes
-count atomically before admission/writes; terminal/unknown evidence stays counted.
+parsing and canonical bytes before DB writes. The retained payload budget counts exact snapshot bytes plus UTF8 logs/upload/output
+JSON (including initial empty arrays); fixed ORM metadata and audit rows are excluded
+from that payload measure and physical disk availability is checked separately. These
+payload bytes count atomically before admission/writes; terminal/unknown evidence stays counted.
 No retention janitor is added and quota reduction does not delete evidence. Saturation
 returns429 or leaves durable queued work with explicit backpressure. Disk errors
 roll back state and audit and return503, never acknowledge an uncommitted admission.
@@ -199,8 +203,8 @@ committed typed output/upload references, never owner secret. List envelopes reu
 items/cursor. Cancel is idempotent for a repeated already-recorded cancellation but
 stale changed requests conflict. Retry is internal, not an HTTP or machine issuer.
 
-A CoordinatorHandle privately holds owner_id,256-bit secret and generation; an
-AttemptHandle additionally binds project/workspace/requester/run/step/attempt ID and
+A CoordinatorHandle privately holds owner_id,256-bit coordinator secret and generation;
+an AttemptHandle carries its distinct per-attempt secret and additionally binds project/workspace/requester/run/step/attempt ID and
 number/fence/epochs. Heartbeat, log, upload, output and completion accept that exact
 handle and strictly validated operation data. OutputReference is kind (existing
 OutputKind), opaque reference and digest; no raw artifact payload. WorkerResult
