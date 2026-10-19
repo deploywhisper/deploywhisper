@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import math
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
 from config import settings
 from evidence.models import (
@@ -29,6 +29,21 @@ from services.confidence_ledger import (
 from services.skill_manifest_service import SkillTrustLevel
 from services.identity_service import AccountView, VerifiedPrincipal
 from services.project_service import MembershipView
+
+
+# Workflow lifecycle values are closed independently of legacy API payloads.
+from infra_automation.contracts import ClosedModel as AutomationClosedModel
+from infra_automation.lifecycle import (
+    AutomationSettings,
+    CursorEnvelope as AutomationCursor,
+    Positive as AutomationPositive,
+    Version as AutomationVersion,
+)
+from infra_automation.workflow_schema import (
+    Digest as AutomationDigest,
+    Identifier as AutomationIdentifier,
+    Workflow as AutomationDefinition,
+)
 
 
 class MetaPayload(BaseModel):
@@ -2714,3 +2729,189 @@ def build_analysis_run_data(
         share_summary=_copy_model(share_summary, ShareSummaryData),
         persisted_report=PersistedReportData.model_validate(persisted_report_payload),
     )
+
+
+class AutomationMeta(AutomationClosedModel):
+    app: str
+    version: str
+    correlation_id: AutomationIdentifier
+
+
+AutomationTimestamp = Annotated[
+    str,
+    Field(
+        min_length=20, max_length=20, pattern=r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$"
+    ),
+]
+AutomationDiagnosticPath = (
+    Annotated[str, Field(max_length=128)] | Annotated[int, Field(ge=0, le=131072)]
+)
+
+
+class AutomationWorkflowSummary(AutomationClosedModel):
+    id: AutomationIdentifier
+    project_id: AutomationPositive
+    workspace_id: AutomationPositive | None
+    name: str = Field(min_length=1, max_length=120)
+    draft_version: AutomationPositive
+    archived: bool
+    draft_digest: AutomationDigest
+    created_by: AutomationIdentifier
+    created_at: AutomationTimestamp
+    updated_at: AutomationTimestamp
+
+
+class AutomationWorkflowDetail(AutomationWorkflowSummary):
+    definition: AutomationDefinition
+
+
+class AutomationRevisionSummary(AutomationClosedModel):
+    id: AutomationIdentifier
+    workflow_id: AutomationIdentifier
+    project_id: AutomationPositive
+    workspace_id: AutomationPositive | None
+    revision_number: AutomationPositive
+    digest: AutomationDigest
+    published_by: AutomationIdentifier
+    created_at: AutomationTimestamp
+
+
+class AutomationRevisionDetail(AutomationRevisionSummary):
+    definition: AutomationDefinition
+
+
+class AutomationDiagnostic(AutomationClosedModel):
+    code: Literal[
+        "invalid_input",
+        "resource_limit",
+        "yaml_syntax",
+        "yaml_duplicate_key",
+        "yaml_key_type",
+        "yaml_feature_forbidden",
+        "schema_version",
+        "schema_field",
+        "scope_unsupported",
+        "dependency_invalid",
+        "graph_cycle",
+        "reference_invalid",
+        "reference_type",
+        "binding_mismatch",
+        "profile_unsupported",
+        "input_value_invalid",
+        "metadata_mismatch",
+        "output_invalid",
+    ]
+    message: str = Field(min_length=1, max_length=160)
+    path: list[AutomationDiagnosticPath] = Field(max_length=20)
+    step_index: int | None = Field(default=None, ge=0, le=49)
+    line: int | None = Field(default=None, ge=1, le=131073)
+    column: int | None = Field(default=None, ge=1, le=131073)
+
+
+class AutomationValidation(AutomationClosedModel):
+    valid: bool
+    digest: AutomationDigest | None
+    errors: list[AutomationDiagnostic] = Field(max_length=50)
+    truncated: bool
+
+
+class AutomationPolicy(AutomationClosedModel):
+    project_id: AutomationPositive
+    version: AutomationVersion
+    authorization_epoch: AutomationPositive
+    restore_epoch: AutomationPositive
+    settings: AutomationSettings
+
+
+class AutomationAuditItem(AutomationClosedModel):
+    id: AutomationIdentifier
+    project_id: AutomationPositive
+    workspace_id: AutomationPositive | None
+    actor_principal_id: AutomationIdentifier
+    actor_type: Literal["human"]
+    actor_role: Literal["admin", "maintainer", "reviewer", "contributor", "read-only"]
+    event_type: str = Field(min_length=1, max_length=64)
+    target_id: AutomationIdentifier
+    reason: str = Field(min_length=1, max_length=256)
+    before_digest: AutomationDigest | None
+    after_digest: AutomationDigest | None
+    created_at: AutomationTimestamp
+
+
+class AutomationWorkflowPage(AutomationClosedModel):
+    items: list[AutomationWorkflowSummary] = Field(max_length=100)
+    cursor: AutomationCursor
+
+
+class AutomationRevisionPage(AutomationClosedModel):
+    items: list[AutomationRevisionSummary] = Field(max_length=100)
+    cursor: AutomationCursor
+
+
+class AutomationAuditPage(AutomationClosedModel):
+    items: list[AutomationAuditItem] = Field(max_length=100)
+    cursor: AutomationCursor
+
+
+class AutomationWorkflowResponse(AutomationClosedModel):
+    data: AutomationWorkflowDetail
+    meta: AutomationMeta
+
+
+class AutomationRevisionResponse(AutomationClosedModel):
+    data: AutomationRevisionDetail
+    meta: AutomationMeta
+
+
+class AutomationValidationResponse(AutomationClosedModel):
+    data: AutomationValidation
+    meta: AutomationMeta
+
+
+class AutomationPolicyResponse(AutomationClosedModel):
+    data: AutomationPolicy
+    meta: AutomationMeta
+
+
+class AutomationWorkflowListResponse(AutomationClosedModel):
+    data: AutomationWorkflowPage
+    meta: AutomationMeta
+
+
+class AutomationRevisionListResponse(AutomationClosedModel):
+    data: AutomationRevisionPage
+    meta: AutomationMeta
+
+
+class AutomationAuditResponse(AutomationClosedModel):
+    data: AutomationAuditPage
+    meta: AutomationMeta
+
+
+class AutomationErrorDetails(AutomationClosedModel):
+    retryable: bool
+    correlation_id: AutomationIdentifier
+
+
+class AutomationError(AutomationClosedModel):
+    code: Literal[
+        "authentication_required",
+        "permission_denied",
+        "binding_conflict",
+        "request_validation_failed",
+        "quota_exceeded",
+        "authority_unavailable",
+    ]
+    message: Literal[
+        "Authentication required.",
+        "Operation unavailable.",
+        "Review current evidence again.",
+        "Request validation failed.",
+        "Request limit reached.",
+        "Current authority could not be verified.",
+    ]
+    details: AutomationErrorDetails
+
+
+class AutomationErrorResponse(AutomationClosedModel):
+    error: AutomationError
