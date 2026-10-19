@@ -1,0 +1,705 @@
+{
+  "$defs": {
+    "CancelRunRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "reason": {
+          "maxLength": 256,
+          "minLength": 1,
+          "title": "Reason",
+          "type": "string"
+        },
+        "expected_version": {
+          "maximum": 9007199254740991,
+          "minimum": 1,
+          "title": "Expected Version",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "reason",
+        "expected_version"
+      ],
+      "title": "CancelRunRequest",
+      "type": "object"
+    },
+    "CursorEnvelope": {
+      "additionalProperties": false,
+      "properties": {
+        "version": {
+          "default": 1,
+          "maximum": 1,
+          "minimum": 1,
+          "title": "Version",
+          "type": "integer"
+        },
+        "snapshot_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.:-]*(?![\\s\\S])",
+          "title": "Snapshot Id",
+          "type": "string"
+        },
+        "next_cursor": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.:-]*(?![\\s\\S])",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Next Cursor"
+        },
+        "limit": {
+          "maximum": 100,
+          "minimum": 1,
+          "title": "Limit",
+          "type": "integer"
+        },
+        "last_sequence": {
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "title": "Last Sequence",
+          "type": "integer"
+        },
+        "truncated": {
+          "title": "Truncated",
+          "type": "boolean"
+        },
+        "gap": {
+          "default": false,
+          "title": "Gap",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "snapshot_id",
+        "next_cursor",
+        "limit",
+        "last_sequence",
+        "truncated"
+      ],
+      "title": "CursorEnvelope",
+      "type": "object"
+    },
+    "EngineBounds": {
+      "additionalProperties": false,
+      "properties": {
+        "workflow_active_runs": {
+          "default": 5,
+          "maximum": 5,
+          "minimum": 1,
+          "title": "Workflow Active Runs",
+          "type": "integer"
+        },
+        "workflow_queued_runs": {
+          "default": 25,
+          "maximum": 25,
+          "minimum": 1,
+          "title": "Workflow Queued Runs",
+          "type": "integer"
+        },
+        "analysis_workers": {
+          "default": 2,
+          "maximum": 2,
+          "minimum": 1,
+          "title": "Analysis Workers",
+          "type": "integer"
+        },
+        "project_bytes": {
+          "default": 67108864,
+          "maximum": 67108864,
+          "minimum": 1,
+          "title": "Project Bytes",
+          "type": "integer"
+        },
+        "global_bytes": {
+          "default": 268435456,
+          "maximum": 268435456,
+          "minimum": 1,
+          "title": "Global Bytes",
+          "type": "integer"
+        },
+        "attempt_log_bytes": {
+          "default": 1048576,
+          "maximum": 1048576,
+          "minimum": 1,
+          "title": "Attempt Log Bytes",
+          "type": "integer"
+        },
+        "log_chunk_utf8_bytes": {
+          "default": 16384,
+          "maximum": 16384,
+          "minimum": 1,
+          "title": "Log Chunk Utf8 Bytes",
+          "type": "integer"
+        }
+      },
+      "title": "EngineBounds",
+      "type": "object"
+    },
+    "LogChunk": {
+      "additionalProperties": false,
+      "properties": {
+        "sequence": {
+          "maximum": 9007199254740991,
+          "minimum": 1,
+          "title": "Sequence",
+          "type": "integer"
+        },
+        "text": {
+          "maxLength": 16384,
+          "title": "Text",
+          "type": "string"
+        }
+      },
+      "required": [
+        "sequence",
+        "text"
+      ],
+      "title": "LogChunk",
+      "type": "object"
+    },
+    "LogPage": {
+      "additionalProperties": false,
+      "properties": {
+        "items": {
+          "items": {
+            "$ref": "#/$defs/LogChunk"
+          },
+          "maxItems": 100,
+          "title": "Items",
+          "type": "array"
+        },
+        "cursor": {
+          "$ref": "#/$defs/CursorEnvelope"
+        }
+      },
+      "required": [
+        "items",
+        "cursor"
+      ],
+      "title": "LogPage",
+      "type": "object"
+    },
+    "OutputReference": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "enum": [
+            "screened_artifacts",
+            "report",
+            "action_binding",
+            "decision_receipt"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "reference": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.:-]*(?![\\s\\S])",
+          "title": "Reference",
+          "type": "string"
+        },
+        "digest": {
+          "maxLength": 71,
+          "minLength": 71,
+          "pattern": "^sha256:[0-9a-f]{64}(?![\\s\\S])",
+          "title": "Digest",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "reference",
+        "digest"
+      ],
+      "title": "OutputReference",
+      "type": "object"
+    },
+    "RetryAttemptRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "reason": {
+          "maxLength": 256,
+          "minLength": 1,
+          "title": "Reason",
+          "type": "string"
+        },
+        "expected_version": {
+          "maximum": 9007199254740991,
+          "minimum": 1,
+          "title": "Expected Version",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "reason",
+        "expected_version"
+      ],
+      "title": "RetryAttemptRequest",
+      "type": "object"
+    },
+    "RunPage": {
+      "additionalProperties": false,
+      "properties": {
+        "items": {
+          "items": {
+            "$ref": "#/$defs/RunView"
+          },
+          "maxItems": 100,
+          "title": "Items",
+          "type": "array"
+        },
+        "cursor": {
+          "$ref": "#/$defs/CursorEnvelope"
+        }
+      },
+      "required": [
+        "items",
+        "cursor"
+      ],
+      "title": "RunPage",
+      "type": "object"
+    },
+    "RunRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "reason": {
+          "maxLength": 256,
+          "minLength": 1,
+          "title": "Reason",
+          "type": "string"
+        },
+        "workflow_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.:-]*(?![\\s\\S])",
+          "title": "Workflow Id",
+          "type": "string"
+        },
+        "revision_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.:-]*(?![\\s\\S])",
+          "title": "Revision Id",
+          "type": "string"
+        },
+        "workspace_id": {
+          "maximum": 9007199254740991,
+          "minimum": 1,
+          "title": "Workspace Id",
+          "type": "integer"
+        },
+        "inputs": {
+          "additionalProperties": false,
+          "maxProperties": 32,
+          "patternProperties": {
+            "^[a-zA-Z0-9][a-zA-Z0-9_.:-]*(?![\\s\\S])": {
+              "anyOf": [
+                {
+                  "maxLength": 1024,
+                  "type": "string"
+                },
+                {
+                  "maximum": 9007199254740991,
+                  "minimum": -9007199254740991,
+                  "type": "integer"
+                },
+                {
+                  "type": "boolean"
+                }
+              ]
+            }
+          },
+          "propertyNames": {
+            "maxLength": 128,
+            "minLength": 1
+          },
+          "title": "Inputs",
+          "type": "object"
+        },
+        "idempotency_key": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.:-]*(?![\\s\\S])",
+          "title": "Idempotency Key",
+          "type": "string"
+        },
+        "total_timeout_seconds": {
+          "default": 3600,
+          "maximum": 3600,
+          "minimum": 60,
+          "title": "Total Timeout Seconds",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "reason",
+        "workflow_id",
+        "revision_id",
+        "workspace_id",
+        "idempotency_key"
+      ],
+      "title": "RunRequest",
+      "type": "object"
+    },
+    "RunView": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.:-]*(?![\\s\\S])",
+          "title": "Id",
+          "type": "string"
+        },
+        "workflow_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.:-]*(?![\\s\\S])",
+          "title": "Workflow Id",
+          "type": "string"
+        },
+        "revision_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.:-]*(?![\\s\\S])",
+          "title": "Revision Id",
+          "type": "string"
+        },
+        "project_id": {
+          "maximum": 9007199254740991,
+          "minimum": 1,
+          "title": "Project Id",
+          "type": "integer"
+        },
+        "workspace_id": {
+          "maximum": 9007199254740991,
+          "minimum": 1,
+          "title": "Workspace Id",
+          "type": "integer"
+        },
+        "requested_by": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.:-]*(?![\\s\\S])",
+          "title": "Requested By",
+          "type": "string"
+        },
+        "state": {
+          "enum": [
+            "queued",
+            "running",
+            "waiting_approval",
+            "ready_handoff",
+            "handing_off",
+            "external_running",
+            "succeeded",
+            "failed",
+            "stopped_by_gate",
+            "rejected",
+            "expired",
+            "timed_out",
+            "cancelled",
+            "delivery_unknown"
+          ],
+          "title": "State",
+          "type": "string"
+        },
+        "version": {
+          "maximum": 9007199254740991,
+          "minimum": 1,
+          "title": "Version",
+          "type": "integer"
+        },
+        "snapshot_digest": {
+          "maxLength": 71,
+          "minLength": 71,
+          "pattern": "^sha256:[0-9a-f]{64}(?![\\s\\S])",
+          "title": "Snapshot Digest",
+          "type": "string"
+        },
+        "definition_digest": {
+          "maxLength": 71,
+          "minLength": 71,
+          "pattern": "^sha256:[0-9a-f]{64}(?![\\s\\S])",
+          "title": "Definition Digest",
+          "type": "string"
+        },
+        "input_digest": {
+          "maxLength": 71,
+          "minLength": 71,
+          "pattern": "^sha256:[0-9a-f]{64}(?![\\s\\S])",
+          "title": "Input Digest",
+          "type": "string"
+        },
+        "created_at": {
+          "maxLength": 20,
+          "minLength": 20,
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$",
+          "title": "Created At",
+          "type": "string"
+        },
+        "deadline_at": {
+          "maxLength": 20,
+          "minLength": 20,
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$",
+          "title": "Deadline At",
+          "type": "string"
+        },
+        "cancel_requested": {
+          "title": "Cancel Requested",
+          "type": "boolean"
+        },
+        "cancellation_requested_at": {
+          "anyOf": [
+            {
+              "maxLength": 20,
+              "minLength": 20,
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Cancellation Requested At"
+        }
+      },
+      "required": [
+        "id",
+        "workflow_id",
+        "revision_id",
+        "project_id",
+        "workspace_id",
+        "requested_by",
+        "state",
+        "version",
+        "snapshot_digest",
+        "definition_digest",
+        "input_digest",
+        "created_at",
+        "deadline_at",
+        "cancel_requested",
+        "cancellation_requested_at"
+      ],
+      "title": "RunView",
+      "type": "object"
+    },
+    "StepPage": {
+      "additionalProperties": false,
+      "properties": {
+        "items": {
+          "items": {
+            "$ref": "#/$defs/StepView"
+          },
+          "maxItems": 100,
+          "title": "Items",
+          "type": "array"
+        },
+        "cursor": {
+          "$ref": "#/$defs/CursorEnvelope"
+        }
+      },
+      "required": [
+        "items",
+        "cursor"
+      ],
+      "title": "StepPage",
+      "type": "object"
+    },
+    "StepView": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.:-]*(?![\\s\\S])",
+          "title": "Id",
+          "type": "string"
+        },
+        "run_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.:-]*(?![\\s\\S])",
+          "title": "Run Id",
+          "type": "string"
+        },
+        "step_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.:-]*(?![\\s\\S])",
+          "title": "Step Id",
+          "type": "string"
+        },
+        "attempt_number": {
+          "maximum": 9007199254740991,
+          "minimum": 1,
+          "title": "Attempt Number",
+          "type": "integer"
+        },
+        "state": {
+          "enum": [
+            "pending",
+            "claimed",
+            "running",
+            "succeeded",
+            "failed",
+            "timed_out",
+            "cancelled"
+          ],
+          "title": "State",
+          "type": "string"
+        },
+        "version": {
+          "maximum": 9007199254740991,
+          "minimum": 1,
+          "title": "Version",
+          "type": "integer"
+        },
+        "fence": {
+          "maximum": 9007199254740991,
+          "minimum": 1,
+          "title": "Fence",
+          "type": "integer"
+        },
+        "generation": {
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "title": "Generation",
+          "type": "integer"
+        },
+        "deadline_at": {
+          "maxLength": 20,
+          "minLength": 20,
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$",
+          "title": "Deadline At",
+          "type": "string"
+        },
+        "lease_until": {
+          "anyOf": [
+            {
+              "maxLength": 20,
+              "minLength": 20,
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Lease Until"
+        },
+        "output": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/OutputReference"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "uploads": {
+          "items": {
+            "$ref": "#/$defs/OutputReference"
+          },
+          "maxItems": 50,
+          "title": "Uploads",
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "run_id",
+        "step_id",
+        "attempt_number",
+        "state",
+        "version",
+        "fence",
+        "generation",
+        "deadline_at",
+        "lease_until"
+      ],
+      "title": "StepView",
+      "type": "object"
+    },
+    "WorkerResult": {
+      "additionalProperties": false,
+      "properties": {
+        "outcome": {
+          "enum": [
+            "local_success",
+            "retryable_local_failure",
+            "permanent_local_failure",
+            "stopped_by_gate",
+            "rejected",
+            "external_unknown"
+          ],
+          "title": "Outcome",
+          "type": "string"
+        },
+        "output": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/OutputReference"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "outcome"
+      ],
+      "title": "WorkerResult",
+      "type": "object"
+    }
+  },
+  "anyOf": [
+    {
+      "$ref": "#/$defs/RunRequest"
+    },
+    {
+      "$ref": "#/$defs/CancelRunRequest"
+    },
+    {
+      "$ref": "#/$defs/RetryAttemptRequest"
+    },
+    {
+      "$ref": "#/$defs/RunView"
+    },
+    {
+      "$ref": "#/$defs/StepView"
+    },
+    {
+      "$ref": "#/$defs/OutputReference"
+    },
+    {
+      "$ref": "#/$defs/WorkerResult"
+    },
+    {
+      "$ref": "#/$defs/EngineBounds"
+    },
+    {
+      "$ref": "#/$defs/RunPage"
+    },
+    {
+      "$ref": "#/$defs/StepPage"
+    },
+    {
+      "$ref": "#/$defs/LogPage"
+    }
+  ],
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Durable engine v1 requests and consumer values"
+}

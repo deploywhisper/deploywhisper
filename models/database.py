@@ -62,6 +62,7 @@ _KNOWN_ALEMBIC_REVISIONS = {
     "029_add_identity_lifecycle",
     "030_add_project_memberships",
     "031_add_infra_workflows",
+    "032_add_infra_automation_engine",
 }
 _BASELINE_TABLES = {"analysis_reports", "app_settings"}
 _EVIDENCE_TABLES = {
@@ -1057,15 +1058,20 @@ def _project_authorization_schema_complete(connection, tables: set[str]) -> bool
     return True
 
 
-def _infra_automation_schema_complete(connection, tables: set[str]) -> bool:
+def _infra_automation_schema_complete(
+    connection, tables: set[str], migration_name: str = "031_add_infra_workflows"
+) -> bool:
     """Never let create_all disguise an interrupted security-sensitive migration."""
-    migration = import_module("migrations.versions.031_add_infra_workflows")
+    migration = import_module(f"migrations.versions.{migration_name}")
     names = set(migration.TABLES)
     actual_triggers = dict(
         connection.exec_driver_sql(
             "SELECT name, sql FROM sqlite_master WHERE type='trigger' AND name LIKE 'infra_%'"
         ).all()
     )
+    actual_triggers = {
+        name: sql for name, sql in actual_triggers.items() if name in migration.GUARDS
+    }
     if not names & tables and not actual_triggers:
         return False
 
@@ -1149,6 +1155,9 @@ def _bootstrap_brownfield_revision() -> None:
     with engine.begin() as connection:
         tables = set(inspect(connection).get_table_names())
         has_complete_automation = _infra_automation_schema_complete(connection, tables)
+        has_complete_engine = _infra_automation_schema_complete(
+            connection, tables, "032_add_infra_automation_engine"
+        )
         tables = _repair_partial_evidence_schema(connection, tables)
 
         has_baseline_tables = _BASELINE_TABLES.issubset(tables)
@@ -1183,24 +1192,41 @@ def _bootstrap_brownfield_revision() -> None:
                 "029_add_identity_lifecycle",
                 "030_add_project_memberships",
                 "031_add_infra_workflows",
+                "032_add_infra_automation_engine",
             } and not _identity_schema_complete(connection, tables):
                 raise RuntimeError(
                     "Detected a partial identity schema. Manual recovery is required."
                 )
             if (
-                revision in {"030_add_project_memberships", "031_add_infra_workflows"}
+                revision
+                in {
+                    "030_add_project_memberships",
+                    "031_add_infra_workflows",
+                    "032_add_infra_automation_engine",
+                }
                 and not has_complete_authorization
             ):
                 raise RuntimeError(
                     "Detected a partial project authorization schema. Manual recovery is required."
                 )
-            if revision == "031_add_infra_workflows" and not has_complete_automation:
+            if (
+                revision
+                in {"031_add_infra_workflows", "032_add_infra_automation_engine"}
+                and not has_complete_automation
+            ):
                 raise RuntimeError(
                     "Detected a partial infra automation schema. Manual recovery is required."
                 )
-            if has_complete_automation and revision != "031_add_infra_workflows":
+            if has_complete_automation and revision not in {
+                "031_add_infra_workflows",
+                "032_add_infra_automation_engine",
+            }:
                 raise RuntimeError(
                     "Detected a partial infra automation migration history. Manual recovery is required."
+                )
+            if (revision == "032_add_infra_automation_engine") != has_complete_engine:
+                raise RuntimeError(
+                    "Detected a partial infra automation engine migration history. Manual recovery is required."
                 )
             return
 
@@ -1424,6 +1450,12 @@ def _bootstrap_brownfield_revision() -> None:
                         "Detected a partial infra automation schema. Manual recovery is required."
                     )
                 revision = "031_add_infra_workflows"
+            if has_complete_engine:
+                if not has_complete_automation:
+                    raise RuntimeError(
+                        "Detected a partial infra automation engine schema. Manual recovery is required."
+                    )
+                revision = "032_add_infra_automation_engine"
             _write_alembic_revision(connection, revision)
             return
         if scoped_learning_columns_present and not has_complete_learning_context_scope:

@@ -1,6 +1,6 @@
 # Story 16.5: Durable Engine And Fenced Recovery
 
-Status: backlog
+Status: in-progress
 Preparation: refined
 Release: v1.5.0 — P0 highest-priority feature
 Dependencies: 16.4; public RFC and 16.0 qualification required
@@ -117,16 +117,50 @@ Preparation means the work is decomposed, not authorized as implementation-ready
 
 ### Agent Model Used
 
-Story preparation only; implementation agent/model must be recorded when execution starts.
+Codex primary agent with native implementation/readiness/review agents; active worktree feature/16-5-durable-engine-fenced-recovery, baseline3af659e (merged16.4).
 
 ### Debug Log References
 
-Not executed. No application, migration, test, browser, runner, receiver or benchmark result is claimed by this story preparation.
+Scoped readiness completed in implementation-readiness-report-2026-10-19-story-16-5.md.
+Engine contract and fixture independently reviewed before PacketA. No implementation
+or benchmark acceptance is claimed by this initial entry.
 
 ### Completion Notes List
 
-Prepared implementation context and owned acceptance matrix on 2026-10-07. Governance/feasibility/interface gates remain open; Status is backlog.
+2026-10-19: Earlier governance/feasibility/dependency gates and scoped IR03 are
+satisfied. Root owns service/HTTP, identity reservation, integration and qualification.
+PacketA owner: s165_packet_a (state/persistence/migration); independent reviewer
+assigned after tests. Later B→F owners will be recorded before their packets start.
+Each packet integrates into this story branch with its own tests/review/commit.
+UI validation not applicable unless a rendered surface is changed.
 
 ### File List
 
-This story file only. Planned write scopes above are prospective, not an implemented file list.
+PacketA implemented files (later packets will extend): infra_automation/state.py;
+models/tables.py; models/database.py; models/repositories/infra_automation_runs.py;
+migrations/versions/032_add_infra_automation_engine.py; schemas/infra-automation/engine-v1.json;
+services/infra_automation_engine_support.py; engine state/repository/identity tests;
+tests/test_infra/test_infra_automation_engine_migration.py; existing migration-head
+expectations; engine contract/fixture; scoped readiness report; story/sprint.
+The final explicit file list will be reconciled after all packets.
+
+### Packet A evidence — 2026-10-19
+
+Implemented state/persistence/migration and non-login audit support. Initial absent
+state/helper tests were red, then passed. Boundary tests found and fixed an actual
+SQLite legacy savepoint implicit-commit trap by reserving a physical transaction
+before nesting. All declared run/attempt edges have commit/rollback/reopen assertions;
+real process fault qualification remains PacketF and no full-story acceptance is
+claimed here. Immutable SQL guards, exact snapshot binding, typed output consistency,
+scoped FKs, partial-schema/history rejection and copied synthetic028 upgrade pass.
+Migration leaves identity_accounts empty; service audit account is lazy and non-login.
+
+Independent s165_packet_a_review approved frozen code:36tests/182subtests,3optional
+skips. Whole automation+infra regression:415passed,4skipped,2561subtests. Focused
+engine state/repository:14passed. Root identity support:4passed. Ruff lint/format,
+Bandit and diff checks pass (383Pythonfiles format-clean). PacketA code integrates
+into story branch before B. All story acceptance checkboxes stay pending final
+qualification; no UI changed and UI validation not applicable.
+
+PacketB owner:s165_packet_b; root owns service/HTTP/coordinator integration and
+qualification. B may begin after this reviewed packet commit.
