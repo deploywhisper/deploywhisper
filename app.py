@@ -100,6 +100,32 @@ async def _topology_drift_scheduler_loop(stop_event: asyncio.Event) -> None:
             continue
 
 
+async def _start_engine_coordinator():
+    """Start only a server-installed registry; an empty registry has no effects."""
+    from infra_automation.coordinator import Coordinator
+    from infra_automation.local_workers import DEFAULT_REGISTRY, SpawnProcessWorkers
+    from infra_automation.state import EngineBounds
+    from models.database import SessionLocal
+
+    if not DEFAULT_REGISTRY:
+        return None
+    bounds = EngineBounds()
+    workers = SpawnProcessWorkers(
+        str(SessionLocal.kw["bind"].url),
+        max_workers=bounds.analysis_workers,
+        bounds=bounds,
+    )
+    coordinator = Coordinator(
+        SessionLocal, workers, registry=DEFAULT_REGISTRY, bounds=bounds
+    )
+    try:
+        await coordinator.start()
+    except BaseException:
+        await coordinator.stop()
+        raise
+    return coordinator
+
+
 @asynccontextmanager
 async def lifespan(app):
     """Initialize local storage and background maintenance for the app."""
@@ -108,13 +134,21 @@ async def lifespan(app):
     drift_scheduler_task = asyncio.create_task(
         _topology_drift_scheduler_loop(stop_event)
     )
+    coordinator = None
     try:
+        coordinator = await _start_engine_coordinator()
+        app.state.infra_automation_coordinator = coordinator
         yield
     finally:
-        stop_event.set()
-        drift_scheduler_task.cancel()
-        with contextlib.suppress(asyncio.CancelledError):
-            await drift_scheduler_task
+        try:
+            if coordinator is not None:
+                await coordinator.stop()
+        finally:
+            app.state.infra_automation_coordinator = None
+            stop_event.set()
+            drift_scheduler_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await drift_scheduler_task
 
 
 fastapi_app = FastAPI(

@@ -192,3 +192,30 @@ qualification and full-story acceptance remain pending.
 
 PacketC owner:s165_packet_c for coordinator/local_workers and dedicated tests; root
 owns service admission/read integration and app wiring. No rendered UI changes.
+
+### Packet C evidence — 2026-10-19
+
+Owner:s165_packet_c for coordinator/local_workers; root for human admission/read
+service and app lifespan. Trusted registry defaults empty; handler input contains
+only immutable snapshot/prerequisite bytes. A child receives only its own attempt
+capability, opens fresh guarded SQLite sessions and commits typed upload/output
+references before parent completion. Parent binds pipe results to its original
+handle. At most2spawned processes/no pending executor queue; short ticks run off
+the event loop and claims commit before spawning. UTC is sampled after transaction
+acquisition to avoid cross-process false rollback detection.
+
+Human admission tests prove same-key concurrent deduplication, changed-payload
+conflict, exact immutable snapshots, replay after disable/edit without recapture,
+live scope, no-credential denial, project/workflow queue caps, byte/response
+rollback and draft-ID denial. Lifespan has no engine effects for empty registry;
+configured startup/shutdown and failed-start cleanup are covered.
+
+Cowned tests:17passed/47subtests. Rootservice/lifespan:11passed. Independent
+s165_packet_c_review:28passed/47subtests; approved all Cfiles. Final automation
+regression:193passed,3optional-skips,583subtests. Ruff lint/format,Bandit,diff
+checks pass (392Pythonfiles).
+
+Dmust add safe finite retry/output adoption, orphan recovery and cached-owner reset
+after lease loss; no-output handoff registrations require the D typed external
+uncertainty port before execution. Actual descendant-cancel, process-fault and
+30-minute capacity qualification remain E/F. No full-story acceptance is claimed.
