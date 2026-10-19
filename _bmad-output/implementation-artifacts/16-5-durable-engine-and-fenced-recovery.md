@@ -219,3 +219,34 @@ Dmust add safe finite retry/output adoption, orphan recovery and cached-owner re
 after lease loss; no-output handoff registrations require the D typed external
 uncertainty port before execution. Actual descendant-cancel, process-fault and
 30-minute capacity qualification remain E/F. No full-story acceptance is claimed.
+
+### Packet D evidence — 2026-10-19
+
+Owners:s165_packet_b claims helpers; s165_packet_c coordinator/worker integration.
+Retries create at most3fresh fenced attempts only for declared-safe local failures
+within immutable run/evidence deadlines; permanent failures stop after1. A successor
+adopts an existing committed typed output before handler invocation without changing
+the old output. External test doubles commit handing_off intent before invocation;
+actual spawned acceptance followed by os._exit/noresponse becomes delivery_unknown,
+and restart never resends. No real transport/receiver/grant is supplied.
+
+Fault review found known permanent outcomes could retry after a result-persistence
+failure; corrected with at-most-worker-count pending completion receipts and slot
+backpressure until the exact result transaction commits. Lost ownership discards
+old-generation receipts/children. Gate/rejection/permanent meanings survive stop/
+audit faults, while stale results cannot become current. Evidence-horizon expiry
+remains expired, distinct from earlier timeout. Owner loss resets cached authority
+and permits later fresh generation acquisition.
+
+Run admission is independent of worker slots:10active across2workflows,2attempts
+executing,11thrunqueued under active quotas. Attempts are only created for ready
+work when a worker slot is available.
+
+Independent claims review:29tests/75subtests. Independent worker/coordinator review:
+53tests/94subtests, plus3final admission-delta tests; both approved. Full working-tree
+automation regression:232passed,3optional-skips,630subtests. Ruff lint/format,
+Bandit,diff checks pass. Read/API compatibility groundwork is tracked separately
+with E. Cancellation and real process/capacity qualification remain pending.
+
+PacketE:s165_packet_c owns process-group cancellation/control tests; root owns
+human cancellation service, typed HTTP resources, compatibility and app callback.

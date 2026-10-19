@@ -913,3 +913,186 @@ def finish_run(session, coordinator, *, run_id, expected_version, state, now=Non
         raise
     except ValueError:
         raise LifecycleError(409) from None
+
+
+def prepare_retry(
+    session,
+    coordinator,
+    *,
+    previous_attempt_id,
+    expected_version,
+    attempt_timeout_seconds=300,
+    now=None,
+    bounds=None,
+):
+    """Create a successor from unchanged local bindings; never reopen old work."""
+    timestamp = _now(now)
+    _counter(expected_version)
+    _coordinator(session, coordinator, timestamp)
+    previous = repo.get_attempt(session, previous_attempt_id)
+    if previous is None or previous.version != expected_version:
+        return None
+    run, document = _run(session, previous.run_id, timestamp, operation="claim")
+    attempts = [
+        row
+        for row in repo.list_attempts(session, run_id=run.id)
+        if row.step_id == previous.step_id
+    ]
+    if (
+        run.state != "running"
+        or not attempts
+        or attempts[-1].id != previous.id
+        or previous.state not in ("failed", "timed_out")
+        or not previous.retry_safe
+        or previous.step_kind == "registered_github_handoff"
+        or len(attempts) >= 3
+        or previous.attempt_number >= 3
+        or not _dependencies(session, run, document, previous.step_id)
+    ):
+        return None
+    if (
+        type(attempt_timeout_seconds) is not int
+        or not 1 <= attempt_timeout_seconds <= MAX_ATTEMPT_SECONDS
+    ):
+        raise LifecycleError(422)
+    if (
+        previous.project_id,
+        previous.workspace_id,
+        previous.requested_by,
+        previous.input_digest,
+    ) != (
+        run.project_id,
+        run.workspace_id,
+        run.requested_by,
+        run.input_digest,
+    ) or timestamp < repo.utc(previous.last_observed_at):
+        _deny()
+    _counter(previous.fence)
+    with repo._atomic(session):
+        row = repo.create_attempt(
+            session,
+            run_id=run.id,
+            step_id=previous.step_id,
+            handler_id=previous.handler_id,
+            handler_version=previous.handler_version,
+            retry_safe=previous.retry_safe,
+            deadline_at=min(
+                timestamp + timedelta(seconds=attempt_timeout_seconds),
+                repo.utc(run.deadline_at),
+            ),
+            audit_actor=engine_support.engine_actor(session),
+            reason="Safe local engine retry prepared.",
+            now=timestamp,
+        )
+        _charge(session, run, 4, timestamp, bounds)
+        return row
+
+
+def adopt_committed_output(session, handle, *, expected_version, now=None, bounds=None):
+    """Link a prior immutable result under fresh ownership without invoking a handler."""
+    timestamp = _now(now)
+    _counter(expected_version)
+    row = _attempt(session, handle, timestamp)
+    if row.state != "running":
+        _deny()
+    if row.output_json is not None:
+        output = OutputReference.model_validate_json(row.output_json)
+        return commit_output(
+            session,
+            handle,
+            expected_version=expected_version,
+            output=output,
+            now=timestamp,
+            bounds=bounds,
+        )
+    if row.version != expected_version:
+        _deny()
+    previous = [
+        candidate
+        for candidate in repo.list_attempts(session, run_id=row.run_id)
+        if candidate.step_id == row.step_id
+        and candidate.attempt_number < row.attempt_number
+        and candidate.output_json is not None
+    ]
+    if not previous:
+        return None
+    source = previous[-1]
+    if (
+        not row.retry_safe
+        or not source.retry_safe
+        or source.state not in ("failed", "timed_out")
+        or (
+            source.project_id,
+            source.workspace_id,
+            source.requested_by,
+            source.handler_id,
+            source.handler_version,
+            source.input_digest,
+            source.step_kind,
+        )
+        != (
+            row.project_id,
+            row.workspace_id,
+            row.requested_by,
+            row.handler_id,
+            row.handler_version,
+            row.input_digest,
+            row.step_kind,
+        )
+    ):
+        _deny()
+    try:
+        output = OutputReference.model_validate_json(source.output_json)
+        registered = json.loads(source.uploads_json)
+    except (ValueError, TypeError):
+        raise LifecycleError(503) from None
+    if (
+        output.kind != STEP_CONTRACTS[row.step_kind].output
+        or output.digest != source.output_digest
+        or output.model_dump() not in registered
+    ):
+        raise LifecycleError(503)
+    with repo._atomic(session):
+        row = register_upload(
+            session,
+            handle,
+            expected_version=expected_version,
+            reference=output,
+            now=timestamp,
+            bounds=bounds,
+        )
+        return commit_output(
+            session,
+            handle,
+            expected_version=row.version,
+            output=output,
+            now=timestamp,
+            bounds=bounds,
+        )
+
+
+def begin_external(session, handle, *, expected_version, now=None):
+    """Persist uncertainty before the sole trusted external-capable local double."""
+    timestamp = _now(now)
+    _counter(expected_version)
+    row = _attempt(session, handle, timestamp)
+    if (
+        row.version != expected_version
+        or row.state != "running"
+        or row.step_kind != "registered_github_handoff"
+        or row.retry_safe
+        or row.output_json is not None
+    ):
+        _deny()
+    run, document = _run(session, row.run_id, timestamp, operation="dispatch")
+    if run.state != "running" or not _dependencies(session, run, document, row.step_id):
+        _deny()
+    return repo.transition_run(
+        session,
+        run_id=run.id,
+        expected_version=run.version,
+        state="handing_off",
+        audit_actor=engine_support.engine_actor(session),
+        reason="Trusted local external double invocation recorded.",
+        now=timestamp,
+    )

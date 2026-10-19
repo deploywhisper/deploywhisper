@@ -3,14 +3,14 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import logging
 import threading
 
 from sqlalchemy import func, select
 
 from infra_automation import claims
-from infra_automation.lifecycle import SnapshotDocument
+from infra_automation.lifecycle import LifecycleError, SnapshotDocument
 from infra_automation.local_workers import DEFAULT_REGISTRY, WorkerInput
 from infra_automation.state import ACTIVE_STATES, EngineBounds
 from models.repositories import infra_automation_runs as repository
@@ -18,6 +18,20 @@ from models.tables import InfraAutomationRun
 from services import project_service as authorization
 
 logger = logging.getLogger(__name__)
+
+
+def deadline_outcome(snapshot_bytes: bytes, deadline_at: datetime) -> str:
+    """Distinguish immutable evidence expiry from an earlier total timeout."""
+    document = SnapshotDocument.model_validate_json(snapshot_bytes)
+    captured = datetime.strptime(document.captured_at, "%Y-%m-%dT%H:%M:%SZ").replace(
+        tzinfo=timezone.utc
+    )
+    evidence_deadline = captured + timedelta(
+        seconds=document.policy.evidence_ttl_seconds
+    )
+    return (
+        "expired" if repository.utc(deadline_at) >= evidence_deadline else "timed_out"
+    )
 
 
 class Coordinator:
@@ -43,6 +57,14 @@ class Coordinator:
         self._lock = threading.Lock()
         self._task = None
         self._stopping = False
+        self._pending_completions = {}
+
+    @property
+    def _can_submit(self):
+        return self.workers.can_submit and (
+            len(self._pending_completions) + len(self.workers.handles)
+            < min(self.bounds.analysis_workers, self.workers.max_workers)
+        )
 
     def _operation(self, function, *args, **kwargs):
         with authorization.authorized_session(self.factory) as session:
@@ -52,7 +74,14 @@ class Coordinator:
         with authorization.authorized_session(self.factory) as session:
             now = self.clock()
             row = repository.get_run(session, run_id)
-            if row is not None and row.state in ("queued", "running"):
+            if row is not None and row.state in (
+                "queued",
+                "running",
+                "handing_off",
+                "external_running",
+            ):
+                if row.external_possible:
+                    state = "delivery_unknown"
                 claims.stop_run(
                     session,
                     self._owner,
@@ -64,18 +93,51 @@ class Coordinator:
 
     def _complete(self, completion, now):
         handle, result = completion.handle, completion.result
+        if handle.generation != self._owner.generation:
+            raise LifecycleError(409)
         with authorization.authorized_session(self.factory) as session:
             now = self.clock()
             attempt = repository.get_attempt(session, handle.attempt_id)
+            run = repository.get_run(session, handle.run_id)
+            if run is not None and run.external_possible:
+                if run.state in ("handing_off", "external_running"):
+                    claims.stop_run(
+                        session,
+                        self._owner,
+                        run_id=run.id,
+                        expected_version=run.version,
+                        state="delivery_unknown",
+                        now=now,
+                    )
+                return
+            if (
+                run is not None
+                and run.state == "running"
+                and now >= repository.utc(run.deadline_at)
+            ):
+                claims.stop_run(
+                    session,
+                    self._owner,
+                    run_id=run.id,
+                    expected_version=run.version,
+                    state=deadline_outcome(run.snapshot_bytes, run.deadline_at),
+                    now=now,
+                )
+                return
             if attempt is None or attempt.state not in ("claimed", "running"):
                 return
-            if completion.crashed or attempt.state == "claimed":
+            expired = (
+                now >= repository.utc(attempt.deadline_at)
+                or attempt.lease_until is None
+                or now >= repository.utc(attempt.lease_until)
+            )
+            if completion.crashed or attempt.state == "claimed" or expired:
                 claims.safety_cleanup(
                     session,
                     self._owner,
                     attempt_id=attempt.id,
                     expected_version=attempt.version,
-                    state="failed",
+                    state="timed_out" if expired else "failed",
                     now=now,
                 )
             else:
@@ -89,7 +151,7 @@ class Coordinator:
                     now=now,
                 )
             run = repository.get_run(session, handle.run_id)
-            if result.outcome in ("stopped_by_gate", "rejected"):
+            if result.outcome in ("stopped_by_gate", "rejected") and not expired:
                 claims.finish_run(
                     session,
                     self._owner,
@@ -98,7 +160,12 @@ class Coordinator:
                     state=result.outcome,
                     now=now,
                 )
-            elif result.outcome != "local_success":
+            elif result.outcome != "local_success" and not (
+                (completion.crashed or result.outcome == "retryable_local_failure")
+                and attempt.retry_safe
+                and attempt.attempt_number < 3
+                and now < repository.utc(run.deadline_at)
+            ):
                 claims.stop_run(
                     session,
                     self._owner,
@@ -108,76 +175,183 @@ class Coordinator:
                     now=now,
                 )
 
+    def _recover_abandoned(self, handle, now):
+        with authorization.authorized_session(self.factory) as session:
+            now = self.clock()
+            run = repository.get_run(session, handle.run_id)
+            if run is None or run.state not in (
+                "running",
+                "handing_off",
+                "external_running",
+            ):
+                return
+            if run.external_possible:
+                claims.stop_run(
+                    session,
+                    self._owner,
+                    run_id=run.id,
+                    expected_version=run.version,
+                    state="delivery_unknown",
+                    now=now,
+                )
+                return
+            row = repository.get_attempt(session, handle.attempt_id)
+            if row is not None and row.state in ("claimed", "running"):
+                claims.safety_cleanup(
+                    session,
+                    self._owner,
+                    attempt_id=row.id,
+                    expected_version=row.version,
+                    state="failed",
+                    now=now,
+                )
+
+    def _ownership(self):
+        with authorization.authorized_session(self.factory) as session:
+            now = self.clock()
+            candidates = list(
+                session.scalars(
+                    select(InfraAutomationRun)
+                    .where(
+                        InfraAutomationRun.state.in_(
+                            ("queued", "running", "handing_off", "external_running")
+                        )
+                    )
+                    .order_by(InfraAutomationRun.sequence)
+                    .limit(100)
+                )
+            )
+            owner = self._owner
+            scope = self._scope
+            if owner is None:
+                if not candidates:
+                    return [], now
+                first = candidates[0]
+                scope = (first.project_id, first.workspace_id)
+                owner = claims.acquire_coordinator(
+                    session, project_id=scope[0], workspace_id=scope[1], now=now
+                )
+                if owner is None:
+                    return [], now
+            elif (now - self._heartbeat_at).total_seconds() >= 10:
+                claims.renew_coordinator(
+                    session, owner, project_id=scope[0], workspace_id=scope[1], now=now
+                )
+        # Only retain a capability whose acquisition actually committed.
+        self._owner, self._scope = owner, scope
+        self._heartbeat_at = (
+            now
+            if self._heartbeat_at is None
+            or (now - self._heartbeat_at).total_seconds() >= 10
+            else self._heartbeat_at
+        )
+        return candidates, now
+
     def tick(self):
         if not self.registry or self._stopping:
             return
         with self._lock:
-            now = self.clock()
-            with authorization.authorized_session(self.factory) as session:
-                now = self.clock()
-                candidates = list(
-                    session.scalars(
-                        select(InfraAutomationRun)
-                        .where(InfraAutomationRun.state.in_(("queued", "running")))
-                        .order_by(InfraAutomationRun.sequence)
-                        .limit(100)
-                    )
-                )
-                if self._owner is None:
-                    if not candidates:
-                        return
-                    first = candidates[0]
-                    self._scope = (first.project_id, first.workspace_id)
-                    self._owner = claims.acquire_coordinator(
-                        session,
-                        project_id=self._scope[0],
-                        workspace_id=self._scope[1],
-                        now=now,
-                    )
-                    if self._owner is None:
-                        return
-                    self._heartbeat_at = now
-                elif (now - self._heartbeat_at).total_seconds() >= 10:
-                    claims.renew_coordinator(
-                        session,
-                        self._owner,
-                        project_id=self._scope[0],
-                        workspace_id=self._scope[1],
-                        now=now,
-                    )
-                    self._heartbeat_at = now
+            try:
+                candidates, now = self._ownership()
+            except LifecycleError:
+                for handle in self.workers.handles:
+                    self.workers.cancel(handle.attempt_id)
+                self._owner = self._scope = self._heartbeat_at = None
+                self._pending_completions.clear()
+                logger.warning("Local engine ownership lost.")
+                return
+            if self._owner is None:
+                return
             for completion in self.workers.poll():
+                self._pending_completions[completion.handle.attempt_id] = completion
+            for attempt_id, completion in tuple(self._pending_completions.items()):
                 try:
                     self._complete(completion, now)
                 except Exception:
-                    # A stale result cannot be promoted to another attempt.
+                    # Preserve known outcome semantics until its transaction commits.
                     logger.warning("Local engine completion rejected.")
-                    try:
-                        self._stop(completion.handle.run_id, "failed", now)
-                    except Exception:
-                        logger.warning("Local engine completion safety stop rejected.")
-            for handle in self.workers.handles:
+                else:
+                    del self._pending_completions[attempt_id]
+            heartbeat_handles = {
+                handle.attempt_id: handle for handle in self.workers.handles
+            }
+            heartbeat_handles.update(
+                {
+                    attempt_id: completion.handle
+                    for attempt_id, completion in self._pending_completions.items()
+                }
+            )
+            for handle in heartbeat_handles.values():
                 try:
+                    stop_external = False
                     with authorization.authorized_session(self.factory) as session:
                         heartbeat_now = self.clock()
                         row = repository.get_attempt(session, handle.attempt_id)
-                        if row is not None and row.state in ("claimed", "running"):
+                        run = repository.get_run(session, handle.run_id)
+                        if run is not None and run.external_possible:
+                            stop_external = run.state == "delivery_unknown" or (
+                                row is not None
+                                and heartbeat_now >= repository.utc(row.deadline_at)
+                            )
+                            if stop_external and run.state in (
+                                "handing_off",
+                                "external_running",
+                            ):
+                                claims.stop_run(
+                                    session,
+                                    self._owner,
+                                    run_id=run.id,
+                                    expected_version=run.version,
+                                    state="delivery_unknown",
+                                    now=heartbeat_now,
+                                )
+                        elif row is not None and row.state in ("claimed", "running"):
                             claims.heartbeat_attempt(
                                 session,
                                 handle,
                                 expected_version=row.version,
                                 now=heartbeat_now,
                             )
+                    if stop_external:
+                        self.workers.cancel(handle.attempt_id)
                 except Exception:
+                    if handle.attempt_id in self._pending_completions:
+                        logger.warning(
+                            "Local engine pending completion heartbeat rejected."
+                        )
+                        continue
                     self.workers.cancel(handle.attempt_id)
                     try:
-                        self._stop(handle.run_id, "failed", now)
+                        self._recover_abandoned(handle, now)
                     except Exception:
                         logger.warning("Local engine heartbeat safety stop rejected.")
             for candidate in candidates:
                 try:
+                    if any(
+                        completion.handle.run_id == candidate.id
+                        for completion in self._pending_completions.values()
+                    ):
+                        continue
+                    if candidate.state in ("handing_off", "external_running"):
+                        handles = tuple(
+                            handle
+                            for handle in self.workers.handles
+                            if handle.run_id == candidate.id
+                        )
+                        expired = repository.utc(candidate.deadline_at) <= now
+                        if expired or not handles:
+                            self._stop(candidate.id, "delivery_unknown", now)
+                            for handle in handles:
+                                self.workers.cancel(handle.attempt_id)
+                        continue
                     if repository.utc(candidate.deadline_at) <= now:
-                        self._stop(candidate.id, "timed_out", now)
+                        self._stop(
+                            candidate.id,
+                            deadline_outcome(
+                                candidate.snapshot_bytes, candidate.deadline_at
+                            ),
+                            now,
+                        )
                         continue
                     self._schedule(candidate.id, now)
                 except Exception:
@@ -196,8 +370,6 @@ class Coordinator:
                 return
             document = SnapshotDocument.model_validate_json(run.snapshot_bytes)
             if run.state == "queued":
-                if not self.workers.can_submit:
-                    return
                 project_active = session.scalar(
                     select(func.count())
                     .select_from(InfraAutomationRun)
@@ -243,16 +415,18 @@ class Coordinator:
                     now=now,
                 )
                 return
-            if not self.workers.can_submit:
+            if not self._can_submit:
                 return
             for step in document.definition.steps:
                 registration = self.registry.get(step.kind)
-                if registration is None or registration.output_kind is None:
+                if registration is None:
                     continue
                 previous = [row for row in attempts if row.step_id == step.id]
                 if previous:
                     attempt = previous[-1]
-                    if attempt.state != "pending" or (
+                    if attempt.state == "succeeded":
+                        continue
+                    if (
                         attempt.handler_id,
                         attempt.handler_version,
                         attempt.retry_safe,
@@ -261,6 +435,51 @@ class Coordinator:
                         registration.handler_version,
                         registration.retry_safe,
                     ):
+                        run = repository.get_run(session, run.id)
+                        claims.stop_run(
+                            session,
+                            self._owner,
+                            run_id=run.id,
+                            expected_version=run.version,
+                            state="failed",
+                            now=now,
+                        )
+                        return
+                    if attempt.state in ("claimed", "running"):
+                        if any(
+                            handle.attempt_id == attempt.id
+                            for handle in self.workers.handles
+                        ):
+                            continue
+                        attempt = claims.safety_cleanup(
+                            session,
+                            self._owner,
+                            attempt_id=attempt.id,
+                            expected_version=attempt.version,
+                            state="failed",
+                            now=now,
+                        )
+                    if attempt.state in ("failed", "timed_out"):
+                        if not attempt.retry_safe or attempt.attempt_number >= 3:
+                            run = repository.get_run(session, run.id)
+                            claims.stop_run(
+                                session,
+                                self._owner,
+                                run_id=run.id,
+                                expected_version=run.version,
+                                state="failed",
+                                now=now,
+                            )
+                            return
+                        attempt = claims.prepare_retry(
+                            session,
+                            self._owner,
+                            previous_attempt_id=attempt.id,
+                            expected_version=attempt.version,
+                            now=now,
+                            bounds=self.bounds,
+                        )
+                    if attempt is None or attempt.state != "pending":
                         continue
                 else:
                     attempt = claims.prepare_attempt(
@@ -319,6 +538,11 @@ class Coordinator:
             self.workers.close()
             if self._owner is not None:
                 now = self.clock()
+                for completion in tuple(self._pending_completions.values()):
+                    try:
+                        self._complete(completion, now)
+                    except Exception:
+                        logger.warning("Local engine shutdown completion rejected.")
                 for handle in handles:
                     try:
                         self._stop(handle.run_id, "failed", now)
@@ -335,6 +559,7 @@ class Coordinator:
                 except Exception:
                     logger.warning("Local engine ownership release rejected.")
                 self._owner = None
+            self._pending_completions.clear()
 
     async def start(self):
         if self._task is None and self.registry:

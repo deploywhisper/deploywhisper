@@ -15,7 +15,12 @@ from sqlalchemy.orm import sessionmaker
 from infra_automation import claims
 from infra_automation.contracts import STEP_CONTRACTS
 from infra_automation.lifecycle import SnapshotDocument
-from infra_automation.state import AttemptHandle, EngineBounds, WorkerResult
+from infra_automation.state import (
+    AttemptHandle,
+    EngineBounds,
+    OutputReference,
+    WorkerResult,
+)
 from models.repositories import infra_automation_runs as repository
 from services import project_service as authorization
 
@@ -104,6 +109,7 @@ class WorkerCompletion:
 def _worker_main(database_url, handle, registration, value, bounds, channel):
     """Private wrapper owns the capability; trusted handler receives input only."""
     engine = None
+    external_started = False
     try:
         if os.name == "posix":
             os.setsid()
@@ -165,8 +171,25 @@ def _worker_main(database_url, handle, registration, value, bounds, channel):
             if value.prerequisites != expected:
                 raise ValueError("Immutable prerequisite binding unavailable.")
         write(claims.start_attempt)
-        result = WorkerResult.model_validate(registration.handler(value).model_dump())
-        if result.outcome == "external_unknown":
+        if registration.step_kind == "registered_github_handoff":
+            if write(claims.begin_external) is None:
+                raise ValueError("External intent unavailable.")
+            external_started = True
+            # This is a trusted local uncertainty double, with no transport.
+            registration.handler(value)
+            result = WorkerResult(outcome="external_unknown")
+        else:
+            adopted = write(claims.adopt_committed_output, bounds=bounds)
+            if adopted is not None:
+                result = WorkerResult(
+                    outcome="local_success",
+                    output=OutputReference.model_validate_json(adopted.output_json),
+                )
+            else:
+                result = WorkerResult.model_validate(
+                    registration.handler(value).model_dump()
+                )
+        if result.outcome == "external_unknown" and not external_started:
             raise ValueError("External adapter unavailable.")
         if result.outcome == "local_success":
             if result.output is None or result.output.kind != registration.output_kind:
@@ -179,7 +202,11 @@ def _worker_main(database_url, handle, registration, value, bounds, channel):
     except Exception:
         # Fixed diagnostics: exceptions may contain sensitive handler inputs.
         try:
-            channel.send_bytes(b'{"outcome":"permanent_local_failure"}')
+            channel.send_bytes(
+                b'{"outcome":"external_unknown"}'
+                if external_started
+                else b'{"outcome":"permanent_local_failure"}'
+            )
         except (BrokenPipeError, EOFError, OSError):
             pass
     finally:

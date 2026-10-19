@@ -158,14 +158,18 @@ class EngineCoordinatorRuntimeTests(repository_tests.EngineRepositoryTests):
         handles = self.workers.handles
         self.assertEqual(len(handles), 2)
         rows = self.await_attempts(coordinator, 2)
+        originals = [
+            row for row in rows if row.id in {handle.attempt_id for handle in handles}
+        ]
         self.assertTrue(
-            all(row.state == "failed" and row.output_json is None for row in rows)
+            all(row.state == "failed" and row.output_json is None for row in originals)
         )
+        self.assertFalse(any(row.state == "succeeded" for row in rows))
         self.assertEqual(
-            {row.id for row in rows}, {handle.attempt_id for handle in handles}
+            {row.id for row in originals}, {handle.attempt_id for handle in handles}
         )
 
-    def test_worker_saturation_leaves_third_run_queued_without_attempt(self):
+    def test_worker_saturation_keeps_active_run_waiting_without_attempt(self):
         self.two_runs()
         with self.factory.begin() as session:
             third = repository.create_run(
@@ -174,7 +178,7 @@ class EngineCoordinatorRuntimeTests(repository_tests.EngineRepositoryTests):
         coordinator = self.scheduler()
         coordinator.tick()
         with self.factory() as session:
-            self.assertEqual(repository.get_run(session, third.id).state, "queued")
+            self.assertEqual(repository.get_run(session, third.id).state, "running")
             self.assertEqual(repository.list_attempts(session, run_id=third.id), [])
         self.assertEqual(len(self.workers.handles), 2)
 
