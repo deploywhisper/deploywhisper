@@ -49,9 +49,9 @@ DeployWhisper is a self-hosted, advisory-first deployment-risk briefing tool. Th
 - Improve AI-agent interfaces and prompt-injection test coverage.
 - Track CNCF readiness through public governance, security, release, adoption, benchmark, and community-health evidence.
 
-### Phase 5: Live Environment Grounding (proposed)
+### Phase 5: Live Environment Grounding (accepted, not implemented)
 
-Status: proposed, pending a maintainer decision on [RFC 0002](docs/rfcs/0002-live-environment-grounding.md). Nothing in this phase is implemented.
+Status: [RFC 0002](docs/rfcs/0002-live-environment-grounding.md) accepted 2026-10-19. Targeting **v1.5.0**, shipping alongside Epic 16 under one release tag (retargeted 2026-10-20 from v1.6.0). Acceptance authorizes qualification work only. **Nothing in this phase is implemented**, and no capability below is a claim about current behaviour.
 
 DeployWhisper reasons well about change but currently has a thin supply of real environment facts: blast radius depends on a hand-authored topology, and severity is derived from resource categories rather than from the specific instance being changed. This phase closes that gap with a read-only, plan-directed cloud context provider, starting with AWS.
 
@@ -64,7 +64,7 @@ DeployWhisper reasons well about change but currently has a thin supply of real 
 
 Boundaries for this phase: read-only by construction and by mechanical CI enforcement; opt-in per project and disabled by default; plan-directed rather than account-wide; local-first with direct operator-to-provider calls and no intermediary; and advisory, with the only gate being a CI exit code the caller opts into. No apply, destroy, remediation, drift daemon, cost estimation or policy engine is in scope.
 
-Tracked as Epic 17, independent of Epic 16. See the [feature PRD](_bmad-output/planning-artifacts/prd-live-environment-grounding.md), [architecture §26](_bmad-output/planning-artifacts/architecture.md) and the [operator guide](docs/live-environment-grounding/README.md).
+Tracked as Epic 17. Development is independent of Epic 16 — separate modules, tests, branches and review — but both epics share the v1.5.0 release tag, so the release ships only when both close. Grounding is opt-in and disabled by default, so Epic 17 can be cut back to a later release without affecting Epic 16. See the [feature PRD](_bmad-output/planning-artifacts/prd-live-environment-grounding.md), [architecture §26](_bmad-output/planning-artifacts/architecture.md) and the [operator guide](docs/live-environment-grounding/README.md).
 
 ## Non-Goals
 

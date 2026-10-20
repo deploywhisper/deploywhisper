@@ -233,6 +233,8 @@ development_status:
   epic-16-retrospective: optional
 
   # Epic 17 is an independent lane (see planning-artifacts/epic-16-17-boundary-and-parallelization-plan.md).
+  # Retargeted 2026-10-20: Epic 17 ships in v1.5.0 with Epic 16 under one release tag.
+  # Development stays independent; the release gate is shared. Story 17.10 owns release integration.
   # RFC 0002 accepted 2026-10-19; Story 17.0 is authorized. Stories 17.1+ remain backlog
   # until Story 17.0 closes its feasibility gate and the dependency decision is recorded.
   epic-17: in-progress
@@ -246,4 +248,5 @@ development_status:
   17-7-snapshot-portability-and-air-gapped-grounding: backlog
   17-8-live-context-ui: backlog
   17-9-extensibility-cli-agent-and-qualification: backlog
+  17-10-v1-5-0-release-integration-and-joint-qualification: backlog
   epic-17-retrospective: optional

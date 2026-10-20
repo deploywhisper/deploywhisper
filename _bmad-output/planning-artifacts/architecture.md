@@ -1373,11 +1373,11 @@ Each earlier story proves only its owned contract with scoped fixtures or test-d
 
 ---
 
-## 26. v1.6.0 Live Environment Grounding Architecture Amendment
+## 26. v1.5.0 Live Environment Grounding Architecture Amendment
 
 ### 26.1 Authority, baseline and supported boundary
 
-This amendment is appended for **Epic 17, Live Environment Grounding**, targeting v1.6.0. Its governance source is [RFC 0002](../../docs/rfcs/0002-live-environment-grounding.md) (**Proposed**, 2026-10-19) and its canonical requirement authority is the [feature PRD](prd-live-environment-grounding.md), requirement IDs `LEG-FR-001..040` and `LEG-NFR-001..012`. Story **17.0** owns RFC acceptance, the dependency decision, the threat model and executable feasibility spikes. **Nothing described below is represented as implemented.**
+This amendment is appended for **Epic 17, Live Environment Grounding**, targeting **v1.5.0** (retargeted 2026-10-20 from v1.6.0; Epic 17 now shares the v1.5.0 release tag with Epic 16 while remaining architecturally independent of it). Its governance source is [RFC 0002](../../docs/rfcs/0002-live-environment-grounding.md) (**Accepted**, 2026-10-19) and its canonical requirement authority is the [feature PRD](prd-live-environment-grounding.md), requirement IDs `LEG-FR-001..040` and `LEG-NFR-001..012`. Story **17.0** owns RFC acceptance, the dependency decision, the threat model and executable feasibility spikes. **Nothing described below is represented as implemented.**
 
 This amendment is **append-only and does not modify §25**. Epic 16 and Epic 17 are independent in both directions and are intended to run concurrently; the operative contract is the [boundary and parallelization plan](epic-16-17-boundary-and-parallelization-plan.md). Sections 2, 4, 8, 19–23 remain constraints, and the existing shared-core, advisory, local-first and scale ADRs are unchanged.
 
@@ -1401,6 +1401,7 @@ The following **LEG-ADR** records extend the existing ADRs and the §25.2 `IA-AD
 | LEG-ADR-08 Report contract | Optional, separately versioned `live_context` block with its own `live_context_version: 1`; **no report schema version bump**, consistent with IA-ADR-06. | A report minor-version bump is not an established contract and would break existing consumers for an optional additive field. | 17.1, 17.8 |
 | LEG-ADR-09 Extensibility | Provider-neutral connector contract, registry, and an executable conformance suite; Azure and GCP as explicit stubs. | An AWS-only implementation forfeits the community contribution surface that makes multi-cloud coverage sustainable for a volunteer-maintained project. | 17.1, 17.9 |
 | LEG-ADR-10 Epic independence | Grounding executes in-application as a short synchronous inbound read. It does not use the Epic 16 runner; private-network operators use snapshot import instead. | Reusing the runner would import the enrollment/fencing/lease protocol for a read that does not need it and would block all Epic 17 value behind 16.12–16.14. | 17.0, 17.7 |
+| LEG-ADR-11 Shared release, separate documents | Epic 17 ships in v1.5.0 with Epic 16 but publishes its own self-contained release fragment under `docs/releases/`, which Story 16.19 includes by one reference line. Epic 17 never edits Epic 16's release-notes file. | The retarget created exactly one new cross-epic obligation. Containing it in a separate document keeps the most contended artifact of the release single-owner, keeps the coupling documentation-only, and keeps an Epic 17 cut-back cheap: deleting one fragment and one reference line. | 17.10 |
 
 An AWS SDK is a **new runtime dependency** and requires an explicit approved dependency decision recorded in Story 17.0 before any implementation. Preserve the repository Python floor and locked dependencies; do not introduce unrelated framework upgrades.
 

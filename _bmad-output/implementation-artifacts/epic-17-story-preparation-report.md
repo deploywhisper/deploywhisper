@@ -25,10 +25,11 @@ Ten dedicated story contexts for Epic 17, 17.0 through 17.9, each carrying role 
 
 | Artifact | Purpose |
 | --- | --- |
-| [RFC 0002](../../docs/rfcs/0002-live-environment-grounding.md) | Governance gate; status Proposed |
+| [RFC 0002](../../docs/rfcs/0002-live-environment-grounding.md) | Governance gate; **Accepted 2026-10-19**, authorizing Story 17.0 only |
 | [Feature PRD](../planning-artifacts/prd-live-environment-grounding.md) | Canonical `LEG-FR-001..040` and `LEG-NFR-001..012` |
-| [Architecture §26](../planning-artifacts/architecture.md) | v1.6.0 amendment with `LEG-ADR-01..10` |
-| [Epic 17 in epics.md](../planning-artifacts/epics.md) | Epic header and all ten story definitions |
+| [Architecture §26](../planning-artifacts/architecture.md) | v1.5.0 amendment with `LEG-ADR-01..11` |
+| [Epic 17 in epics.md](../planning-artifacts/epics.md) | Epic header and all eleven story definitions |
+| [v1.5.0 retarget course correction](../planning-artifacts/sprint-change-proposal-2026-10-20-epic-17-into-v1-5-0.md) | Records the 2026-10-20 move from v1.6.0 into v1.5.0 and the shared release gate |
 | [Sprint change proposal](../planning-artifacts/sprint-change-proposal-2026-10-19-epic-17-live-environment-grounding.md) | Course correction recording the new epic |
 | [Boundary and parallelization plan](../planning-artifacts/epic-16-17-boundary-and-parallelization-plan.md) | Epic 16 conflict-avoidance contract |
 | [Traceability matrix](../planning-artifacts/requirements-traceability-matrix.md) | Appended `LEG-*` adoption section, 52 rows |
@@ -70,5 +71,7 @@ Architecture §26.2 `LEG-ADR-10` records the deliberate decision **not** to reus
 **Story 17.0 is READY. Stories 17.1-17.9 are NOT READY.**
 
 RFC 0002 was accepted on 2026-10-19, which authorizes Story 17.0 qualification only. Story 17.0 must close its feasibility gate, record the dependency decision and freeze the coverage list before any downstream story is promoted. The open items in the table above remain open.
+
+**v1.5.0 retarget (2026-10-20).** Epic 17 now ships in v1.5.0 alongside Epic 16 by owner decision. Story 17.10 was added to own release integration, bringing Epic 17 to eleven stories. This does not change the readiness verdict: preparation is still specification only, and the retarget tightens rather than relaxes the schedule. The combined release now gates on 31 stories across both epics, and the documented mitigation is the Epic 17 cut-back path rehearsed in Story 17.10 Packet 10.5, not an assumption that both lanes will finish together.
 
 No code was written, no spike was run, no dependency was installed, no provider was contacted and no test result is claimed anywhere in this preparation set.

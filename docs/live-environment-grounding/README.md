@@ -2,7 +2,7 @@
 
 > **Status: planned, not implemented.** This guide documents the intended operator contract for Epic 17 so that the security posture can be reviewed before any code exists. No feature described here ships today. Nothing in this document is a test result or a capability claim.
 >
-> Governance: [RFC 0002](../rfcs/0002-live-environment-grounding.md) (Proposed) · Requirements: [feature PRD](../../_bmad-output/planning-artifacts/prd-live-environment-grounding.md) · Architecture: [§26](../../_bmad-output/planning-artifacts/architecture.md)
+> Governance: [RFC 0002](../rfcs/0002-live-environment-grounding.md) (Accepted 2026-10-19; acceptance authorizes Story 17.0 qualification only) · Target release: v1.5.0, shipping alongside Epic 16 · Requirements: [feature PRD](../../_bmad-output/planning-artifacts/prd-live-environment-grounding.md) · Architecture: [§26](../../_bmad-output/planning-artifacts/architecture.md)
 
 ## What this is
 
@@ -93,7 +93,7 @@ This is the supported path for private-network operators. It does **not** requir
 
 | Provider | Intended status |
 | --- | --- |
-| AWS | The first and only provider targeted for v1.6.0, qualified in Story 17.9 |
+| AWS | The first and only provider targeted for v1.5.0, qualified in Story 17.9 |
 | Azure | Registered stub that fails explicitly, like the existing unimplemented topology sources |
 | GCP | Registered stub that fails explicitly |
 

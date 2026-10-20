@@ -2,7 +2,7 @@
 
 Status: backlog. **Highest standalone value in the epic; shippable without any UI.**
 Preparation: refined
-Release: v1.6.0 | Priority: P0 within the independent Epic 17 lane
+Release: v1.5.0 (shared release train with Epic 16) | Priority: P0 within the independent Epic 17 lane
 
 ## Story
 

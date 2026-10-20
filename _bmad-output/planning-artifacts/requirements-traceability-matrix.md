@@ -153,7 +153,7 @@ The following previously implicit family-map ownership is now explicit in the ep
 | NFR-PERF-03 | 2.7 | Deterministic fallback after narrative timeout/failure |
 | NFR-PERF-05 | 7.2/7.3 and 2.6 | Connector deadline/unavailable context; proof remains distinct from mapping |
 
-## v1.6.0 Live Environment Grounding Adoption — 2026-10-19
+## v1.5.0 Live Environment Grounding Adoption — 2026-10-19 (retargeted to v1.5.0 on 2026-10-20)
 
 The [canonical feature PRD](prd-live-environment-grounding.md) adds 40 FR and 12 NFR in the `LEG-*` family without replacing the parent's requirements or the v1.5.0 `IAU15-*` family. Epic 17 owns this outcome end to end and takes **no dependency on Epic 16**; see the [boundary and parallelization plan](epic-16-17-boundary-and-parallelization-plan.md).
 
@@ -218,5 +218,11 @@ Nonfunctional obligations:
 | LEG-NFR-010 | A new provider must be addable without modifying core analysis, scoring, blast radius or report code. | 17.1, 17.9 | Conformance suite executed against a reference stub provider |
 | LEG-NFR-011 | Air-gapped operators must achieve grounding parity through snapshot import. | 17.7, 17.9 | Disconnected-host equivalence exercise |
 | LEG-NFR-012 | Call count, elapsed time and budget consumption must be visible to the operator for every collection. | 17.3, 17.9 | Budget reporting assertions in API, CLI and UI |
+| LEG-FR-041 | Publish Live Environment Grounding release documentation as a self-contained fragment owned by Epic 17 and included by reference from Story 16.19. | 17.10 | Fragment published; 16.19 reference is one line with no duplicated content |
+| LEG-FR-042 | Publish an upgrade and rollback record stating grounding is disabled by default and requires no migration or credential provisioning. | 17.10 | Clean-upgrade exercise with grounding left disabled |
+| LEG-FR-043 | Produce joint-release qualification evidence that a both-epic build with grounding disabled is behaviourally identical to an Epic 16-only build. | 17.10 | Recorded differential across reports, schemas, API, CLI and agent output |
+| LEG-NFR-013 | Sharing the v1.5.0 release tag must not create a code, test or fixture dependency between Epic 16 and Epic 17. | 17.10 | Per-shard isolation run plus a CI cross-import invariant with a deliberate failing case |
 
 Cross-cutting notes: `LEG-*` intersects `CTX-*` (context enrichment gains a live source), `RSK-*` (grounded severity floors and recoverability), `EVD-*` (a new `live_state` evidence source under unchanged Evidence Law), `REV-*` (the Live Context report surface), `WRK-*` (the divergence CI gate), `AIA-*` (grounded facts labelled distinctly from inferred ones) and `NFR-SEC-*` (a new outbound trust boundary with mechanically enforced read-only access). Grounding is opt-in and disabled by default; with it off, all existing coverage is unchanged, which is itself an acceptance obligation under LEG-NFR-009.
+
+Release retarget (2026-10-20): Epic 17 moved from v1.6.0 into v1.5.0, shipping alongside Epic 16 under one tag. `LEG-FR-041..043` and `LEG-NFR-013` were added to cover the release-integration obligations this created and are owned by the new Story 17.10. The retarget adds no code coupling between the epics; `LEG-NFR-013` exists to keep it that way and is mechanically enforced.

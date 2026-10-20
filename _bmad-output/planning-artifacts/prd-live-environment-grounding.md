@@ -3,10 +3,10 @@ workflowType: prd
 workflow: create
 version: '0.1'
 status: proposed-for-planning-not-implementation-ready
-release: v1.6.0
+release: v1.5.0
 priority: independent-parallel-workstream
 canonical_epic: 17
-lastEdited: '2026-10-19'
+lastEdited: '2026-10-20'
 stepsCompleted: [step-c-01-discovery, step-c-02-scope, step-c-03-requirements, step-c-04-complete]
 inputDocuments:
   - docs/rfcs/0002-live-environment-grounding.md
@@ -18,7 +18,7 @@ inputDocuments:
 
 ## Executive Summary
 
-**Live Environment Grounding is an independent feature workstream, canonically Epic 17, targeting v1.6.0.** It supplies DeployWhisper's existing analysis core with read-only knowledge of the operator's actual running infrastructure, starting with AWS and extending through a provider-neutral connector contract.
+**Live Environment Grounding is an independent feature workstream, canonically Epic 17, shipping in v1.5.0 alongside Epic 16.** It was retargeted from v1.6.0 to v1.5.0 on 2026-10-20 by owner decision. The two epics remain independent in code, modules, tests and review, but they now share one release tag, so **v1.5.0 ships only when both epics close**. It supplies DeployWhisper's existing analysis core with read-only knowledge of the operator's actual running infrastructure, starting with AWS and extending through a provider-neutral connector contract.
 
 DeployWhisper currently reasons about declared intent — a Terraform plan, a Kubernetes manifest — against a topology graph that a human hand-authored or imported from a point-in-time state file. Grounding replaces that starved context supply with plan-directed, read-only observation of reality, and uses it to produce real blast radius, plan-versus-reality divergence detection, verified recoverability, and grounded environment classification.
 
@@ -38,7 +38,7 @@ Epic 17 is **independent of Epic 16 in both directions**. Neither epic's accepta
 | Owned modules | `infra_automation/`, `services/infra_automation_*` | `cloud/`, `services/cloud_context_service.py` |
 | Credentials | Issues grants, runner and receiver tokens | Consumes ambient operator credentials; issues none |
 | Can it mutate anything? | Dispatches to an operator-owned external system | **Never** |
-| Release lane | v1.5.0 | v1.6.0 |
+| Release lane | v1.5.0 | v1.5.0 (shared tag; independent development) |
 
 The single intended integration is **one-directional, optional and presentation-time**: Epic 16's approval inbox may render Epic 17's additive `live_context` report block when both are present. Epic 17 does not reuse Epic 16's runner, enrollment, attempt fencing or receiver protocol, and must not acquire a dependency on them.
 
@@ -59,7 +59,7 @@ Every requirement below has a named acceptance proof and a canonical story mappi
 
 ## Product Scope
 
-| Profile | v1.6.0 support contract |
+| Profile | v1.5.0 support contract |
 | --- | --- |
 | Application | Existing self-hosted FastAPI app, Python-first shared analysis core, React production assets, SQLite and local storage. No new control plane, no new runtime service, no Node runtime. |
 | Providers | **AWS supported.** Azure and GCP ship as registered stubs with a documented connector contract and conformance suite, mirroring the existing `cloudformation`/`ansible` topology stubs. |
@@ -73,7 +73,7 @@ Every requirement below has a named acceptance proof and a canonical story mappi
 
 P0 comprises all 40 functional and 12 nonfunctional requirements below. No release date or performance figure is implied; a versioned manifest must freeze supported SDK, provider API and application versions during qualification.
 
-**Explicitly excluded from v1.6.0:** any write or mutate capability; automatic remediation; continuous or scheduled drift monitoring; account-wide inventory; cost estimation; a hosted or multi-tenant collection service; cross-account assume-role chaining beyond the operator's own ambient profile; Kubernetes rework (the existing `kubectl` source is unchanged); and reuse of or dependency on Epic 16 runner, enrollment, fencing or receiver protocols.
+**Explicitly excluded from v1.5.0:** any write or mutate capability; automatic remediation; continuous or scheduled drift monitoring; account-wide inventory; cost estimation; a hosted or multi-tenant collection service; cross-account assume-role chaining beyond the operator's own ambient profile; Kubernetes rework (the existing `kubectl` source is unchanged); and reuse of or dependency on Epic 16 runner, enrollment, fencing or receiver protocols.
 
 ## User Journeys
 
@@ -180,6 +180,14 @@ P0 comprises all 40 functional and 12 nonfunctional requirements below. No relea
 | LEG-FR-039 | Ship Azure and GCP as registered stubs that fail explicitly and identically to the existing unimplemented topology sources, with no partial or misleading behaviour. |
 | LEG-FR-040 | Publish a connector contributor guide and an executable provider conformance suite covering read-only enforcement, bounded execution, honest degradation, redaction and snapshot shape, so a community provider can be validated without maintainer-specific knowledge. |
 
+### Release integration (added 2026-10-20 with the v1.5.0 retarget)
+
+| ID | Requirement |
+| --- | --- |
+| LEG-FR-041 | Publish Live Environment Grounding release documentation as a **self-contained fragment** owned by Epic 17, covering enablement, the required IAM policy, degradation behaviour, snapshot handling and the disabled-by-default guarantee. Story 16.19 includes the fragment by reference; Epic 17 never edits Epic 16's release-notes file. |
+| LEG-FR-042 | Publish an upgrade and rollback record for operators upgrading to v1.5.0, stating that grounding is disabled by default, that no migration or credential provisioning is required to upgrade, and how to disable grounding without downgrading. |
+| LEG-FR-043 | Produce joint-release qualification evidence proving that, with grounding disabled, a v1.5.0 build containing both epics is behaviourally identical to one containing Epic 16 alone, and that neither epic's test shard depends on the other. |
+
 ## Nonfunctional Requirements
 
 | ID | Requirement | Verification |
@@ -196,6 +204,7 @@ P0 comprises all 40 functional and 12 nonfunctional requirements below. No relea
 | LEG-NFR-010 | A new provider must be addable without modifying core analysis, scoring, blast radius or report code. | Conformance suite executed against a reference stub provider |
 | LEG-NFR-011 | Air-gapped operators must achieve grounding parity through snapshot import. | Disconnected-host equivalence exercise |
 | LEG-NFR-012 | Call count, elapsed time and budget consumption must be visible to the operator for every collection. | Budget reporting assertions in API, CLI and UI |
+| LEG-NFR-013 | Sharing the v1.5.0 release tag must not create a code, test or fixture dependency between Epic 16 and Epic 17. Each epic's test shard must pass with the other epic's modules absent from the import graph. | Per-shard isolation run and a cross-import grep invariant executed in CI |
 
 ## Requirement to Story Mapping
 
@@ -211,8 +220,9 @@ P0 comprises all 40 functional and 12 nonfunctional requirements below. No relea
 | 17.7 Snapshot portability and air-gapped grounding | LEG-FR-032, LEG-FR-033; LEG-NFR-011 |
 | 17.8 Live context UI | LEG-FR-034–036; LEG-NFR-008 |
 | 17.9 Extensibility, CLI/agent surfaces and qualification | LEG-FR-037–040; LEG-NFR-010, and release-wide verification of all NFRs |
+| 17.10 v1.5.0 release integration and joint qualification | LEG-FR-041–043; LEG-NFR-013 |
 
-Mapping expresses acceptance obligation, not implementation evidence. Release-wide proof of every requirement is owned by Story 17.9.
+Mapping expresses acceptance obligation, not implementation evidence. Release-wide proof of every requirement is owned by Story 17.9. Story 17.10 proves only release integration and cross-epic isolation; it does not re-prove feature requirements and must not become a second qualification gate.
 
 ## Out of Scope and Deferred
 

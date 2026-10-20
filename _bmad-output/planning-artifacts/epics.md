@@ -2786,7 +2786,7 @@ The owner requested refinement of all readiness work and preparation of Story 16
 
 ## Epic 17: Live Environment Grounding
 
-**Release priority:** Independent parallel workstream targeting v1.6.0. **Delivery status:** proposed for story preparation; no implementation started.
+**Release priority:** Independent parallel workstream shipping in **v1.5.0** alongside Epic 16 (retargeted 2026-10-20 from v1.6.0 by owner decision). Development remains independent of Epic 16; the **release tag is now shared**, so v1.5.0 cannot ship until both epics close. **Delivery status:** Story 17.0 ready-for-dev after the RFC 0002 acceptance; no implementation started.
 
 A reviewer analyzing an infrastructure change receives evidence grounded in the operator's **actual running environment** instead of a hand-authored topology: real blast radius from live dependency edges, detection of plans computed against stale reality, verified recoverability for destructive changes, and grounded environment classification. Collection is read-only, plan-directed, bounded, opt-in and local-first. AWS is supported; Azure and GCP ship as registered stubs behind a published connector contract.
 
@@ -3135,5 +3135,37 @@ So that the community can extend grounding and operators receive honest capabili
 | LEG-FR-040 | Contributor guide and executable conformance suite. | Reference provider passing conformance with no core diff |
 | LEG-NFR-010 | Provider extensibility without core modification. | Conformance suite against the reference stub |
 | All LEG-NFR | Release-wide nonfunctional proof. | Full qualification matrix, measured results and published deltas |
+
+### Story 17.10: v1.5.0 Release Integration and Joint Qualification
+
+As a maintainer shipping Epic 16 and Epic 17 under one v1.5.0 tag,
+I want Epic 17's release documentation published as a self-contained fragment and the two epics proven mutually independent at build and test level,
+So that a combined release is safe to cut, the release-notes file has exactly one owner, and Epic 17 can still be cut from v1.5.0 cheaply if it is not ready.
+
+**Status:** backlog. Added 2026-10-20 with the v1.5.0 retarget.
+
+**Dedicated context:** [17-10-v1-5-0-release-integration-and-joint-qualification.md](../implementation-artifacts/17-10-v1-5-0-release-integration-and-joint-qualification.md).
+
+**Dependencies:** all earlier Epic 17 stories. **No Epic 16 code dependency**; the single touchpoint is Story 16.19 including this story's fragment by reference.
+
+**Acceptance Criteria:**
+
+1. **Given** the v1.5.0 release, **when** Epic 17 release documentation is published, **then** it exists as a self-contained fragment under `docs/releases/` owned entirely by Epic 17, and Story 16.19's release-notes file references it with a single added line and no content duplication.
+2. **Given** an operator upgrading to v1.5.0, **when** they read the upgrade and rollback record, **then** it states that grounding is disabled by default, that no migration, credential provisioning or IAM change is required to upgrade, and how to disable grounding without downgrading.
+3. **Given** grounding disabled, **when** a v1.5.0 build containing both epics is compared against a build containing Epic 16 alone, **then** reports, fixtures, schemas, API responses, CLI output and agent output are identical, with the comparison recorded as evidence.
+4. **Given** each epic's test shard, **when** it runs with the other epic's modules absent from the import graph, **then** it passes, and a CI check fails the build if either epic imports from the other's module tree.
+5. **Given** a decision to cut Epic 17 from v1.5.0, **when** the documented cut-back procedure is followed on a scratch branch, **then** Epic 16's release remains complete and green.
+6. **Given** the combined release, **when** the release manifest is published, **then** it names both epics, states the disabled-by-default posture, and claims no Epic 17 capability that Story 17.9 did not qualify.
+
+**Slice acceptance boundary:** This story proves release integration and cross-epic isolation only. It does not re-prove feature requirements; release-wide feature qualification remains owned by Story 17.9 and must not be duplicated here. If an earlier story is incomplete at this point, the correct outcomes are to finish it or to cut Epic 17 from v1.5.0, never to paper over the gap in release copy.
+
+**Requirement-specific acceptance coverage:**
+
+| Requirement | Contract owned by this story | Required acceptance proof |
+| --- | --- | --- |
+| LEG-FR-041 | Self-contained Epic 17 release fragment, included by reference from 16.19. | Fragment published; 16.19 reference is one line with no duplicated content |
+| LEG-FR-042 | Upgrade and rollback record for v1.5.0. | Clean-upgrade exercise with grounding left disabled |
+| LEG-FR-043 | Joint-release qualification with grounding disabled. | Recorded differential across reports, schemas, API, CLI and agent output |
+| LEG-NFR-013 | No code, test or fixture dependency between the epics. | Per-shard isolation run plus a CI cross-import invariant with a deliberate failing case |
 
 Only add persistence and entities needed for each slice; do not create the full grounding schema in one foundational migration. Runtime schema or constructor changes require a repository-wide fixture search and the affected CI shards. New dependencies require an explicit approved dependency decision.
