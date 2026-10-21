@@ -5,7 +5,7 @@ sqlalchemy==2.0.54
 alembic==1.18.4
 pydantic==2.14.1
 openai==2.32.0
-anthropic==1.13.0
+anthropic==1.15.0
 google-genai==2.29.0
 pyyaml==6.0.3
 ruamel.yaml==0.19.1
