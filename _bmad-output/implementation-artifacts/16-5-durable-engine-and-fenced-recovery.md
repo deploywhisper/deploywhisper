@@ -1,6 +1,6 @@
 # Story 16.5: Durable Engine And Fenced Recovery
 
-Status: in-progress
+Status: review
 Preparation: refined
 Release: v1.5.0 — P0 highest-priority feature
 Dependencies: 16.4; public RFC and 16.0 qualification required
@@ -43,30 +43,30 @@ Coverage intent: Delta over accepted v1.4.0; exact canonical requirement text/pr
 
 Execute packets in listed dependency order; assign one named owner per packet and review its tests before widening scope. Shared files must accommodate concurrent edits; no global tracker or unrelated story change is authorized by a packet.
 
-- [ ] **Packet A — persistence/state owner; must merge first** (AC1/2)
-  - [ ] Owned write scope: `infra_automation/state.py (new), models/tables.py, models/repositories/infra_automation_runs.py (new), next migration`.
-  - [ ] Create only runs, step attempts, coordinator lease and request-idempotency records required by this engine; use 16.4 audit/epoch. Freeze transition/version enums and unique (run_id, step_id, attempt_number), scoped idempotency-key+digest constraints. Prove immutable source/input snapshots, full transition crash-before/after-commit matrix and v1.4 upgrade.
-  - [ ] Attach packet-specific acceptance output, touched-file list, migration/contract fixtures and review notes; leave unchecked until verified.
-- [ ] **Packet B — atomic claim/recovery owner; after A** (AC2/3)
-  - [ ] Owned write scope: `models/repositories/infra_automation_runs.py, infra_automation/claims.py (new)`.
-  - [ ] Use short compare-and-update SQLite transactions checking state/version/epoch and unexpired lease; commit monotonic coordinator/attempt fencing before execution. Bind all worker writes to principal/project/run/step/attempt/fence. Test two connections/processes racing claims, restart overlap and all stale write classes. Never authorize solely from elapsed wall-clock lease.
-  - [ ] Attach packet-specific acceptance output, touched-file list, migration/contract fixtures and review notes; leave unchecked until verified.
-- [ ] **Packet C — coordinator/worker owner; after B** (AC3/4)
-  - [ ] Owned write scope: `infra_automation/coordinator.py and local_workers.py (new), services/infra_automation_service.py, app.py lifespan`.
-  - [ ] Implement bounded tick and worker ports with separate database sessions. Register only supported local doubles/handlers available now; analyze_uploaded_files adapter is integrated in 16.6. Measure scheduler progress while blocking a worker; startup/shutdown must release ownership safely without performing collection in FastAPI.
-  - [ ] Attach packet-specific acceptance output, touched-file list, migration/contract fixtures and review notes; leave unchecked until verified.
-- [ ] **Packet D — retries/output owner; after C** (AC2/5)
-  - [ ] Owned write scope: `infra_automation/state.py, local_workers.py, repository output references`.
-  - [ ] Persist safe-handler retry classification, finite total/attempt deadlines and atomic output link/idempotency. Retry creates new attempt, never reopens completed output. Model unknown external work via a typed adapter double that drops responses: assert reconciliation-only state, with no transport/resend implementation. Real outbox/receiver is 16.10/16.11.
-  - [ ] Attach packet-specific acceptance output, touched-file list, migration/contract fixtures and review notes; leave unchecked until verified.
-- [ ] **Packet E — cancellation owner; after D** (AC3/6)
-  - [ ] Owned write scope: `infra_automation/local_workers.py, coordinator.py, api/routes/infra_automation.py`.
-  - [ ] Persist cancellation before signaling the owned worker double; terminate descendants and reject old attempt writes. Enumerate cancel-before-start, cancel-during-work, completion-race and hypothetical accepted/unknown dispatch races using local ports. Runner protocol/process-isolation proof remains 16.12–16.14.
-  - [ ] Attach packet-specific acceptance output, touched-file list, migration/contract fixtures and review notes; leave unchecked until verified.
-- [ ] **Packet F — capacity/fault qualification owner; after E** (AC1–7)
-  - [ ] Owned write scope: `tests/test_infra_automation, config.py, docs/infra-automation/engine.md (new), benchmark fixtures`.
-  - [ ] Apply explicit project/workflow run/queue/byte limits and at most two local analysis workers. Exercise disk-full/queue-full/timeout/leader-overlap corpus, 1,000-transition timing and 30-minute reference capacity with 20 synthetic runner slots. Record commands/results/resources; these qualify only owned engine behavior, not real receiver/runner support. Independently review each packet before the next.
-  - [ ] Attach packet-specific acceptance output, touched-file list, migration/contract fixtures and review notes; leave unchecked until verified.
+- [x] **Packet A — persistence/state owner; must merge first** (AC1/2)
+  - [x] Owned write scope: `infra_automation/state.py (new), models/tables.py, models/repositories/infra_automation_runs.py (new), next migration`.
+  - [x] Create only runs, step attempts, coordinator lease and request-idempotency records required by this engine; use 16.4 audit/epoch. Freeze transition/version enums and unique (run_id, step_id, attempt_number), scoped idempotency-key+digest constraints. Prove immutable source/input snapshots, full transition crash-before/after-commit matrix and v1.4 upgrade.
+  - [x] Attach packet-specific acceptance output, touched-file list, migration/contract fixtures and review notes; leave unchecked until verified.
+- [x] **Packet B — atomic claim/recovery owner; after A** (AC2/3)
+  - [x] Owned write scope: `models/repositories/infra_automation_runs.py, infra_automation/claims.py (new)`.
+  - [x] Use short compare-and-update SQLite transactions checking state/version/epoch and unexpired lease; commit monotonic coordinator/attempt fencing before execution. Bind all worker writes to principal/project/run/step/attempt/fence. Test two connections/processes racing claims, restart overlap and all stale write classes. Never authorize solely from elapsed wall-clock lease.
+  - [x] Attach packet-specific acceptance output, touched-file list, migration/contract fixtures and review notes; leave unchecked until verified.
+- [x] **Packet C — coordinator/worker owner; after B** (AC3/4)
+  - [x] Owned write scope: `infra_automation/coordinator.py and local_workers.py (new), services/infra_automation_service.py, app.py lifespan`.
+  - [x] Implement bounded tick and worker ports with separate database sessions. Register only supported local doubles/handlers available now; analyze_uploaded_files adapter is integrated in 16.6. Measure scheduler progress while blocking a worker; startup/shutdown must release ownership safely without performing collection in FastAPI.
+  - [x] Attach packet-specific acceptance output, touched-file list, migration/contract fixtures and review notes; leave unchecked until verified.
+- [x] **Packet D — retries/output owner; after C** (AC2/5)
+  - [x] Owned write scope: `infra_automation/state.py, local_workers.py, repository output references`.
+  - [x] Persist safe-handler retry classification, finite total/attempt deadlines and atomic output link/idempotency. Retry creates new attempt, never reopens completed output. Model unknown external work via a typed adapter double that drops responses: assert reconciliation-only state, with no transport/resend implementation. Real outbox/receiver is 16.10/16.11.
+  - [x] Attach packet-specific acceptance output, touched-file list, migration/contract fixtures and review notes; leave unchecked until verified.
+- [x] **Packet E — cancellation owner; after D** (AC3/6)
+  - [x] Owned write scope: `infra_automation/local_workers.py, coordinator.py, api/routes/infra_automation.py`.
+  - [x] Persist cancellation before signaling the owned worker double; terminate descendants and reject old attempt writes. Enumerate cancel-before-start, cancel-during-work, completion-race and hypothetical accepted/unknown dispatch races using local ports. Runner protocol/process-isolation proof remains 16.12–16.14.
+  - [x] Attach packet-specific acceptance output, touched-file list, migration/contract fixtures and review notes; leave unchecked until verified.
+- [x] **Packet F — capacity/fault qualification owner; after E** (AC1–7)
+  - [x] Owned write scope: `tests/test_infra_automation, config.py, docs/infra-automation/engine.md (new), benchmark fixtures`.
+  - [x] Apply explicit project/workflow run/queue/byte limits and at most two local analysis workers. Exercise disk-full/queue-full/timeout/leader-overlap corpus, 1,000-transition timing and 30-minute reference capacity with 20 synthetic runner slots. Record commands/results/resources; these qualify only owned engine behavior, not real receiver/runner support. Independently review each packet before the next.
+  - [x] Attach packet-specific acceptance output, touched-file list, migration/contract fixtures and review notes; leave unchecked until verified.
 
 ## Dev Notes
 
@@ -91,12 +91,12 @@ Use the locked Python-first stack (SQLAlchemy/Alembic/Pydantic and existing libr
 
 ## Implementation verification requirements
 
-- [ ] Add regression/contract tests with each packet; do not defer them to 16.19. Use temporary SQLite databases, TestClient and local synthetic fixtures; never real secrets/infrastructure state.
-- [ ] If adding `tests/test_infra_automation/`, register it in `scripts/ci-local.sh` and `.github/workflows/ci.yml` services pytest shard, and prove discovery includes it; root unittest discovery alone is insufficient.
-- [ ] Search repository-wide direct instantiations/fixtures whenever changing a constructor/Pydantic/dataclass/API contract; run affected CI shard exactly: `./.venv/bin/python -m pytest tests/test_api tests/test_cli tests/test_infra -v --tb=short` and/or `./.venv/bin/python -m pytest tests/test_services -v --tb=short`, plus explicitly registered automation tests.
-- [ ] Before review run `./.venv/bin/ruff check .`, `./.venv/bin/ruff format --check .`, `./.venv/bin/python -m unittest discover -q`, `bash scripts/ci-local.sh` and `git diff --check`; record actual outputs and resolve failures.
-- [ ] Keep this slice backend/contract scoped. Record **UI validation not applicable** if no rendered surface changes. If React/browser semantics change, use a separate labeled backend-for-UI PR where required, compose production build (`docker compose up -d --build`), wait for health, seed data and run `BASE_URL=http://localhost:8080 npm run test:ui-review` plus necessary a11y/keyboard/screenshots, then `docker compose down`. Root SPA routes only; Vite is not proof.
-- [ ] Update version-matched operator/schema/API docs and story file list with the actual implementation. Layered code/security review must examine this slice's trust boundary; no new dependency without explicit approved decision.
+- [x] Add regression/contract tests with each packet; do not defer them to 16.19. Use temporary SQLite databases, TestClient and local synthetic fixtures; never real secrets/infrastructure state.
+- [x] If adding `tests/test_infra_automation/`, register it in `scripts/ci-local.sh` and `.github/workflows/ci.yml` services pytest shard, and prove discovery includes it; root unittest discovery alone is insufficient.
+- [x] Search repository-wide direct instantiations/fixtures whenever changing a constructor/Pydantic/dataclass/API contract; run affected CI shard exactly: `./.venv/bin/python -m pytest tests/test_api tests/test_cli tests/test_infra -v --tb=short` and/or `./.venv/bin/python -m pytest tests/test_services -v --tb=short`, plus explicitly registered automation tests.
+- [x] Before review run `./.venv/bin/ruff check .`, `./.venv/bin/ruff format --check .`, `./.venv/bin/python -m unittest discover -q`, `bash scripts/ci-local.sh` and `git diff --check`; record actual outputs and resolve failures.
+- [x] Keep this slice backend/contract scoped. Record **UI validation not applicable** if no rendered surface changes. If React/browser semantics change, use a separate labeled backend-for-UI PR where required, compose production build (`docker compose up -d --build`), wait for health, seed data and run `BASE_URL=http://localhost:8080 npm run test:ui-review` plus necessary a11y/keyboard/screenshots, then `docker compose down`. Root SPA routes only; Vite is not proof.
+- [x] Update version-matched operator/schema/API docs and story file list with the actual implementation. Layered code/security review must examine this slice's trust boundary; no new dependency without explicit approved decision.
 
 ## Readiness and advancement
 
@@ -136,13 +136,61 @@ UI validation not applicable unless a rendered surface is changed.
 
 ### File List
 
-PacketA implemented files (later packets will extend): infra_automation/state.py;
-models/tables.py; models/database.py; models/repositories/infra_automation_runs.py;
-migrations/versions/032_add_infra_automation_engine.py; schemas/infra-automation/engine-v1.json;
-services/infra_automation_engine_support.py; engine state/repository/identity tests;
-tests/test_infra/test_infra_automation_engine_migration.py; existing migration-head
-expectations; engine contract/fixture; scoped readiness report; story/sprint.
-The final explicit file list will be reconciled after all packets.
+- `README.md`
+- `_bmad-output/implementation-artifacts/16-5-durable-engine-and-fenced-recovery.md`
+- `_bmad-output/implementation-artifacts/sprint-status.yaml`
+- `_bmad-output/planning-artifacts/implementation-readiness-report-2026-10-19-story-16-5.md`
+- `api/routes/infra_automation.py`
+- `api/schemas.py`
+- `app.py`
+- `config.py`
+- `docs/infra-automation/engine-contract-v1.md`
+- `docs/infra-automation/engine.md`
+- `docs/verification/infra-automation/16-5/benchmark.json.gz`
+- `docs/verification/infra-automation/16-5/capacity.json.gz`
+- `docs/verification/infra-automation/16-5/faults.json.gz`
+- `docs/verification/infra-automation/16-5/local-validation.md`
+- `docs/verification/infra-automation/16-5/qualification.md`
+- `docs/verification/infra-automation/16-5/reference-results.json`
+- `docs/verification/infra-automation/16-5/results.md`
+- `infra_automation/claims.py`
+- `infra_automation/coordinator.py`
+- `infra_automation/local_workers.py`
+- `infra_automation/state.py`
+- `infra_automation/storage.py`
+- `migrations/versions/032_add_infra_automation_engine.py`
+- `models/database.py`
+- `models/repositories/infra_automation_runs.py`
+- `models/tables.py`
+- `schemas/infra-automation/engine-v1.json`
+- `services/infra_automation_engine_service.py`
+- `services/infra_automation_engine_support.py`
+- `services/infra_automation_policy.py`
+- `services/infra_automation_service.py`
+- `tests/fixtures/infra_automation/engine_v1/contract.json`
+- `tests/fixtures/infra_automation/engine_v1/qualification.py`
+- `tests/test_api/test_infra_automation_engine.py`
+- `tests/test_api/test_infra_automation_workflows.py`
+- `tests/test_infra/test_container_contract.py`
+- `tests/test_infra/test_identity_migration.py`
+- `tests/test_infra/test_infra_automation_engine_migration.py`
+- `tests/test_infra/test_infra_automation_workflow_migration.py`
+- `tests/test_infra/test_migrations.py`
+- `tests/test_infra/test_project_membership_migration.py`
+- `tests/test_infra_automation/test_engine_app_lifespan.py`
+- `tests/test_infra_automation/test_engine_cancel_service.py`
+- `tests/test_infra_automation/test_engine_cancellation.py`
+- `tests/test_infra_automation/test_engine_claims.py`
+- `tests/test_infra_automation/test_engine_coordinator.py`
+- `tests/test_infra_automation/test_engine_identity.py`
+- `tests/test_infra_automation/test_engine_limits.py`
+- `tests/test_infra_automation/test_engine_qualification.py`
+- `tests/test_infra_automation/test_engine_recovery.py`
+- `tests/test_infra_automation/test_engine_recovery_claims.py`
+- `tests/test_infra_automation/test_engine_repository.py`
+- `tests/test_infra_automation/test_engine_service.py`
+- `tests/test_infra_automation/test_engine_state.py`
+- `tests/test_infra_automation/test_engine_workers.py`
 
 ### Packet A evidence — 2026-10-19
 
@@ -250,3 +298,61 @@ with E. Cancellation and real process/capacity qualification remain pending.
 
 PacketE:s165_packet_c owns process-group cancellation/control tests; root owns
 human cancellation service, typed HTTP resources, compatibility and app callback.
+
+
+### Packets E/F completion evidence — 2026-10-22
+
+All packets A–F are implemented, independently reviewed and verified. Owners:
+root service/API/app/integration; s165_packet_c runtime cancellation and limits;
+s165_packet_b claims/storage/configuration; s165_qualification fault/capacity harness.
+Independent reviewers s165_packet_a_review, s165_packet_c_review and s165_readiness
+approved their bounded reviews. Core packet commits: A dfd4927; B 44f3808;
+C 727fdeb; D d7a3a08; E 1fb5a19; F 1661a94; harness correction cc27c6f.
+Earlier packet entries above are historical milestones; all pending E/F proofs
+mentioned there are completed by this final evidence.
+
+E commits human cancellation flag, scoped owner/admin authority, audit, replay
+binding and local termination state before signaling. Identical retries are
+idempotent; changed/stale bindings conflict. Signals execute only after the outer
+transaction commits. Rollback/response overflow cannot signal. Worker groups and
+SIGTERM-ignoring descendants terminate within five seconds; unconfirmed cleanup
+retains ownership/slots. Tick recovery catches lost callbacks. Stale evidence
+writes fail; accepted external work remains delivery_unknown, without resend.
+Closed human-only run/detail/steps/log/cancel API routes preserve current scoped
+read authority, CSRF, signed snapshot cursors and fixed bounded error envelopes.
+
+F adds strict trusted ceilings, global backlog/storage caps, physical disk reserve,
+quota-reduction guards and explicit installed-only SQLite WAL/FULL. Real engine
+SQLITE_FULL tests prove transaction/audit rollback and safe retry. No new dependency
+or runtime transport was introduced. Reuse of the existing authorization, audit,
+signed cursor and immutable output contracts avoids a parallel control plane.
+
+Final Linux evidence: 128 actual process-exit cases; 1,000 real ready-step samples
+with p95 0.014543958 seconds; 1,800.102835 real seconds with 10 active runs in all
+6,502 samples, <=2 analysis workers, 20 synthetic online slots, zero engine errors,
+explicit queue backpressure and stale/forged-owner denials. Source hashes remained
+identical. The initial unqualified capacity attempt exposed synthetic human-session
+idleness; legitimate periodic authorized reads fixed the fixture and all phases
+were rerun. Runtime identity policy is unchanged.
+
+Exact commands, hardware/resources, checksums, raw compressed artifacts, scope
+limitations and AC proof are recorded in
+`docs/verification/infra-automation/16-5/results.md` and `reference-results.json`.
+Final verification: root unittest 1,002 tests/5 skips; every-directory ci-local
+passed; exact API/CLI/infra pytest 660 passed/1 skip/2,200 subtests; exact services+
+automation pytest 1,524 passed/3 skips/3,017 subtests; Ruff lint/401-file format and
+diff checks passed; scoped engine/repository mypy clean, full scope has 313 existing
+diagnostics vs314 baseline and no new diagnostics. Bandit high gate passed with
+only unchanged baseline B104 sample-IP comparison finding. Production image build,
+startup and restart passed migration032/integrity/healthyAPI and empty-registry
+zero-engine-identity/lease checks. UI validation not applicable.
+
+Remaining scope: production registry deliberately empty; actual analysis adapter
+is Story16.6 and real runner/receiver/transport/host-power-loss support is outside
+this proof. BMad Help routes the completed development story to `bmad-code-review`
+in a fresh context. Status is review; this is not a release or merge claim.
+
+### Change Log
+
+- 2026-10-19: Scoped readiness and contracts frozen; packets A–E implemented and reviewed.
+- 2026-10-22: Packet F limits, real fault/overhead/capacity evidence and validation completed; story moved to review.
