@@ -3,11 +3,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from contextlib import contextmanager
 import multiprocessing
 import os
-from pathlib import Path
 import signal
-import sys
 import time
 from typing import Callable
 
@@ -20,6 +19,11 @@ from infra_automation import claims
 from infra_automation.storage import configure_engine_sqlite
 from infra_automation.contracts import STEP_CONTRACTS
 from infra_automation.lifecycle import SnapshotDocument
+from infra_automation.worker_failures import (
+    InfrastructureOperationError,
+    failure_outcome,
+)
+from infra_automation.worker_supervision import global_slot_available, supervisor_main
 from infra_automation.state import (
     AttemptHandle,
     EngineBounds,
@@ -116,32 +120,66 @@ class WorkerTerminationError(RuntimeError):
         super().__init__("Owned local worker termination could not be confirmed.")
 
 
-def _worker_main(database_url, handle, registration, value, bounds, channel):
+@contextmanager
+def _infrastructure_operation():
+    """Classify storage only inside explicit wrapper-owned operations."""
+    try:
+        yield
+    except InfrastructureOperationError:
+        raise
+    except Exception as error:
+        raise InfrastructureOperationError(error) from None
+
+
+def _worker_main(
+    database_url,
+    handle,
+    registration,
+    value,
+    bounds,
+    channel,
+    supervision_ready=None,
+    execution_gate=None,
+):
     """Private wrapper owns the capability; trusted handler receives input only."""
     engine = None
     external_started = False
     try:
         if os.name == "posix":
             os.setsid()
+        if supervision_ready is not None:
+            # No database/handler work may escape an unconfirmed supervisor.
+            supervision_ready.send_bytes(b"ready")
+            supervision_ready.close()
+            if not execution_gate.poll(5) or execution_gate.recv_bytes() != b"start":
+                return
+            execution_gate.close()
         channel.send_bytes(b"ready")
-        engine = create_engine(database_url, connect_args={"timeout": 2})
+        with _infrastructure_operation():
+            engine = create_engine(database_url, connect_args={"timeout": 2})
 
-        @event.listens_for(engine, "connect")
-        def configure(connection, _record):
-            connection.execute("PRAGMA foreign_keys=ON")
-            connection.execute("PRAGMA synchronous=FULL")
+            @event.listens_for(engine, "connect")
+            def configure(connection, _record):
+                connection.execute("PRAGMA foreign_keys=ON")
+                connection.execute("PRAGMA synchronous=FULL")
 
-        configure_engine_sqlite(engine)
-        factory = sessionmaker(engine, expire_on_commit=False)
+            configure_engine_sqlite(engine)
+            factory = sessionmaker(engine, expire_on_commit=False)
 
         def write(function, **kwargs):
-            with authorization.authorized_session(factory) as session:
+            with (
+                _infrastructure_operation(),
+                authorization.authorized_session(factory) as session,
+            ):
                 row = repository.get_attempt(session, handle.attempt_id)
                 if row is None:
                     raise ValueError("Attempt unavailable.")
                 return function(session, handle, expected_version=row.version, **kwargs)
 
-        with authorization.authorized_session(factory) as session:
+        with (
+            _infrastructure_operation(),
+            authorization.authorized_session(factory) as session,
+        ):
             run = repository.get_run(session, handle.run_id)
             attempt = repository.get_attempt(session, handle.attempt_id)
             if (
@@ -210,13 +248,19 @@ def _worker_main(database_url, handle, registration, value, bounds, channel):
         elif result.output is not None:
             raise ValueError("Failed work cannot commit an output.")
         channel.send_bytes(result.model_dump_json().encode("utf-8"))
-    except Exception:
+    except Exception as error:
         # Fixed diagnostics: exceptions may contain sensitive handler inputs.
         try:
             channel.send_bytes(
-                b'{"outcome":"external_unknown"}'
-                if external_started
-                else b'{"outcome":"permanent_local_failure"}'
+                WorkerResult(
+                    outcome=failure_outcome(
+                        error,
+                        external_started=external_started,
+                        retry_safe=registration.retry_safe,
+                    )
+                )
+                .model_dump_json()
+                .encode("utf-8")
             )
         except (BrokenPipeError, EOFError, OSError):
             pass
@@ -231,6 +275,7 @@ class _OwnedProcess:
     process: object
     channel: object
     handle: AttemptHandle = field(repr=False)
+    liveness: object | None = field(default=None, repr=False)
     ready: bool = False
     result: WorkerResult | None = None
     crashed: bool = False
@@ -269,7 +314,11 @@ class SpawnProcessWorkers:
 
     @property
     def can_submit(self):
-        return not self._closed and len(self._owned) < self.max_workers
+        return (
+            not self._closed
+            and len(self._owned) < self.max_workers
+            and global_slot_available(self.database_url, self.max_workers)
+        )
 
     @property
     def handles(self):
@@ -287,18 +336,43 @@ class SpawnProcessWorkers:
         if not self.can_submit or handle.attempt_id in self._owned:
             raise ValueError("Local worker capacity unavailable.")
         parent, child = self._context.Pipe(duplex=False)
+        liveness_rx, liveness_tx = self._context.Pipe(duplex=False)
+        worker_args = (
+            self.database_url,
+            handle,
+            registration,
+            value,
+            self.bounds,
+            child,
+        )
         process = self._context.Process(
-            target=_worker_main,
-            args=(self.database_url, handle, registration, value, self.bounds, child),
+            target=supervisor_main,
+            args=(
+                self.database_url,
+                handle.attempt_id,
+                _worker_main,
+                worker_args,
+                liveness_rx,
+                child,
+                self.max_workers,
+            ),
         )
         try:
             process.start()
         except BaseException:
             parent.close()
             child.close()
+            liveness_rx.close()
+            liveness_tx.close()
             raise
         child.close()
-        self._owned[handle.attempt_id] = _OwnedProcess(process, parent, handle)
+        liveness_rx.close()
+        self._owned[handle.attempt_id] = _OwnedProcess(
+            process,
+            parent,
+            handle,
+            liveness=liveness_tx,
+        )
 
     def poll(self):
         completed = []
@@ -330,17 +404,18 @@ class SpawnProcessWorkers:
         return tuple(completed)
 
     def _dispose(self, item):
+        # EOF asks the independent supervisor to confirm the whole group is dead.
         # Two owned groups share at most four seconds of cancellation budget.
         process, deadline = item.process, time.monotonic() + 2
         try:
-            self._refresh_group(item)
             if process.is_alive():
                 self._signal(item, signal.SIGTERM)
             process.join(timeout=0.1)
             while True:
-                self._refresh_group(item)
                 if not process.is_alive() and not self._group_alive(item):
                     item.channel.close()
+                    if item.liveness is not None:
+                        item.liveness.close()
                     process.close()
                     return
                 self._signal(item, signal.SIGKILL)
@@ -352,56 +427,16 @@ class SpawnProcessWorkers:
             raise WorkerTerminationError() from None
 
     @staticmethod
-    def _refresh_group(item):
-        if item.ready:
-            return
-        try:
-            if os.name == "posix" and os.getpgid(item.process.pid) == item.process.pid:
-                item.ready = True
-        except ProcessLookupError:
-            pass
-        if not item.ready:
-            try:
-                if item.channel.poll() and item.channel.recv_bytes(2048) == b"ready":
-                    item.ready = True
-            except (OSError, EOFError):
-                pass
-
-    @staticmethod
     def _group_alive(item):
-        if os.name != "posix" or not item.ready:
-            return item.process.is_alive()
-        try:
-            os.killpg(item.process.pid, 0)
-        except ProcessLookupError:
-            return False
-        if sys.platform != "linux":
-            return True
-        # Unreaped Linux zombies have exited and cannot execute or hold a slot.
-        # Other POSIX hosts confirm disappearance of the whole process group.
-        for entry in Path("/proc").iterdir():
-            if not entry.name.isdigit():
-                continue
-            try:
-                fields = (entry / "stat").read_text().rsplit(")", 1)[1].split()
-            except FileNotFoundError:
-                continue
-            if int(fields[2]) == item.process.pid and fields[0] != "Z":
-                return True
-        return False
+        # Only the supervisor can confirm and release its authenticated group.
+        # An abnormal supervisor exit leaves a dirty global slot, never free work.
+        return item.process.is_alive() or item.process.exitcode != 0
 
     @staticmethod
-    def _signal(item, signum):
-        try:
-            owns_group = os.name == "posix" and (
-                item.ready or os.getpgid(item.process.pid) == item.process.pid
-            )
-            if owns_group:
-                os.killpg(item.process.pid, signum)
-            elif item.process.is_alive():
-                os.kill(item.process.pid, signum)
-        except ProcessLookupError:
-            pass
+    def _signal(item, _signum):
+        if item.liveness is None:
+            raise WorkerTerminationError()
+        item.liveness.close()
 
     def cancel(self, attempt_id):
         item = self._owned.get(attempt_id)

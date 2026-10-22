@@ -243,3 +243,27 @@ controlled process/container restart only; it does not establish host-power-loss
 support. Project policy changes cannot reduce active or queued limits below the
 actual corresponding project run counts; denial changes no settings, epochs or
 audit history.
+
+### Review recovery guarantees
+
+The two analysis slots are global to the canonical SQLite path, including during
+coordinator process overlap. Independent supervisors own gated worker groups and
+watch creator liveness through private pipes. Coordinator process death triggers
+bounded group cleanup; terminal run/attempt state also triggers owned-process
+cleanup rather than assuming a persisted cancellation proves process exit.
+Only after confirming the entire group stopped may a slot be released.
+
+Stable local file locks and dirty runtime reservation metadata beside SQLite are
+execution resource accounting, not an added ORM family or an authorization token.
+Successors count dirty/unreadable slots as occupied and never signal uncertain
+process identities. Unexpected supervisor failure requires trusted operator
+recovery of dirty capacity; automatic recovery from that additional failure is
+not qualified. The production handler registry remains empty and unsupported
+platforms do not activate workers.
+
+Candidate sweeps advance through at most100 rows per tick with a fixed sequence
+ceiling per sweep and project/workflow interleaving. Later arrivals cannot extend
+an ongoing sweep indefinitely. Temporary coded SQLite storage/capacity failures
+inside wrapper-owned setup/read/write operations preserve declared-safe bounded
+retry behavior; handler and authority failures cannot impersonate those internal
+operations. Typed committed output adoption remains idempotent.

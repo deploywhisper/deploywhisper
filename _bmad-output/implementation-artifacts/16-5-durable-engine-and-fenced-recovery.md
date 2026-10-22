@@ -150,6 +150,12 @@ UI validation not applicable unless a rendered surface is changed.
 
 ### File List
 
+- `tests/test_infra_automation/test_engine_worker_failures.py`
+- `tests/test_infra_automation/test_engine_supervision.py`
+- `tests/test_infra_automation/test_engine_review_scheduler.py`
+- `tests/test_infra_automation/test_engine_parent_recovery.py`
+- `infra_automation/worker_failures.py`
+- `infra_automation/worker_supervision.py`
 - `README.md`
 - `_bmad-output/implementation-artifacts/16-5-durable-engine-and-fenced-recovery.md`
 - `_bmad-output/implementation-artifacts/sprint-status.yaml`
@@ -382,3 +388,27 @@ no production fixes applied by the review. Focused regression passed 67 tests an
 cases remain open. Story/sprint returned to in-progress. Remote push was not
 performed because review follow-up remains open. PR159 and the original checkout
 were untouched. Next: bmad-dev-story for follow-ups, then bmad-code-review.
+
+### Review follow-up implementation plan
+
+Resume CR16.5-01–05 on the existing feature branch. Owners: root worker-port
+integration, actual parent-death/takeover regression, documentation and qualification;
+s165_fix_arch supervision foundation; s165_fix_coord terminal cleanup and fair
+candidate sweeps; s165_fix_retry explicit infrastructure error classification;
+s165_fix_review independent verification. No new dependencies or ORM families.
+
+Use a gated execution process with an independent supervisor, creator-liveness
+pipe, stable global file slots and dirty-slot fail-closed accounting. Keep the
+leader unreaped until the whole group stops. Clean terminal siblings regardless
+of the run's cancellation flag. Use bounded candidate pages with a frozen sweep
+ceiling and project/workflow interleaving. Classify transient storage only inside
+wrapper-owned setup/read/write boundaries; never infer retry authority from a
+handler exception. Correct public lease metadata guidance.
+
+Lock each review defect with a failing regression before applying its fix, then
+run process-tree cancellation, actual coordinator crash and real lease takeover,
+slot reuse/dirty-state/configuration reduction, >100-row deadline/fairness, and
+transient retry/adoption/exhaustion proofs. Independently review the repaired
+source, freeze it, and rerun full CI plus real Linux fault/1,000-transition/
+1,800-second capacity qualification. Keep review findings unchecked until all
+required evidence completes. UI validation not applicable.

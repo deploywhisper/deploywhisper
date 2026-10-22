@@ -4,8 +4,10 @@ from __future__ import annotations
 
 from pathlib import Path
 import shutil
+import sqlite3
 
 from sqlalchemy import event
+from sqlalchemy.exc import OperationalError
 
 import config
 from infra_automation.lifecycle import LifecycleError
@@ -91,7 +93,8 @@ def configure_engine_sqlite(engine):
             finally:
                 cursor.close()
         event.listen(engine, "checkout", _verify_checkout)
-    except LifecycleError:
+    except (LifecycleError, OperationalError, sqlite3.OperationalError):
+        # Preserve coded SQLite storage failures for the trusted worker wrapper.
         raise
     except Exception:
         raise LifecycleError(503) from None

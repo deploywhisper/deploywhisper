@@ -41,8 +41,9 @@ Mutations require the existing trusted origin and CSRF protections.
 List routes accept `limit` (default 25, maximum 100) and an opaque signed
 snapshot cursor. Every page rechecks current authority. Attempts and logs are
 ordered newest first; entries added after the first page do not enter its
-snapshot. Worker nonces, hashes, leases and private ownership handles never
-appear in public responses.
+snapshot. Step responses expose lease expiry, fence and generation as read-only
+metadata. Worker nonces, authentication hashes and private ownership handles
+never appear in public responses; public comparison fields grant no authority.
 
 Admission keys bind the original typed body and its authoritative resolution.
 An identical retry returns the existing run without recapturing policy, inputs
@@ -107,3 +108,44 @@ closed with 503. These are server settings and are never accepted from a human
 run request. Restart an installed coordinator to capture changed server bounds.
 The default global backlog is 1,000 queued runs and disk reserve is 64 MiB.
 Project policy changes cannot reduce active/backlog quotas below retained usage.
+
+## Local worker supervision and recovery
+
+Each analysis process has a small independent supervisor. The supervisor opens
+an execution gate only after reserving a global slot and confirming the worker's
+own process group. Coordinator death closes a private liveness pipe; the
+supervisor stops that worker and its descendants with bounded TERM/KILL cleanup.
+It retains the worker leader until the group is confirmed stopped, preventing a
+reused PID from becoming a signal target. The two-analysis-worker ceiling applies
+across overlapping coordinator processes; supervisors perform no analysis. Their
+resource overhead is included in qualification measurements.
+
+Global slot files live beside the canonical SQLite file in
+`.<database-name>.engine-worker-slots/`. These are local execution reservations,
+not credentials or new domain records. They contain only runtime ownership
+metadata. Stable file locks serialize admission across processes, and both physical
+slots remain counted when a server lowers its worker bound to one. Never unlink,
+replace, or edit these lock files while any engine supervisor or worker may live.
+Doing so can split the locking boundary and invalidate the global limit.
+
+An abnormal supervisor exit or unreadable/partial metadata leaves its slot dirty
+and unavailable. Successors fail closed; they never signal an uncertain numeric
+PID or silently discard a dirty reservation. Recovery of dirty capacity requires
+a trusted operator to stop the affected engine processes and confirm all recorded
+execution is gone before resetting local reservations. Automatic recovery from
+simultaneous supervisor failure is not claimed by this slice. Empty registries
+remain inert on unsupported platforms; qualified worker supervision is POSIX,
+with actual Linux ARM64 process-tree evidence.
+
+A run becoming terminal also stops its still-owned sibling processes, even when
+its stop reason is failure, rejection or gate stop rather than cancellation.
+Worker capacity remains reserved until cleanup is confirmed. Candidate scanning
+advances through bounded pages with a fixed sweep ceiling, so new arrivals and
+quota-blocked older rows cannot hide later eligible work or old deadlines.
+
+Declared-safe local storage failures at wrapper-owned setup/read/write boundaries
+retry within the same three-attempt and immutable deadline limits. Capacity 429
+and coded SQLite BUSY/LOCKED/FULL are retryable; handler failures, invalid bindings,
+authority denial and unknown storage errors are not automatically retried.
+Possible external acceptance remains reconciliation-only. Already committed typed
+output is adopted by a successor without invoking its handler again.

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from collections import deque
 from datetime import datetime, timedelta, timezone
 import logging
 import threading
@@ -64,6 +65,9 @@ class Coordinator:
         self._task = None
         self._stopping = False
         self._pending_completions = {}
+        self._candidate_sequence = 0
+        self._candidate_ceiling = None
+        self._candidate_rotation = 0
 
     @property
     def _can_submit(self):
@@ -264,18 +268,38 @@ class Coordinator:
     def _ownership(self):
         with authorization.authorized_session(self.factory) as session:
             now = self.clock()
+            eligible = InfraAutomationRun.state.in_(
+                ("queued", "running", "handing_off", "external_running")
+            )
+            if self._candidate_ceiling is None:
+                self._candidate_ceiling = (
+                    session.scalar(
+                        select(func.max(InfraAutomationRun.sequence)).where(eligible)
+                    )
+                    or 0
+                )
             candidates = list(
                 session.scalars(
                     select(InfraAutomationRun)
                     .where(
-                        InfraAutomationRun.state.in_(
-                            ("queued", "running", "handing_off", "external_running")
-                        )
+                        eligible,
+                        InfraAutomationRun.sequence > self._candidate_sequence,
+                        InfraAutomationRun.sequence <= self._candidate_ceiling,
                     )
                     .order_by(InfraAutomationRun.sequence)
                     .limit(100)
                 )
             )
+            # Freeze each sweep's tail so sustained arrivals cannot extend it
+            # indefinitely and delay revisiting older blocked runs/deadlines.
+            if (
+                len(candidates) < 100
+                or candidates[-1].sequence >= self._candidate_ceiling
+            ):
+                self._candidate_sequence = 0
+                self._candidate_ceiling = None
+            else:
+                self._candidate_sequence = candidates[-1].sequence
             owner = self._owner
             scope = self._scope
             if owner is None:
@@ -300,7 +324,52 @@ class Coordinator:
             or (now - self._heartbeat_at).total_seconds() >= 10
             else self._heartbeat_at
         )
+        # Interleave projects, then workflows within each project, so a hot
+        # workflow cannot consume every available slot in a mixed page.
+        projects = {}
+        for candidate in candidates:
+            projects.setdefault(candidate.project_id, {}).setdefault(
+                candidate.workflow_id, deque()
+            ).append(candidate)
+        project_queues = deque()
+        for workflows in projects.values():
+            lanes = deque(workflows.values())
+            lanes.rotate(-self._candidate_rotation)
+            project_queues.append(lanes)
+        project_queues.rotate(-self._candidate_rotation)
+        self._candidate_rotation += 1
+        candidates = []
+        while project_queues:
+            workflows = project_queues.popleft()
+            lane = workflows.popleft()
+            candidates.append(lane.popleft())
+            if lane:
+                workflows.append(lane)
+            if workflows:
+                project_queues.append(workflows)
         return candidates, now
+
+    def _stop_invalid_workers(self, stopping_attempts):
+        """Terminal database state is not proof an owned process has exited."""
+        for handle in self.workers.handles:
+            if handle.attempt_id in stopping_attempts:
+                continue
+            try:
+                with authorization.authorized_session(self.factory) as session:
+                    run = repository.get_run(session, handle.run_id)
+                    attempt = repository.get_attempt(session, handle.attempt_id)
+                    invalid = (
+                        run is None
+                        or run.state
+                        not in ("running", "handing_off", "external_running")
+                        or attempt is None
+                        or attempt.state not in ("claimed", "running")
+                    )
+                if invalid:
+                    # The worker port keeps its slot until termination succeeds.
+                    self.workers.cancel(handle.attempt_id)
+            except Exception:
+                logger.warning("Local engine terminal worker stop rejected.")
 
     def tick(self):
         if not self.registry or self._stopping:
@@ -337,6 +406,7 @@ class Coordinator:
                     for attempt_id, completion in self._pending_completions.items()
                 }
             )
+            stopping_attempts = set()
             for handle in heartbeat_handles.values():
                 try:
                     stop_external = False
@@ -344,7 +414,15 @@ class Coordinator:
                         heartbeat_now = self.clock()
                         row = repository.get_attempt(session, handle.attempt_id)
                         run = repository.get_run(session, handle.run_id)
-                        if run is not None and run.external_possible:
+                        if (
+                            run is None
+                            or run.state
+                            not in ("running", "handing_off", "external_running")
+                            or row is None
+                            or row.state not in ("claimed", "running")
+                        ):
+                            stop_external = True
+                        elif run.external_possible:
                             stop_external = run.state == "delivery_unknown" or (
                                 row is not None
                                 and heartbeat_now >= repository.utc(row.deadline_at)
@@ -369,14 +447,22 @@ class Coordinator:
                                 now=heartbeat_now,
                             )
                     if stop_external:
+                        stopping_attempts.add(handle.attempt_id)
                         self.workers.cancel(handle.attempt_id)
+                except WorkerTerminationError:
+                    logger.warning("Local engine worker stop unconfirmed.")
                 except Exception:
                     if handle.attempt_id in self._pending_completions:
                         logger.warning(
                             "Local engine pending completion heartbeat rejected."
                         )
                         continue
-                    self.workers.cancel(handle.attempt_id)
+                    try:
+                        stopping_attempts.add(handle.attempt_id)
+                        self.workers.cancel(handle.attempt_id)
+                    except WorkerTerminationError:
+                        logger.warning("Local engine worker stop unconfirmed.")
+                        continue
                     try:
                         self._recover_abandoned(handle, now)
                     except Exception:
@@ -422,6 +508,10 @@ class Coordinator:
                         self._stop(candidate.id, "failed", now)
                     except Exception:
                         logger.warning("Local engine candidate safety stop rejected.")
+
+            # Scheduling can terminalize a run after its heartbeat (for example
+            # a failed non-retryable step). Stop its live siblings in this tick.
+            self._stop_invalid_workers(stopping_attempts)
 
     def _schedule(self, run_id, now):
         submission = None
