@@ -1,6 +1,6 @@
 # Story 16.5: Durable Engine And Fenced Recovery
 
-Status: review
+Status: in-progress
 Preparation: refined
 Release: v1.5.0 — P0 highest-priority feature
 Dependencies: 16.4; public RFC and 16.0 qualification required
@@ -67,6 +67,20 @@ Execute packets in listed dependency order; assign one named owner per packet an
   - [x] Owned write scope: `tests/test_infra_automation, config.py, docs/infra-automation/engine.md (new), benchmark fixtures`.
   - [x] Apply explicit project/workflow run/queue/byte limits and at most two local analysis workers. Exercise disk-full/queue-full/timeout/leader-overlap corpus, 1,000-transition timing and 30-minute reference capacity with 20 synthetic runner slots. Record commands/results/resources; these qualify only owned engine behavior, not real receiver/runner support. Independently review each packet before the next.
   - [x] Attach packet-specific acceptance output, touched-file list, migration/contract fixtures and review notes; leave unchecked until verified.
+
+### Review Findings
+
+BMad code review of `3af659e..7bd80da` (2026-10-22): **request changes**.
+Two high, two medium and one low finding; all are unambiguous patch follow-ups.
+Full evidence and reproduction details: [16-5-code-review-2026-10-22.md](16-5-code-review-2026-10-22.md).
+The previously recorded qualification remains evidence for its declared workload;
+these additional reachable cases are not covered by that passing workload.
+
+- [ ] [Review][Patch][High][CR16.5-01] Prevent orphaned worker overlap after coordinator crash — real parent crash and lease takeover produced four simultaneously live handlers despite the two-worker bound; qualify cleanup/accounting and cancellation after restart [infra_automation/coordinator.py:511; infra_automation/local_workers.py:267].
+- [ ] [Review][Patch][High][CR16.5-02] Stop terminal sibling processes — a permanent sibling failure cancels the persisted attempt but never signals its owned worker, even after both deadlines [infra_automation/coordinator.py:364].
+- [ ] [Review][Patch][Medium][CR16.5-03] Advance bounded scheduler selection — repeated oldest-100 selection starves a later eligible workflow; add fair/advancing selection and a >100-row regression [infra_automation/coordinator.py:275].
+- [ ] [Review][Patch][Medium][CR16.5-04] Preserve retryable local persistence errors — output-storage 429 becomes permanent failure despite retry_safe=True; classify transient infrastructure/backpressure and verify finite retry/adoption [infra_automation/local_workers.py:213].
+- [ ] [Review][Patch][Low][CR16.5-05] Correct lease visibility guidance — public StepView exposes lease_until, contradicting the operator guide; distinguish public metadata from private capabilities [docs/infra-automation/engine.md:44; services/infra_automation_engine_service.py:297].
 
 ## Dev Notes
 
@@ -139,6 +153,7 @@ UI validation not applicable unless a rendered surface is changed.
 - `README.md`
 - `_bmad-output/implementation-artifacts/16-5-durable-engine-and-fenced-recovery.md`
 - `_bmad-output/implementation-artifacts/sprint-status.yaml`
+- `_bmad-output/implementation-artifacts/16-5-code-review-2026-10-22.md`
 - `_bmad-output/planning-artifacts/implementation-readiness-report-2026-10-19-story-16-5.md`
 - `api/routes/infra_automation.py`
 - `api/schemas.py`
@@ -356,3 +371,14 @@ in a fresh context. Status is review; this is not a release or merge claim.
 
 - 2026-10-19: Scoped readiness and contracts frozen; packets A–E implemented and reviewed.
 - 2026-10-22: Packet F limits, real fault/overhead/capacity evidence and validation completed; story moved to review.
+- 2026-10-22: BMad code review reproduced four functional gaps and one documentation discrepancy; five follow-ups recorded and story returned to in-progress.
+
+### Code review outcome — 2026-10-22
+
+Three independent BMad layers completed and root verified candidates with synthetic
+reproductions. Review outcome: request changes; five follow-ups recorded above,
+no production fixes applied by the review. Focused regression passed 67 tests and
+156 subtests, but the new crash/process-lifetime, fairness and transient failure
+cases remain open. Story/sprint returned to in-progress. Remote push was not
+performed because review follow-up remains open. PR159 and the original checkout
+were untouched. Next: bmad-dev-story for follow-ups, then bmad-code-review.
