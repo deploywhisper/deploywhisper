@@ -195,6 +195,15 @@ class Fixture(EngineClaimsTests):
 
     def current_time(self):
         self.now = utc_now()
+        refreshed = getattr(self, "_identity_refreshed_at", None)
+        if refreshed is None or (self.now - refreshed).total_seconds() >= 10:
+            # Real session activity through the identity port keeps this synthetic
+            # human present. Never edit persisted expiry/last-seen or bypass idle
+            # rejection; a harness stalled past idle must fail authentication.
+            with self.credentials():
+                service.get_run(self.run.id)
+            self._identity_refreshed_at = self.now
+            self.identity_refresh_count = getattr(self, "identity_refresh_count", 0) + 1
         captured = datetime.strptime(
             self.snapshot.snapshot.captured_at, "%Y-%m-%dT%H:%M:%SZ"
         ).replace(tzinfo=timezone.utc)
@@ -968,6 +977,7 @@ def run_workload(
             )
         initial = environment(fixture.engine)
         next_integrity = time.monotonic()
+        next_report = time.monotonic() + 10
         next_progress = time.monotonic() + (40 if capacity and not smoke else 15)
         last_completed = 0
         max_active = max_workers = max_analysis = max_slots = 0
@@ -1108,6 +1118,18 @@ def run_workload(
                 "resources": resource_sample(),
             }
             samples.append(sample)
+            if capacity and now >= next_report:
+                progress = {
+                    "event": "progress",
+                    "mode": "capacity",
+                    "utc": utc_now().isoformat(),
+                    "sample_count": len(samples),
+                    "identity_refresh_count": fixture.identity_refresh_count,
+                    **sample,
+                }
+                write_json(Path(output) / "capacity-progress.json", progress)
+                print(json.dumps(progress, sort_keys=True), flush=True)
+                next_report = now + 10
             if horizon_started is not None and active != 10:
                 # A completion is replenished on the next iteration, and is recorded.
                 all_capacity = False
@@ -1150,6 +1172,7 @@ def run_workload(
             "elapsed_seconds": elapsed,
             "environment": initial,
             "final_resources": resource_sample(),
+            "identity_refresh_count": fixture.identity_refresh_count,
             "source_hashes_start": hashes,
             "source_hashes_end": end_hashes,
             "source_hashes_identical": hashes == end_hashes,

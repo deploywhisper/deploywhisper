@@ -5,6 +5,8 @@ from __future__ import annotations
 import json
 import tempfile
 import unittest
+from datetime import timedelta
+from unittest.mock import patch
 
 from sqlalchemy import text
 
@@ -70,6 +72,50 @@ class EngineQualificationTests(unittest.TestCase):
                 json.loads((harness.Path(output) / "faults.json").read_text())["count"],
                 2,
             )
+
+    def test_idle_policy_rejects_unattended_fixture_but_active_refresh_allows_replenishment(
+        self,
+    ):
+        from services.identity_service import IDLE_SECONDS
+        from services.project_service import TrustedAuthorizationError
+
+        fixture = harness.make_fixture()
+        try:
+            late = fixture.now + timedelta(seconds=IDLE_SECONDS + 1)
+            with patch.object(harness, "utc_now", return_value=late):
+                with self.assertRaises(TrustedAuthorizationError):
+                    fixture.current_time()
+        finally:
+            fixture.doCleanups()
+
+        fixture = harness.make_fixture()
+        try:
+            ids = fixture.new_workflow(steps=3)
+            handlers = harness.registry()
+            first = fixture.request_ready(ids, 1, handlers)
+            started = fixture.now
+            for elapsed in range(60, IDLE_SECONDS + 61, 60):
+                with patch.object(
+                    harness,
+                    "utc_now",
+                    return_value=started + timedelta(seconds=elapsed),
+                ):
+                    fixture.current_time()
+            with patch.object(
+                harness,
+                "utc_now",
+                return_value=started + timedelta(seconds=IDLE_SECONDS + 61),
+            ):
+                second = fixture.request_ready(ids, 2, handlers)
+            self.assertNotEqual(first["id"], second["id"])
+            self.assertGreaterEqual(fixture.identity_refresh_count, 7)
+            self.assertGreater((fixture.now - started).total_seconds(), IDLE_SECONDS)
+            late = fixture.now + timedelta(seconds=IDLE_SECONDS + 1)
+            with patch.object(harness, "utc_now", return_value=late):
+                with self.assertRaises(TrustedAuthorizationError):
+                    fixture.current_time()
+        finally:
+            fixture.doCleanups()
 
     def test_freeze_hashes_include_contract_and_fixture_helpers(self):
         hashes = harness.source_hashes()

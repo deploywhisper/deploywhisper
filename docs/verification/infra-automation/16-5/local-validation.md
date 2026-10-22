@@ -36,3 +36,29 @@ Temporary artifacts are `faults.json` in `/private/tmp/s165-f-final`, and
 The reference container command, complete workload results and permanent JSON
 artifacts must be recorded separately before accepting AC7. No real runner,
 receiver or host power-loss qualification is claimed. UI validation not applicable.
+
+## Idle-session correction — 2026-10-20
+
+The first reference Linux capacity attempt failed around six minutes when the
+synthetic human's session exceeded its unchanged 300-second idle limit before
+replenishment. That attempt is unqualified. The harness now uses the real
+`service.get_run` port under human credentials every ten seconds, records the
+activity count, and updates bounded progress JSON/stdout every ten seconds.
+
+The updated six-test suite passed in 3.83 seconds. Its additional regression
+checks unattended idle rejection, continued real read activity past the original
+idle boundary with successful later admission, and rejection after activity
+subsequently stops. Runtime policy and persisted session fields are not changed
+by the harness.
+
+```sh
+python -m pytest tests/test_infra_automation/test_engine_qualification.py -q
+python -m tests.fixtures.infra_automation.engine_v1.qualification --mode capacity --smoke --capacity-seconds 25 --output /private/tmp/s165-f-idle-smoke
+```
+
+The real 25.155728-second smoke passed with 90 samples, ten active runs in every
+post-warmup sample, two real analysis workers, eight completed attempts, three
+successful human read heartbeats and identical source hashes. Progress records
+were emitted at approximately 9.96 and 20.05 elapsed seconds. Ruff lint/format and
+`git diff --check` passed. This smoke is explicitly unqualified; all reference
+measurements must use the newly frozen harness.

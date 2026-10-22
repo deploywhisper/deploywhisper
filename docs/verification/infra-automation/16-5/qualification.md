@@ -65,3 +65,23 @@ qualified by these local doubles. Actual results are recorded in the generated
 JSON evidence; this document alone makes no acceptance claim.
 
 UI validation not applicable: no rendered surface is changed.
+
+## Synthetic human activity during long measurements
+
+The harness keeps its synthetic human session active through the actual
+`service.get_run` read port under human credentials every ten seconds. This
+touches the session using the existing identity service and preserves the
+300-second idle limit. A late heartbeat still fails; the harness never updates
+identity timestamps directly or relaxes identity policy. The final report records
+`identity_refresh_count`. A bounded `capacity-progress.json` file and stdout
+progress record are refreshed every ten seconds with the latest coarse sample
+and refresh count, so a failed or stalled run remains observable.
+
+The initial Linux capacity attempt failed around six minutes when its first
+replenishment encountered an idle synthetic human session. It does not qualify
+the 1,800-second requirement. The harness regression now proves an unattended
+session fails after its idle boundary, periodic authorized reads permit later
+admission beyond that original boundary, and a subsequent late heartbeat still
+fails. These controlled-clock unit checks are separate from the real-time
+capacity measurement. Full reference fault, benchmark and capacity measurements
+must be rerun against the updated frozen harness.
