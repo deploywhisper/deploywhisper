@@ -6,6 +6,7 @@ import multiprocessing
 import os
 from pathlib import Path
 import signal
+import struct
 import subprocess
 import sys
 import tempfile
@@ -211,3 +212,67 @@ class WorkerSupervisionTests(TestCase):
         ):
             self.assertFalse(global_slot_available(self.url, 2))
         directory.assert_not_called()
+
+    def test_live_creator_without_keepalive_cannot_hold_execution(self):
+        process, life, pid = self.launch()
+        started = time.monotonic()
+        process.join(4.8)
+        self.assertFalse(
+            process.is_alive(), "A stalled creator must not retain live work"
+        )
+        self.assertEqual(process.exitcode, 0)
+        self.assertLess(time.monotonic() - started, 5)
+        self.assertFalse(_group_executing(pid))
+        self.assertTrue(global_slot_available(self.url, 1))
+        self.assertFalse(life.closed)
+
+    def test_valid_private_pulses_extend_only_a_finite_lifetime(self):
+        process, life, pid = self.launch()
+        until = time.monotonic() + 3.5
+        while time.monotonic() < until:
+            life.send_bytes(struct.pack("!d", time.monotonic() + 3))
+            self.assertTrue(process.is_alive())
+            time.sleep(0.1)
+        process.join(4.8)
+        self.assertEqual(process.exitcode, 0)
+        self.assertFalse(_group_executing(pid))
+        self.assertTrue(global_slot_available(self.url, 1))
+
+    def test_expired_private_pulse_cannot_refresh_execution(self):
+        process, life, pid = self.launch()
+        life.send_bytes(struct.pack("!d", time.monotonic() - 1))
+        process.join(2)
+        self.assertEqual(process.exitcode, 0)
+        self.assertFalse(_group_executing(pid))
+
+    def test_batch_shutdown_requests_every_worker_before_waiting_for_exit(self):
+        from types import SimpleNamespace
+        from infra_automation.local_workers import SpawnProcessWorkers, _OwnedProcess
+
+        requested = set()
+
+        class Group:
+            exitcode = 0
+
+            def is_alive(self):
+                return len(requested) != 2
+
+            def join(self, timeout):
+                if len(requested) != 2:
+                    raise AssertionError("Other owned group was never asked to stop")
+
+            def close(self):
+                pass
+
+        workers = SpawnProcessWorkers(self.url)
+        self.addCleanup(workers.close)
+        for key in ("a", "b"):
+            channel = SimpleNamespace(close=lambda: None)
+            writer = SimpleNamespace(close=lambda key=key: requested.add(key))
+            handle = SimpleNamespace(attempt_id=key)
+            workers._owned[key] = _OwnedProcess(
+                Group(), channel, handle, liveness=writer
+            )
+        workers.close()
+        self.assertEqual(requested, {"a", "b"})
+        self.assertEqual(workers.handles, ())

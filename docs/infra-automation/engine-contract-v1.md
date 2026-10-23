@@ -267,3 +267,13 @@ an ongoing sweep indefinitely. Temporary coded SQLite storage/capacity failures
 inside wrapper-owned setup/read/write operations preserve declared-safe bounded
 retry behavior; handler and authority failures cannot impersonate those internal
 operations. Typed committed output adoption remains idempotent.
+
+Creator liveness is finite even while its process remains alive. The coordinator
+validates its private current-owner capability on every pulse inside the reserved
+operation transaction, including the cached-renewal path. Only after that operation
+commits may it send a nonblocking private monotonic expiry, bounded by both three
+seconds and the persisted lease end. A guardian stops on EOF, malformed/stale
+pulses, or lifetime expiry and never revives overdue execution. This covers stalled
+schedulers as well as process death and prevents a successor cancellation from
+leaving stale-owner work running. All matching guardians are signaled before any
+join and share one 4.5-second shutdown confirmation deadline.

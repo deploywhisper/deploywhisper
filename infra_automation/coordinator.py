@@ -7,12 +7,14 @@ from collections import deque
 from datetime import datetime, timedelta, timezone
 import logging
 import threading
+import time
 
 from sqlalchemy import func, select
 
 import config
 from infra_automation import claims
 from infra_automation.storage import ensure_capacity
+from infra_automation.worker_supervision import OWNER_PULSE_SECONDS
 from infra_automation.lifecycle import LifecycleError, SnapshotDocument
 from infra_automation.local_workers import (
     DEFAULT_REGISTRY,
@@ -65,6 +67,7 @@ class Coordinator:
         self._task = None
         self._stopping = False
         self._pending_completions = {}
+        self._pulse_deadline = None
         self._candidate_sequence = 0
         self._candidate_ceiling = None
         self._candidate_rotation = 0
@@ -86,6 +89,16 @@ class Coordinator:
             for attempt_id, completion in self._pending_completions.items()
             if completion.handle.run_id != run_id
         }
+        batch_cancel = getattr(self.workers, "cancel_many", None)
+        if callable(batch_cancel):
+            batch_cancel(
+                tuple(
+                    handle.attempt_id
+                    for handle in self.workers.handles
+                    if handle.run_id == run_id
+                )
+            )
+            return
         failed = False
         for handle in self.workers.handles:
             if handle.run_id == run_id:
@@ -316,8 +329,14 @@ class Coordinator:
                 claims.renew_coordinator(
                     session, owner, project_id=scope[0], workspace_id=scope[1], now=now
                 )
+            validated_at = self.clock()
+            lease_until = claims.validate_coordinator(session, owner, now=validated_at)
+            pulse_deadline = time.monotonic() + min(
+                OWNER_PULSE_SECONDS, (lease_until - validated_at).total_seconds()
+            )
         # Only retain a capability whose acquisition actually committed.
         self._owner, self._scope = owner, scope
+        self._pulse_deadline = pulse_deadline
         self._heartbeat_at = (
             now
             if self._heartbeat_at is None
@@ -387,6 +406,9 @@ class Coordinator:
                 return
             if self._owner is None:
                 return
+            pulse = getattr(self.workers, "heartbeat", None)
+            if callable(pulse):
+                pulse(self._pulse_deadline)
             for completion in self.workers.poll():
                 self._pending_completions[completion.handle.attempt_id] = completion
             for attempt_id, completion in tuple(self._pending_completions.items()):

@@ -15,6 +15,8 @@ try:
 except ImportError:  # Optional engine remains inert on unsupported platforms.
     fcntl = None
 import json
+import math
+import struct
 import multiprocessing
 from multiprocessing.connection import wait
 import os
@@ -25,6 +27,8 @@ import sys
 import time
 
 from sqlalchemy.engine import make_url
+
+OWNER_PULSE_SECONDS = 3.0
 
 
 class _Slot:
@@ -132,14 +136,31 @@ def global_slot_available(database_url, max_slots=2):
         return False
 
 
-def _parent_gone(channel):
-    if not channel.poll():
-        return False
-    try:
-        channel.recv_bytes(16)
-    except (EOFError, OSError):
-        return True
-    return False
+class _OwnerLifetime:
+    def __init__(self, channel):
+        self.channel = channel
+        self.deadline = time.monotonic() + OWNER_PULSE_SECONDS
+
+    def stopped(self):
+        now = time.monotonic()
+        # A late pulse cannot resurrect an already expired execution lifetime.
+        if now >= self.deadline:
+            return True
+        try:
+            while self.channel.poll():
+                payload = self.channel.recv_bytes(8)
+                if len(payload) != 8:
+                    return True
+                proposed = struct.unpack("!d", payload)[0]
+                if (
+                    not math.isfinite(proposed)
+                    or proposed > now + OWNER_PULSE_SECONDS + 0.1
+                ):
+                    return True
+                self.deadline = proposed
+        except (EOFError, OSError, ValueError):
+            return True
+        return time.monotonic() >= self.deadline
 
 
 def _start_time(pid):
@@ -240,9 +261,10 @@ def supervisor_main(
     It must setsid(), send b'ready', then await b'start' before doing any work.
     result_channel is also in worker_args and carries worker results to the parent.
     """
+    lifetime = _OwnerLifetime(parent_liveness_rx)
     slot = None
     reservation_deadline = time.monotonic() + 0.25
-    while not _parent_gone(parent_liveness_rx):
+    while not lifetime.stopped():
         slot = _reserve(database_url, max_slots)
         if slot is not None or time.monotonic() >= reservation_deadline:
             break
@@ -262,7 +284,7 @@ def supervisor_main(
     grouped = False
     try:
         slot.write({"state": "reserved", "attempt_id": attempt_id})
-        if _parent_gone(parent_liveness_rx):
+        if lifetime.stopped():
             clean = True
             return
         context = multiprocessing.get_context("spawn")
@@ -289,7 +311,7 @@ def supervisor_main(
             events = wait(
                 [ready_rx, parent_liveness_rx, process.sentinel], timeout=0.05
             )
-            if _parent_gone(parent_liveness_rx) or process.sentinel in events:
+            if lifetime.stopped() or process.sentinel in events:
                 break
             if ready_rx in events:
                 try:
@@ -298,7 +320,7 @@ def supervisor_main(
                     break
                 if not grouped or os.getpgid(process.pid) != process.pid:
                     raise RuntimeError("Worker process-group handshake invalid.")
-                if not _parent_gone(parent_liveness_rx):
+                if not lifetime.stopped():
                     gate_tx.send_bytes(b"start")
                 break
             if time.monotonic() >= startup_deadline:
@@ -307,7 +329,7 @@ def supervisor_main(
         if grouped:
             while True:
                 events = wait([parent_liveness_rx, process.sentinel], timeout=0.05)
-                if _parent_gone(parent_liveness_rx) or process.sentinel in events:
+                if lifetime.stopped() or process.sentinel in events:
                     break
         _stop_worker(process, grouped)
         process.close()

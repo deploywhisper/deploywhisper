@@ -322,6 +322,13 @@ def _run(session, run_id, now, *, live=True, operation="consume", active=True):
     return row, document
 
 
+def validate_coordinator(session, coordinator, *, now=None):
+    """Return only the current private owner's finite lease for local liveness."""
+    timestamp = _now(now)
+    row = _coordinator(session, coordinator, timestamp)
+    return repo.utc(row.lease_until)
+
+
 def start_run(session, coordinator, *, run_id, expected_version, now=None, bounds=None):
     timestamp = _now(now)
     _counter(expected_version)

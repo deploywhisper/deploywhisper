@@ -4,9 +4,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from contextlib import contextmanager
+import math
 import multiprocessing
 import os
 import signal
+import struct
 import time
 from typing import Callable
 
@@ -23,7 +25,11 @@ from infra_automation.worker_failures import (
     InfrastructureOperationError,
     failure_outcome,
 )
-from infra_automation.worker_supervision import global_slot_available, supervisor_main
+from infra_automation.worker_supervision import (
+    OWNER_PULSE_SECONDS,
+    global_slot_available,
+    supervisor_main,
+)
 from infra_automation.state import (
     AttemptHandle,
     EngineBounds,
@@ -337,6 +343,7 @@ class SpawnProcessWorkers:
             raise ValueError("Local worker capacity unavailable.")
         parent, child = self._context.Pipe(duplex=False)
         liveness_rx, liveness_tx = self._context.Pipe(duplex=False)
+        os.set_blocking(liveness_tx.fileno(), False)
         worker_args = (
             self.database_url,
             handle,
@@ -374,6 +381,23 @@ class SpawnProcessWorkers:
             liveness=liveness_tx,
         )
 
+    def heartbeat(self, expires_at):
+        """Private finite pulse, supplied only after committed owner validation."""
+        now = time.monotonic()
+        if (
+            type(expires_at) not in (int, float)
+            or not math.isfinite(expires_at)
+            or expires_at <= now
+        ):
+            return
+        pulse = struct.pack("!d", min(expires_at, now + OWNER_PULSE_SECONDS))
+        for item in self._owned.values():
+            try:
+                item.liveness.send_bytes(pulse)
+            except (BrokenPipeError, EOFError, OSError, ValueError):
+                # Never block authority processing on an unavailable guardian.
+                pass
+
     def poll(self):
         completed = []
         for attempt_id, item in tuple(self._owned.items()):
@@ -403,10 +427,11 @@ class SpawnProcessWorkers:
             del self._owned[attempt_id]
         return tuple(completed)
 
-    def _dispose(self, item):
+    def _dispose(self, item, *, deadline=None):
         # EOF asks the independent supervisor to confirm the whole group is dead.
-        # Two owned groups share at most four seconds of cancellation budget.
-        process, deadline = item.process, time.monotonic() + 2
+        # Batch cancellation signals every group first and shares one deadline.
+        process = item.process
+        deadline = time.monotonic() + 4.5 if deadline is None else deadline
         try:
             if process.is_alive():
                 self._signal(item, signal.SIGTERM)
@@ -438,19 +463,33 @@ class SpawnProcessWorkers:
             raise WorkerTerminationError()
         item.liveness.close()
 
+    def cancel_many(self, attempt_ids):
+        deadline = time.monotonic() + 4.5
+        selected = tuple(
+            (key, self._owned[key]) for key in attempt_ids if key in self._owned
+        )
+        failed = set()
+        # Signal all supervisors before joining any one of them.
+        for key, item in selected:
+            try:
+                self._signal(item, signal.SIGTERM)
+            except (OSError, ValueError, WorkerTerminationError):
+                failed.add(key)
+        for key, item in selected:
+            if key in failed:
+                continue
+            try:
+                self._dispose(item, deadline=deadline)
+            except WorkerTerminationError:
+                failed.add(key)
+            else:
+                del self._owned[key]
+        if failed:
+            raise WorkerTerminationError()
+
     def cancel(self, attempt_id):
-        item = self._owned.get(attempt_id)
-        if item is not None:
-            self._dispose(item)
-            del self._owned[attempt_id]
+        self.cancel_many((attempt_id,))
 
     def close(self):
         self._closed = True
-        failed = False
-        for attempt_id in tuple(self._owned):
-            try:
-                self.cancel(attempt_id)
-            except WorkerTerminationError:
-                failed = True
-        if failed:
-            raise WorkerTerminationError()
+        self.cancel_many(tuple(self._owned))

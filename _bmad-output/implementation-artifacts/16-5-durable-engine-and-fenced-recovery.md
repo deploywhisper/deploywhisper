@@ -150,6 +150,7 @@ UI validation not applicable unless a rendered surface is changed.
 
 ### File List
 
+- `tests/test_infra_automation/test_engine_owner_liveness.py`
 - `tests/test_infra_automation/test_engine_worker_failures.py`
 - `tests/test_infra_automation/test_engine_supervision.py`
 - `tests/test_infra_automation/test_engine_review_scheduler.py`
@@ -412,3 +413,28 @@ transient retry/adoption/exhaustion proofs. Independently review the repaired
 source, freeze it, and rerun full CI plus real Linux fault/1,000-transition/
 1,800-second capacity qualification. Keep review findings unchecked until all
 required evidence completes. UI validation not applicable.
+
+### Validation hardening — 2026-10-23
+
+Broad validation exposed a cold-start shutdown confirmation budget shorter than
+the five-second owned cancellation contract, and a one-second test attempt that
+could expire before the added supervision bootstrap. Shutdown now signals every
+matching guardian first and shares a4.5-second confirmation deadline. The expiry
+regression waits for the actual persisted five-second test deadline after proving
+its handler ran; it no longer assumes one-second process startup.
+
+Independent review also reproduced a live but stalled creator retaining its open
+pipe across lease takeover and cancellation. Guardians now require finite3-second
+monotonic keepalives bounded by current lease expiry. Every pulse follows explicit
+private-owner validation and committed transaction, including the cached<10s
+renewal path; rollback or stale generation cannot extend execution. Tests prove
+expiry without EOF while the creator stays alive, actual31-second takeover and
+cancellation, stale/cached pulse rejection and group/slot cleanup.
+
+Targeted validation:56 cancellation/recovery/expiry tests plus103subtests;21 real
+parent-death/stall/takeover and supervision tests;4 SQLite pulse-authority tests.
+The earlier parallel run was invalidated by host/VM suspend (82-minute UTC gap)
+and qualified evidence is being rerun with an active temporary sleep assertion.
+A subsequent awake run identified the confirmed cold-start/fixture issues above;
+its incomplete metrics are also excluded. All review items remain unchecked until
+fresh full regression and reference qualification finish on the final source.

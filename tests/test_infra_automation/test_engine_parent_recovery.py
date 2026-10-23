@@ -69,7 +69,7 @@ def parent_recovery_registry():
     )
 
 
-def crash_coordinator(database_url, marker_folder):
+def crash_coordinator(database_url, marker_folder, exit_when_ready=True):
     engine = create_engine(database_url, connect_args={"timeout": 2})
     factory = sessionmaker(engine, expire_on_commit=False)
     workers = SpawnProcessWorkers(database_url)
@@ -82,8 +82,13 @@ def crash_coordinator(database_url, marker_folder):
             len(list(folder.glob("worker.*"))) == 2
             and len(list(folder.glob("descendant.*"))) == 2
         ):
-            (folder / "owner-exiting").write_text(str(time.monotonic()))
-            os._exit(79)
+            marker = "owner-exiting" if exit_when_ready else "owner-stalled"
+            (folder / marker).write_text(str(time.monotonic()))
+            if exit_when_ready:
+                os._exit(79)
+            # Model a live creator whose scheduler is no longer making progress.
+            while True:
+                time.sleep(0.1)
         time.sleep(0.02)
     os._exit(80)
 
@@ -210,6 +215,60 @@ class ParentRecoveryTests(TestCase):
                     ),
                     cancel_port=coordinator.cancel_run,
                     now=datetime.now(timezone.utc),
+                )
+        self.assertLess(time.monotonic() - started, 5)
+        self.assertFalse(any(alive(pid) for pid in self.marker_pids()))
+        self.assertEqual(workers.handles, ())
+
+    @staticmethod
+    def cleanup_owner(process):
+        if process.is_alive():
+            process.terminate()
+            process.join(3)
+        if process.is_alive():
+            process.kill()
+            process.join(2)
+        process.close()
+
+    def test_live_stalled_creator_stops_trees_before_takeover_and_cancel(self):
+        owner = multiprocessing.get_context("spawn").Process(
+            target=crash_coordinator,
+            args=(str(self.fixture.engine.url), str(self.folder), False),
+        )
+        owner.start()
+        self.addCleanup(self.cleanup_owner, owner)
+        marker = self.folder / "owner-stalled"
+        self.wait_for(marker.exists, 15)
+        stalled_at = float(marker.read_text())
+        old = set(self.marker_pids())
+        self.assertEqual(len(old), 4)
+        self.wait_for(
+            lambda: not any(alive(pid) for pid in old),
+            max(0.1, 5 - (time.monotonic() - stalled_at)),
+        )
+        self.assertTrue(
+            owner.is_alive(), "Creator must remain alive with its pipe open"
+        )
+        self.assertLess(time.monotonic() - stalled_at, 5)
+        self.wait_for(lambda: time.monotonic() - stalled_at >= 31, 32)
+        workers = SpawnProcessWorkers(str(self.fixture.engine.url))
+        coordinator = Coordinator(
+            self.fixture.factory, workers, registry=parent_recovery_registry()
+        )
+        self.addCleanup(coordinator.close)
+        coordinator.tick()
+        started = time.monotonic()
+        for run_id in self.runs:
+            with self.fixture.factory() as db:
+                current = repo.get_run(db, run_id)
+            with self.fixture.credentials():
+                service.cancel_run(
+                    run_id,
+                    CancelRunRequest(
+                        expected_version=current.version,
+                        reason="Synthetic stalled-owner cancellation",
+                    ),
+                    cancel_port=coordinator.cancel_run,
                 )
         self.assertLess(time.monotonic() - started, 5)
         self.assertFalse(any(alive(pid) for pid in self.marker_pids()))

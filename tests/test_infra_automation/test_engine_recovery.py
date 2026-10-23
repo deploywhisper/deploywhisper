@@ -105,7 +105,7 @@ class EngineRecoveryTests(coordinator_tests.EngineCoordinatorRuntimeTests):
         prepare = claims.prepare_attempt
 
         def finite_prepare(session, owner, **kwargs):
-            kwargs["attempt_timeout_seconds"] = 1
+            kwargs["attempt_timeout_seconds"] = 5
             return prepare(session, owner, **kwargs)
 
         if expire_attempt:
@@ -149,7 +149,11 @@ class EngineRecoveryTests(coordinator_tests.EngineCoordinatorRuntimeTests):
                     self.assertEqual(len(rows), 1)
                     self.assertEqual(rows[0].state, "running")
             if expire_attempt:
-                time.sleep(1.05)
+                with self.factory() as session:
+                    attempt = repository.list_attempts(session, run_id=run.id)[0]
+                    until = repository.utc(attempt.deadline_at)
+                while datetime.now(timezone.utc) <= until:
+                    time.sleep(0.02)
             coordinator.tick()
         with self.factory() as session:
             self.assertEqual(repository.get_run(session, run.id).state, terminal)

@@ -113,8 +113,10 @@ Project policy changes cannot reduce active/backlog quotas below retained usage.
 
 Each analysis process has a small independent supervisor. The supervisor opens
 an execution gate only after reserving a global slot and confirming the worker's
-own process group. Coordinator death closes a private liveness pipe; the
-supervisor stops that worker and its descendants with bounded TERM/KILL cleanup.
+own process group. Coordinator death closes a private liveness pipe; a stalled scheduler also loses
+its finite three-second keepalive. Each keepalive follows committed validation of
+the current private coordinator capability and cannot outlive its persisted lease.
+The supervisor stops the worker and descendants with bounded TERM/KILL cleanup.
 It retains the worker leader until the group is confirmed stopped, preventing a
 reused PID from becoming a signal target. The two-analysis-worker ceiling applies
 across overlapping coordinator processes; supervisors perform no analysis. Their
@@ -149,3 +151,10 @@ and coded SQLite BUSY/LOCKED/FULL are retryable; handler failures, invalid bindi
 authority denial and unknown storage errors are not automatically retried.
 Possible external acceptance remains reconciliation-only. Already committed typed
 output is adopted by a successor without invoking its handler again.
+
+Shutdown and run cancellation close every matching supervisor pipe before waiting
+for any one group, sharing a 4.5-second confirmation budget. This includes cold
+supervisor startup and preserves the five-second whole-run cancellation bound.
+An open creator pipe alone is not authority: expired keepalives stop execution,
+including when a stale coordinator remains alive after lease takeover. Late or
+cached pulses cannot resurrect an expired lifetime.
