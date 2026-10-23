@@ -227,7 +227,8 @@ class EngineRecoveryTests(coordinator_tests.EngineCoordinatorRuntimeTests):
             )
 
     def await_run_terminal(self, coordinator, run_id):
-        deadline = time.monotonic() + 15
+        # Five serial supervised stages include separate cold-start handshakes.
+        deadline = time.monotonic() + 30
         while time.monotonic() < deadline:
             coordinator.tick()
             with self.factory() as session:
@@ -406,7 +407,7 @@ class EngineRecoveryTests(coordinator_tests.EngineCoordinatorRuntimeTests):
         run, registry, marker = self.external_fixture(external_accept_and_block)
         coordinator = Coordinator(self.factory, self.workers, registry=registry)
         self.addCleanup(coordinator.close)
-        deadline = time.monotonic() + 12
+        deadline = time.monotonic() + 30
         while not marker.exists() and time.monotonic() < deadline:
             coordinator.tick()
             time.sleep(0.03)

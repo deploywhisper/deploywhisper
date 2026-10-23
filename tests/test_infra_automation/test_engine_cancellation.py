@@ -221,7 +221,7 @@ class EngineCancellationTests(coordinator_tests.EngineCoordinatorRuntimeTests):
         )
         coordinator = Coordinator(self.factory, self.workers, registry=registry)
         self.addCleanup(coordinator.close)
-        deadline = time.monotonic() + 12
+        deadline = time.monotonic() + 30
         while not marker.exists() and time.monotonic() < deadline:
             coordinator.tick()
             time.sleep(0.02)

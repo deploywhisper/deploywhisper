@@ -17,7 +17,7 @@ from infra_automation.local_workers import (
     SpawnProcessWorkers,
 )
 from infra_automation.state import OutputReference, WorkerResult
-from infra_automation.state import EngineBounds
+from infra_automation.state import EngineBounds, TERMINAL_STATES
 from infra_automation.storage import configure_engine_sqlite
 from models.repositories import infra_automation_runs as repository
 from models.tables import InfraAutomationAttempt
@@ -142,7 +142,7 @@ class EngineCoordinatorRuntimeTests(repository_tests.EngineRepositoryTests):
         self.fail("Spawned workers did not finish within the bounded test deadline")
 
     def test_blocking_handler_does_not_block_tick_or_second_claim(self):
-        self.two_runs()
+        runs = self.two_runs()
         coordinator = self.scheduler()
         started = time.monotonic()
         coordinator.tick()
@@ -153,14 +153,28 @@ class EngineCoordinatorRuntimeTests(repository_tests.EngineRepositoryTests):
             self.assertEqual(
                 len(list(session.scalars(select(InfraAutomationAttempt)))), 2
             )
-        rows = self.await_attempts(coordinator, 2)
-        self.assertTrue(all(row.state == "succeeded" for row in rows))
+        # Retry-safe storage backpressure may leave failed historical attempts.
+        # Prove both durable runs complete, not just any two terminal attempts.
+        deadline = time.monotonic() + 30
+        while time.monotonic() < deadline:
+            coordinator.tick()
+            with self.factory() as session:
+                states = [repository.get_run(session, run.id).state for run in runs]
+                rows = list(session.scalars(select(InfraAutomationAttempt)))
+            if all(state in TERMINAL_STATES for state in states):
+                break
+            time.sleep(0.03)
+        self.assertEqual(states, ["succeeded", "succeeded"])
+        successful = [row for row in rows if row.state == "succeeded"]
+        self.assertEqual({row.run_id for row in successful}, {run.id for run in runs})
+        self.assertEqual(len(successful), 2)
         self.assertTrue(
             all(
-                row.output_json is not None and row.uploads_json != "[]" for row in rows
+                row.output_json is not None and row.uploads_json != "[]"
+                for row in successful
             )
         )
-        self.assertEqual(len({row.owner_hash for row in rows}), 2)
+        self.assertEqual(len({row.owner_hash for row in rows}), len(rows))
         with self.engine.connect() as connection:
             self.assertEqual(
                 connection.exec_driver_sql("PRAGMA journal_mode").scalar(), "wal"
