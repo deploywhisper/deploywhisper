@@ -1,0 +1,54 @@
+{
+  "api_cli_infra": {
+    "command": "./.venv/bin/python -m pytest tests/test_api tests/test_cli tests/test_infra -v --tb=short",
+    "log_sha256": "63834d9a57336733729a210ab73c5a1c61d816d20731d477cb69f6b65a2581a1",
+    "note": "Production and API/CLI/infra test sources unchanged by test-only570e7ec; current570 CI also reran all API/CLI/infra directories",
+    "result": "660 passed, 1 skipped, 427 warnings, 2200 subtests passed in 307.49s (0:05:07)",
+    "runtime_source_commit": "fbb638c",
+    "success": true
+  },
+  "ci_local": {
+    "command": "bash scripts/ci-local.sh",
+    "log_sha256": "6cc338eac55859761a718342d52023263611e724cfbc976e50d8ee05586be91c",
+    "success": true,
+    "test_directory_counts": {
+      "analysis": 69,
+      "api": 287,
+      "cli": 102,
+      "docs": 51,
+      "infra": 272,
+      "infra_automation": 354,
+      "llm": 76,
+      "models": 22,
+      "parsers": 43,
+      "services": 1232
+    }
+  },
+  "independent_audit": "s165_final_audit: source approved; raw/gzip hashes, all capacity samples, p95, fault cases, current Linux results, locked test dependency, exact3unusedtest provenance and native logs independently verified",
+  "root_unittest": {
+    "command": "./.venv/bin/python -m unittest discover -q",
+    "log_sha256": "a402693edfa6b3cb0ecb03bb3c8dbe10ed9026b922f8b3a4d60183f35c407b3f",
+    "seconds": 418.002,
+    "skipped": 5,
+    "success": true,
+    "tests": 1062
+  },
+  "runtime_commit": "fbb638c13fd5613d0f96c587e1e91e77e9f66bd4",
+  "services_automation": {
+    "command": "./.venv/bin/python -m pytest tests/test_services tests/test_infra_automation -v --tb=short",
+    "log_sha256": "42613d9a761eee14251d6cefb20ffed8122920ff9da02a67216228ab87f2f62c",
+    "result": "1583 passed, 3 skipped, 631 warnings, 3084 subtests passed in 499.85s (0:08:19)",
+    "success": true
+  },
+  "static": {
+    "bandit_existing_finding": "B104 medium: unchanged sample IP literal comparison in services/sample_incident_pack.py; high gate passed",
+    "bandit_new_findings": 0,
+    "mypy_baseline_errors": 314,
+    "mypy_current_errors": 313,
+    "mypy_new_errors": 0,
+    "ruff_format_python_files": 408,
+    "ruff_lint": "passed"
+  },
+  "test_fixture_commit": "570e7ecccc56050753e0f6539b4fc923f08ece46",
+  "ui_validation": "not applicable"
+}

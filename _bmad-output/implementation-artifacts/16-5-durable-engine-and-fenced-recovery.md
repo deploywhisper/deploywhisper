@@ -1,6 +1,6 @@
 # Story 16.5: Durable Engine And Fenced Recovery
 
-Status: in-progress
+Status: review
 Preparation: refined
 Release: v1.5.0 — P0 highest-priority feature
 Dependencies: 16.4; public RFC and 16.0 qualification required
@@ -76,11 +76,11 @@ Full evidence and reproduction details: [16-5-code-review-2026-10-22.md](16-5-co
 The previously recorded qualification remains evidence for its declared workload;
 these additional reachable cases are not covered by that passing workload.
 
-- [ ] [Review][Patch][High][CR16.5-01] Prevent orphaned worker overlap after coordinator crash — real parent crash and lease takeover produced four simultaneously live handlers despite the two-worker bound; qualify cleanup/accounting and cancellation after restart [infra_automation/coordinator.py:511; infra_automation/local_workers.py:267].
-- [ ] [Review][Patch][High][CR16.5-02] Stop terminal sibling processes — a permanent sibling failure cancels the persisted attempt but never signals its owned worker, even after both deadlines [infra_automation/coordinator.py:364].
-- [ ] [Review][Patch][Medium][CR16.5-03] Advance bounded scheduler selection — repeated oldest-100 selection starves a later eligible workflow; add fair/advancing selection and a >100-row regression [infra_automation/coordinator.py:275].
-- [ ] [Review][Patch][Medium][CR16.5-04] Preserve retryable local persistence errors — output-storage 429 becomes permanent failure despite retry_safe=True; classify transient infrastructure/backpressure and verify finite retry/adoption [infra_automation/local_workers.py:213].
-- [ ] [Review][Patch][Low][CR16.5-05] Correct lease visibility guidance — public StepView exposes lease_until, contradicting the operator guide; distinguish public metadata from private capabilities [docs/infra-automation/engine.md:44; services/infra_automation_engine_service.py:297].
+- [x] [Review][Patch][High][CR16.5-01] Prevent orphaned worker overlap after coordinator crash — real parent crash and lease takeover produced four simultaneously live handlers despite the two-worker bound; qualify cleanup/accounting and cancellation after restart [infra_automation/coordinator.py:511; infra_automation/local_workers.py:267].
+- [x] [Review][Patch][High][CR16.5-02] Stop terminal sibling processes — a permanent sibling failure cancels the persisted attempt but never signals its owned worker, even after both deadlines [infra_automation/coordinator.py:364].
+- [x] [Review][Patch][Medium][CR16.5-03] Advance bounded scheduler selection — repeated oldest-100 selection starves a later eligible workflow; add fair/advancing selection and a >100-row regression [infra_automation/coordinator.py:275].
+- [x] [Review][Patch][Medium][CR16.5-04] Preserve retryable local persistence errors — output-storage 429 becomes permanent failure despite retry_safe=True; classify transient infrastructure/backpressure and verify finite retry/adoption [infra_automation/local_workers.py:213].
+- [x] [Review][Patch][Low][CR16.5-05] Correct lease visibility guidance — public StepView exposes lease_until, contradicting the operator guide; distinguish public metadata from private capabilities [docs/infra-automation/engine.md:44; services/infra_automation_engine_service.py:297].
 
 ## Dev Notes
 
@@ -150,17 +150,10 @@ UI validation not applicable unless a rendered surface is changed.
 
 ### File List
 
-- `tests/test_infra_automation/test_engine_owner_liveness.py`
-- `tests/test_infra_automation/test_engine_worker_failures.py`
-- `tests/test_infra_automation/test_engine_supervision.py`
-- `tests/test_infra_automation/test_engine_review_scheduler.py`
-- `tests/test_infra_automation/test_engine_parent_recovery.py`
-- `infra_automation/worker_failures.py`
-- `infra_automation/worker_supervision.py`
 - `README.md`
+- `_bmad-output/implementation-artifacts/16-5-code-review-2026-10-22.md`
 - `_bmad-output/implementation-artifacts/16-5-durable-engine-and-fenced-recovery.md`
 - `_bmad-output/implementation-artifacts/sprint-status.yaml`
-- `_bmad-output/implementation-artifacts/16-5-code-review-2026-10-22.md`
 - `_bmad-output/planning-artifacts/implementation-readiness-report-2026-10-19-story-16-5.md`
 - `api/routes/infra_automation.py`
 - `api/schemas.py`
@@ -175,11 +168,24 @@ UI validation not applicable unless a rendered surface is changed.
 - `docs/verification/infra-automation/16-5/qualification.md`
 - `docs/verification/infra-automation/16-5/reference-results.json`
 - `docs/verification/infra-automation/16-5/results.md`
+- `docs/verification/infra-automation/16-5/review-fixes/benchmark.json.gz`
+- `docs/verification/infra-automation/16-5/review-fixes/capacity.json.gz`
+- `docs/verification/infra-automation/16-5/review-fixes/faults.json.gz`
+- `docs/verification/infra-automation/16-5/review-fixes/process.json`
+- `docs/verification/infra-automation/16-5/review-fixes/process.log`
+- `docs/verification/infra-automation/16-5/review-fixes/reference-results.json`
+- `docs/verification/infra-automation/16-5/review-fixes/results.md`
+- `docs/verification/infra-automation/16-5/review-fixes/runtime-smoke.json`
+- `docs/verification/infra-automation/16-5/review-fixes/source-provenance.json`
+- `docs/verification/infra-automation/16-5/review-fixes/test-dependency-manifest.json`
+- `docs/verification/infra-automation/16-5/review-fixes/verification-summary.json`
 - `infra_automation/claims.py`
 - `infra_automation/coordinator.py`
 - `infra_automation/local_workers.py`
 - `infra_automation/state.py`
 - `infra_automation/storage.py`
+- `infra_automation/worker_failures.py`
+- `infra_automation/worker_supervision.py`
 - `migrations/versions/032_add_infra_automation_engine.py`
 - `models/database.py`
 - `models/repositories/infra_automation_runs.py`
@@ -206,12 +212,17 @@ UI validation not applicable unless a rendered surface is changed.
 - `tests/test_infra_automation/test_engine_coordinator.py`
 - `tests/test_infra_automation/test_engine_identity.py`
 - `tests/test_infra_automation/test_engine_limits.py`
+- `tests/test_infra_automation/test_engine_owner_liveness.py`
+- `tests/test_infra_automation/test_engine_parent_recovery.py`
 - `tests/test_infra_automation/test_engine_qualification.py`
 - `tests/test_infra_automation/test_engine_recovery.py`
 - `tests/test_infra_automation/test_engine_recovery_claims.py`
 - `tests/test_infra_automation/test_engine_repository.py`
+- `tests/test_infra_automation/test_engine_review_scheduler.py`
 - `tests/test_infra_automation/test_engine_service.py`
 - `tests/test_infra_automation/test_engine_state.py`
+- `tests/test_infra_automation/test_engine_supervision.py`
+- `tests/test_infra_automation/test_engine_worker_failures.py`
 - `tests/test_infra_automation/test_engine_workers.py`
 
 ### Packet A evidence — 2026-10-19
@@ -379,6 +390,7 @@ in a fresh context. Status is review; this is not a release or merge claim.
 - 2026-10-19: Scoped readiness and contracts frozen; packets A–E implemented and reviewed.
 - 2026-10-22: Packet F limits, real fault/overhead/capacity evidence and validation completed; story moved to review.
 - 2026-10-22: BMad code review reproduced four functional gaps and one documentation discrepancy; five follow-ups recorded and story returned to in-progress.
+- 2026-10-23: All five follow-ups fixed, hardened and independently audited; fresh runtime qualification and full current-fixture verification passed; story returned to review.
 
 ### Code review outcome — 2026-10-22
 
@@ -438,3 +450,66 @@ and qualified evidence is being rerun with an active temporary sleep assertion.
 A subsequent awake run identified the confirmed cold-start/fixture issues above;
 its incomplete metrics are also excluded. All review items remain unchecked until
 fresh full regression and reference qualification finish on the final source.
+
+
+### Review findings resolved and verified — 2026-10-23
+
+All CR16.5-01–05 are resolved by runtime commits7bf930a/fbb638c and test-fixture
+commit570e7ec. Independent source review and artifact audit found no remaining
+blocker. Root owns integration/evidence; native bounded owners implemented and
+cross-reviewed supervision, scheduler and infrastructure classification slices.
+
+- Resolved [High] CR01: independent gated global-slot supervisors plus finite
+  lease-bounded current-owner pulses stop crashed OR live-stalled creator trees.
+  All stop requests precede a shared4.5-second confirmation budget. Real parent
+  death, stalled creator, descendant cleanup,31-second takeover/cancellation,
+  dirty slots, reduced capacity, stale pulses and rollback are verified.
+- Resolved [High] CR02: terminal/missing run/attempt ownership stops live siblings
+  and retains the slot until cleanup is confirmed; real handler PID and reuse proven.
+- Resolved [Medium] CR03: bounded advancing pages with a fixed sweep tail and
+  project/workflow interleaving progress beyond100rows despite ongoing arrivals.
+- Resolved [Medium] CR04: explicit wrapper setup/read/write infrastructure scope
+  retries only declared-safe capacity429/SQLite BUSY,LOCKED,FULL. Handler and
+  authority failures remain permanent; external uncertainty remains no-resend;
+  immutable output adoption and three-attempt exhaustion pass.
+- Resolved [Low] CR05: operator guide distinguishes public lease/fence/generation
+  metadata from private ownership capabilities. Existing auth/audit/cursor/state
+  contracts are reused, without new dependencies or domain persistence families.
+
+Fresh repaired-runtime qualification atfbb638c:128 actual process-exit cases with
+exact restart/audit recovery;1,000 dispatch samples p95=0.019121375seconds;
+1,800.124686 real monotonic seconds,6,362 samples all10active with<=2workers and
+20synthetic slots,zero errors,queue429and119private-owner denials. Source136hashes
+were identical at start/end. Production startup/restart passed health,migration032,
+integrity and empty-registry zero identity/lease/slot side effects.
+
+The later test-only570e7ec correction waits for durable successful runs across
+allowed retry history and gives five cold serial supervised stages30seconds.
+Actual execution/cancellation deadlines were unchanged. All production, harness,
+contract,migration and used fixture bytes remain exactlyfbb638c; exactly3unused
+test modules differ (133/136 total qualified entries match). Independent static,
+dynamic-import and hash audits establish this explicit provenance. Reference
+artifacts are retained unchanged, not falsely relabeled as current136-map matches.
+
+Current-fixture full Linux runtime automation:354tests,zero failures/errors,3optional
+JSON Schema validator skips,329.510seconds;136current hashes start=end. The already
+locked test-onlytomli2.5.0 pure Python files were supplied read-only and verified
+against distribution RECORD; project dependency files were unchanged.
+
+Final current-fixture native verification: `bash scripts/ci-local.sh` all10test
+directories passed (automation354,services1232); root unittest1062 OK5skips; exact
+services/automation pytest1583passed3skips3084subtests. Exact API/CLI/infra pytest
+660passed1skip2200subtests passed on byte-identical production/test scope; current
+CI reran allthree directories. Ruff lint and repo-wide408-file formatting, scoped
+mypy and diff checks passed. Full mypy313baseline diagnostics vs314beforethisstory,
+none new. Bandit high gate passed; only unchanged B104sample-IP comparison remains.
+UI validation not applicable. Existing application containers/original Epic17
+checkout/PR159 were untouched; all16owned test containers removed after evidence.
+
+Final command summaries, original raw/compressed data, checksums, runtime test log,
+source equivalence, pinned test-dependency evidence and independent audit are in
+`docs/verification/infra-automation/16-5/review-fixes/results.md` and accompanying
+`verification-summary.json`. Remaining intentional scope: empty production handler
+registry until16.6; real runner/receiver/transport and host-power-loss support are
+not qualified. Unexpected supervisor failure retains dirty capacity for trusted
+operator recovery. Story returns to review for the next BMad code-review cycle.

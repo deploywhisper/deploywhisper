@@ -1,0 +1,26 @@
+{
+  "matching_current_entries": 133,
+  "qualification_does_not_import_or_execute_changed_test_modules": true,
+  "qualified_entries": 136,
+  "runtime_and_executed_harness_dependencies_identical": true,
+  "unused_test_only_differences": {
+    "tests/test_infra_automation/test_engine_cancellation.py": {
+      "current_sha256": "f8363730605ddb7dd7b7bd9c409c2cdd6f63266856836fe2739685e6265a9b1d",
+      "qualified_sha256": "3cb0e65f4e78d0d79b24cbd3b1165b643353f4420a2f34deb4d2c5acd3a23400"
+    },
+    "tests/test_infra_automation/test_engine_coordinator.py": {
+      "current_sha256": "f3f45a07a4d53153e3eb7e231ea0916c49a3fcc2afdbbe68cea8f37a2050f5e2",
+      "qualified_sha256": "3131479a64728621aa3c82b1e7bb476f7fb9dfb171821940ec59918da7073c6f"
+    },
+    "tests/test_infra_automation/test_engine_recovery.py": {
+      "current_sha256": "8d74ed6c9bbe2e36bb9443e07c360ef71f2b8e76b16126523c10b3561f2f7ea9",
+      "qualified_sha256": "ec7b18b9f811446e7fd906607c76c23c7dd99ca69de2c082289ac417ecf2d7e1"
+    }
+  },
+  "used_fixture_modules": [
+    "lifecycle_support",
+    "test_engine_claims",
+    "test_engine_repository",
+    "test_workflow_snapshots"
+  ]
+}

@@ -1,0 +1,188 @@
+{
+  "allocation": {
+    "cpus": 2,
+    "database": "synthetic ephemeral SQLite in512MiB tmpfs",
+    "memory_bytes": 1073741824,
+    "network": "none",
+    "pids_limit": 128,
+    "source_mount": "read-only /qualification",
+    "working_directory": "/qualification"
+  },
+  "image": "deploywhisper-story16-5:review-fixes-final",
+  "image_id": "sha256:889caacc284c32de31ab4e0058c375a8e0ce2bb9aa279f5045ec9ad445a1f6fa",
+  "provenance": {
+    "matching_current_entries": 133,
+    "qualification_does_not_import_or_execute_changed_test_modules": true,
+    "qualified_entries": 136,
+    "runtime_and_executed_harness_dependencies_identical": true,
+    "unused_test_only_differences": {
+      "tests/test_infra_automation/test_engine_cancellation.py": {
+        "current_sha256": "f8363730605ddb7dd7b7bd9c409c2cdd6f63266856836fe2739685e6265a9b1d",
+        "qualified_sha256": "3cb0e65f4e78d0d79b24cbd3b1165b643353f4420a2f34deb4d2c5acd3a23400"
+      },
+      "tests/test_infra_automation/test_engine_coordinator.py": {
+        "current_sha256": "f3f45a07a4d53153e3eb7e231ea0916c49a3fcc2afdbbe68cea8f37a2050f5e2",
+        "qualified_sha256": "3131479a64728621aa3c82b1e7bb476f7fb9dfb171821940ec59918da7073c6f"
+      },
+      "tests/test_infra_automation/test_engine_recovery.py": {
+        "current_sha256": "8d74ed6c9bbe2e36bb9443e07c360ef71f2b8e76b16126523c10b3561f2f7ea9",
+        "qualified_sha256": "ec7b18b9f811446e7fd906607c76c23c7dd99ca69de2c082289ac417ecf2d7e1"
+      }
+    },
+    "used_fixture_modules": [
+      "lifecycle_support",
+      "test_engine_claims",
+      "test_engine_repository",
+      "test_workflow_snapshots"
+    ]
+  },
+  "qualified_runtime_commit": "fbb638c13fd5613d0f96c587e1e91e77e9f66bd4",
+  "results": {
+    "benchmark": {
+      "acceptance_qualified": true,
+      "active_ten_every_sample_after_warmup": true,
+      "artifact": "benchmark.json.gz",
+      "completed_attempts": 994,
+      "compressed_sha256": "4d3c5bc98c9472ef598b108d38f2f9612a57fea18d416a951e31f90c0f0ce61d",
+      "continuous_private_owner_denials": 111,
+      "elapsed_seconds": 1675.3882806379988,
+      "ended_monotonic": 88473.603044099,
+      "ended_utc": "2026-10-23T07:25:54.063537+00:00",
+      "error_count": 0,
+      "final_resources": {
+        "children_maxrss": 101900,
+        "cpu.max": "200000 100000",
+        "maxrss_units": "KiB",
+        "memory.current": "170475520",
+        "memory.events": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0",
+        "memory.max": "1073741824",
+        "self_maxrss": 101900
+      },
+      "handler_seconds": 0,
+      "identity_refresh_count": 167,
+      "max_active": 10,
+      "max_analysis_inflight": 2,
+      "max_database_bytes": 16781312,
+      "max_online_slots": 20,
+      "max_wal_bytes": 4194192,
+      "max_workers": 2,
+      "mode": "benchmark",
+      "platform": "Linux-6.12.54-linuxkit-aarch64-with-glibc2.41",
+      "pragmas": {
+        "foreign_keys": 1,
+        "journal_mode": "wal",
+        "page_size": 4096,
+        "synchronous": 2
+      },
+      "python": "3.11.17 (main, Oct  6 2026, 02:08:45) [GCC 14.2.0]",
+      "queue_backpressure_checked": false,
+      "raw_sha256": "f3a660bc7bb449fbf911491974db34a3f44a7583bee8bc3f7c86185334e4dcf1",
+      "ready_measurement": "Actual Coordinator._schedule calls which submit a committed attempt to SpawnProcessWorkers; includes orchestration/database/spawn; excludes handler execution",
+      "ready_transition_count": 1000,
+      "ready_transition_p95_seconds": 0.019121375007671304,
+      "sample_count": 11327,
+      "scope": "Synthetic local engine/analysis handlers and heartbeat/read slots only; no real runner/receiver or host power loss qualification",
+      "slot_heartbeat_calls": 226540,
+      "slot_read_calls": 11327,
+      "source_hashes_identical": true,
+      "sqlite": "3.46.1",
+      "started_monotonic": 86798.214763461,
+      "started_utc": "2026-10-23T06:57:58.619785+00:00"
+    },
+    "capacity": {
+      "acceptance_qualified": true,
+      "active_ten_every_sample_after_warmup": true,
+      "artifact": "capacity.json.gz",
+      "completed_attempts": 270,
+      "compressed_sha256": "f44160aef669dc0c8c1e1582af7ba247c6917159583369041d27fd25d959758f",
+      "continuous_private_owner_denials": 119,
+      "elapsed_seconds": 1800.124685570001,
+      "ended_monotonic": 88598.85623149,
+      "ended_utc": "2026-10-23T07:27:59.297793+00:00",
+      "error_count": 0,
+      "final_resources": {
+        "children_maxrss": 95516,
+        "cpu.max": "200000 100000",
+        "maxrss_units": "KiB",
+        "memory.current": "353615872",
+        "memory.events": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0",
+        "memory.max": "1073741824",
+        "self_maxrss": 95516
+      },
+      "handler_seconds": 10,
+      "identity_refresh_count": 178,
+      "max_active": 10,
+      "max_analysis_inflight": 2,
+      "max_database_bytes": 8232960,
+      "max_online_slots": 20,
+      "max_wal_bytes": 4148872,
+      "max_workers": 2,
+      "mode": "capacity",
+      "peak_sampled_cgroup_memory_bytes": 351412224,
+      "platform": "Linux-6.12.54-linuxkit-aarch64-with-glibc2.41",
+      "pragmas": {
+        "foreign_keys": 1,
+        "journal_mode": "wal",
+        "page_size": 4096,
+        "synchronous": 2
+      },
+      "python": "3.11.17 (main, Oct  6 2026, 02:08:45) [GCC 14.2.0]",
+      "queue_backpressure_checked": true,
+      "raw_sha256": "dc9075fe78807174cba98df233fe4d25f506f2cd262d0daf2e867483bd11be63",
+      "ready_measurement": "Actual Coordinator._schedule calls which submit a committed attempt to SpawnProcessWorkers; includes orchestration/database/spawn; excludes handler execution",
+      "ready_transition_count": 272,
+      "ready_transition_p95_seconds": 0.020779874990694225,
+      "sample_count": 6362,
+      "scope": "Synthetic local engine/analysis handlers and heartbeat/read slots only; no real runner/receiver or host power loss qualification",
+      "slot_heartbeat_calls": 127240,
+      "slot_read_calls": 6362,
+      "source_hashes_identical": true,
+      "sqlite": "3.46.1",
+      "started_monotonic": 86798.73154592,
+      "started_utc": "2026-10-23T06:57:59.251401+00:00"
+    },
+    "faults": {
+      "acceptance_qualified": true,
+      "artifact": "faults.json.gz",
+      "cancel_boundary_mapping": "E request flag, idempotency and cancelled run/attempt completion are one atomic service.cancel_run transaction; both fixture labels exercise that same outer commit",
+      "compressed_sha256": "5e0d5194458505601f930b47231a256386a562718f3820488a7566f9430ac1b4",
+      "count": 128,
+      "elapsed_seconds": 253.3063248230028,
+      "ended_monotonic": 87051.003904367,
+      "ended_utc": "2026-10-23T07:02:11.409016+00:00",
+      "host_power_loss_qualified": false,
+      "mode": "fault",
+      "platform": "Linux-6.12.54-linuxkit-aarch64-with-glibc2.41",
+      "pragmas": {
+        "foreign_keys": 1,
+        "journal_mode": "wal",
+        "page_size": 4096,
+        "synchronous": 2
+      },
+      "python": "3.11.17 (main, Oct  6 2026, 02:08:45) [GCC 14.2.0]",
+      "raw_sha256": "5f63af21ed254ebc2d766ec5f49764ae05e2a2a1306a10ace69ca9b7daa121c0",
+      "source_hashes_identical": true,
+      "sqlite": "3.46.1",
+      "started_monotonic": 86797.697580336,
+      "started_utc": "2026-10-23T06:57:58.102600+00:00"
+    },
+    "linux_automation": {
+      "artifact": "process.json",
+      "elapsed_seconds": 329.51037152500066,
+      "ended_utc": "2026-10-23T12:29:29.044854+00:00",
+      "errors": 0,
+      "failures": 0,
+      "platform": "Linux-6.12.54-linuxkit-aarch64-with-glibc2.41",
+      "python": "3.11.17 (main, Oct  6 2026, 02:08:45) [GCC 14.2.0]",
+      "raw_sha256": "8e84f9f444a433288af631757980f886de2dcd0fa2f6caf2b4adefced2167b2d",
+      "runtime_source_commit": "fbb638c13fd5613d0f96c587e1e91e77e9f66bd4",
+      "skipped": 3,
+      "source_hashes_identical": true,
+      "started_utc": "2026-10-23T12:23:59.515725+00:00",
+      "success": true,
+      "test_fixture_commit": "570e7ecccc56050753e0f6539b4fc923f08ece46",
+      "tests": 354
+    }
+  },
+  "validated_test_fixture_commit": "570e7ecccc56050753e0f6539b4fc923f08ece46"
+}

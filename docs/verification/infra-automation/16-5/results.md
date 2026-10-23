@@ -1,5 +1,9 @@
 # Story 16.5 qualification results — 2026-10-22
 
+Latest review-fix runtime qualification and corrected full Linux results are in
+[review-fixes/results.md](review-fixes/results.md). The record below is the earlier
+pre-review qualification and remains historical evidence.
+
 All owned engine acceptance criteria passed on frozen source `cc27c6f`.
 The production runtime code is `1661a94`; the later commit changes the synthetic
 qualification harness and its documentation only. The original checkout and PR
