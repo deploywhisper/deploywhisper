@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from unittest import TestCase
 from unittest.mock import patch
 import os
 from pathlib import Path
@@ -48,13 +49,48 @@ def alive(pid):
                 == "Z"
             ):
                 return False
-        except FileNotFoundError:
+        except (FileNotFoundError, ProcessLookupError):
             return False
     try:
         os.kill(pid, 0)
         return True
     except ProcessLookupError:
         return False
+
+
+class ProcessLivenessTests(TestCase):
+    def test_disappearing_proc_entry_is_stopped(self):
+        for error in (FileNotFoundError(), ProcessLookupError()):
+            with (
+                self.subTest(error=type(error).__name__),
+                patch.object(sys, "platform", "linux"),
+                patch.object(Path, "read_text", side_effect=error),
+                patch.object(os, "kill") as probe,
+            ):
+                self.assertFalse(alive(12345))
+                probe.assert_not_called()
+
+    def test_zombies_are_stopped_and_running_processes_are_probed(self):
+        for state in ("Z", "R"):
+            with (
+                self.subTest(state=state),
+                patch.object(sys, "platform", "linux"),
+                patch.object(Path, "read_text", return_value=f"12345 (worker) {state}"),
+                patch.object(os, "kill") as probe,
+            ):
+                self.assertEqual(alive(12345), state == "R")
+                if state == "R":
+                    probe.assert_called_once_with(12345, 0)
+                else:
+                    probe.assert_not_called()
+
+    def test_permission_errors_remain_visible(self):
+        with (
+            patch.object(sys, "platform", "linux"),
+            patch.object(Path, "read_text", side_effect=PermissionError()),
+            self.assertRaises(PermissionError),
+        ):
+            alive(12345)
 
 
 class EngineCancellationTests(coordinator_tests.EngineCoordinatorRuntimeTests):

@@ -13,7 +13,11 @@ required high-priority finding dispositions.
 - `security`: runs dependency audit, Bandit static analysis, and secret-pattern scanning.
 - `frontend`: installs the React SPA workspace, then runs typecheck, Vitest, and the production build.
 - `changed-tests`: on pull requests, runs changed `test_*.py` modules under `tests/`, excluding `tests/fixtures/` and helper scripts, for faster early feedback. Qualification probes stay executable through their owning tests and are never imported as test modules.
-- `test`: runs the Python suite with pytest in four logical shards with `fail-fast: false`.
+- `test`: runs the Python suite with pytest in five logical shards with `fail-fast: false`.
+  Services and infrastructure automation run separately, each retaining its
+  15-minute job budget. Combining the expanded engine process tests with services
+  exceeded that budget on hosted runners; no tests or cancellation deadlines
+  were relaxed to make the pipeline pass.
 - The blocking `tests/test_llm` shard includes the prompt-injection regression
   suite documented in
   [`docs/ai-safety/prompt-injection-testing.md`](./ai-safety/prompt-injection-testing.md).

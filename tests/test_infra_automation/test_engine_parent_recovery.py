@@ -25,6 +25,7 @@ from infra_automation.local_workers import (
 from infra_automation.state import CancelRunRequest
 from models.repositories import infra_automation_runs as repo
 from services import infra_automation_engine_service as service
+from services import project_service as authorization
 from services.infra_automation_support import digest
 from tests.test_infra_automation import test_engine_coordinator as coordinator_tests
 from tests.test_infra_automation.test_engine_cancellation import alive
@@ -204,9 +205,11 @@ class ParentRecoveryTests(TestCase):
         self.assertFalse(any(alive(pid) for pid in old))
         started = time.monotonic()
         for run_id in self.runs:
-            with self.fixture.factory() as db:
+            with (
+                self.fixture.credentials(),
+                authorization.authorized_session(self.fixture.factory) as db,
+            ):
                 current = repo.get_run(db, run_id)
-            with self.fixture.credentials():
                 service.cancel_run(
                     run_id,
                     CancelRunRequest(
@@ -259,9 +262,11 @@ class ParentRecoveryTests(TestCase):
         coordinator.tick()
         started = time.monotonic()
         for run_id in self.runs:
-            with self.fixture.factory() as db:
+            with (
+                self.fixture.credentials(),
+                authorization.authorized_session(self.fixture.factory) as db,
+            ):
                 current = repo.get_run(db, run_id)
-            with self.fixture.credentials():
                 service.cancel_run(
                     run_id,
                     CancelRunRequest(

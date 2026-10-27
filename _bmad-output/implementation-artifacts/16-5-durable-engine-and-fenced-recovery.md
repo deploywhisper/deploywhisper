@@ -106,7 +106,7 @@ Use the locked Python-first stack (SQLAlchemy/Alembic/Pydantic and existing libr
 ## Implementation verification requirements
 
 - [x] Add regression/contract tests with each packet; do not defer them to 16.19. Use temporary SQLite databases, TestClient and local synthetic fixtures; never real secrets/infrastructure state.
-- [x] If adding `tests/test_infra_automation/`, register it in `scripts/ci-local.sh` and `.github/workflows/ci.yml` services pytest shard, and prove discovery includes it; root unittest discovery alone is insufficient.
+- [x] If adding `tests/test_infra_automation/`, register it in `scripts/ci-local.sh` and the dedicated `.github/workflows/ci.yml` infrastructure-automation pytest shard, and prove discovery includes it; root unittest discovery alone is insufficient.
 - [x] Search repository-wide direct instantiations/fixtures whenever changing a constructor/Pydantic/dataclass/API contract; run affected CI shard exactly: `./.venv/bin/python -m pytest tests/test_api tests/test_cli tests/test_infra -v --tb=short` and/or `./.venv/bin/python -m pytest tests/test_services -v --tb=short`, plus explicitly registered automation tests.
 - [x] Before review run `./.venv/bin/ruff check .`, `./.venv/bin/ruff format --check .`, `./.venv/bin/python -m unittest discover -q`, `bash scripts/ci-local.sh` and `git diff --check`; record actual outputs and resolve failures.
 - [x] Keep this slice backend/contract scoped. Record **UI validation not applicable** if no rendered surface changes. If React/browser semantics change, use a separate labeled backend-for-UI PR where required, compose production build (`docker compose up -d --build`), wait for health, seed data and run `BASE_URL=http://localhost:8080 npm run test:ui-review` plus necessary a11y/keyboard/screenshots, then `docker compose down`. Root SPA routes only; Vite is not proof.
@@ -535,3 +535,25 @@ later-story backlog and production integration/release gates remain unchanged.
   frontend dependency files are unchanged from baseline3af659e. Dependency
   maintenance must resolve this before merging PR195. See the rerun report and
   `deferred-work.md`; no audit suppression or dependency change was applied.
+
+### CI follow-up hardening — 2026-10-27
+
+The dependency repair is supplied by maintenance PR197 and carried onto this
+branch, preserving the automatic-update pause. Once audits passed, hosted CI
+exposed a test-observer race: `/proc/<pid>/stat` may raise ProcessLookupError
+when the observed process exits. A deterministic red/green regression now covers
+that race, missing entries, zombies, running processes and visible permission
+errors. The helper treats an exited process as stopped; actual five-second
+process-tree cancellation assertions remain unchanged.
+
+Linux verification also exposed a legitimate optimistic-version conflict in the
+takeover fixture: worker evidence can advance a run between its version read
+and cancellation. The two takeover tests now read and request cancellation in
+the same authorized operation transaction, with process signaling still deferred
+until commit. Production authorization and stale-version rejection are unchanged.
+
+The combined services/automation coverage job reached its15-minute limit with
+the expanded engine suite still running. Dedicated services and automation
+matrix rows retain the original15-minute budget and execute every test. Updated
+configuration coverage guards this split. These are verification corrections;
+engine runtime behavior and the scope of historical qualification remain intact.
