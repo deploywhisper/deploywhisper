@@ -449,6 +449,7 @@ class PreflightRepositoryTests(LifecycleCase):
 
     def test_real_upgrade_from_engine_preserves_history_and_bootstraps(self):
         import os
+        import sys
         from pathlib import Path
         import subprocess
         from unittest.mock import patch
@@ -459,7 +460,8 @@ class PreflightRepositoryTests(LifecycleCase):
         environment = {**os.environ, "DATABASE_URL": url}
         for target in ("032_add_infra_automation_engine", "head"):
             result = subprocess.run(
-                ["./.venv/bin/python", "-m", "alembic", "upgrade", target],
+                [sys.executable, "-m", "alembic", "upgrade", target],
+                cwd=Path(__file__).resolve().parents[2],
                 env=environment,
                 capture_output=True,
                 text=True,

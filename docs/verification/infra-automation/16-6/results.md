@@ -76,7 +76,7 @@ closure before this story is marked done. This dev-story hands off at review. Im
 
 Review target: original Story16.6 change from8e4cf16 throughbee7199. Three native
 layers completed independently: diff-only Blind Hunter, repository Edge Case
-Hunter and spec/context Acceptance Auditor. Five behavioral patch findings plus one type-contract follow-up, no unresolved
+Hunter and spec/context Acceptance Auditor. Five behavioral patch findings, one type-contract follow-up and one CI portability fix, no unresolved
 product decisions or pre-existing deferrals; two hypotheses dismissed after
 tracing existing recovery/transaction code and adding executable proof.
 
@@ -88,6 +88,7 @@ tracing existing recovery/transaction code and adding executable proof.
 | R4 snapshot copies omitted from retained-byte accounting | P2 | Count actual descriptor-validated snapshot and sidecar bytes once; authenticate before filesystem access; quota rollback removes report/link/files. |
 | R5 lone-surrogate names survive direct intake validation | P3 | Strict filename UTF-8 screening returns 422 before classification/canonicalization; HTTP already rejects invalid Unicode and now has explicit regression coverage. |
 | R6 new type annotations disagree with strict validation and nullable lookup | P3 | Align byte/status types and reject a missing admitted row consistently; no new normalized mypy errors against current develop. |
+| R7 migration test assumes a repository-local virtualenv | P2 | Use the active interpreter and explicit repository root; reproduce and pass the test in an isolated tracked checkout with no .venv. |
 
 The crash-duplication hypothesis was dismissed: a real spawned successor adopts
 its predecessor's committed typed output and retains exactly one report/link.
@@ -127,3 +128,23 @@ Remote closure: the Git Flow-compliant branch
 [PR #199](https://github.com/deploywhisper/deploywhisper/pull/199) targets `develop`.
 The story is done for implementation/review, while the PR remains open for
 independent human approval. No merge or release publication is claimed.
+
+
+### Hosted-runner portability correction
+
+GitHub's changed-tests and automation jobs exposed a new test-only launcher defect:
+`test_real_upgrade_from_engine_preserves_history_and_bootstraps` assumed a local
+`.venv/bin/python`, while setup-python installs the hosted interpreter globally.
+An isolated tracked checkout with no `.venv` reproduced that failure. The test now
+uses `sys.executable` and an explicit repository working directory; isolated
+migration proof passes, and the exact changed-test lane passes 145 tests in 59.656s.
+No application/runtime behavior changed.
+
+An earlier local changed-lane attempt had one fail-closed process disposal event
+reported as three repeated cleanup errors. The isolated test (1), coordinator
+module (17), original preceding order (97), and exact lane (145) all subsequently
+passed. No reproducible state contamination or introduced source defect was
+established; the original diagnostic lacks the supervisor exit/timing detail needed
+to identify its precise OS cause. No supervision deadline or termination guard was
+relaxed. Hosted CI is rerun on the portable test fix; current results are linked
+from PR #199.
