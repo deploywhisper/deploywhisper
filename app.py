@@ -105,11 +105,12 @@ async def _start_engine_coordinator():
     import config
 
     from infra_automation.coordinator import Coordinator
-    from infra_automation.local_workers import DEFAULT_REGISTRY, SpawnProcessWorkers
+    from infra_automation.local_workers import default_registry, SpawnProcessWorkers
     from infra_automation.storage import configure_engine_sqlite
     from models.database import SessionLocal
 
-    if not DEFAULT_REGISTRY:
+    registry = default_registry()
+    if not registry:
         return None
     bounds = config.engine_bounds()
     configure_engine_sqlite(SessionLocal.kw["bind"])
@@ -118,9 +119,7 @@ async def _start_engine_coordinator():
         max_workers=bounds.analysis_workers,
         bounds=bounds,
     )
-    coordinator = Coordinator(
-        SessionLocal, workers, registry=DEFAULT_REGISTRY, bounds=bounds
-    )
+    coordinator = Coordinator(SessionLocal, workers, registry=registry, bounds=bounds)
     try:
         await coordinator.start()
     except BaseException:
@@ -367,5 +366,5 @@ def run() -> None:
     )
 
 
-if __name__ in {"__main__", "__mp_main__"}:
+if __name__ == "__main__":
     run()

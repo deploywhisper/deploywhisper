@@ -660,3 +660,15 @@ def cancel_run(run_id: str, request: CancelRunRequest, *, cancel_port=None) -> d
     from services.infra_automation_engine_service import cancel_run as operation
 
     return operation(run_id, request, cancel_port=cancel_port)
+
+
+def request_preflight(request) -> dict:
+    from services.infra_automation_preflight import request_preflight as operation
+
+    return operation(request)
+
+
+def list_run_reports(run_id: str) -> dict:
+    from services.infra_automation_preflight import list_run_reports as operation
+
+    return operation(run_id)

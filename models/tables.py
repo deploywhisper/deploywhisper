@@ -1316,3 +1316,96 @@ if "InfraAutomationRunRequest" not in globals():
         created_at: Mapped[datetime] = mapped_column(
             DateTime(timezone=True), nullable=False
         )
+
+
+if "InfraAutomationArtifactManifest" not in globals():
+
+    class InfraAutomationArtifactManifest(Base):
+        """Immutable screened payload bound to one run intake step."""
+
+        __tablename__ = "infra_automation_artifact_manifests"
+        __table_args__ = (
+            ForeignKeyConstraint(
+                ["run_id", "project_id", "workspace_id", "requested_by"],
+                [
+                    "infra_automation_runs.id",
+                    "infra_automation_runs.project_id",
+                    "infra_automation_runs.workspace_id",
+                    "infra_automation_runs.requested_by",
+                ],
+                ondelete="RESTRICT",
+            ),
+            UniqueConstraint("run_id", "step_id"),
+            CheckConstraint(
+                "(collection_bytes IS NULL) = (collection_digest IS NULL) AND (collection_bytes IS NULL OR length(collection_bytes) BETWEEN 1 AND 16384)",
+                name="ck_preflight_collection_bounds",
+            ),
+            UniqueConstraint(
+                "id", "run_id", "project_id", "workspace_id", "requested_by"
+            ),
+            CheckConstraint(
+                "length(artifacts_bytes) BETWEEN 1 AND 50331648 AND length(digest) = 71",
+                name="ck_preflight_manifest_bounds",
+            ),
+        )
+        id: Mapped[str] = mapped_column(String(64), primary_key=True)
+        run_id: Mapped[str] = mapped_column(String(64), nullable=False)
+        step_id: Mapped[str] = mapped_column(String(128), nullable=False)
+        project_id: Mapped[int] = mapped_column(Integer, nullable=False)
+        workspace_id: Mapped[int] = mapped_column(Integer, nullable=False)
+        requested_by: Mapped[str] = mapped_column(String(64), nullable=False)
+        collection_bytes: Mapped[bytes | None] = mapped_column(
+            LargeBinary, nullable=True
+        )
+        collection_digest: Mapped[str | None] = mapped_column(String(71), nullable=True)
+        artifacts_bytes: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+        digest: Mapped[str] = mapped_column(String(71), nullable=False)
+        created_at: Mapped[datetime] = mapped_column(
+            DateTime(timezone=True), nullable=False
+        )
+
+
+if "InfraAutomationReportLink" not in globals():
+
+    class InfraAutomationReportLink(Base):
+        """Immutable relational provenance; no report schema/hash mutation."""
+
+        __tablename__ = "infra_automation_report_links"
+        __table_args__ = (
+            ForeignKeyConstraint(
+                ["manifest_id", "run_id", "project_id", "workspace_id", "requested_by"],
+                [
+                    "infra_automation_artifact_manifests.id",
+                    "infra_automation_artifact_manifests.run_id",
+                    "infra_automation_artifact_manifests.project_id",
+                    "infra_automation_artifact_manifests.workspace_id",
+                    "infra_automation_artifact_manifests.requested_by",
+                ],
+                ondelete="RESTRICT",
+            ),
+            ForeignKeyConstraint(
+                ["attempt_id"], ["infra_automation_attempts.id"], ondelete="RESTRICT"
+            ),
+            ForeignKeyConstraint(
+                ["report_id"], ["analysis_reports.id"], ondelete="RESTRICT"
+            ),
+            UniqueConstraint("attempt_id"),
+            UniqueConstraint("report_id"),
+            CheckConstraint(
+                "length(provenance_bytes) BETWEEN 1 AND 16384 AND length(digest) = 71",
+                name="ck_preflight_link_bounds",
+            ),
+        )
+        id: Mapped[str] = mapped_column(String(64), primary_key=True)
+        run_id: Mapped[str] = mapped_column(String(64), nullable=False)
+        attempt_id: Mapped[str] = mapped_column(String(64), nullable=False)
+        manifest_id: Mapped[str] = mapped_column(String(64), nullable=False)
+        report_id: Mapped[int] = mapped_column(Integer, nullable=False)
+        project_id: Mapped[int] = mapped_column(Integer, nullable=False)
+        workspace_id: Mapped[int] = mapped_column(Integer, nullable=False)
+        requested_by: Mapped[str] = mapped_column(String(64), nullable=False)
+        provenance_bytes: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+        digest: Mapped[str] = mapped_column(String(71), nullable=False)
+        created_at: Mapped[datetime] = mapped_column(
+            DateTime(timezone=True), nullable=False
+        )

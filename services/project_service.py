@@ -14,7 +14,7 @@ from typing import Any
 from urllib.parse import urlparse
 
 from pydantic import BaseModel, ConfigDict
-from sqlalchemy import exists, false, func, or_, select, true
+from sqlalchemy import and_, exists, false, func, or_, select, true
 from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlalchemy.orm import Session, aliased
 
@@ -1141,9 +1141,15 @@ def authorized_session(session_factory=None) -> Iterator[Session]:
         _require_operation(active)
         yield active
         return
+    from infra_automation.analysis_context import current as worker_operation
+
+    worker = worker_operation()
     credentials = _credentials.get()
-    factory = session_factory or (
-        credentials.service.session_factory if credentials else SessionLocal
+    factory = (
+        worker.factory
+        if worker is not None
+        else session_factory
+        or (credentials.service.session_factory if credentials else SessionLocal)
     )
     commit_callbacks: list[Callable[[Callable[[], Session]], None]] = []
     with factory() as session:
@@ -1312,6 +1318,10 @@ def guard_project(
     mutation: bool | None = None,
 ) -> TrustedProjectScope | None:
     _require_operation(session)
+    from infra_automation.analysis_context import current, guard_scope
+
+    if current() is not None:
+        return guard_scope(session, project_id, workspace_id, capability)
     project = session.get(Project, project_id)
     workspace = (
         session.get(ProjectWorkspace, workspace_id)
@@ -1400,6 +1410,16 @@ def _visible_scope_predicate(
     project_metadata: bool = False,
 ):
     _require_operation(session)
+    from infra_automation.analysis_context import current, guard_scope
+
+    operation = current()
+    if operation is not None:
+        handle = operation.handle
+        guard_scope(session, handle.project_id, handle.workspace_id, capability)
+        return and_(
+            project_id == handle.project_id,
+            true() if project_metadata else workspace_id == handle.workspace_id,
+        )
     profile = _profile()
     legacy = (
         ~_protected_project_predicate(project_id)
@@ -1481,6 +1501,10 @@ def guard_global_configuration(
     session: Session, *, mutation: bool = False
 ) -> VerifiedPrincipal | None:
     """Global administration must not change protected projects through defaults."""
+    from infra_automation.analysis_context import current
+
+    if current() is not None:
+        raise TrustedAuthorizationError()
     _require_operation(session)
     profile = _profile()
     projects = select(Project.id)

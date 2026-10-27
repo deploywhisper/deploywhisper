@@ -30,8 +30,10 @@ from api.schemas import (
     AutomationRunListResponse,
     AutomationStepListResponse,
     AutomationLogListResponse,
+    AutomationPreflightLinksResponse,
 )
 from infra_automation.state import CancelRunRequest, RunRequest
+from infra_automation.preflight_contracts import PreflightRequest
 from infra_automation.contracts import SAFE_INTEGER
 from infra_automation.lifecycle import (
     AdvanceEpochRequest,
@@ -50,6 +52,7 @@ from services.identity_service import IdentityError
 from services import project_service as authorization
 
 MAX_BODY_BYTES = 131072
+MAX_PREFLIGHT_BODY_BYTES = 12582912
 MAX_BODY_DEPTH = 16
 ObjectId = Annotated[
     str, Path(min_length=1, max_length=128, pattern=r"^[a-zA-Z0-9][a-zA-Z0-9_.:-]*$")
@@ -107,7 +110,7 @@ def _invalid_constant(value: str):
     raise ValueError
 
 
-async def _bounded_body(request: Request) -> None:
+async def _bounded_body(request: Request, *, maximum: int = MAX_BODY_BYTES) -> None:
     """Bound bytes and nesting before JSON or request-model construction."""
     if (
         request.headers.get("content-type", "").split(";", 1)[0].strip().lower()
@@ -116,7 +119,7 @@ async def _bounded_body(request: Request) -> None:
         raise LifecycleError()
     body = bytearray()
     async for chunk in request.stream():
-        if len(body) + len(chunk) > MAX_BODY_BYTES:
+        if len(body) + len(chunk) > maximum:
             raise LifecycleError(429)
         body.extend(chunk)
     try:
@@ -176,7 +179,12 @@ class AutomationRoute(ApiRoute):
                     ):
                         raise LifecycleError(409)
                     if request.method in {"POST", "PUT", "PATCH"}:
-                        await _bounded_body(request)
+                        await _bounded_body(
+                            request,
+                            maximum=MAX_PREFLIGHT_BODY_BYTES
+                            if self.path.endswith("/preflights")
+                            else MAX_BODY_BYTES,
+                        )
                     response = await original(request)
                     response.headers["Cache-Control"] = "no-store"
                     return response
@@ -371,3 +379,13 @@ def export_audit(
             project_id, workspace_id=workspace_id, limit=limit, cursor=cursor
         )
     )
+
+
+@router.post("/preflights", response_model=AutomationRunResponse)
+def request_preflight(payload: PreflightRequest):
+    return _response(service.request_preflight(payload))
+
+
+@router.get("/runs/{run_id}/reports", response_model=AutomationPreflightLinksResponse)
+def list_run_reports(run_id: ObjectId):
+    return _response(service.list_run_reports(run_id))

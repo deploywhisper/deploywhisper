@@ -60,7 +60,7 @@ class EngineCoordinatorContractTests(TestCase):
 
     def test_empty_registry_never_opens_database_or_workers(self):
         factory, workers = Mock(), Mock()
-        coordinator = Coordinator(factory, workers)
+        coordinator = Coordinator(factory, workers, registry=HandlerRegistry())
         coordinator.tick()
         coordinator.close()
         factory.assert_not_called()

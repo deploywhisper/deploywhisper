@@ -92,9 +92,9 @@ def _request_digest(request: RunRequest, document: SnapshotDocument) -> str:
 
 def _require_handlers(document: SnapshotDocument, registry) -> None:
     if registry is None:
-        from infra_automation.local_workers import DEFAULT_REGISTRY
+        from infra_automation.local_workers import default_registry
 
-        registry = DEFAULT_REGISTRY
+        registry = default_registry()
     if not callable(getattr(registry, "get", None)) or any(
         registry.get(step.kind) is None for step in document.definition.steps
     ):

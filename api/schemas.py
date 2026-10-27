@@ -34,6 +34,10 @@ from services.project_service import MembershipView
 # Workflow lifecycle values are closed independently of legacy API payloads.
 from infra_automation.contracts import ClosedModel as AutomationClosedModel
 from infra_automation.state import LogPage, RunPage, RunView, StepPage
+from infra_automation.preflight_contracts import (
+    PreflightEvidenceStatus,
+    PreflightLinkView,
+)
 from infra_automation.lifecycle import (
     AutomationSettings,
     CursorEnvelope as AutomationCursor,
@@ -2944,3 +2948,13 @@ class AutomationError(AutomationClosedModel):
 
 class AutomationErrorResponse(AutomationClosedModel):
     error: AutomationError
+
+
+class AutomationPreflightLinks(AutomationClosedModel):
+    items: list[PreflightLinkView] = Field(max_length=50)
+    evidence_status: PreflightEvidenceStatus
+
+
+class AutomationPreflightLinksResponse(AutomationClosedModel):
+    data: AutomationPreflightLinks
+    meta: AutomationMeta

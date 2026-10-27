@@ -63,6 +63,7 @@ _KNOWN_ALEMBIC_REVISIONS = {
     "030_add_project_memberships",
     "031_add_infra_workflows",
     "032_add_infra_automation_engine",
+    "033_add_infra_preflight",
 }
 _BASELINE_TABLES = {"analysis_reports", "app_settings"}
 _EVIDENCE_TABLES = {
@@ -1158,6 +1159,9 @@ def _bootstrap_brownfield_revision() -> None:
         has_complete_engine = _infra_automation_schema_complete(
             connection, tables, "032_add_infra_automation_engine"
         )
+        has_complete_preflight = _infra_automation_schema_complete(
+            connection, tables, "033_add_infra_preflight"
+        )
         tables = _repair_partial_evidence_schema(connection, tables)
 
         has_baseline_tables = _BASELINE_TABLES.issubset(tables)
@@ -1193,6 +1197,7 @@ def _bootstrap_brownfield_revision() -> None:
                 "030_add_project_memberships",
                 "031_add_infra_workflows",
                 "032_add_infra_automation_engine",
+                "033_add_infra_preflight",
             } and not _identity_schema_complete(connection, tables):
                 raise RuntimeError(
                     "Detected a partial identity schema. Manual recovery is required."
@@ -1203,6 +1208,7 @@ def _bootstrap_brownfield_revision() -> None:
                     "030_add_project_memberships",
                     "031_add_infra_workflows",
                     "032_add_infra_automation_engine",
+                    "033_add_infra_preflight",
                 }
                 and not has_complete_authorization
             ):
@@ -1211,7 +1217,11 @@ def _bootstrap_brownfield_revision() -> None:
                 )
             if (
                 revision
-                in {"031_add_infra_workflows", "032_add_infra_automation_engine"}
+                in {
+                    "031_add_infra_workflows",
+                    "032_add_infra_automation_engine",
+                    "033_add_infra_preflight",
+                }
                 and not has_complete_automation
             ):
                 raise RuntimeError(
@@ -1220,13 +1230,21 @@ def _bootstrap_brownfield_revision() -> None:
             if has_complete_automation and revision not in {
                 "031_add_infra_workflows",
                 "032_add_infra_automation_engine",
+                "033_add_infra_preflight",
             }:
                 raise RuntimeError(
                     "Detected a partial infra automation migration history. Manual recovery is required."
                 )
-            if (revision == "032_add_infra_automation_engine") != has_complete_engine:
+            if (
+                revision
+                in {"032_add_infra_automation_engine", "033_add_infra_preflight"}
+            ) != has_complete_engine:
                 raise RuntimeError(
                     "Detected a partial infra automation engine migration history. Manual recovery is required."
+                )
+            if (revision == "033_add_infra_preflight") != has_complete_preflight:
+                raise RuntimeError(
+                    "Detected a partial infra preflight migration history. Manual recovery is required."
                 )
             return
 
@@ -1456,6 +1474,12 @@ def _bootstrap_brownfield_revision() -> None:
                         "Detected a partial infra automation engine schema. Manual recovery is required."
                     )
                 revision = "032_add_infra_automation_engine"
+            if has_complete_preflight:
+                if not has_complete_engine:
+                    raise RuntimeError(
+                        "Detected a partial infra preflight schema. Manual recovery is required."
+                    )
+                revision = "033_add_infra_preflight"
             _write_alembic_revision(connection, revision)
             return
         if scoped_learning_columns_present and not has_complete_learning_context_scope:

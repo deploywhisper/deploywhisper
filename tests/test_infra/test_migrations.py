@@ -1141,7 +1141,7 @@ class MigrationTests(unittest.TestCase):
         self.assertIn("topology_versions", tables)
         self.assertIn("incident_ingestion_sources", tables)
         self._assert_incident_ingestion_source_schema()
-        self.assertEqual(revision, "032_add_infra_automation_engine")
+        self.assertEqual(revision, "033_add_infra_preflight")
 
     def test_init_db_repairs_partial_evidence_schema_without_alembic_version(
         self,
@@ -1192,7 +1192,7 @@ class MigrationTests(unittest.TestCase):
         self.assertIn("projects", tables)
         self.assertIn("incident_ingestion_sources", tables)
         self._assert_incident_ingestion_source_schema()
-        self.assertEqual(revision, "032_add_infra_automation_engine")
+        self.assertEqual(revision, "033_add_infra_preflight")
 
     def test_init_db_repairs_current_schema_without_alembic_version(self) -> None:
         command.upgrade(self._config(), "head")
@@ -1218,7 +1218,7 @@ class MigrationTests(unittest.TestCase):
         finally:
             sqlite_conn.close()
 
-        self.assertEqual(revision, "032_add_infra_automation_engine")
+        self.assertEqual(revision, "033_add_infra_preflight")
         self.assertIn("report_schema_version", columns)
         self.assertIn("blast_radius_json", columns)
         self.assertIn("project_id", columns)
@@ -1250,7 +1250,7 @@ class MigrationTests(unittest.TestCase):
         finally:
             sqlite_conn.close()
 
-        self.assertEqual(revision, "032_add_infra_automation_engine")
+        self.assertEqual(revision, "033_add_infra_preflight")
         self.assertEqual(
             self._index_columns("ix_deployment_outcomes_analysis_deployed_outcome"),
             ("analysis_id", "deployed_at", "outcome_label"),
@@ -1276,7 +1276,7 @@ class MigrationTests(unittest.TestCase):
         finally:
             sqlite_conn.close()
 
-        self.assertEqual(revision, "032_add_infra_automation_engine")
+        self.assertEqual(revision, "033_add_infra_preflight")
         self._assert_incident_ingestion_source_schema()
 
     def test_init_db_rejects_partial_report_workspace_scope_schema(self) -> None:
@@ -2031,7 +2031,7 @@ class MigrationTests(unittest.TestCase):
         finally:
             sqlite_conn.close()
 
-        self.assertEqual(revision, "032_add_infra_automation_engine")
+        self.assertEqual(revision, "033_add_infra_preflight")
         self._assert_incident_ingestion_source_schema()
 
 

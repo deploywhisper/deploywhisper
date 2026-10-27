@@ -55,6 +55,10 @@ class Coordinator:
     ):
         self.factory = session_factory
         self.workers = workers
+        if registry is None:
+            from infra_automation.local_workers import default_registry
+
+            registry = default_registry()
         self.registry = registry
         self.bounds = EngineBounds.model_validate(
             (config.engine_bounds() if bounds is None else bounds).model_dump()
