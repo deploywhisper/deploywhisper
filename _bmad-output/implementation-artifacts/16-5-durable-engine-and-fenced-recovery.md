@@ -518,7 +518,7 @@ operator recovery. Story returns to review for the next BMad code-review cycle.
 ### Code review rerun outcome — 2026-10-27
 
 Approved the full `3af659e..5e9a3b3` story diff with all three independent BMad
-review layers complete. No decision-needed, patch or deferred findings remain;
+review layers complete. No decision-needed or patch findings remain;
 two candidates were dismissed after validation. CR16.5-01–05 remain resolved.
 Fresh automation/API/migration pytest:365 passed,885 subtests passed; Ruff lint
 and repository-wide408-file formatting passed. Independent acceptance checks
@@ -529,3 +529,9 @@ Full scope, commands, triage and remaining limitations are in
 [16-5-code-review-2026-10-27.md](16-5-code-review-2026-10-27.md).
 Story status is done. BMad Help routes next to scoped Story16.6 readiness;
 later-story backlog and production integration/release gates remain unchanged.
+
+- [x] [Review][Defer][High] Inherited Vite 8.0.16 fails the remote frontend npm
+  audit gate [frontend/package-lock.json:2072] — deferred, pre-existing;
+  frontend dependency files are unchanged from baseline3af659e. Dependency
+  maintenance must resolve this before merging PR195. See the rerun report and
+  `deferred-work.md`; no audit suppression or dependency change was applied.
