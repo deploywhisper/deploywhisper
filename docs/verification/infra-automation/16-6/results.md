@@ -120,3 +120,10 @@ unittest passed 1,136 tests (two skips). Final local CI and deployment smoke det
 - Docker final source e3cb6df built successfully from git-tracked archive; health 200, evidence-status OpenAPI, Python 3.11/non-root/Node-absent assertions passed; temporary container removed.
 - Final type alignment 31 tests /405 subtests passed; repo-wide Ruff (424 files) and diff checks pass. Mypy: 308 diagnostics versus 314 baseline, zero new normalized errors.
 - No frozen protocol/report schema changed; no new dependency or rendered UI change. Git Flow branch preserved; status is done after all review fixes/local checks, with push/PR closure performed by the workflow.
+
+
+Remote closure: the Git Flow-compliant branch
+`feature/16-6-uploaded-artifact-preflight` was committed and pushed to `origin`;
+[PR #199](https://github.com/deploywhisper/deploywhisper/pull/199) targets `develop`.
+The story is done for implementation/review, while the PR remains open for
+independent human approval. No merge or release publication is claimed.
