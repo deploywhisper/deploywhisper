@@ -231,3 +231,22 @@ development_status:
   16-18-operator-recovery-retention-and-network-readiness: backlog
   16-19-production-qualification-and-v1-5-0-release: backlog
   epic-16-retrospective: optional
+
+  # Epic 17 is an independent lane (see planning-artifacts/epic-16-17-boundary-and-parallelization-plan.md).
+  # Retargeted 2026-10-20: Epic 17 ships in v1.5.0 with Epic 16 under one release tag.
+  # Development stays independent; the release gate is shared. Story 17.10 owns release integration.
+  # RFC 0002 accepted 2026-10-19; Story 17.0 is authorized. Stories 17.1+ remain backlog
+  # until Story 17.0 closes its feasibility gate and the dependency decision is recorded.
+  epic-17: in-progress
+  17-0-adopt-and-qualify-the-grounding-contract: ready-for-dev
+  17-1-cloud-connector-contract-and-snapshot-evidence: backlog
+  17-2-aws-read-only-session-allowlist-and-dry-run: backlog
+  17-3-plan-directed-reflection-and-bounded-collection: backlog
+  17-4-plan-versus-reality-divergence-and-ci-gate: backlog
+  17-5-live-dependency-graph-and-grounded-blast-radius: backlog
+  17-6-grounded-recoverability-and-rollback: backlog
+  17-7-snapshot-portability-and-air-gapped-grounding: backlog
+  17-8-live-context-ui: backlog
+  17-9-extensibility-cli-agent-and-qualification: backlog
+  17-10-v1-5-0-release-integration-and-joint-qualification: backlog
+  epic-17-retrospective: optional
