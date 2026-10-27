@@ -41,6 +41,7 @@ class SupplyChainRemediationTests(unittest.TestCase):
         for update in updates:
             self.assertEqual(update["target-branch"], "develop")
             self.assertEqual(update["schedule"]["interval"], "weekly")
+            self.assertEqual(update["open-pull-requests-limit"], "0")
 
     def test_release_write_scopes_are_limited_to_publishers(self):
         data = self.workflow("release")

@@ -203,14 +203,15 @@ class SkillContributionWorkflowTests(unittest.TestCase):
         self.assertIn("docs/contributing/skills.md", contributing)
         self.assertIn("docs/contributing/skills.md", authoring)
 
-    def test_daily_skill_analytics_refresh_workflow_exists(self) -> None:
+    def test_skill_analytics_refresh_requires_manual_dispatch(self) -> None:
         workflow = Path(".github/workflows/refresh-skill-analytics.yml").read_text(
             encoding="utf-8"
         )
 
         self.assertIn("Refresh Skill Analytics", workflow)
-        self.assertIn("schedule:", workflow)
-        self.assertIn("cron:", workflow)
+        self.assertIn("workflow_dispatch:", workflow)
+        self.assertNotIn("schedule:", workflow)
+        self.assertNotIn("cron:", workflow)
         self.assertIn("scripts/refresh_skill_analytics.py", workflow)
         self.assertIn("issues: read", workflow)
         self.assertIn("GITHUB_TOKEN", workflow)
