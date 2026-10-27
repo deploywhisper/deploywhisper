@@ -159,8 +159,17 @@ jobs:
             --format json \
             --desc \
             2>&1 | tee pip-audit.log
-          # Fail on critical/high severity; warn on others
+          # Enforce the runtime audit without suppressing reported advisories.
           pip-audit --requirement requirements.txt --strict
+
+      - name: Audit development dependencies for known vulnerabilities
+        run: |
+          pip-audit \
+            --requirement requirements-dev.txt \
+            --output pip-audit-dev-report.json \
+            --format json \
+            --desc \
+            --strict
 
       - name: Static security analysis with Bandit
         run: |
@@ -201,6 +210,7 @@ jobs:
           name: security-reports
           path: |
             pip-audit-report.json
+            pip-audit-dev-report.json
             pip-audit.log
             bandit-report.json
             bandit.log
