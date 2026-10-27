@@ -557,3 +557,10 @@ the expanded engine suite still running. Dedicated services and automation
 matrix rows retain the original15-minute budget and execute every test. Updated
 configuration coverage guards this split. These are verification corrections;
 engine runtime behavior and the scope of historical qualification remain intact.
+
+The older16.0 SQLite race test also exposed expected bounded SQLITE_BUSY denial
+as an unreported child result under coverage. Its test-local spawned adapter now
+reports that no-claim outcome as a loser, while exactly-one-winner/attempt checks
+and unexpected-error visibility remain enforced. The frozen prototype bytes are
+unchanged. Deterministic backpressure coverage was red before the adapter and
+green afterward;13real Linux qualification tests passed.

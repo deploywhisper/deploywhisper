@@ -4,12 +4,14 @@ from __future__ import annotations
 
 import importlib
 from pathlib import Path
+import queue
 import sqlite3
 import subprocess
 import sys
 import tempfile
 import threading
 import unittest
+from unittest.mock import patch
 
 
 PROTOTYPE = (
@@ -21,6 +23,16 @@ prototype = importlib.import_module(
 )
 
 
+def race_contender(path, barrier, results, owner):
+    """Adapt bounded backpressure without modifying frozen qualification bytes."""
+    try:
+        prototype.contender(path, barrier, results, owner)
+    except prototype.Busy:
+        # Exhausted SQLITE_BUSY admits no claim, so this contender lost. The
+        # parent still requires exactly one winner and one persisted attempt.
+        results.put(False)
+
+
 class SQLiteQualificationTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
@@ -29,10 +41,31 @@ class SQLiteQualificationTests(unittest.TestCase):
         self.store = prototype.Store(self.path)
 
     def test_independent_process_race_has_one_owner(self):
-        results = prototype.race(self.path)
+        # Spawn imports the adapter in a fresh interpreter with the original
+        # prototype contender, preserving its real independent-process race.
+        with patch.object(prototype, "contender", race_contender):
+            results = prototype.race(self.path)
         self.assertEqual(sorted(results), [False, True])
         self.assertEqual(self.store.row()["attempt"], 1)
         self.assertEqual(len(self.store.attempts()), 1)
+
+    def test_race_contender_reports_bounded_backpressure(self):
+        results = queue.SimpleQueue()
+        with patch.object(prototype, "contender", side_effect=prototype.Busy("busy")):
+            race_contender(self.path, None, results, "a")
+        self.assertIs(results.get_nowait(), False)
+        self.assertTrue(results.empty())
+
+    def test_race_contender_does_not_hide_unexpected_database_errors(self):
+        results = queue.SimpleQueue()
+        with (
+            patch.object(
+                prototype, "contender", side_effect=sqlite3.OperationalError("I/O")
+            ),
+            self.assertRaises(sqlite3.OperationalError),
+        ):
+            race_contender(self.path, None, results, "a")
+        self.assertTrue(results.empty())
 
     def test_reclaim_fences_all_stale_mutations_and_generation(self):
         old = self.store.claim("old", 0, 1, 10)
