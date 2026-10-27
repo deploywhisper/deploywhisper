@@ -43,7 +43,7 @@ transaction. Failed/cancelled/stale attempts cannot commit orphan reports. Repor
 links and manifests are immutable and scoped by foreign keys and SQLite guards.
 Linked reports protect their parent scope using existing 16.2 guards and cannot be
 deleted or rewritten by ordinary SQL. Existing share/export routes still require
-verified report membership; share passwords/tokens and role headers grant no bypass.
+verified report membership; share passwords/tokens and role headers grant no bypass. Authorized share-configuration and delete attempts for linked evidence return the existing controlled 403 response before SQL mutation. Bulk requests validate every member before deleting any ordinary report; SQL immutability guards remain in force.
 
 GET `/runs/{id}/reports` requires live automation.read and report.read and returns
 relational provenance plus canonical `/reports/{report_id}` URLs. Provenance is

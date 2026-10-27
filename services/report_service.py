@@ -21,7 +21,7 @@ from typing import Any, get_args
 from urllib.parse import urlsplit
 
 from pydantic import ValidationError
-from sqlalchemy import update
+from sqlalchemy import select, update
 from sqlalchemy.exc import DBAPIError
 
 from analysis.blast_radius import BlastRadiusResult
@@ -5091,6 +5091,22 @@ def fetch_report_comparison(
     return _build_report_comparison(current_report, previous_report)
 
 
+def _require_mutable_report(session, report_id: int) -> None:
+    """Deny linked report mutations before SQLite's immutable evidence guards."""
+    from models.tables import InfraAutomationReportLink
+    from services import project_service as authorization
+
+    if (
+        session.scalar(
+            select(InfraAutomationReportLink.id)
+            .where(InfraAutomationReportLink.report_id == report_id)
+            .limit(1)
+        )
+        is not None
+    ):
+        raise authorization.TrustedAuthorizationError()
+
+
 def configure_report_share(
     report_id: int,
     *,
@@ -5108,6 +5124,7 @@ def configure_report_share(
     def operation():
         with authorized_session(SessionLocal) as session:
             guard_report(session, report_id, "report.share.manage", mutation=True)
+            _require_mutable_report(session, report_id)
             report = update_analysis_report_share_settings(
                 session,
                 report_id,
@@ -6140,6 +6157,7 @@ def remove_analysis_report(report_id: int) -> bool:
         report = guard_report(session, report_id, "report.review", mutation=True)
         if report is None:
             return False
+        _require_mutable_report(session, report_id)
         project_id = report.project_id
         if report.authorization_required:
             # Removing the last marker must not reopen surviving project context.
@@ -6167,4 +6185,5 @@ def remove_analysis_reports(report_ids: list[int]) -> int:
         # Validate the complete batch before touching any row or snapshot.
         for report_id in report_ids:
             guard_report(session, report_id, "report.review", mutation=True)
+            _require_mutable_report(session, report_id)
         return sum(remove_analysis_report(report_id) for report_id in report_ids)

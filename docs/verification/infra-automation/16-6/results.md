@@ -76,7 +76,7 @@ closure before this story is marked done. This dev-story hands off at review. Im
 
 Review target: original Story16.6 change from8e4cf16 throughbee7199. Three native
 layers completed independently: diff-only Blind Hunter, repository Edge Case
-Hunter and spec/context Acceptance Auditor. Five behavioral patch findings, one type-contract follow-up and one CI portability fix, no unresolved
+Hunter and spec/context Acceptance Auditor. Six behavioral patch findings, one type-contract follow-up and one CI portability fix, no unresolved
 product decisions or pre-existing deferrals; two hypotheses dismissed after
 tracing existing recovery/transaction code and adding executable proof.
 
@@ -89,6 +89,7 @@ tracing existing recovery/transaction code and adding executable proof.
 | R5 lone-surrogate names survive direct intake validation | P3 | Strict filename UTF-8 screening returns 422 before classification/canonicalization; HTTP already rejects invalid Unicode and now has explicit regression coverage. |
 | R6 new type annotations disagree with strict validation and nullable lookup | P3 | Align byte/status types and reject a missing admitted row consistently; no new normalized mypy errors against current develop. |
 | R7 migration test assumes a repository-local virtualenv | P2 | Use the active interpreter and explicit repository root; reproduce and pass the test in an isolated tracked checkout with no .venv. |
+| R8 authorized immutable mutations return500 from database guards | P2 | Check linkage after live authorization and before share/delete operations; prevalidate entire bulk set; return existing403, retain SQL guards. |
 
 The crash-duplication hypothesis was dismissed: a real spawned successor adopts
 its predecessor's committed typed output and retains exactly one report/link.
@@ -148,3 +149,11 @@ established; the original diagnostic lacks the supervisor exit/timing detail nee
 to identify its precise OS cause. No supervision deadline or termination guard was
 relaxed. Hosted CI is rerun on the portable test fix; current results are linked
 from PR #199.
+
+
+R8 follow-up: actual migration033 guards and authorized HTTPS cookies/Origin/CSRF
+reproduced IntegrityError/HTTP500 for share configuration, single deletion and
+bulk deletion. The shared report service now rejects those intentional immutable
+mutations with the existing controlled403 before writes, preserving unlinked
+operations and every bulk member. New5tests/8subtests and25existing relevant tests/
+27subtests passed. Final full checks rerun on this small report-service correction.
