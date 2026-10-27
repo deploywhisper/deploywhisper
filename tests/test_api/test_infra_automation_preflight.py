@@ -131,7 +131,7 @@ class InfraAutomationPreflightApiTests(unittest.TestCase):
             f"/api/v1/infra-automation/runs/{run['id']}/reports", headers=self.headers()
         )
         self.assertEqual(links.status_code, 200, links.text)
-        self.assertEqual(links.json()["data"], {"items": []})
+        self.assertEqual(links.json()["data"]["items"], [])
 
     def test_actor_role_and_unrecognized_fields_cannot_select_authority(self):
         before = self.counts()
@@ -218,6 +218,25 @@ class InfraAutomationPreflightApiTests(unittest.TestCase):
                 )
                 self.assert_error(response, 422)
                 self.assertNotIn(secret, response.text)
+                self.assertEqual(self.counts(), before)
+
+    def test_escaped_lone_surrogate_names_return_generic_validation_error(self):
+        before = self.counts()
+        for name in ("\ud800.tf", "modules/\udfff/main.tf", "main\ud800.tf"):
+            payload = copy.deepcopy(self.payload)
+            payload["artifacts"][0]["name"] = name
+            # Send literal JSON escapes so the client does not encode surrogates.
+            body = json.dumps(payload, ensure_ascii=True).encode("ascii")
+            with self.subTest(name=ascii(name)):
+                response = self.client.post(
+                    self.path,
+                    content=body,
+                    headers=self.headers(**{"Content-Type": "application/json"}),
+                )
+                self.assert_error(response, 422)
+                self.assertNotIn("surrogate", response.text.lower())
+                self.assertNotIn("\\ud800", response.text.lower())
+                self.assertNotIn("\\udfff", response.text.lower())
                 self.assertEqual(self.counts(), before)
 
     def test_versioned_known_sensitive_corpus_has_zero_error_or_storage_matches(self):

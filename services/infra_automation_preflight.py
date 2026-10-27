@@ -2,16 +2,21 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
+from sqlalchemy import select
 
 from infra_automation import claims
 from infra_automation.analysis_context import current, validate
 from infra_automation.artifact_intake import screen_artifacts
+from infra_automation.preflight_evidence import build_evidence_status
 from infra_automation.lifecycle import LifecycleError
 from infra_automation.local_workers import HandlerRegistration, HandlerRegistry
 from infra_automation.preflight_contracts import PreflightRequest, UploadedProvenance
 from infra_automation.state import OutputReference, WorkerResult
 from models.repositories import infra_automation_reports as reports
 from models.repositories import infra_automation_runs as runs
+from models.tables import InfraAutomationArtifactManifest
 from services import infra_automation_engine_service as engine
 from services import infra_automation_support as support
 from services import project_service as auth
@@ -47,7 +52,7 @@ def request_preflight(request: PreflightRequest):
         return engine._view(run)
 
 
-def list_run_reports(run_id):
+def list_run_reports(run_id, *, now: datetime | None = None):
     with auth.authorized_session() as session:
         run, _ = engine._authorized_run(session, run_id)
         auth.guard_project(session, run.project_id, run.workspace_id, "report.read")
@@ -56,7 +61,33 @@ def list_run_reports(run_id):
             if auth.guard_report(session, row.report_id, "report.read") is None:
                 raise auth.TrustedAuthorizationError()
             items.append(reports.link_view(row))
-        return support.bounded_payload({"items": items})
+        document = engine._document(run)
+        intake_steps = {
+            step.id
+            for step in document.definition.steps
+            if step.kind == "uploaded_intake"
+        }
+        present = set(
+            session.scalars(
+                select(InfraAutomationArtifactManifest.step_id).where(
+                    InfraAutomationArtifactManifest.run_id == run.id,
+                    InfraAutomationArtifactManifest.project_id == run.project_id,
+                    InfraAutomationArtifactManifest.workspace_id == run.workspace_id,
+                    InfraAutomationArtifactManifest.requested_by == run.requested_by,
+                )
+            )
+        )
+        evidence_status = build_evidence_status(
+            run,
+            document,
+            runs.list_attempts(session, run_id=run.id),
+            manifest_present=bool(intake_steps) and intake_steps <= present,
+            links=items,
+            now=now or datetime.now(timezone.utc),
+        )
+        return support.bounded_payload(
+            {"items": items, "evidence_status": evidence_status.model_dump(mode="json")}
+        )
 
 
 def execute_preflight_step(value):

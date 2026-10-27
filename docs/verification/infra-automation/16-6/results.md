@@ -70,3 +70,32 @@ admission or raw saved-plan integrity. Later stories own human workflow screens,
 policy/approval, canonical decision snapshots, real collection and release proof.
 Independent code-review workflow must verify the final branch, commit/push and PR
 closure before this story is marked done. This dev-story hands off at review. Implementation commit: 5289b8d. Final story/sprint/status map all record review.
+
+
+## Adversarial code review — 2026-10-27
+
+Review target: original Story16.6 change from8e4cf16 throughbee7199. Three native
+layers completed independently: diff-only Blind Hunter, repository Edge Case
+Hunter and spec/context Acceptance Auditor. Five patch findings, no unresolved
+product decisions or pre-existing deferrals; two hypotheses dismissed after
+tracing existing recovery/transaction code and adding executable proof.
+
+| Finding | Severity | Resolution |
+| --- | --- | --- |
+| R1 failed/missing/stale evidence lost visible limitations without a report | P2 | Versioned read-only evidence_status projection renders fixed recovery guidance from persisted run/attempt/snapshot/manifest/link facts; evaluated freshness uses captured policy TTL. |
+| R2 legitimate warning/TODO counts overflow link models | P2 | Preserve mandatory summary entries, cap lists/bytes with explicit omitted counts, retain full detail in the report. |
+| R3 final opaque ID makes an admitted 16 KiB relation unreadable | P2 | Allocate and screen the exact final view before retaining its independently hashed payload. |
+| R4 snapshot copies omitted from retained-byte accounting | P2 | Count actual descriptor-validated snapshot and sidecar bytes once; authenticate before filesystem access; quota rollback removes report/link/files. |
+| R5 lone-surrogate names survive direct intake validation | P3 | Strict filename UTF-8 screening returns422 before classification/canonicalization; HTTP already rejects invalid Unicode and now has explicit regression coverage. |
+
+The crash-duplication hypothesis was dismissed: a real spawned successor adopts
+its predecessor's committed typed output and retains exactly one report/link.
+The COMMIT-compensation hypothesis was dismissed: a real deferred SQLite FK
+failure at COMMIT leaves the transaction active for snapshot compensation, rolls
+back report/link/output, and report-ID reuse exposes only replacement artifacts.
+These tests exercise the boundary rather than a prior callback-only exception.
+
+Fix validation:63focused tests/450subtests passed; owned and global Ruff checks
+pass. Final full checks and remote branch/PR closure are pending. New evidence
+status is an independent v1 projection; frozen engine/report/provenance schemas
+remain unchanged. UI validation not applicable.

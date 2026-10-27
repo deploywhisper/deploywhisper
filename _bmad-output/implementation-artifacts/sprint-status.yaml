@@ -216,7 +216,7 @@ development_status:
   16-3-closed-workflow-schema-and-validator: done
   16-4-scoped-workflows-and-immutable-revisions: done
   16-5-durable-engine-and-fenced-recovery: done
-  16-6-uploaded-artifact-preflight-and-report-linkage: review
+  16-6-uploaded-artifact-preflight-and-report-linkage: in-progress
   16-7-workflow-editor-and-run-history-ui: backlog
   16-8-evidence-bound-decisions-and-freshness: backlog
   16-9-human-approval-inbox-and-decision-ux: backlog

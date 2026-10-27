@@ -4,11 +4,11 @@ from __future__ import annotations
 
 from typing import Annotated, Literal
 
-from pydantic import Field, StrictInt, StrictStr
+from pydantic import Field, StrictBool, StrictInt, StrictStr
 
 from infra_automation.contracts import ClosedModel, CommitSha, Digest, Identifier
 from infra_automation.lifecycle import Positive
-from infra_automation.state import RunRequest, UTCText
+from infra_automation.state import AttemptState, RunRequest, RunState, UTCText
 
 
 class ArtifactUpload(ClosedModel):
@@ -65,3 +65,19 @@ class SyntheticCollectionEnvelope(ClosedModel):
     exit_code: Annotated[StrictInt, Field(ge=-255, le=255)]
     collected_at: UTCText
     source_deadline: UTCText
+
+
+class PreflightEvidenceStatus(ClosedModel):
+    version: Annotated[StrictInt, Field(ge=1, le=1)] = 1
+    status: Literal["pending", "available", "failed", "missing", "stale", "interrupted"]
+    run_state: RunState
+    run_version: Positive
+    attempt_id: Identifier | None
+    attempt_state: AttemptState | None
+    manifest_present: StrictBool
+    report_available: StrictBool
+    evaluated_at: UTCText
+    evidence_deadline: UTCText
+    limitations: Annotated[list[StrictStr], Field(max_length=2600)]
+    context_todos: Annotated[list[StrictStr], Field(max_length=2600)]
+    approval_eligible: Literal[False] = False

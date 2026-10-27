@@ -187,6 +187,65 @@ def get_manifest_for_step(session, run_id, step_id):
     return row
 
 
+def _bounded_link_summary(identity, provenance, limitations, context_todos):
+    """Keep a readable summary; original diagnostic detail stays in the report."""
+    originals = (
+        list(dict.fromkeys([provenance.limitation, *limitations])),
+        list(
+            dict.fromkeys(
+                [
+                    "Verify repository source and collect current complete evidence before any handoff decision.",
+                    *context_todos,
+                ]
+            )
+        ),
+    )
+    selected = [[values[0]] for values in originals]
+
+    def render():
+        summaries = []
+        for label, values, retained in zip(
+            ("limitations", "context TODOs"), originals, selected, strict=True
+        ):
+            omitted = len(values) - len(retained)
+            summaries.append(
+                retained
+                + (
+                    [f"Additional {label} omitted: {omitted}; see the full report."]
+                    if omitted
+                    else []
+                )
+            )
+        return PreflightLinkView(
+            **identity,
+            provenance=provenance,
+            limitations=summaries[0],
+            context_todos=summaries[1],
+            approval_eligible=False,
+        )
+
+    for index, values in enumerate(originals):
+        for item in values[1:]:
+            # Reserve a slot for an overflow count whenever entries are omitted.
+            maximum = 50 if len(values) <= 50 else 49
+            if len(selected[index]) >= maximum:
+                continue
+            selected[index].append(item)
+            candidate = render().model_dump(mode="json")
+            if (
+                len(
+                    json.dumps(candidate, ensure_ascii=False, allow_nan=False).encode(
+                        "utf-8"
+                    )
+                )
+                > 16384
+            ):
+                selected[index].pop()
+    value = render()
+    screen_metadata(value.model_dump(mode="json"))
+    return value
+
+
 def create_link(
     session,
     handle,
@@ -261,36 +320,30 @@ def create_link(
         or json.loads(prerequisite.output_json or "null") != expected
     ):
         raise LifecycleError(409)
-    try:
-        typed = UploadedProvenance.model_validate(provenance)
-        value = PreflightLinkView(
-            id="pending",
-            run_id=run.id,
-            attempt_id=attempt.id,
-            manifest_id=manifest.id,
-            report_id=report.id,
-            report_url=f"/reports/{report.id}",
-            provenance=typed,
-            limitations=list(dict.fromkeys([typed.limitation, *limitations])),
-            context_todos=list(
-                dict.fromkeys(
-                    [
-                        "Verify repository source and collect current complete evidence before any handoff decision.",
-                        *context_todos,
-                    ]
-                )
-            ),
-            approval_eligible=False,
-        )
-        payload = support.canonical(value.model_dump(mode="json", exclude={"id"}))
-        screen_metadata(json.loads(payload))
-    except (ValueError, TypeError):
-        raise LifecycleError(422) from None
     existing = session.scalar(
         select(InfraAutomationReportLink).where(
             InfraAutomationReportLink.attempt_id == attempt.id
         )
     )
+    link_id = existing.id if existing is not None else uuid4().hex
+    try:
+        typed = UploadedProvenance.model_validate(provenance)
+        value = _bounded_link_summary(
+            dict(
+                id=link_id,
+                run_id=run.id,
+                attempt_id=attempt.id,
+                manifest_id=manifest.id,
+                report_id=report.id,
+                report_url=f"/reports/{report.id}",
+            ),
+            typed,
+            limitations,
+            context_todos,
+        )
+        payload = support.canonical(value.model_dump(mode="json", exclude={"id"}))
+    except (ValueError, TypeError):
+        raise LifecycleError(422) from None
     if existing is not None:
         if existing.provenance_bytes != payload:
             raise LifecycleError(409)
@@ -304,9 +357,20 @@ def create_link(
     report_bytes = support.canonical(_serialize_report(report, include_evidence=True))
     if len(report_bytes) > 8388608:
         raise LifecycleError(429)
-    claims._charge(session, run, len(payload) + len(report_bytes), timestamp, bounds)
+    from services.artifact_snapshot_service import retained_report_artifact_bytes
+
+    snapshot_bytes = retained_report_artifact_bytes(
+        session, report.id, handle=handle, now=timestamp
+    )
+    claims._charge(
+        session,
+        run,
+        len(payload) + len(report_bytes) + snapshot_bytes,
+        timestamp,
+        bounds,
+    )
     row = InfraAutomationReportLink(
-        id=uuid4().hex,
+        id=link_id,
         run_id=run.id,
         attempt_id=attempt.id,
         manifest_id=manifest.id,

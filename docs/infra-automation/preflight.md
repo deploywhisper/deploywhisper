@@ -53,6 +53,26 @@ or exact-plan grant. Confidence limitations/context TODOs remain visible on the
 link, including missing/partial/stale evidence; eligibility is always false in this
 upload-only slice. Deterministic findings and Evidence Law labels remain unchanged.
 
+The relation also returns `evidence_status`, a separately versioned v1 read
+projection of the persisted run state/version, latest analysis (or intake)
+attempt, immutable snapshot/policy and manifest/report presence. Fixed versioned
+limitations and context TODOs render pending, failed, timed-out, cancelled,
+expired and mandatory-missing evidence even when no report could be created.
+Those facts survive restart; no optional log or stale worker credential is needed
+to read them. Unknown states fail closed, no numerical confidence is invented,
+and `approval_eligible` is always false. The projection identifies its basis and
+`evaluated_at`; `evidence_deadline` follows captured policy evidence TTL, separately
+from a shorter execution timeout. A stale report remains readable with explicit
+freshness/recollection guidance. Specific exception or revocation causes are not
+inferred from a generic persisted failure.
+
+Link metadata is a bounded summary: at most 50 entries per list and 16 KiB for the
+exact returned relation, including its opaque ID. Overflow messages state omitted
+counts and direct the member to the full report, which retains complete diagnostic
+detail. Quotas count the retained manifest, canonical report/link payloads and the
+additional actual snapshot files/sidecar bytes. Replay does not charge copies twice;
+a quota or final COMMIT failure compensates the report, linkage and snapshot files.
+
 ## Synthetic collection contract proof
 
 A service-only typed envelope binds project/workspace/run/step/attempt/fence,

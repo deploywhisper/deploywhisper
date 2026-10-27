@@ -93,6 +93,19 @@ class ArtifactIntakeTests(unittest.TestCase):
             with self.subTest(raw=raw):
                 self.assert_rejected([("main.tf", raw)])
 
+    def test_lone_surrogate_names_are_rejected_before_classification(self):
+        for name in ("\ud800.tf", "modules/\udfff/main.tf", "main\ud800.tf"):
+            with (
+                self.subTest(name=ascii(name)),
+                patch(
+                    "infra_automation.artifact_intake.detect_tool_type",
+                    side_effect=AssertionError(
+                        "No classification before UTF-8 screening"
+                    ),
+                ),
+            ):
+                self.assert_rejected([(name, self.terraform)])
+
     def test_inline_sensitive_corpus_is_rejected_without_reflection(self):
         for secret in self.corpus:
             with self.subTest(secret=secret):

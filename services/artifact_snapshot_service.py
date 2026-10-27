@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
+import stat
 import shutil
 from pathlib import Path
 from typing import Iterable
@@ -193,3 +195,60 @@ def delete_report_artifacts(report_id: int) -> None:
             raise TrustedAuthorizationError()
         _require_mutable_artifacts(session, report_id)
         _delete_report_artifacts_after_authorization(report_id)
+
+
+def retained_report_artifact_bytes(
+    session, report_id: int, *, handle=None, now=None
+) -> int:
+    """Count retained payload files and their sidecar under current report authority."""
+    from services import project_service as authorization
+
+    authorization._require_operation(session)
+    if handle is None:
+        if authorization.guard_report(session, report_id, "analysis.submit") is None:
+            raise authorization.TrustedAuthorizationError()
+    else:
+        from datetime import datetime, timezone
+        from infra_automation import claims
+        from models.tables import AnalysisReport
+
+        attempt = claims._attempt(session, handle, now or datetime.now(timezone.utc))
+        report = session.get(AnalysisReport, report_id)
+        member = authorization.membership_repository.get_membership(
+            session, principal_id=handle.principal_id, project_id=handle.project_id
+        )
+        if (
+            attempt.state != "running"
+            or attempt.step_kind != "shared_analysis"
+            or report is None
+            or (report.project_id, report.workspace_id)
+            != (handle.project_id, handle.workspace_id)
+            or member is None
+            or not member.enabled
+            or "analysis.submit"
+            not in authorization.PROJECT_ROLE_CAPABILITIES.get(member.role, ())
+        ):
+            raise authorization.TrustedAuthorizationError()
+    report_dir = _report_dir(report_id, create=False)
+    if not report_dir.exists():
+        return 0
+    # Descriptors keep a replaced path from redirecting the byte accounting to
+    # another directory or following a symlink between validation and open.
+    directory_fd = os.open(report_dir, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    try:
+        total = 0
+        for name in os.listdir(directory_fd):
+            _snapshot_path(report_dir, name)
+            descriptor = os.open(
+                name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=directory_fd
+            )
+            try:
+                info = os.fstat(descriptor)
+                if not stat.S_ISREG(info.st_mode):
+                    raise ValueError("Artifact snapshot payload is unsafe.")
+                total += info.st_size
+            finally:
+                os.close(descriptor)
+        return total
+    finally:
+        os.close(directory_fd)

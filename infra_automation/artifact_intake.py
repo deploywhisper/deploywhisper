@@ -85,9 +85,14 @@ def screen_artifacts(
     names: set[str] = set()
     texts = []
     for name, raw in files:
+        if not 1 <= len(name) <= 256:
+            raise LifecycleError(422)
+        try:
+            name.encode("utf-8", errors="strict")
+        except UnicodeError:
+            raise LifecycleError(422) from None
         if (
-            not 1 <= len(name) <= 256
-            or any(ord(char) < 32 or ord(char) == 127 for char in name)
+            any(ord(char) < 32 or ord(char) == 127 for char in name)
             or "\\" in name
             or trusted_relative_artifact_path(name) != name
             or name in names
