@@ -4,5 +4,7 @@ pytest-cov==7.1.0
 httpx==0.28.1
 ruff==0.15.11
 mypy==1.19.1
-pip-audit==2.10.0
+# The patched filelock used by audit-tool caching requires Python 3.11+.
+# Runtime and the remaining test tooling retain the project's Python 3.10 floor.
+pip-audit==2.10.0 ; python_version >= "3.11"
 bandit==1.9.4
