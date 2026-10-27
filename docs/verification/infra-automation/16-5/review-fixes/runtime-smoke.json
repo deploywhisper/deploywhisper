@@ -1,0 +1,11 @@
+{
+  "health": "ok",
+  "migration": "032_add_infra_automation_engine",
+  "engine_identity": 0,
+  "leases": 0,
+  "slot_directory": false,
+  "integrity": "ok",
+  "qualified_runtime_commit": "fbb638c13fd5613d0f96c587e1e91e77e9f66bd4",
+  "image_id": "sha256:889caacc284c32de31ab4e0058c375a8e0ce2bb9aa279f5045ec9ad445a1f6fa",
+  "startup_and_restart_verified": true
+}

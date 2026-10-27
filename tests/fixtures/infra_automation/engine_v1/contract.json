@@ -1,0 +1,264 @@
+{
+  "version": 1,
+  "owner": "16.5",
+  "workflow_version": 2,
+  "run_states": [
+    "queued",
+    "running",
+    "waiting_approval",
+    "ready_handoff",
+    "handing_off",
+    "external_running",
+    "succeeded",
+    "failed",
+    "stopped_by_gate",
+    "rejected",
+    "expired",
+    "timed_out",
+    "cancelled",
+    "delivery_unknown"
+  ],
+  "attempt_states": [
+    "pending",
+    "claimed",
+    "running",
+    "succeeded",
+    "failed",
+    "timed_out",
+    "cancelled"
+  ],
+  "request": {
+    "workflow_id": "wf_synthetic",
+    "revision_id": "rev_synthetic",
+    "workspace_id": 100,
+    "inputs": {},
+    "idempotency_key": "request_synthetic",
+    "reason": "Synthetic engine qualification.",
+    "total_timeout_seconds": 3600
+  },
+  "defaults": {
+    "coordinator_lease_seconds": 30,
+    "attempt_lease_seconds": 30,
+    "heartbeat_seconds": 10,
+    "attempt_timeout_seconds": 300,
+    "max_attempt_timeout_seconds": 600,
+    "max_attempts": 3,
+    "cancellation_deadline_seconds": 5,
+    "project_active_runs": 10,
+    "project_queued_runs": 100,
+    "workflow_active_runs": 5,
+    "workflow_queued_runs": 25,
+    "analysis_workers": 2,
+    "project_bytes": 67108864,
+    "global_bytes": 268435456,
+    "attempt_log_bytes": 1048576,
+    "log_chunk_utf8_bytes": 16384,
+    "page_items": 25,
+    "max_page_items": 100,
+    "global_queued_runs": 1000,
+    "disk_reserve_bytes": 67108864
+  },
+  "fault_boundaries": [
+    "run_admission",
+    "coordinator_acquire",
+    "coordinator_renew",
+    "coordinator_release",
+    "attempt_claim",
+    "attempt_start",
+    "attempt_heartbeat",
+    "attempt_log",
+    "attempt_upload_reference",
+    "attempt_output",
+    "attempt_complete",
+    "attempt_retry",
+    "attempt_expire",
+    "run_transition",
+    "cancel_request",
+    "cancel_completion"
+  ],
+  "fault_points": [
+    "before_commit",
+    "after_commit"
+  ],
+  "denials": [
+    "wrong_principal",
+    "wrong_project",
+    "wrong_workspace",
+    "wrong_run",
+    "wrong_step",
+    "wrong_attempt",
+    "old_fence",
+    "old_generation",
+    "wrong_owner",
+    "expired_coordinator_lease",
+    "expired_attempt_lease",
+    "expired_total_deadline",
+    "disabled_feature",
+    "revoked_membership",
+    "changed_policy",
+    "restore_epoch",
+    "clock_rollback"
+  ],
+  "qualification": {
+    "transitions": 1000,
+    "p95_ready_transition_seconds_max": 1,
+    "capacity_elapsed_seconds": 1800,
+    "active_runs": 10,
+    "analysis_workers_max": 2,
+    "synthetic_runner_slots": 20,
+    "real_receiver_support": false,
+    "host_power_loss_qualified": false,
+    "minimum_workflows": 2
+  },
+  "cancel_request": {
+    "expected_version": 1,
+    "reason": "Synthetic cancellation."
+  },
+  "retry_request": {
+    "expected_version": 1,
+    "reason": "Synthetic retry."
+  },
+  "output_reference": {
+    "kind": "report",
+    "reference": "report_synthetic",
+    "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  },
+  "coordinator_handle_fields": [
+    "owner_id",
+    "owner_secret",
+    "generation"
+  ],
+  "attempt_handle_fields": [
+    "owner_id",
+    "owner_secret",
+    "generation",
+    "project_id",
+    "workspace_id",
+    "principal_id",
+    "run_id",
+    "step_id",
+    "attempt_id",
+    "attempt_number",
+    "fence",
+    "authorization_epoch",
+    "restore_epoch"
+  ],
+  "worker_outcomes": [
+    "local_success",
+    "retryable_local_failure",
+    "permanent_local_failure",
+    "stopped_by_gate",
+    "rejected",
+    "external_unknown"
+  ],
+  "run_edges": {
+    "queued": [
+      "running",
+      "cancelled",
+      "expired",
+      "timed_out",
+      "failed"
+    ],
+    "running": [
+      "waiting_approval",
+      "ready_handoff",
+      "handing_off",
+      "external_running",
+      "succeeded",
+      "failed",
+      "stopped_by_gate",
+      "rejected",
+      "expired",
+      "timed_out",
+      "cancelled"
+    ],
+    "waiting_approval": [
+      "ready_handoff",
+      "failed",
+      "stopped_by_gate",
+      "rejected",
+      "expired",
+      "timed_out",
+      "cancelled"
+    ],
+    "ready_handoff": [
+      "handing_off",
+      "failed",
+      "stopped_by_gate",
+      "rejected",
+      "expired",
+      "timed_out",
+      "cancelled"
+    ],
+    "handing_off": [
+      "external_running",
+      "delivery_unknown"
+    ],
+    "external_running": [
+      "delivery_unknown"
+    ],
+    "delivery_unknown": [],
+    "succeeded": [],
+    "failed": [],
+    "stopped_by_gate": [],
+    "rejected": [],
+    "expired": [],
+    "timed_out": [],
+    "cancelled": []
+  },
+  "attempt_edges": {
+    "pending": [
+      "claimed",
+      "failed",
+      "timed_out",
+      "cancelled"
+    ],
+    "claimed": [
+      "running",
+      "failed",
+      "timed_out",
+      "cancelled"
+    ],
+    "running": [
+      "succeeded",
+      "failed",
+      "timed_out",
+      "cancelled"
+    ],
+    "succeeded": [],
+    "failed": [],
+    "timed_out": [],
+    "cancelled": []
+  },
+  "recovery_rules": {
+    "local_inflight": "New fenced attempt only for declared retry-safe handler within unchanged run deadline.",
+    "output_before_completion": "Reuse committed immutable output without rerunning handler; require new current fenced ownership.",
+    "external_uncertain": "delivery_unknown; read/cancel-request only; no automatic retry.",
+    "cancel_committed_before_signal": "Restart repeats owned-tree termination; completion remains invalid.",
+    "revoked_or_disabled": "Safety cleanup only; no result acceptance or new effects."
+  },
+  "invalid_requests": [
+    {
+      "field": "workspace_id",
+      "value": true,
+      "status": 422
+    },
+    {
+      "field": "total_timeout_seconds",
+      "value": 3601,
+      "status": 422
+    },
+    {
+      "field": "state",
+      "value": "running",
+      "status": 422
+    },
+    {
+      "field": "inputs",
+      "value": {
+        "bad/key": "value"
+      },
+      "status": 422
+    }
+  ]
+}

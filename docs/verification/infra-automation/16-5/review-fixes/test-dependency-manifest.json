@@ -1,0 +1,13 @@
+{
+  "name": "tomli",
+  "version": "2.5.0",
+  "origin": "Existing pinned requirements-dev.txt dependency; pure-Python files verified against installed distribution RECORD",
+  "requirements_dev_sha256": "4cd25fd1345a395b15eb95c67e377c49ba58241d76d6eceedbc324b5e8c7a70f",
+  "files": {
+    "_types.py": "f864c6d9552a929c7032ace654ee05ef26ca75d21b027b801d77e65907138b74",
+    "__init__.py": "7182927b251660b7d649eec79e0dcaf03a59973793400990a693d9f6f8b73eca",
+    "_parser.py": "3e782f1bc85639ecef630ae686df3d849f2bedd2e9c987d8f5109a5a154df131",
+    "_re.py": "a12359fe294523a72112e434d58452a14c9d050affa2417f9927474e4166bfdd",
+    "py.typed": "f0f8f2675695a10a5156fb7bd66bafbaae6a13e8d315990af862c792175e6e67"
+  }
+}

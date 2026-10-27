@@ -1,0 +1,495 @@
+"""Trusted local handlers in bounded spawned processes; no executor queue."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from contextlib import contextmanager
+import math
+import multiprocessing
+import os
+import signal
+import struct
+import time
+from typing import Callable
+
+from sqlalchemy import create_engine, event
+from sqlalchemy.engine import make_url
+from sqlalchemy.orm import sessionmaker
+
+import config
+from infra_automation import claims
+from infra_automation.storage import configure_engine_sqlite
+from infra_automation.contracts import STEP_CONTRACTS
+from infra_automation.lifecycle import SnapshotDocument
+from infra_automation.worker_failures import (
+    InfrastructureOperationError,
+    failure_outcome,
+)
+from infra_automation.worker_supervision import (
+    OWNER_PULSE_SECONDS,
+    global_slot_available,
+    supervisor_main,
+)
+from infra_automation.state import (
+    AttemptHandle,
+    EngineBounds,
+    OutputReference,
+    WorkerResult,
+)
+from models.repositories import infra_automation_runs as repository
+from services import project_service as authorization
+
+
+@dataclass(frozen=True)
+class WorkerInput:
+    snapshot_bytes: bytes
+    step_id: str
+    prerequisites: tuple[tuple[str, bytes], ...]
+
+    def __post_init__(self):
+        if (
+            type(self.snapshot_bytes) is not bytes
+            or not 1 <= len(self.snapshot_bytes) <= 524288
+            or type(self.step_id) is not str
+            or type(self.prerequisites) is not tuple
+            or len(self.prerequisites) > 50
+            or any(
+                type(item) is not tuple
+                or len(item) != 2
+                or type(item[0]) is not str
+                or type(item[1]) is not bytes
+                or len(item[1]) > 1024
+                for item in self.prerequisites
+            )
+        ):
+            raise ValueError("Invalid immutable worker input.")
+
+
+@dataclass(frozen=True)
+class HandlerRegistration:
+    handler_id: str
+    handler_version: str
+    step_kind: str
+    output_kind: str | None
+    retry_safe: bool
+    handler: Callable[[WorkerInput], WorkerResult] = field(repr=False)
+
+    def __post_init__(self):
+        if (
+            self.step_kind not in STEP_CONTRACTS
+            or STEP_CONTRACTS[self.step_kind].output != self.output_kind
+            or type(self.retry_safe) is not bool
+            or not callable(self.handler)
+            or any(
+                type(value) is not str or not 1 <= len(value) <= 128
+                for value in (self.handler_id, self.handler_version)
+            )
+            or (self.output_kind is None and self.retry_safe)
+        ):
+            raise ValueError("Invalid trusted handler registration.")
+
+
+@dataclass(frozen=True)
+class HandlerRegistry:
+    registrations: tuple[HandlerRegistration, ...] = ()
+
+    def __post_init__(self):
+        if (
+            type(self.registrations) is not tuple
+            or any(type(item) is not HandlerRegistration for item in self.registrations)
+            or len({item.step_kind for item in self.registrations})
+            != len(self.registrations)
+        ):
+            raise ValueError("Handler registry must be immutable and unique.")
+
+    def get(self, step_kind):
+        return next(
+            (item for item in self.registrations if item.step_kind == step_kind), None
+        )
+
+    def __bool__(self):
+        return bool(self.registrations)
+
+
+DEFAULT_REGISTRY = HandlerRegistry()
+
+
+@dataclass(frozen=True)
+class WorkerCompletion:
+    handle: AttemptHandle = field(repr=False)
+    result: WorkerResult
+    crashed: bool = False
+
+
+class WorkerTerminationError(RuntimeError):
+    def __init__(self):
+        super().__init__("Owned local worker termination could not be confirmed.")
+
+
+@contextmanager
+def _infrastructure_operation():
+    """Classify storage only inside explicit wrapper-owned operations."""
+    try:
+        yield
+    except InfrastructureOperationError:
+        raise
+    except Exception as error:
+        raise InfrastructureOperationError(error) from None
+
+
+def _worker_main(
+    database_url,
+    handle,
+    registration,
+    value,
+    bounds,
+    channel,
+    supervision_ready=None,
+    execution_gate=None,
+):
+    """Private wrapper owns the capability; trusted handler receives input only."""
+    engine = None
+    external_started = False
+    try:
+        if os.name == "posix":
+            os.setsid()
+        if supervision_ready is not None:
+            # No database/handler work may escape an unconfirmed supervisor.
+            supervision_ready.send_bytes(b"ready")
+            supervision_ready.close()
+            if not execution_gate.poll(5) or execution_gate.recv_bytes() != b"start":
+                return
+            execution_gate.close()
+        channel.send_bytes(b"ready")
+        with _infrastructure_operation():
+            engine = create_engine(database_url, connect_args={"timeout": 2})
+
+            @event.listens_for(engine, "connect")
+            def configure(connection, _record):
+                connection.execute("PRAGMA foreign_keys=ON")
+                connection.execute("PRAGMA synchronous=FULL")
+
+            configure_engine_sqlite(engine)
+            factory = sessionmaker(engine, expire_on_commit=False)
+
+        def write(function, **kwargs):
+            with (
+                _infrastructure_operation(),
+                authorization.authorized_session(factory) as session,
+            ):
+                row = repository.get_attempt(session, handle.attempt_id)
+                if row is None:
+                    raise ValueError("Attempt unavailable.")
+                return function(session, handle, expected_version=row.version, **kwargs)
+
+        with (
+            _infrastructure_operation(),
+            authorization.authorized_session(factory) as session,
+        ):
+            run = repository.get_run(session, handle.run_id)
+            attempt = repository.get_attempt(session, handle.attempt_id)
+            if (
+                run is None
+                or attempt is None
+                or run.snapshot_bytes != value.snapshot_bytes
+                or handle.step_id != value.step_id
+            ):
+                raise ValueError("Immutable worker binding unavailable.")
+            if (
+                attempt.handler_id,
+                attempt.handler_version,
+                attempt.step_kind,
+                attempt.retry_safe,
+            ) != (
+                registration.handler_id,
+                registration.handler_version,
+                registration.step_kind,
+                registration.retry_safe,
+            ):
+                raise ValueError("Trusted handler binding unavailable.")
+            document = SnapshotDocument.model_validate_json(value.snapshot_bytes)
+            step = next(
+                item for item in document.definition.steps if item.id == value.step_id
+            )
+            attempts = repository.list_attempts(session, run_id=run.id)
+            expected = tuple(
+                (
+                    dependency,
+                    next(
+                        item
+                        for item in reversed(attempts)
+                        if item.step_id == dependency and item.state == "succeeded"
+                    ).output_json.encode(),
+                )
+                for dependency in step.depends_on
+            )
+            if value.prerequisites != expected:
+                raise ValueError("Immutable prerequisite binding unavailable.")
+        write(claims.start_attempt, bounds=bounds)
+        if registration.step_kind == "registered_github_handoff":
+            if write(claims.begin_external, bounds=bounds) is None:
+                raise ValueError("External intent unavailable.")
+            external_started = True
+            # This is a trusted local uncertainty double, with no transport.
+            registration.handler(value)
+            result = WorkerResult(outcome="external_unknown")
+        else:
+            adopted = write(claims.adopt_committed_output, bounds=bounds)
+            if adopted is not None:
+                result = WorkerResult(
+                    outcome="local_success",
+                    output=OutputReference.model_validate_json(adopted.output_json),
+                )
+            else:
+                result = WorkerResult.model_validate(
+                    registration.handler(value).model_dump()
+                )
+        if result.outcome == "external_unknown" and not external_started:
+            raise ValueError("External adapter unavailable.")
+        if result.outcome == "local_success":
+            if result.output is None or result.output.kind != registration.output_kind:
+                raise ValueError("Required typed output unavailable.")
+            write(claims.register_upload, reference=result.output, bounds=bounds)
+            write(claims.commit_output, output=result.output, bounds=bounds)
+        elif result.output is not None:
+            raise ValueError("Failed work cannot commit an output.")
+        channel.send_bytes(result.model_dump_json().encode("utf-8"))
+    except Exception as error:
+        # Fixed diagnostics: exceptions may contain sensitive handler inputs.
+        try:
+            channel.send_bytes(
+                WorkerResult(
+                    outcome=failure_outcome(
+                        error,
+                        external_started=external_started,
+                        retry_safe=registration.retry_safe,
+                    )
+                )
+                .model_dump_json()
+                .encode("utf-8")
+            )
+        except (BrokenPipeError, EOFError, OSError):
+            pass
+    finally:
+        channel.close()
+        if engine is not None:
+            engine.dispose()
+
+
+@dataclass
+class _OwnedProcess:
+    process: object
+    channel: object
+    handle: AttemptHandle = field(repr=False)
+    liveness: object | None = field(default=None, repr=False)
+    ready: bool = False
+    result: WorkerResult | None = None
+    crashed: bool = False
+
+
+class SpawnProcessWorkers:
+    def __init__(self, database_url, *, max_workers=None, bounds=None):
+        self.bounds = EngineBounds.model_validate(
+            (config.engine_bounds() if bounds is None else bounds).model_dump()
+        )
+        max_workers = (
+            self.bounds.analysis_workers if max_workers is None else max_workers
+        )
+        url = make_url(database_url)
+        if (
+            url.drivername != "sqlite"
+            or not url.database
+            or url.database == ":memory:"
+            or url.host
+            or url.username
+            or url.password
+            or url.query
+            or type(max_workers) is not int
+            or not 1 <= max_workers <= 2
+        ):
+            raise ValueError(
+                "Workers require a local file SQLite profile and one or two slots."
+            )
+        self.database_url = str(url)
+        self.max_workers = max_workers
+        if max_workers > self.bounds.analysis_workers:
+            raise ValueError("Worker slots exceed server bounds.")
+        self._context = multiprocessing.get_context("spawn")
+        self._owned = {}
+        self._closed = False
+
+    @property
+    def can_submit(self):
+        return (
+            not self._closed
+            and len(self._owned) < self.max_workers
+            and global_slot_available(self.database_url, self.max_workers)
+        )
+
+    @property
+    def handles(self):
+        return tuple(item.handle for item in self._owned.values())
+
+    def submit(self, handle, registration, value):
+        if (
+            type(handle) is not AttemptHandle
+            or type(registration) is not HandlerRegistration
+            or type(value) is not WorkerInput
+        ):
+            raise ValueError("Invalid local worker binding.")
+        if value.step_id != handle.step_id:
+            raise ValueError("Invalid local worker binding.")
+        if not self.can_submit or handle.attempt_id in self._owned:
+            raise ValueError("Local worker capacity unavailable.")
+        parent, child = self._context.Pipe(duplex=False)
+        liveness_rx, liveness_tx = self._context.Pipe(duplex=False)
+        os.set_blocking(liveness_tx.fileno(), False)
+        worker_args = (
+            self.database_url,
+            handle,
+            registration,
+            value,
+            self.bounds,
+            child,
+        )
+        process = self._context.Process(
+            target=supervisor_main,
+            args=(
+                self.database_url,
+                handle.attempt_id,
+                _worker_main,
+                worker_args,
+                liveness_rx,
+                child,
+                self.max_workers,
+            ),
+        )
+        try:
+            process.start()
+        except BaseException:
+            parent.close()
+            child.close()
+            liveness_rx.close()
+            liveness_tx.close()
+            raise
+        child.close()
+        liveness_rx.close()
+        self._owned[handle.attempt_id] = _OwnedProcess(
+            process,
+            parent,
+            handle,
+            liveness=liveness_tx,
+        )
+
+    def heartbeat(self, expires_at):
+        """Private finite pulse, supplied only after committed owner validation."""
+        now = time.monotonic()
+        if (
+            type(expires_at) not in (int, float)
+            or not math.isfinite(expires_at)
+            or expires_at <= now
+        ):
+            return
+        pulse = struct.pack("!d", min(expires_at, now + OWNER_PULSE_SECONDS))
+        for item in self._owned.values():
+            try:
+                item.liveness.send_bytes(pulse)
+            except (BrokenPipeError, EOFError, OSError, ValueError):
+                # Never block authority processing on an unavailable guardian.
+                pass
+
+    def poll(self):
+        completed = []
+        for attempt_id, item in tuple(self._owned.items()):
+            result = item.result
+            crashed = item.crashed
+            try:
+                # At most a ready marker and one bounded result per child.
+                for _ in range(0 if result is not None else 2):
+                    if not item.channel.poll():
+                        break
+                    payload = item.channel.recv_bytes(2048)
+                    if payload == b"ready" and not item.ready:
+                        item.ready = True
+                    else:
+                        result = WorkerResult.model_validate_json(payload)
+                        break
+            except (EOFError, OSError, ValueError):
+                crashed = True
+            if result is None and not crashed and item.process.is_alive():
+                continue
+            if result is None:
+                crashed = True
+                result = WorkerResult(outcome="permanent_local_failure")
+            item.result, item.crashed = result, crashed
+            self._dispose(item)
+            completed.append(WorkerCompletion(item.handle, result, crashed))
+            del self._owned[attempt_id]
+        return tuple(completed)
+
+    def _dispose(self, item, *, deadline=None):
+        # EOF asks the independent supervisor to confirm the whole group is dead.
+        # Batch cancellation signals every group first and shares one deadline.
+        process = item.process
+        deadline = time.monotonic() + 4.5 if deadline is None else deadline
+        try:
+            if process.is_alive():
+                self._signal(item, signal.SIGTERM)
+            process.join(timeout=0.1)
+            while True:
+                if not process.is_alive() and not self._group_alive(item):
+                    item.channel.close()
+                    if item.liveness is not None:
+                        item.liveness.close()
+                    process.close()
+                    return
+                self._signal(item, signal.SIGKILL)
+                process.join(timeout=0.02)
+                if time.monotonic() >= deadline:
+                    raise WorkerTerminationError()
+                time.sleep(0.02)
+        except (OSError, ValueError, IndexError):
+            raise WorkerTerminationError() from None
+
+    @staticmethod
+    def _group_alive(item):
+        # Only the supervisor can confirm and release its authenticated group.
+        # An abnormal supervisor exit leaves a dirty global slot, never free work.
+        return item.process.is_alive() or item.process.exitcode != 0
+
+    @staticmethod
+    def _signal(item, _signum):
+        if item.liveness is None:
+            raise WorkerTerminationError()
+        item.liveness.close()
+
+    def cancel_many(self, attempt_ids):
+        deadline = time.monotonic() + 4.5
+        selected = tuple(
+            (key, self._owned[key]) for key in attempt_ids if key in self._owned
+        )
+        failed = set()
+        # Signal all supervisors before joining any one of them.
+        for key, item in selected:
+            try:
+                self._signal(item, signal.SIGTERM)
+            except (OSError, ValueError, WorkerTerminationError):
+                failed.add(key)
+        for key, item in selected:
+            if key in failed:
+                continue
+            try:
+                self._dispose(item, deadline=deadline)
+            except WorkerTerminationError:
+                failed.add(key)
+            else:
+                del self._owned[key]
+        if failed:
+            raise WorkerTerminationError()
+
+    def cancel(self, attempt_id):
+        self.cancel_many((attempt_id,))
+
+    def close(self):
+        self._closed = True
+        self.cancel_many(tuple(self._owned))

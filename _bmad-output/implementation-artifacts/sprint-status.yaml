@@ -1,5 +1,5 @@
 # generated: 2026-05-01
-# last_updated: 2026-10-19
+# last_updated: 2026-10-27
 # project: deploywhisper
 # project_key: NOKEY
 # tracking_system: file-system
@@ -28,7 +28,7 @@
 #   - done: Retrospective has been completed
 #
 # RECONCILIATION BASELINE: v1.4.0 published 2026-10-07; accepted through 12.4, plus 12.6 and 13.8
-# NEXT IMPLEMENTATION: assess 16.5 durable-engine readiness; Stories 16.1–16.4 done
+# NEXT IMPLEMENTATION: assess 16.6 scoped readiness; Stories 16.1–16.5 done
 # RELEASE ENABLER: 12-5-sbom-and-release-checksums (SBOM remains unshipped)
 # EVIDENCE: story-implementation-status-map.md and planning-artifacts/sprint-change-proposal-2026-10-07-v1.4.0-status-reconciliation.md
 # WORKFLOW NOTES:
@@ -39,7 +39,7 @@
 # - Dev moves story to review, then runs code-review
 
 generated: 2026-05-01
-last_updated: 2026-10-19
+last_updated: 2026-10-27
 project: deploywhisper
 project_key: NOKEY
 tracking_system: file-system
@@ -48,7 +48,7 @@ story_location: _bmad-output/implementation-artifacts
 release_priorities:
   v1.5.0:
     highest_priority_feature: epic-16
-    next_planning_story: 16-5-durable-engine-and-fenced-recovery
+    next_planning_story: 16-6-uploaded-artifact-preflight-and-report-linkage
     release_enablers:
       - 12-5-sbom-and-release-checksums
       - 12-7-backup-restore-upgrade-and-retention-docs
@@ -215,7 +215,7 @@ development_status:
   16-2-trusted-project-memberships-and-automation-permissions: done
   16-3-closed-workflow-schema-and-validator: done
   16-4-scoped-workflows-and-immutable-revisions: done
-  16-5-durable-engine-and-fenced-recovery: backlog
+  16-5-durable-engine-and-fenced-recovery: done
   16-6-uploaded-artifact-preflight-and-report-linkage: backlog
   16-7-workflow-editor-and-run-history-ui: backlog
   16-8-evidence-bound-decisions-and-freshness: backlog

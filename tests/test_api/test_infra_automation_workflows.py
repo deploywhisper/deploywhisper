@@ -673,7 +673,9 @@ class InfraAutomationWorkflowApiTests(unittest.TestCase):
             self.assert_error(response, 503)
             self.assertNotIn("secret-value", response.text)
 
-    def test_openapi_has_closed_typed_contract_and_no_run_creation(self):
+    def test_openapi_has_closed_authoring_and_engine_contract_without_runner_transport(
+        self,
+    ):
         from app import create_app
 
         schema = self.app.openapi()
@@ -689,7 +691,8 @@ class InfraAutomationWorkflowApiTests(unittest.TestCase):
         ):
             self.assertFalse(components[name]["additionalProperties"])
         for path, methods in schema["paths"].items():
-            self.assertNotIn("/runs", path)
+            self.assertNotIn("/runners", path)
+            self.assertNotIn("/handoffs", path)
             for operation in methods.values():
                 response = operation["responses"]["200"]["content"]["application/json"][
                     "schema"

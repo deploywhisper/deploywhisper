@@ -1096,3 +1096,223 @@ if "InfraAutomationAudit" not in globals():
         before_digest: Mapped[str | None] = mapped_column(String(71), nullable=True)
         after_digest: Mapped[str | None] = mapped_column(String(71), nullable=True)
         created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+if "InfraAutomationRun" not in globals():
+
+    class InfraAutomationRun(Base):
+        __tablename__ = "infra_automation_runs"
+        __table_args__ = (
+            ForeignKeyConstraint(
+                ["project_id", "workspace_id"],
+                ["project_workspaces.project_id", "project_workspaces.id"],
+                ondelete="RESTRICT",
+            ),
+            ForeignKeyConstraint(
+                ["requested_by"], ["identity_accounts.id"], ondelete="RESTRICT"
+            ),
+            UniqueConstraint("id"),
+            UniqueConstraint("id", "project_id", "workspace_id", "requested_by"),
+            ForeignKeyConstraint(
+                ["workflow_id", "project_id"],
+                ["infra_workflows.id", "infra_workflows.project_id"],
+                ondelete="RESTRICT",
+            ),
+            ForeignKeyConstraint(
+                ["revision_id"], ["infra_workflow_revisions.id"], ondelete="RESTRICT"
+            ),
+            CheckConstraint(
+                "state IN ('queued','running','waiting_approval','ready_handoff','handing_off','external_running','succeeded','failed','stopped_by_gate','rejected','expired','timed_out','cancelled','delivery_unknown')",
+                name="ck_engine_run_state",
+            ),
+            CheckConstraint(
+                "version BETWEEN 1 AND 9007199254740991 AND retained_bytes >= length(snapshot_bytes) AND length(snapshot_bytes) BETWEEN 1 AND 524288",
+                name="ck_engine_run_bounds",
+            ),
+            {"sqlite_autoincrement": True},
+        )
+        sequence: Mapped[int] = mapped_column(
+            Integer, nullable=False, primary_key=True, autoincrement=True
+        )
+        id: Mapped[str] = mapped_column(String(64), nullable=False)
+        project_id: Mapped[int] = mapped_column(Integer, nullable=False)
+        workspace_id: Mapped[int] = mapped_column(Integer, nullable=False)
+        requested_by: Mapped[str] = mapped_column(String(64), nullable=False)
+        workflow_id: Mapped[str] = mapped_column(String(64), nullable=False)
+        revision_id: Mapped[str] = mapped_column(String(64), nullable=False)
+        snapshot_bytes: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+        snapshot_digest: Mapped[str] = mapped_column(String(71), nullable=False)
+        definition_digest: Mapped[str] = mapped_column(String(71), nullable=False)
+        input_digest: Mapped[str] = mapped_column(String(71), nullable=False)
+        request_digest: Mapped[str] = mapped_column(String(71), nullable=False)
+        created_at: Mapped[datetime] = mapped_column(
+            DateTime(timezone=True), nullable=False
+        )
+        deadline_at: Mapped[datetime] = mapped_column(
+            DateTime(timezone=True), nullable=False
+        )
+        state: Mapped[str] = mapped_column(String(24), nullable=False)
+        version: Mapped[int] = mapped_column(Integer, nullable=False)
+        updated_at: Mapped[datetime] = mapped_column(
+            DateTime(timezone=True), nullable=False
+        )
+        last_observed_at: Mapped[datetime] = mapped_column(
+            DateTime(timezone=True), nullable=False
+        )
+        cancel_requested: Mapped[bool] = mapped_column(Boolean, nullable=False)
+        cancellation_requested_at: Mapped[datetime | None] = mapped_column(
+            DateTime(timezone=True), nullable=True
+        )
+        retained_bytes: Mapped[int] = mapped_column(Integer, nullable=False)
+        external_possible: Mapped[bool] = mapped_column(Boolean, nullable=False)
+
+
+if "InfraAutomationAttempt" not in globals():
+
+    class InfraAutomationAttempt(Base):
+        __tablename__ = "infra_automation_attempts"
+        __table_args__ = (
+            ForeignKeyConstraint(
+                ["project_id", "workspace_id"],
+                ["project_workspaces.project_id", "project_workspaces.id"],
+                ondelete="RESTRICT",
+            ),
+            ForeignKeyConstraint(
+                ["requested_by"], ["identity_accounts.id"], ondelete="RESTRICT"
+            ),
+            UniqueConstraint("id"),
+            UniqueConstraint("run_id", "step_id", "attempt_number"),
+            UniqueConstraint("run_id", "step_id", "fence"),
+            ForeignKeyConstraint(
+                ["run_id", "project_id", "workspace_id", "requested_by"],
+                [
+                    "infra_automation_runs.id",
+                    "infra_automation_runs.project_id",
+                    "infra_automation_runs.workspace_id",
+                    "infra_automation_runs.requested_by",
+                ],
+                ondelete="RESTRICT",
+            ),
+            CheckConstraint(
+                "state IN ('pending','claimed','running','succeeded','failed','timed_out','cancelled')",
+                name="ck_engine_attempt_state",
+            ),
+            CheckConstraint(
+                "version BETWEEN 1 AND 9007199254740991 AND attempt_number BETWEEN 1 AND 3 AND fence BETWEEN 1 AND 9007199254740991 AND coordinator_generation BETWEEN 0 AND 9007199254740991 AND log_bytes BETWEEN 0 AND 1048576 AND last_log_sequence >= 0",
+                name="ck_engine_attempt_bounds",
+            ),
+            CheckConstraint(
+                "(output_json IS NULL) = (output_digest IS NULL)",
+                name="ck_engine_attempt_output",
+            ),
+            {"sqlite_autoincrement": True},
+        )
+        sequence: Mapped[int] = mapped_column(
+            Integer, nullable=False, primary_key=True, autoincrement=True
+        )
+        id: Mapped[str] = mapped_column(String(64), nullable=False)
+        project_id: Mapped[int] = mapped_column(Integer, nullable=False)
+        workspace_id: Mapped[int] = mapped_column(Integer, nullable=False)
+        requested_by: Mapped[str] = mapped_column(String(64), nullable=False)
+        run_id: Mapped[str] = mapped_column(String(64), nullable=False)
+        step_id: Mapped[str] = mapped_column(String(128), nullable=False)
+        step_kind: Mapped[str] = mapped_column(String(40), nullable=False)
+        attempt_number: Mapped[int] = mapped_column(Integer, nullable=False)
+        fence: Mapped[int] = mapped_column(Integer, nullable=False)
+        handler_id: Mapped[str] = mapped_column(String(128), nullable=False)
+        handler_version: Mapped[str] = mapped_column(String(128), nullable=False)
+        retry_safe: Mapped[bool] = mapped_column(Boolean, nullable=False)
+        input_digest: Mapped[str] = mapped_column(String(71), nullable=False)
+        created_at: Mapped[datetime] = mapped_column(
+            DateTime(timezone=True), nullable=False
+        )
+        deadline_at: Mapped[datetime] = mapped_column(
+            DateTime(timezone=True), nullable=False
+        )
+        state: Mapped[str] = mapped_column(String(24), nullable=False)
+        version: Mapped[int] = mapped_column(Integer, nullable=False)
+        owner_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+        owner_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+        coordinator_generation: Mapped[int] = mapped_column(Integer, nullable=False)
+        lease_until: Mapped[datetime | None] = mapped_column(
+            DateTime(timezone=True), nullable=True
+        )
+        last_observed_at: Mapped[datetime] = mapped_column(
+            DateTime(timezone=True), nullable=False
+        )
+        logs_json: Mapped[str] = mapped_column(Text, nullable=False)
+        uploads_json: Mapped[str] = mapped_column(Text, nullable=False)
+        output_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+        output_digest: Mapped[str | None] = mapped_column(String(71), nullable=True)
+        log_bytes: Mapped[int] = mapped_column(Integer, nullable=False)
+        last_log_sequence: Mapped[int] = mapped_column(Integer, nullable=False)
+
+
+if "InfraAutomationCoordinatorLease" not in globals():
+
+    class InfraAutomationCoordinatorLease(Base):
+        __tablename__ = "infra_automation_coordinator_lease"
+        __table_args__ = (
+            CheckConstraint(
+                "id = 1 AND generation BETWEEN 1 AND 9007199254740991 AND version BETWEEN 1 AND 9007199254740991",
+                name="ck_engine_lease_bounds",
+            ),
+        )
+        id: Mapped[int] = mapped_column(
+            Integer, nullable=False, primary_key=True, autoincrement=True
+        )
+        generation: Mapped[int] = mapped_column(Integer, nullable=False)
+        version: Mapped[int] = mapped_column(Integer, nullable=False)
+        owner_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+        owner_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+        lease_until: Mapped[datetime | None] = mapped_column(
+            DateTime(timezone=True), nullable=True
+        )
+        last_observed_at: Mapped[datetime] = mapped_column(
+            DateTime(timezone=True), nullable=False
+        )
+
+
+if "InfraAutomationRunRequest" not in globals():
+
+    class InfraAutomationRunRequest(Base):
+        __tablename__ = "infra_automation_run_requests"
+        __table_args__ = (
+            ForeignKeyConstraint(
+                ["project_id", "workspace_id"],
+                ["project_workspaces.project_id", "project_workspaces.id"],
+                ondelete="RESTRICT",
+            ),
+            ForeignKeyConstraint(
+                ["requested_by"], ["identity_accounts.id"], ondelete="RESTRICT"
+            ),
+            UniqueConstraint("id"),
+            UniqueConstraint(
+                "project_id", "workspace_id", "requested_by", "operation", "key_digest"
+            ),
+            ForeignKeyConstraint(
+                ["run_id", "project_id", "workspace_id", "requested_by"],
+                [
+                    "infra_automation_runs.id",
+                    "infra_automation_runs.project_id",
+                    "infra_automation_runs.workspace_id",
+                    "infra_automation_runs.requested_by",
+                ],
+                ondelete="RESTRICT",
+            ),
+            {"sqlite_autoincrement": True},
+        )
+        sequence: Mapped[int] = mapped_column(
+            Integer, nullable=False, primary_key=True, autoincrement=True
+        )
+        id: Mapped[str] = mapped_column(String(64), nullable=False)
+        project_id: Mapped[int] = mapped_column(Integer, nullable=False)
+        workspace_id: Mapped[int] = mapped_column(Integer, nullable=False)
+        requested_by: Mapped[str] = mapped_column(String(64), nullable=False)
+        operation: Mapped[str] = mapped_column(String(32), nullable=False)
+        key_digest: Mapped[str] = mapped_column(String(71), nullable=False)
+        request_digest: Mapped[str] = mapped_column(String(71), nullable=False)
+        run_id: Mapped[str] = mapped_column(String(64), nullable=False)
+        created_at: Mapped[datetime] = mapped_column(
+            DateTime(timezone=True), nullable=False
+        )

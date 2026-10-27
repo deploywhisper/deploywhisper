@@ -100,3 +100,11 @@
 ## Deferred from: code review of 12-3-connector-credential-handling-and-redaction-audit.md (2026-10-06, fresh re-review)
 
 - **Resolved 2026-10-06:** Incident reindex and scanner import permission prechecks resolve project/workspace references before the service collects sensitive values from imported content (`api/routes/incidents.py:216`, `api/routes/scanner_imports.py:182,282`). An isolated temporary DB/TestClient request with a valid project ID and an unknown key echoed from a named imported password returns the key verbatim in a 404 error. Direct incident ingestion also resolves scope without contextual error screening (`services/incident_service.py:335,355`). Originally confirmed baseline behavior. This follow-up adds request-context error screening, including configured/normalized credential variants, while preserving authorization ordering; isolated API tests cover incident reindex and both scanner routes, and direct ingestion service tests cover the same boundary.
+## Deferred from: code review of 16-5-durable-engine-and-fenced-recovery.md (2026-10-27)
+
+- [High] Inherited Vite8.0.16 at `frontend/package-lock.json:2072` fails
+  `npm audit --prefix frontend --audit-level=low` for current Vite/launch-editor
+  advisories. Both frontend dependency files are unchanged across
+  `3af659e..5e9a3b3`, so remediation belongs to dependency maintenance.
+  [CI failure](https://github.com/deploywhisper/deploywhisper/actions/runs/40472650527/job/122083216976).
+  Blocks merging PR195; engine review remains approved. No audit suppression.

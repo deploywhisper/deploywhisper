@@ -327,7 +327,9 @@ jobs:
           - shard: analysis-parsers
             targets: tests/test_analysis tests/test_parsers
           - shard: services
-            targets: tests/test_services tests/test_infra_automation
+            targets: tests/test_services
+          - shard: infra-automation
+            targets: tests/test_infra_automation
           - shard: llm
             targets: tests/test_llm
     steps:

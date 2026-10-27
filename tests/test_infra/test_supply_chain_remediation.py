@@ -81,6 +81,13 @@ class SupplyChainRemediationTests(unittest.TestCase):
         security_scripts = "\n".join(s.get("run", "") for s in security_steps)
         self.assertIn("--requirement requirements.txt", security_scripts)
         self.assertIn("--requirement requirements-dev.txt", security_scripts)
+        shards = {
+            shard["shard"]: shard["targets"]
+            for shard in data["jobs"]["test"]["strategy"]["matrix"]["include"]
+        }
+        self.assertEqual(shards["services"], "tests/test_services")
+        self.assertEqual(shards["infra-automation"], "tests/test_infra_automation")
+        self.assertEqual(data["jobs"]["test"]["timeout-minutes"], "15")
 
     def test_analytics_defaults_read_only_and_limits_committed_paths(self):
         data = self.workflow("refresh-skill-analytics")

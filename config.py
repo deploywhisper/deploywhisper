@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from infra_automation.contracts import ValidationLimits
     from infra_automation.lifecycle import AutomationSettings
+    from infra_automation.state import EngineBounds
 
 
 PROVIDER_ENV_API_KEYS: dict[str, tuple[str, ...]] = {
@@ -268,3 +269,22 @@ def automation_settings_defaults() -> AutomationSettings:
         approval_ttl_seconds=settings.automation_approval_ttl_seconds,
         credential_ttl_seconds=settings.automation_credential_ttl_seconds,
     )
+
+
+def engine_bounds() -> EngineBounds:
+    """Trusted dynamic engine ceilings; malformed or increased values fail closed."""
+    from infra_automation.lifecycle import LifecycleError
+    from infra_automation.state import EngineBounds
+
+    values = EngineBounds().model_dump()
+    for field, maximum in values.items():
+        raw = os.getenv("DEPLOYWHISPER_ENGINE_" + field.upper())
+        if raw is None:
+            continue
+        if not raw or not raw.isascii() or not raw.isdecimal() or len(raw) > 10:
+            raise LifecycleError(503)
+        value = int(raw)
+        if not 1 <= value <= maximum:
+            raise LifecycleError(503)
+        values[field] = value
+    return EngineBounds(**values)
