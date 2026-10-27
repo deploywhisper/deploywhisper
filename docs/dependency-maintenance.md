@@ -1,5 +1,28 @@
 # Python dependency maintenance
 
+## Automatic update PRs paused
+
+At the maintainer's request on 2026-10-27, automatic dependency PRs are paused.
+Every ecosystem in `.github/dependabot.yml` has
+`open-pull-requests-limit: 0`. The weekly schedule is retained for a future
+explicit opt-in, but a zero limit prevents version-update PR creation. Closing
+existing PRs alone would not disable their scheduled replacements.
+
+Dependabot security-update PRs are separately disabled in the repository settings;
+the version-update limit does not control them. Dependency alerts, CI dependency
+audits, CodeQL, fuzzing and Scorecard checks remain available. Resolve dependency
+and security failures through deliberate maintenance changes while updates are
+paused; this pause does not waive the existing Vite audit blocker on Story16.5.
+
+The Refresh Skill Analytics workflow is also disabled in GitHub, and its YAML
+now permits only `workflow_dispatch`, with no cron trigger. No analytics PR mode
+is currently opted in (`DEPLOYWHISPER_REVIEWED_UPDATES` is unset). To resume,
+explicitly enable the workflow and dispatch it; restoring automatic refreshes
+or dependency PRs requires a reviewed configuration change. All 15 unwanted
+Dependabot PRs (#180–194) were closed; Story16.5 PR #195 was preserved.
+
+## Deliberate dependency maintenance
+
 Keep runtime declarations in `pyproject.toml` and `requirements-runtime.txt`
 aligned. Use `uv 0.11.2` and `bash scripts/lock-dependencies.sh` to regenerate
 both universal, hashed application locks. Regenerate the fuzzer lock with:
