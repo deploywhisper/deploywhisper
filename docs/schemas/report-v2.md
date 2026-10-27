@@ -683,3 +683,15 @@ Story 2.6 added report-level confidence, context uncertainty, evidence coverage,
 context TODOs, and insufficient-context signals as additive `v2` fields. Story
 2.8 makes the report schema version explicit for API, CLI, PR, benchmark, and
 agent-facing machine consumers.
+
+
+### Automation linkage (Story 16.6)
+
+Uploaded preflights retain `v2` without adding an authoritative field to this report
+payload. Independently versioned provenance v1, screened artifact digest and
+run/attempt/report identities live in immutable relational links, read through
+`GET /api/v1/infra-automation/runs/{run_id}/reports`. The link exposes the existing
+permanent `/reports/{id}` URL and explicit unknown-source limitations. It grants
+no approval or exact-plan authority. Legacy v1/v2 serializers and consumers remain
+unchanged; frozen snapshot hashing is still owned by Story 16.8. See the
+[preflight contract](../infra-automation/preflight.md).

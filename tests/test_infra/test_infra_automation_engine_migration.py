@@ -18,7 +18,7 @@ from alembic.config import Config
 import config
 import models.database as database
 
-HEAD = "032_add_infra_automation_engine"
+HEAD = "033_add_infra_preflight"
 PREVIOUS = "031_add_infra_workflows"
 TABLES = (
     "infra_automation_runs",

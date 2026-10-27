@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from contextlib import nullcontext
 import html
 import json
 import math
@@ -2678,9 +2679,10 @@ def analyze_uploaded_files(
     workspace_id: int | None = None,
     workspace_key: str | None = None,
     audit_context: dict | None = None,
+    _on_persisted=None,
 ) -> AnalysisRunResult:
     """Run the shared parse -> assess -> persist pipeline."""
-    from services.project_service import TrustedAuthorizationError
+    from services.project_service import TrustedAuthorizationError, authorized_session
 
     started_at = perf_counter()
     resolved_project = resolve_analysis_project_scope(
@@ -2699,23 +2701,28 @@ def analyze_uploaded_files(
     )
     analysis_duration_seconds = max(1, round(perf_counter() - started_at))
     try:
-        persisted_report = persist_analysis_report(
-            artifacts.parse_batch,
-            artifacts.assessment,
-            artifacts.narrative,
-            blast_radius=artifacts.blast_radius,
-            rollback_plan=artifacts.rollback_plan,
-            incident_matches=artifacts.incident_matches,
-            findings=artifacts.findings,
-            evidence_items=artifacts.evidence_items,
-            artifact_snapshots={name: raw_content for name, raw_content in files},
-            submitted_artifacts=list(files),
-            project_id=resolved_project.id,
-            workspace_id=workspace_id,
-            workspace_key=workspace_key,
-            audit_context=audit_context,
-            analysis_duration_seconds=analysis_duration_seconds,
-        )
+        # An internal automation adapter may bind report/link/output in the same
+        # final operation. Analysis above retains short independent context reads.
+        with authorized_session() if _on_persisted is not None else nullcontext():
+            persisted_report = persist_analysis_report(
+                artifacts.parse_batch,
+                artifacts.assessment,
+                artifacts.narrative,
+                blast_radius=artifacts.blast_radius,
+                rollback_plan=artifacts.rollback_plan,
+                incident_matches=artifacts.incident_matches,
+                findings=artifacts.findings,
+                evidence_items=artifacts.evidence_items,
+                artifact_snapshots={name: raw_content for name, raw_content in files},
+                submitted_artifacts=list(files),
+                project_id=resolved_project.id,
+                workspace_id=workspace_id,
+                workspace_key=workspace_key,
+                audit_context=audit_context,
+                analysis_duration_seconds=analysis_duration_seconds,
+            )
+            if _on_persisted is not None:
+                _on_persisted(persisted_report)
     except TrustedAuthorizationError:
         raise
     except Exception as exc:  # noqa: BLE001

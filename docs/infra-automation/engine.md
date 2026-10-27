@@ -8,11 +8,13 @@ contracts are in [engine-contract-v1.md](engine-contract-v1.md).
 
 ## Availability and scope
 
-The production local-handler registry is intentionally empty. Requesting a new
-run without all required trusted handlers returns the fixed 503 response. Empty
-registry startup does not install a coordinator or create its audit identity.
-Story 16.6 supplies the analysis adapter; receiver, outbox, credentials, runner
-execution and reconciliation integrations belong to later stories. This engine
+Story 16.6 installs only the application-owned `uploaded_intake` and
+`shared_analysis` handlers. Start an uploaded preflight through the atomic
+[preflight admission API](preflight.md), which binds its screened manifest to the
+run. A workflow requiring any later handler returns the fixed 503 response.
+An explicitly empty server registry still installs no coordinator or audit identity.
+Receiver, outbox, credentials, runner execution and reconciliation integrations
+belong to later stories. This engine
 does not send infrastructure changes or accept client-provided code, commands,
 process IDs, handler registrations, or worker capabilities.
 

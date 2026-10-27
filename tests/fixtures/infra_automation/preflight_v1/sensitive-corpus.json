@@ -1,0 +1,47 @@
+{
+  "version": 1,
+  "name": "preflight-screening-v1",
+  "scope": "Known synthetic patterns only; passing this corpus does not establish universal sensitive-data detection.",
+  "cases": [
+    {
+      "id": "password-assignment",
+      "value": "password = \"synthetic-password-value\"",
+      "known_patterns": ["synthetic-password-value"]
+    },
+    {
+      "id": "api-key-assignment",
+      "value": "api_key = \"synthetic-api-value\"",
+      "known_patterns": ["synthetic-api-value"]
+    },
+    {
+      "id": "token-assignment",
+      "value": "token = \"synthetic-token-value\"",
+      "known_patterns": ["synthetic-token-value"]
+    },
+    {
+      "id": "authorization-bearer",
+      "value": "Authorization: Bearer synthetic-auth-value",
+      "known_patterns": ["synthetic-auth-value"]
+    },
+    {
+      "id": "private-key-block",
+      "value": "-----BEGIN PRIVATE KEY-----\nsynthetic\n-----END PRIVATE KEY-----",
+      "known_patterns": ["-----BEGIN PRIVATE KEY-----", "-----END PRIVATE KEY-----"]
+    },
+    {
+      "id": "aws-access-key-pattern",
+      "value": "AKIAABCDEFGHIJKLMNOP",
+      "known_patterns": ["AKIAABCDEFGHIJKLMNOP"]
+    },
+    {
+      "id": "github-token-pattern",
+      "value": "ghp_abcdefghijklmnopqrstuvwxyz",
+      "known_patterns": ["ghp_abcdefghijklmnopqrstuvwxyz"]
+    },
+    {
+      "id": "credential-bearing-url",
+      "value": "postgres://synthetic:synthetic-password@localhost/db",
+      "known_patterns": ["synthetic-password"]
+    }
+  ]
+}

@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import asyncio
+import runpy
+from pathlib import Path
 import unittest
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -15,6 +17,11 @@ async def idle_scheduler(stop):
 
 
 class EngineLifespanTests(unittest.IsolatedAsyncioTestCase):
+    async def test_spawn_bootstrap_does_not_restart_uvicorn(self):
+        with patch("uvicorn.run") as start_server:
+            runpy.run_path(str(Path(app.__file__)), run_name="__mp_main__")
+        start_server.assert_not_called()
+
     async def test_empty_registry_creates_no_workers_or_coordinator(self):
         with (
             patch("app.init_db"),

@@ -1,6 +1,6 @@
 # Story 16.6: Uploaded Artifact Preflight And Report Linkage
 
-Status: backlog
+Status: in-progress
 Preparation: refined
 Release: v1.5.0 — P0 highest-priority feature
 Dependencies: 16.5; public RFC and 16.0 qualification required
@@ -106,16 +106,71 @@ Preparation means the work is decomposed, not authorized as implementation-ready
 
 ### Agent Model Used
 
-Story preparation only; implementation agent/model must be recorded when execution starts.
+Codex GPT-6; root owns adapter/integration/verification, native intake packet owner owns artifact screening and its tests. Read-only native readiness review completed before implementation.
+
+### Implementation Plan
+
+1. Intake owner: native `intake`; local bounded rejection/screening, fixed errors and named synthetic corpus. Independent `readiness_check` review found BOM/legacy-state bypasses; regression fixes pass.
+2. Persistence owner: native `persistence`; migration033, immutable scoped manifests/links, synthetic envelope checks and brownfield schema validation. No report serializer change.
+3. Adapter owner: root; install a private wrapper-authenticated exact-scope analysis context, call shared `analyze_uploaded_files` off-loop and fence final report/link/output atomically. HTTP accepts a closed bounded upload request and exposes authorized relational links.
+4. Consumer/verification owner: root; shared-core parity, AI-off/failure, stale/cancelled/revoked capability denial, linked legacy-route protection, frozen schema/hash compatibility, full CI and independent trust-boundary review. UI validation not applicable.
+
+Native `readiness_check` reviewed the concrete port and required exact database-factory binding, workspace-limited visibility, live analysis.submit role checking, atomic output/link persistence, payload quota accounting and report filesystem compensation. These are implementation obligations, not completed proof.
 
 ### Debug Log References
 
-Not executed. No application, migration, test, browser, runner, receiver or benchmark result is claimed by this story preparation.
+2026-10-27: scoped readiness reassessment and concrete preflight contract recorded. Current Alembic head: 032_add_infra_automation_engine. Branch: feature/16-6-uploaded-artifact-preflight. The existing console entrypoint shebang references an old workspace; use ./.venv/bin/python -m for tools. Focused packet and trust-boundary tests now pass; final broad validation is in progress. See docs/verification/infra-automation/16-6/results.md.
 
 ### Completion Notes List
 
-Prepared implementation context and owned acceptance matrix on 2026-10-07. Governance/feasibility/interface gates remain open; Status is backlog.
+2026-10-27: dev-story started after scoped readiness reassessment. Shared governance/foundation gates are satisfied by newer evidence; owned concrete interface is documented in docs/infra-automation/preflight.md. Work remains in progress; no implementation acceptance or production collector qualification claimed.
 
 ### File List
 
-This story file only. Planned write scopes above are prospective, not an implemented file list.
+- `README.md`
+- `_bmad-output/implementation-artifacts/16-6-uploaded-artifact-preflight-and-report-linkage.md`
+- `_bmad-output/implementation-artifacts/sprint-status.yaml`
+- `_bmad-output/implementation-artifacts/story-implementation-status-map.md`
+- `_bmad-output/planning-artifacts/implementation-readiness-report-2026-10-27-story-16-6.md`
+- `_bmad-output/project-context.md`
+- `api/routes/infra_automation.py`
+- `api/schemas.py`
+- `app.py`
+- `docs/infra-automation/engine.md`
+- `docs/infra-automation/preflight.md`
+- `docs/schemas/report-v2.md`
+- `docs/verification/infra-automation/16-6/results.md`
+- `infra_automation/analysis_context.py`
+- `infra_automation/artifact_intake.py`
+- `infra_automation/claims.py`
+- `infra_automation/coordinator.py`
+- `infra_automation/local_workers.py`
+- `infra_automation/preflight_contracts.py`
+- `migrations/versions/033_add_infra_preflight.py`
+- `models/database.py`
+- `models/repositories/infra_automation_reports.py`
+- `models/tables.py`
+- `services/analysis_service.py`
+- `services/artifact_snapshot_service.py`
+- `services/infra_automation_engine_service.py`
+- `services/infra_automation_preflight.py`
+- `services/infra_automation_service.py`
+- `services/project_service.py`
+- `tests/fixtures/infra_automation/preflight_v1/sensitive-corpus.json`
+- `tests/test_api/test_infra_automation_preflight.py`
+- `tests/test_infra/test_container_contract.py`
+- `tests/test_infra/test_identity_migration.py`
+- `tests/test_infra/test_infra_automation_engine_migration.py`
+- `tests/test_infra/test_infra_automation_workflow_migration.py`
+- `tests/test_infra/test_migrations.py`
+- `tests/test_infra/test_project_membership_migration.py`
+- `tests/test_infra_automation/test_artifact_intake.py`
+- `tests/test_infra_automation/test_engine_app_lifespan.py`
+- `tests/test_infra_automation/test_engine_coordinator.py`
+- `tests/test_infra_automation/test_preflight_compatibility.py`
+- `tests/test_infra_automation/test_preflight_repository.py`
+- `tests/test_infra_automation/test_preflight_service.py`
+
+## Change Log
+
+- 2026-10-27: Implemented authenticated uploaded-artifact preflight and immutable relational report linkage through the shared fenced analysis pipeline. Preserved report v2/provenance v1 and advisory-only semantics; added scoped migration, corpus/consumer/runtime proofs and operator documentation. Fixed BOM/state screening, SQL replacement/reparenting, linked snapshot mutation, spawned app bootstrap and reload-safe authorization guard findings.

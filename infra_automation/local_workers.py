@@ -111,7 +111,16 @@ class HandlerRegistry:
         return bool(self.registrations)
 
 
-DEFAULT_REGISTRY = HandlerRegistry()
+DEFAULT_REGISTRY = None
+
+
+def default_registry():
+    """Load only the two fixed application-owned upload/analysis handlers."""
+    if DEFAULT_REGISTRY is not None:
+        return DEFAULT_REGISTRY
+    from services.infra_automation_preflight import PREFLIGHT_REGISTRY
+
+    return PREFLIGHT_REGISTRY
 
 
 @dataclass(frozen=True)
@@ -242,7 +251,7 @@ def _worker_main(
                 )
             else:
                 result = WorkerResult.model_validate(
-                    registration.handler(value).model_dump()
+                    _invoke_handler(registration, value, handle, factory).model_dump()
                 )
         if result.outcome == "external_unknown" and not external_started:
             raise ValueError("External adapter unavailable.")
@@ -274,6 +283,16 @@ def _worker_main(
         channel.close()
         if engine is not None:
             engine.dispose()
+
+
+def _invoke_handler(registration, value, handle, factory):
+    from services.infra_automation_preflight import execute_preflight_step
+    from infra_automation.analysis_context import _bind_worker
+
+    if registration.handler is execute_preflight_step:
+        with _bind_worker(handle, factory):
+            return registration.handler(value)
+    return registration.handler(value)
 
 
 @dataclass

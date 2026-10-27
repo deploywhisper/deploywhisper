@@ -78,6 +78,22 @@ def _stored_name(artifact_name: str) -> str:
     return f"{digest}{suffix}"
 
 
+def _require_mutable_artifacts(session, report_id: int) -> None:
+    from sqlalchemy import select
+    from models.tables import InfraAutomationReportLink
+    from services import project_service as authorization
+
+    if (
+        session.scalar(
+            select(InfraAutomationReportLink.id)
+            .where(InfraAutomationReportLink.report_id == report_id)
+            .limit(1)
+        )
+        is not None
+    ):
+        raise authorization.TrustedAuthorizationError()
+
+
 def save_report_artifacts(
     report_id: int,
     artifact_snapshots: dict[str, bytes | None] | None,
@@ -90,6 +106,7 @@ def save_report_artifacts(
     with authorized_session(SessionLocal) as session:
         if guard_report(session, report_id, "analysis.submit", mutation=True) is None:
             raise TrustedAuthorizationError()
+        _require_mutable_artifacts(session, report_id)
         if not artifact_snapshots:
             return
         if not any(content is not None for content in artifact_snapshots.values()):
@@ -174,4 +191,5 @@ def delete_report_artifacts(report_id: int) -> None:
     with authorized_session(SessionLocal) as session:
         if guard_report(session, report_id, "report.review", mutation=True) is None:
             raise TrustedAuthorizationError()
+        _require_mutable_artifacts(session, report_id)
         _delete_report_artifacts_after_authorization(report_id)

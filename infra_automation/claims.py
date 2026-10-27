@@ -732,6 +732,7 @@ def append_log(session, handle, *, expected_version, chunk, now=None, bounds=Non
         _deny()
     support.screened_label(chunk.text)
     logs = json.loads(row.logs_json)
+    support.screened_label("".join(item["text"] for item in logs) + chunk.text)
     logs.append(chunk.model_dump())
     encoded = support.canonical(logs).decode()
     size = len(encoded.encode("utf-8"))
