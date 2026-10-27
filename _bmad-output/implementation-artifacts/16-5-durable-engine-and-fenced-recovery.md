@@ -1,6 +1,6 @@
 # Story 16.5: Durable Engine And Fenced Recovery
 
-Status: review
+Status: done
 Preparation: refined
 Release: v1.5.0 — P0 highest-priority feature
 Dependencies: 16.4; public RFC and 16.0 qualification required
@@ -391,6 +391,7 @@ in a fresh context. Status is review; this is not a release or merge claim.
 - 2026-10-22: Packet F limits, real fault/overhead/capacity evidence and validation completed; story moved to review.
 - 2026-10-22: BMad code review reproduced four functional gaps and one documentation discrepancy; five follow-ups recorded and story returned to in-progress.
 - 2026-10-23: All five follow-ups fixed, hardened and independently audited; fresh runtime qualification and full current-fixture verification passed; story returned to review.
+- 2026-10-27: Three-layer BMad code review rerun approved the repaired implementation; 365 tests and 885 subtests passed, with no actionable findings. Story moved to done.
 
 ### Code review outcome — 2026-10-22
 
@@ -513,3 +514,18 @@ source equivalence, pinned test-dependency evidence and independent audit are in
 registry until16.6; real runner/receiver/transport and host-power-loss support are
 not qualified. Unexpected supervisor failure retains dirty capacity for trusted
 operator recovery. Story returns to review for the next BMad code-review cycle.
+
+### Code review rerun outcome — 2026-10-27
+
+Approved the full `3af659e..5e9a3b3` story diff with all three independent BMad
+review layers complete. No decision-needed, patch or deferred findings remain;
+two candidates were dismissed after validation. CR16.5-01–05 remain resolved.
+Fresh automation/API/migration pytest:365 passed,885 subtests passed; Ruff lint
+and repository-wide408-file formatting passed. Independent acceptance checks
+also passed59tests/67subtests and recomputed published qualification evidence.
+No production changes; UI validation not applicable. Existing Linux/full-CI
+evidence was audited rather than rerun. Native tests used installed Python3.14.
+Full scope, commands, triage and remaining limitations are in
+[16-5-code-review-2026-10-27.md](16-5-code-review-2026-10-27.md).
+Story status is done. BMad Help routes next to scoped Story16.6 readiness;
+later-story backlog and production integration/release gates remain unchanged.
