@@ -153,7 +153,7 @@ Story 16.0's four follow-up review findings were resolved and requalified on 202
 | 16.3 | `ready-for-dev` | [16-3-closed-workflow-schema-and-validator.md](16-3-closed-workflow-schema-and-validator.md) |
 | 16.4 | `backlog` | [16-4-scoped-workflows-and-immutable-revisions.md](16-4-scoped-workflows-and-immutable-revisions.md) |
 | 16.5 | `backlog` | [16-5-durable-engine-and-fenced-recovery.md](16-5-durable-engine-and-fenced-recovery.md) |
-| 16.6 | `in-progress` | [16-6-uploaded-artifact-preflight-and-report-linkage.md](16-6-uploaded-artifact-preflight-and-report-linkage.md) |
+| 16.6 | `done` | [16-6-uploaded-artifact-preflight-and-report-linkage.md](16-6-uploaded-artifact-preflight-and-report-linkage.md) |
 | 16.7 | `backlog` | [16-7-workflow-editor-and-run-history-ui.md](16-7-workflow-editor-and-run-history-ui.md) |
 | 16.8 | `backlog` | [16-8-evidence-bound-decisions-and-freshness.md](16-8-evidence-bound-decisions-and-freshness.md) |
 | 16.9 | `backlog` | [16-9-human-approval-inbox-and-decision-ux.md](16-9-human-approval-inbox-and-decision-ux.md) |

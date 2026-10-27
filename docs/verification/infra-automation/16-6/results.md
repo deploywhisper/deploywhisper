@@ -74,7 +74,7 @@ closure before this story is marked done. This dev-story hands off at review. Im
 
 ## Adversarial code review — 2026-10-27
 
-Review target: original Story16.6 change from8e4cf16 throughbee7199. Three native
+Review target: original Story 16.6 change from8e4cf16 throughbee7199. Three native
 layers completed independently: diff-only Blind Hunter, repository Edge Case
 Hunter and spec/context Acceptance Auditor. Six behavioral patch findings, one type-contract follow-up and one CI portability fix, no unresolved
 product decisions or pre-existing deferrals; two hypotheses dismissed after
@@ -157,3 +157,26 @@ bulk deletion. The shared report service now rejects those intentional immutable
 mutations with the existing controlled403 before writes, preserving unlinked
 operations and every bulk member. New5tests/8subtests and25existing relevant tests/
 27subtests passed. Final full checks rerun on this small report-service correction.
+
+
+### Final R8-qualified head
+
+All final production-source checks passed on 2384d49:
+
+- `bash scripts/ci-local.sh`: 2,587 tests across all 10 directories plus its compile,
+  dependency, lint/format, Bandit and prompt/skill gates.
+- Root unittest: 1,141 tests, two skips.
+- API/CLI/infra pytest: 672 passed /2,233 subtests, one opt-in skip.
+- Services pytest: 1,232 passed /2,248 subtests.
+- Automation pytest: 421 passed /1,326 subtests.
+- Docker build passed; all 5 new guarded service/API tests also passed inside the
+  production Python 3.11/non-root image using a read-only synthetic test mount.
+- Repo-wide Ruff (425 files) and diff checks pass; mypy: 308 legacy diagnostics versus
+ 314 in current develop, zero new normalized diagnostics.
+
+The earlier hosted runner failure was entirely in the new migration test's
+interpreter assumption. PR #199's prior head cea8993 has successful hosted checks;
+this final small guard correction and its qualified evidence are pushed to that
+same PR for fresh hosted validation. No runtime dependency, frozen schema or UI
+surface changed. All 8 findings are resolved and Story 16.6 is done for code review;
+independent human approval is still required before merging the PR.

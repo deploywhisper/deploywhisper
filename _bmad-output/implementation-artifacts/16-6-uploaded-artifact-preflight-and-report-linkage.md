@@ -1,6 +1,6 @@
 # Story 16.6: Uploaded Artifact Preflight And Report Linkage
 
-Status: in-progress
+Status: done
 Preparation: refined
 Release: v1.5.0 — P0 highest-priority feature
 Dependencies: 16.5; public RFC and 16.0 qualification required
@@ -69,7 +69,7 @@ Execute packets in listed dependency order; assign one named owner per packet an
 
 - [x] [Review][Patch][P2][R7] Run migration subprocesses with the active interpreter and explicit repository root so GitHub's no-venv runner can execute the test [tests/test_infra_automation/test_preflight_repository.py:462]. The real remote fast-feedback failure and an isolated tracked checkout without .venv both reproduce the missing-interpreter failure.
 
-- [x] [Review][Patch][P2][R8] Reject authorized share/delete mutations of linked reports with controlled 403 before SQL instead of exposing an immutable-row IntegrityError as HTTP500; validate the full bulk set before deleting any report [services/report_service.py:5110; services/report_service.py:6140; services/report_service.py:6168]. Real guarded service/API probes reproduced all paths.
+- [x] [Review][Patch][P2][R8] Reject authorized share/delete mutations of linked reports with controlled 403 before SQL instead of exposing an immutable-row IntegrityError as HTTP 500; validate the full bulk set before deleting any report [services/report_service.py:5110; services/report_service.py:6140; services/report_service.py:6168]. Real guarded service/API probes reproduced all paths.
 
 All three independent layers completed. No decision-needed or pre-existing deferred finding. Two hypotheses dismissed after dependency tracing: committed-output adoption already prevents rerunning successfully committed analysis after a crash; existing reserved-transaction rollback callbacks already compensate snapshot writes on final COMMIT failure (add focused proof).
 
@@ -166,11 +166,11 @@ Native `readiness_check` reviewed the concrete port and required exact database-
 - **Scope:** Story 16.6 against its original8e4cf16 baseline, synchronized with current `origin/develop` 2656949. Epic 17 append-only planning was preserved; no cross-epic runtime dependency was introduced.
 - **Disposition:** Eight fixes (five P2 behavior defects, one P2 CI portability defect, one P3 direct-input boundary, one P3 type-contract follow-up), zero decision-needed, zero deferred story findings, two dismissed hypotheses backed by real SQLite COMMIT and spawned-output-adoption tests. All findings above are checked off.
 - **Acceptance:** AC1–7 satisfied for uploaded/synthetic advisory evidence. R1 adds a fixed v1 projection from durable facts, without new writes or frozen report/engine DTO changes. R2/R3 retain readable bounded links and complete report detail. R4 accounts for actual snapshot copies with authorization before filesystem access. R5/R6 tighten input/type contracts.
-- **Verification:** Provider fallback isolated using `LLM_API_BASE=http://127.0.0.1:9`; `pytest tests/test_api tests/test_cli tests/test_infra -v --tb=short`: 672 passed /2,233 subtests /one opt-in skip; `pytest tests/test_services -v --tb=short`: 1,232 passed /2,248 subtests; `pytest tests/test_infra_automation -v --tb=short`: 416 passed /1,318 subtests. Root `unittest discover -q`: 1,136 tests /two skips. Full `bash scripts/ci-local.sh` passed all 10 directories /2,582 tests plus prompt/skill/compile/pip/Bandit/Ruff gates. Review-focused 63 tests /450 subtests and final type-alignment 31 tests /405 subtests passed.
-- **Static analysis:** Repo-wide Ruff lint/format pass (424 Python files). Exact CI mypy comparison against a clean current-develop archive: 308 existing diagnostics versus 314 baseline, zero new normalized diagnostics; CI intentionally keeps that legacy gate advisory. Existing unrelated Bandit medium B104 remains outside this slice; high/high gate passes.
-- **Authorized mutation follow-up:** R8 real migration-guarded service/API probes reproduced HTTP500 for intentional immutability. The shared report service now performs same-session linked-row checks after live authorization, validates all bulk members before deleting anything, and returns the existing controlled403. New regression tests5passed/8subtests plus25existing share/delete tests/27subtests passed; unlinked behavior and SQL defense-in-depth are preserved. Full final checks rerun on this correction.
-- **CI portability follow-up:** GitHub's global Python runner exposed the migration test's hard-coded `.venv` launcher. The same test failed in an isolated tracked checkout without a virtualenv; `sys.executable` plus an explicit repository working directory fixes it. The isolated test and exact changed-test lane (145 tests) now pass. A separate local fail-closed disposal event was not reproduced in isolated1/module17/ordered97/exact145-test probes; no production supervision limits were changed.
-- **Production runtime:** Docker build from a tracked-source archive passed. Final source image e3cb6df health 200, preflight/evidence OpenAPI present, Python 3.11, non-root, no Node runtime; temporary container removed.
+- **Verification:** Provider fallback isolated using `LLM_API_BASE=http://127.0.0.1:9`; `pytest tests/test_api tests/test_cli tests/test_infra -v --tb=short`: 672 passed /2,233 subtests /one opt-in skip; `pytest tests/test_services -v --tb=short`: 1,232 passed /2,248 subtests; `pytest tests/test_infra_automation -v --tb=short`: 421 passed /1,326 subtests. Root `unittest discover -q`: 1,141 tests /two skips. Full `bash scripts/ci-local.sh` passed all 10 directories /2,587 tests plus prompt/skill/compile/pip/Bandit/Ruff gates. Review-focused 63 tests /450 subtests and final type-alignment 31 tests /405 subtests passed.
+- **Static analysis:** Repo-wide Ruff lint/format pass (425 Python files). Exact CI mypy comparison against a clean current-develop archive: 308 existing diagnostics versus 314 baseline, zero new normalized diagnostics; CI intentionally keeps that legacy gate advisory. Existing unrelated Bandit medium B104 remains outside this slice; high/high gate passes.
+- **Authorized mutation follow-up:** R8 real migration-guarded service/API probes reproduced HTTP 500 for intentional immutability. The shared report service now performs same-session linked-row checks after live authorization, validates all bulk members before deleting anything, and returns the existing controlled 403. New regression tests: 5 passed /8 subtests plus 25 existing share/delete tests /27 subtests passed; unlinked behavior and SQL defense-in-depth are preserved. Full final checks passed on this correction (2,587 local CI tests, 1,141 root tests, all affected pytest shards).
+- **CI portability follow-up:** GitHub's global Python runner exposed the migration test's hard-coded `.venv` launcher. The same test failed in an isolated tracked checkout without a virtualenv; `sys.executable` plus an explicit repository working directory fixes it. The isolated test and exact changed-test lane (145 tests) now pass. A separate local fail-closed disposal event was not reproduced in isolated 1 /module 17 /ordered 97 /exact 145-test probes; no production supervision limits were changed.
+- **Production runtime:** Docker build from a tracked-source archive passed. Source image e3cb6df passed health/OpenAPI/Python 3.11/non-root/Node-absent smoke. Final source image 2384d49 built and passed all 5 guarded mutation/API tests on Python 3.11 using read-only synthetic test mounts; temporary containers removed.
 - **Git Flow:** Verified `feature/16-6-uploaded-artifact-preflight`, committed and pushed to `origin`; opened [PR #199](https://github.com/deploywhisper/deploywhisper/pull/199) targeting `develop`. Review fixes b0ccb68, base synchronization e62f43b, type alignment e3cb6df and local review evidence1502c16. The PR remains open for independent human approval; no merge is claimed.
 - **Limits:** UI validation not applicable. No new dependency; no production collector/custody/receiver, exact-plan grant, host-power-loss or release qualification claim. Fixed known-pattern corpus does not promise universal secret detection.
 - **BMad Help:** Next is scoped readiness/story refinement for 16.7 (`bmad-create-story`) in a fresh context. No next story is started here.
@@ -207,6 +207,7 @@ Native `readiness_check` reviewed the concrete port and required exact database-
 - `services/infra_automation_preflight.py`
 - `services/infra_automation_service.py`
 - `services/project_service.py`
+- `services/report_service.py`
 - `tests/fixtures/infra_automation/preflight_v1/sensitive-corpus.json`
 - `tests/test_api/test_infra_automation_preflight.py`
 - `tests/test_infra/test_container_contract.py`
@@ -222,6 +223,7 @@ Native `readiness_check` reviewed the concrete port and required exact database-
 - `tests/test_infra_automation/test_preflight_compatibility.py`
 - `tests/test_infra_automation/test_preflight_evidence.py`
 - `tests/test_infra_automation/test_preflight_limits.py`
+- `tests/test_infra_automation/test_preflight_mutation_denials.py`
 - `tests/test_infra_automation/test_preflight_read_projection.py`
 - `tests/test_infra_automation/test_preflight_repository.py`
 - `tests/test_infra_automation/test_preflight_service.py`
@@ -231,3 +233,5 @@ Native `readiness_check` reviewed the concrete port and required exact database-
 - 2026-10-27: Implemented authenticated uploaded-artifact preflight and immutable relational report linkage through the shared fenced analysis pipeline. Preserved report v2/provenance v1 and advisory-only semantics; added scoped migration, corpus/consumer/runtime proofs and operator documentation. Fixed BOM/state screening, SQL replacement/reparenting, linked snapshot mutation, spawned app bootstrap and reload-safe authorization guard findings.
 
 - 2026-10-27: Completed adversarial review, resolved eight findings, proved commit rollback/output adoption, synchronized current develop, and passed final validation.
+
+- 2026-10-27: Resolved hosted-interpreter portability and authorized immutable-mutation denials; final local checks pass, with 50 owned changed paths and PR #199 maintained against develop.
