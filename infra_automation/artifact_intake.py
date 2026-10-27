@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 import json
+from typing import cast
 
 from infra_automation.lifecycle import LifecycleError
 from parsers.registry import detect_tool_type
@@ -137,7 +138,7 @@ def screen_artifacts(
                 raise LifecycleError(422)
     except (ValueError, TypeError, RecursionError):
         raise LifecycleError(422) from None
-    return tuple(files)
+    return cast(tuple[tuple[str, bytes], ...], tuple(files))
 
 
 def collect_screened_artifact(

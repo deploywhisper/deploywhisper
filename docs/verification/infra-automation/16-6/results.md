@@ -76,7 +76,7 @@ closure before this story is marked done. This dev-story hands off at review. Im
 
 Review target: original Story16.6 change from8e4cf16 throughbee7199. Three native
 layers completed independently: diff-only Blind Hunter, repository Edge Case
-Hunter and spec/context Acceptance Auditor. Five patch findings, no unresolved
+Hunter and spec/context Acceptance Auditor. Five behavioral patch findings plus one type-contract follow-up, no unresolved
 product decisions or pre-existing deferrals; two hypotheses dismissed after
 tracing existing recovery/transaction code and adding executable proof.
 
@@ -86,7 +86,8 @@ tracing existing recovery/transaction code and adding executable proof.
 | R2 legitimate warning/TODO counts overflow link models | P2 | Preserve mandatory summary entries, cap lists/bytes with explicit omitted counts, retain full detail in the report. |
 | R3 final opaque ID makes an admitted 16 KiB relation unreadable | P2 | Allocate and screen the exact final view before retaining its independently hashed payload. |
 | R4 snapshot copies omitted from retained-byte accounting | P2 | Count actual descriptor-validated snapshot and sidecar bytes once; authenticate before filesystem access; quota rollback removes report/link/files. |
-| R5 lone-surrogate names survive direct intake validation | P3 | Strict filename UTF-8 screening returns422 before classification/canonicalization; HTTP already rejects invalid Unicode and now has explicit regression coverage. |
+| R5 lone-surrogate names survive direct intake validation | P3 | Strict filename UTF-8 screening returns 422 before classification/canonicalization; HTTP already rejects invalid Unicode and now has explicit regression coverage. |
+| R6 new type annotations disagree with strict validation and nullable lookup | P3 | Align byte/status types and reject a missing admitted row consistently; no new normalized mypy errors against current develop. |
 
 The crash-duplication hypothesis was dismissed: a real spawned successor adopts
 its predecessor's committed typed output and retains exactly one report/link.
@@ -99,3 +100,12 @@ Fix validation:63focused tests/450subtests passed; owned and global Ruff checks
 pass. Final full checks and remote branch/PR closure are pending. New evidence
 status is an independent v1 projection; frozen engine/report/provenance schemas
 remain unchanged. UI validation not applicable.
+
+
+Static follow-up: the exact CI mypy command remains non-blocking for the legacy
+repository. Comparing the synchronized branch with a clean origin/develop archive
+using the same interpreter/dependencies found308current diagnostics versus314in
+the baseline, with zero new normalized diagnostics. New preflight modules are
+clean. The type-alignment regression subset passed31tests/405subtests; root
+unittest passed1,136tests (two skips). Final local CI and deployment smoke details
+will be recorded after completion.

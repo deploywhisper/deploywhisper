@@ -25,7 +25,7 @@ from services import project_service as auth
 def request_preflight(request: PreflightRequest):
     request = support.revalidate(request, PreflightRequest)
     try:
-        files = [
+        files: list[tuple[str, bytes | None]] = [
             (item.name, item.content.encode("utf-8")) for item in request.artifacts
         ]
     except UnicodeError:
@@ -34,6 +34,8 @@ def request_preflight(request: PreflightRequest):
     with auth.authorized_session() as session:
         result = engine.request_run(request.run, registry=PREFLIGHT_REGISTRY)
         run = runs.get_run(session, result["id"])
+        if run is None:
+            raise LifecycleError(503)
         document = engine._document(run)
         intake = [s for s in document.definition.steps if s.kind == "uploaded_intake"]
         analysis = [s for s in document.definition.steps if s.kind == "shared_analysis"]

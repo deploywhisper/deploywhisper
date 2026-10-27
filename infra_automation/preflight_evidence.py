@@ -12,11 +12,11 @@ from typing import get_args
 
 from infra_automation.artifact_intake import screen_metadata
 from infra_automation.lifecycle import LifecycleError, SnapshotDocument
-from infra_automation.preflight_contracts import PreflightEvidenceStatus
+from infra_automation.preflight_contracts import EvidenceStatus, PreflightEvidenceStatus
 from infra_automation.state import AttemptState, RunState, TERMINAL_STATES
 
 
-_RECOVERY = {
+_RECOVERY: dict[str, tuple[EvidenceStatus, str, str]] = {
     "failed": (
         "failed",
         "Analysis did not complete successfully.",
@@ -115,7 +115,7 @@ def build_evidence_status(
             limitations.extend(retained["limitations"])
             todos.extend(retained["context_todos"])
         report_available = bool(links)
-        status = "available" if report_available else "pending"
+        status: EvidenceStatus = "available" if report_available else "pending"
         failure = _RECOVERY.get(run.state)
         if failure is None and latest is not None and not report_available:
             failure = _RECOVERY.get(latest.state)

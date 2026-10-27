@@ -67,9 +67,14 @@ class SyntheticCollectionEnvelope(ClosedModel):
     source_deadline: UTCText
 
 
+EvidenceStatus = Literal[
+    "pending", "available", "failed", "missing", "stale", "interrupted"
+]
+
+
 class PreflightEvidenceStatus(ClosedModel):
     version: Annotated[StrictInt, Field(ge=1, le=1)] = 1
-    status: Literal["pending", "available", "failed", "missing", "stale", "interrupted"]
+    status: EvidenceStatus
     run_state: RunState
     run_version: Positive
     attempt_id: Identifier | None

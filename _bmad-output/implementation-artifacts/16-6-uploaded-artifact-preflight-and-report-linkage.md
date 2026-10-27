@@ -65,6 +65,8 @@ Execute packets in listed dependency order; assign one named owner per packet an
 - [x] [Review][Patch][P2][R4] Include retained filesystem snapshot payload copies in project/global quota accounting and prove rollback at the byte boundary [models/repositories/infra_automation_reports.py:307].
 - [x] [Review][Patch][P3][R5] Reject lone-surrogate filenames as invalid UTF-8 direct-intake input with 422 before manifest canonicalization (HTTP already rejects invalid Unicode) [infra_automation/artifact_intake.py:88].
 
+- [x] [Review][Patch][P3][R6] Align new preflight byte/status annotations and explicitly guard a missing admitted run row — non-blocking mypy identified five new diagnostics [infra_automation/artifact_intake.py:140; infra_automation/preflight_evidence.py:150; services/infra_automation_preflight.py:33].
+
 All three independent layers completed. No decision-needed or pre-existing deferred finding. Two hypotheses dismissed after dependency tracing: committed-output adoption already prevents rerunning successfully committed analysis after a crash; existing reserved-transaction rollback callbacks already compensate snapshot writes on final COMMIT failure (add focused proof).
 
 Review fixes passed 63 focused tests and 450 subtests, with independent re-audits of the evidence projection and metadata/quota boundaries. Real SQLite COMMIT-failure compensation and real spawned committed-output adoption tests passed. Full final checks and Git Flow remote closure remain in progress.
