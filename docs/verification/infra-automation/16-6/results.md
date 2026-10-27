@@ -97,15 +97,26 @@ back report/link/output, and report-ID reuse exposes only replacement artifacts.
 These tests exercise the boundary rather than a prior callback-only exception.
 
 Fix validation:63focused tests/450subtests passed; owned and global Ruff checks
-pass. Final full checks and remote branch/PR closure are pending. New evidence
+pass. Final local checks passed; remote branch/PR closure is recorded by the workflow. New evidence
 status is an independent v1 projection; frozen engine/report/provenance schemas
 remain unchanged. UI validation not applicable.
 
 
 Static follow-up: the exact CI mypy command remains non-blocking for the legacy
 repository. Comparing the synchronized branch with a clean origin/develop archive
-using the same interpreter/dependencies found308current diagnostics versus314in
+using the same interpreter/dependencies found 308 current diagnostics versus 314 in
 the baseline, with zero new normalized diagnostics. New preflight modules are
-clean. The type-alignment regression subset passed31tests/405subtests; root
-unittest passed1,136tests (two skips). Final local CI and deployment smoke details
-will be recorded after completion.
+clean. The type-alignment regression subset passed 31 tests /405 subtests; root
+unittest passed 1,136 tests (two skips). Final local CI and deployment smoke details are recorded below.
+
+
+### Final review validation
+
+- API/CLI/infra pytest: 672 passed, 2,233 subtests; one opt-in disposable Linux qualifier skipped.
+- Services pytest: 1,232 passed, 2,248 subtests.
+- Dedicated automation pytest: 416 passed, 1,318 subtests.
+- Root unittest: 1,136 tests passed, two skips.
+- Local CI: all ten directories /2,582 tests passed, plus its prompt/skill/compile/dependency/security/lint/format gates.
+- Docker final source e3cb6df built successfully from git-tracked archive; health 200, evidence-status OpenAPI, Python 3.11/non-root/Node-absent assertions passed; temporary container removed.
+- Final type alignment 31 tests /405 subtests passed; repo-wide Ruff (424 files) and diff checks pass. Mypy: 308 diagnostics versus 314 baseline, zero new normalized errors.
+- No frozen protocol/report schema changed; no new dependency or rendered UI change. Git Flow branch preserved; status is done after all review fixes/local checks, with push/PR closure performed by the workflow.

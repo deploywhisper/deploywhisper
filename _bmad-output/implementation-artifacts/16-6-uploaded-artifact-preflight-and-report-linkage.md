@@ -1,6 +1,6 @@
 # Story 16.6: Uploaded Artifact Preflight And Report Linkage
 
-Status: in-progress
+Status: done
 Preparation: refined
 Release: v1.5.0 — P0 highest-priority feature
 Dependencies: 16.5; public RFC and 16.0 qualification required
@@ -69,7 +69,7 @@ Execute packets in listed dependency order; assign one named owner per packet an
 
 All three independent layers completed. No decision-needed or pre-existing deferred finding. Two hypotheses dismissed after dependency tracing: committed-output adoption already prevents rerunning successfully committed analysis after a crash; existing reserved-transaction rollback callbacks already compensate snapshot writes on final COMMIT failure (add focused proof).
 
-Review fixes passed 63 focused tests and 450 subtests, with independent re-audits of the evidence projection and metadata/quota boundaries. Real SQLite COMMIT-failure compensation and real spawned committed-output adoption tests passed. Full final checks and Git Flow remote closure remain in progress.
+Review fixes passed 63 focused tests and 450 subtests, with independent re-audits of the evidence projection and metadata/quota boundaries. Real SQLite COMMIT-failure compensation and real spawned committed-output adoption tests passed. Final checks passed. Git Flow remote closure is performed by this review workflow and recorded at completion.
 
 ## Dev Notes
 
@@ -155,6 +155,20 @@ Native `readiness_check` reviewed the concrete port and required exact database-
 - **UI validation not applicable.** No React/browser surface changed. No production collector, receiver, exact-plan grant, action runtime or release qualification is claimed.
 - **Definition of Done: PASS (29/29 applicable checklist items).** All story task/verification boxes are complete. BMad Help recommends `[CR] bmad-code-review` in a fresh context. Implementation is ready for review; final reviewer must verify branch compliance, push and optionally open the PR to `develop` before marking the story done. No remote push or PR is claimed here.
 
+## Senior Developer Review (AI)
+
+- **Outcome:** Approved after fixes; no unresolved high/medium finding.
+- **Reviewer/date:** Codex native three-layer adversarial review, 2026-10-27.
+- **Scope:** Story 16.6 against its original8e4cf16 baseline, synchronized with current `origin/develop` 2656949. Epic 17 append-only planning was preserved; no cross-epic runtime dependency was introduced.
+- **Disposition:** Six fixes (four P2 behavior defects, one P3 direct-input boundary, one P3 type-contract follow-up), zero decision-needed, zero deferred story findings, two dismissed hypotheses backed by real SQLite COMMIT and spawned-output-adoption tests. All findings above are checked off.
+- **Acceptance:** AC1–7 satisfied for uploaded/synthetic advisory evidence. R1 adds a fixed v1 projection from durable facts, without new writes or frozen report/engine DTO changes. R2/R3 retain readable bounded links and complete report detail. R4 accounts for actual snapshot copies with authorization before filesystem access. R5/R6 tighten input/type contracts.
+- **Verification:** Provider fallback isolated using `LLM_API_BASE=http://127.0.0.1:9`; `pytest tests/test_api tests/test_cli tests/test_infra -v --tb=short`: 672 passed /2,233 subtests /one opt-in skip; `pytest tests/test_services -v --tb=short`: 1,232 passed /2,248 subtests; `pytest tests/test_infra_automation -v --tb=short`: 416 passed /1,318 subtests. Root `unittest discover -q`: 1,136 tests /two skips. Full `bash scripts/ci-local.sh` passed all 10 directories /2,582 tests plus prompt/skill/compile/pip/Bandit/Ruff gates. Review-focused 63 tests /450 subtests and final type-alignment 31 tests /405 subtests passed.
+- **Static analysis:** Repo-wide Ruff lint/format pass (424 Python files). Exact CI mypy comparison against a clean current-develop archive: 308 existing diagnostics versus 314 baseline, zero new normalized diagnostics; CI intentionally keeps that legacy gate advisory. Existing unrelated Bandit medium B104 remains outside this slice; high/high gate passes.
+- **Production runtime:** Docker build from a tracked-source archive passed. Final source image e3cb6df health 200, preflight/evidence OpenAPI present, Python 3.11, non-root, no Node runtime; temporary container removed.
+- **Git Flow:** `feature/16-6-uploaded-artifact-preflight`; review fixes b0ccb68, base synchronization e62f43b, type alignment e3cb6df. Push/PR closure follows this evidence commit; final remote outcome is reported by the workflow.
+- **Limits:** UI validation not applicable. No new dependency; no production collector/custody/receiver, exact-plan grant, host-power-loss or release qualification claim. Fixed known-pattern corpus does not promise universal secret detection.
+- **BMad Help:** Next is scoped readiness/story refinement for 16.7 (`bmad-create-story`) in a fresh context. No next story is started here.
+
 ### File List
 
 - `README.md`
@@ -176,6 +190,7 @@ Native `readiness_check` reviewed the concrete port and required exact database-
 - `infra_automation/coordinator.py`
 - `infra_automation/local_workers.py`
 - `infra_automation/preflight_contracts.py`
+- `infra_automation/preflight_evidence.py`
 - `migrations/versions/033_add_infra_preflight.py`
 - `models/database.py`
 - `models/repositories/infra_automation_reports.py`
@@ -197,10 +212,16 @@ Native `readiness_check` reviewed the concrete port and required exact database-
 - `tests/test_infra_automation/test_artifact_intake.py`
 - `tests/test_infra_automation/test_engine_app_lifespan.py`
 - `tests/test_infra_automation/test_engine_coordinator.py`
+- `tests/test_infra_automation/test_preflight_atomic_recovery.py`
 - `tests/test_infra_automation/test_preflight_compatibility.py`
+- `tests/test_infra_automation/test_preflight_evidence.py`
+- `tests/test_infra_automation/test_preflight_limits.py`
+- `tests/test_infra_automation/test_preflight_read_projection.py`
 - `tests/test_infra_automation/test_preflight_repository.py`
 - `tests/test_infra_automation/test_preflight_service.py`
 
 ## Change Log
 
 - 2026-10-27: Implemented authenticated uploaded-artifact preflight and immutable relational report linkage through the shared fenced analysis pipeline. Preserved report v2/provenance v1 and advisory-only semantics; added scoped migration, corpus/consumer/runtime proofs and operator documentation. Fixed BOM/state screening, SQL replacement/reparenting, linked snapshot mutation, spawned app bootstrap and reload-safe authorization guard findings.
+
+- 2026-10-27: Completed adversarial review, resolved six findings, proved commit rollback/output adoption, synchronized current develop, and passed final validation.
