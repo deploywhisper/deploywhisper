@@ -1,6 +1,6 @@
 # Story 16.6: Uploaded Artifact Preflight And Report Linkage
 
-Status: in-progress
+Status: review
 Preparation: refined
 Release: v1.5.0 — P0 highest-priority feature
 Dependencies: 16.5; public RFC and 16.0 qualification required
@@ -40,22 +40,22 @@ Coverage intent: Delta over accepted v1.4.0; exact canonical requirement text/pr
 
 Execute packets in listed dependency order; assign one named owner per packet and review its tests before widening scope. Shared files must accommodate concurrent edits; no global tracker or unrelated story change is authorized by a packet.
 
-- [ ] **Intake/screening owner** (AC1/2/4)
-  - [ ] Owned write scope: `services/intake_service.py, services/content_security.py, services/submission_manifest.py, infra_automation artifact intake module (new)`.
-  - [ ] Reuse build_parse_batch, total_upload_bytes, is_sensitive_file, trusted_relative_artifact_path and redact_value/redact_text; enforce aggregate bytes and filename/content classification. Screen filenames, metadata/errors and bounded stream buffers before storage; reject forbidden artifacts and document known pattern limits rather than universal redaction.
-  - [ ] Attach packet-specific acceptance output, touched-file list, migration/contract fixtures and review notes; leave unchecked until verified.
-- [ ] **Provenance/link persistence owner** (AC3/4/7)
-  - [ ] Owned write scope: `infra_automation/contracts.py, models/tables.py, models/repositories/infra_automation_reports.py (new), next migration`.
-  - [ ] Create only run/report/artifact-manifest immutable links and optional version-1 provenance fields needed here. Record source variant, project/attempt, command/argv digest, source SHA where available, times/exit status, raw-local versus sanitized digest and redaction version. Raw-local digest is metadata, not uploaded plan bytes. Use authenticated synthetic envelopes; real custody/collector admission remains 16.14.
-  - [ ] Attach packet-specific acceptance output, touched-file list, migration/contract fixtures and review notes; leave unchecked until verified.
-- [ ] **Shared-analysis adapter owner** (AC1/4/5/6/7)
-  - [ ] Owned write scope: `services/infra_automation_service.py, services/analysis_service.py, services/report_service.py, api/routes/infra_automation.py`.
-  - [ ] Call analyze_uploaded_files through 16.5 bounded worker, preserving intake→parse→assess→blast-radius→rollback→incident→narrative→persist ordering. Validate returned immutable report/link and compute eligibility outside advisory scoring. Reuse canonical go/caution/no-go plus typed insufficient-context/error flags; unknown values fail closed. Add scoped linked read guards from 16.2.
-  - [ ] Attach packet-specific acceptance output, touched-file list, migration/contract fixtures and review notes; leave unchecked until verified.
-- [ ] **Cross-surface/consumer proof owner** (AC1–7)
-  - [ ] Owned write scope: `tests/test_infra_automation, tests/test_services, tests/test_api, tests/test_cli, tests/test_analysis, docs/infra-automation/preflight.md (new)`.
-  - [ ] Run upload vertical slice, secret corpus/chunk boundaries, tampered digests/stale attempts, cross-surface parity/Evidence Law, AI-off/narrative failure and v1/v2/provenance compatibility. Search all changed constructor instantiations and lock API/CLI fixtures. Regression-test linked shared/export/delete routes; no collection/receiver success claim.
-  - [ ] Attach packet-specific acceptance output, touched-file list, migration/contract fixtures and review notes; leave unchecked until verified.
+- [x] **Intake/screening owner** (AC1/2/4)
+  - [x] Owned write scope: `services/intake_service.py, services/content_security.py, services/submission_manifest.py, infra_automation artifact intake module (new)`.
+  - [x] Reuse build_parse_batch, total_upload_bytes, is_sensitive_file, trusted_relative_artifact_path and redact_value/redact_text; enforce aggregate bytes and filename/content classification. Screen filenames, metadata/errors and bounded stream buffers before storage; reject forbidden artifacts and document known pattern limits rather than universal redaction.
+  - [x] Attach packet-specific acceptance output, touched-file list, migration/contract fixtures and review notes; leave unchecked until verified.
+- [x] **Provenance/link persistence owner** (AC3/4/7)
+  - [x] Owned write scope: `infra_automation/contracts.py, models/tables.py, models/repositories/infra_automation_reports.py (new), next migration`.
+  - [x] Create only run/report/artifact-manifest immutable links and optional version-1 provenance fields needed here. Record source variant, project/attempt, command/argv digest, source SHA where available, times/exit status, raw-local versus sanitized digest and redaction version. Raw-local digest is metadata, not uploaded plan bytes. Use authenticated synthetic envelopes; real custody/collector admission remains 16.14.
+  - [x] Attach packet-specific acceptance output, touched-file list, migration/contract fixtures and review notes; leave unchecked until verified.
+- [x] **Shared-analysis adapter owner** (AC1/4/5/6/7)
+  - [x] Owned write scope: `services/infra_automation_service.py, services/analysis_service.py, services/report_service.py, api/routes/infra_automation.py`.
+  - [x] Call analyze_uploaded_files through 16.5 bounded worker, preserving intake→parse→assess→blast-radius→rollback→incident→narrative→persist ordering. Validate returned immutable report/link and compute eligibility outside advisory scoring. Reuse canonical go/caution/no-go plus typed insufficient-context/error flags; unknown values fail closed. Add scoped linked read guards from 16.2.
+  - [x] Attach packet-specific acceptance output, touched-file list, migration/contract fixtures and review notes; leave unchecked until verified.
+- [x] **Cross-surface/consumer proof owner** (AC1–7)
+  - [x] Owned write scope: `tests/test_infra_automation, tests/test_services, tests/test_api, tests/test_cli, tests/test_analysis, docs/infra-automation/preflight.md (new)`.
+  - [x] Run upload vertical slice, secret corpus/chunk boundaries, tampered digests/stale attempts, cross-surface parity/Evidence Law, AI-off/narrative failure and v1/v2/provenance compatibility. Search all changed constructor instantiations and lock API/CLI fixtures. Regression-test linked shared/export/delete routes; no collection/receiver success claim.
+  - [x] Attach packet-specific acceptance output, touched-file list, migration/contract fixtures and review notes; leave unchecked until verified.
 
 ## Dev Notes
 
@@ -80,12 +80,12 @@ Use the locked Python-first stack (SQLAlchemy/Alembic/Pydantic and existing libr
 
 ## Implementation verification requirements
 
-- [ ] Add regression/contract tests with each packet; do not defer them to 16.19. Use temporary SQLite databases, TestClient and local synthetic fixtures; never real secrets/infrastructure state.
-- [ ] If adding `tests/test_infra_automation/`, register it in `scripts/ci-local.sh` and `.github/workflows/ci.yml` services pytest shard, and prove discovery includes it; root unittest discovery alone is insufficient.
-- [ ] Search repository-wide direct instantiations/fixtures whenever changing a constructor/Pydantic/dataclass/API contract; run affected CI shard exactly: `./.venv/bin/python -m pytest tests/test_api tests/test_cli tests/test_infra -v --tb=short` and/or `./.venv/bin/python -m pytest tests/test_services -v --tb=short`, plus explicitly registered automation tests.
-- [ ] Before review run `./.venv/bin/ruff check .`, `./.venv/bin/ruff format --check .`, `./.venv/bin/python -m unittest discover -q`, `bash scripts/ci-local.sh` and `git diff --check`; record actual outputs and resolve failures.
-- [ ] Keep this slice backend/contract scoped. Record **UI validation not applicable** if no rendered surface changes. If React/browser semantics change, use a separate labeled backend-for-UI PR where required, compose production build (`docker compose up -d --build`), wait for health, seed data and run `BASE_URL=http://localhost:8080 npm run test:ui-review` plus necessary a11y/keyboard/screenshots, then `docker compose down`. Root SPA routes only; Vite is not proof.
-- [ ] Update version-matched operator/schema/API docs and story file list with the actual implementation. Layered code/security review must examine this slice's trust boundary; no new dependency without explicit approved decision.
+- [x] Add regression/contract tests with each packet; do not defer them to 16.19. Use temporary SQLite databases, TestClient and local synthetic fixtures; never real secrets/infrastructure state.
+- [x] If adding `tests/test_infra_automation/`, register it in `scripts/ci-local.sh` and `.github/workflows/ci.yml` services pytest shard, and prove discovery includes it; root unittest discovery alone is insufficient.
+- [x] Search repository-wide direct instantiations/fixtures whenever changing a constructor/Pydantic/dataclass/API contract; run affected CI shard exactly: `./.venv/bin/python -m pytest tests/test_api tests/test_cli tests/test_infra -v --tb=short` and/or `./.venv/bin/python -m pytest tests/test_services -v --tb=short`, plus explicitly registered automation tests.
+- [x] Before review run `./.venv/bin/ruff check .`, `./.venv/bin/ruff format --check .`, `./.venv/bin/python -m unittest discover -q`, `bash scripts/ci-local.sh` and `git diff --check`; record actual outputs and resolve failures.
+- [x] Keep this slice backend/contract scoped. Record **UI validation not applicable** if no rendered surface changes. If React/browser semantics change, use a separate labeled backend-for-UI PR where required, compose production build (`docker compose up -d --build`), wait for health, seed data and run `BASE_URL=http://localhost:8080 npm run test:ui-review` plus necessary a11y/keyboard/screenshots, then `docker compose down`. Root SPA routes only; Vite is not proof.
+- [x] Update version-matched operator/schema/API docs and story file list with the actual implementation. Layered code/security review must examine this slice's trust boundary; no new dependency without explicit approved decision.
 
 ## Readiness and advancement
 
@@ -119,11 +119,27 @@ Native `readiness_check` reviewed the concrete port and required exact database-
 
 ### Debug Log References
 
-2026-10-27: scoped readiness reassessment and concrete preflight contract recorded. Current Alembic head: 032_add_infra_automation_engine. Branch: feature/16-6-uploaded-artifact-preflight. The existing console entrypoint shebang references an old workspace; use ./.venv/bin/python -m for tools. Focused packet and trust-boundary tests now pass; final broad validation is in progress. See docs/verification/infra-automation/16-6/results.md.
+- Baseline migration head032; delivered migration033. Branch `feature/16-6-uploaded-artifact-preflight`; implementation commit `5289b8d`.
+- Durable acceptance/review notes: `docs/verification/infra-automation/16-6/results.md`; scoped readiness: `_bmad-output/planning-artifacts/implementation-readiness-report-2026-10-27-story-16-6.md`.
+- Test output retained locally in `/tmp/story16-6-{ci,unittest,api-cli-infra,services,automation-shard}-verified.log`; app smoke `/tmp/story16-6-pinned-app-smoke.log`. Initial interrupted/failed diagnostic runs are not presented as passes. Dependency synchronization used the existing requirements lock; no manifest/dependency addition.
 
 ### Completion Notes List
 
-2026-10-27: dev-story started after scoped readiness reassessment. Shared governance/foundation gates are satisfied by newer evidence; owned concrete interface is documented in docs/infra-automation/preflight.md. Work remains in progress; no implementation acceptance or production collector qualification claimed.
+- **AC1/2:** Human-scoped authenticated preflight admission binds screened manifests to a published two-step workflow; real spawned workers produce permanent immutable report links through the shared pipeline. Named version1 eight-case corpus covers type/path/aggregate bounds, BOM/legacy state disguises, metadata/errors and every secret chunk split. API error/SQLite scans contain zero declared known patterns.
+- **AC3/4:** Separate immutable relational provenance v1 and authenticated retained synthetic envelopes recompute sanitized digests and bind private live attempt/fence/lease/project/command/collector/source identities. Upload source is explicitly unknown, has no invented commit/custody and never grants approval. Actual collector/custody admission remains 16.14.
+- **AC5/6:** Partial/fallback reports retain limitations/context TODOs with eligibility false; cancellation, stale/fake capability and mid-analysis revocation prevent final persistence. AI-disabled/narrative failure remains usable. Report/link/output commit atomically; failed linkage compensates report and local snapshots. Raw inputs remain local and provider input remains structured summaries.
+- **AC7:** Existing v1/v2 readers, agent output, six real CLI cases, permanent URLs and all frozen protocol hashes remain compatible. No report minor schema bump or duplicated risk logic. Linked report children and artifact snapshots reject SQL REPLACE/reparenting and public mutation; legacy/shared/export/delete paths retain live membership guards.
+- Independent native readiness, intake, persistence and adapter trust-boundary reviews completed. Corrections include BOM/state screening, SQLite implicit replacement/reparenting, app spawn bootstrap, explicit empty-registry test semantics and reload-safe snapshot guard exceptions. Full final validation passed after fixes.
+- **Validation (provider fallback isolated with `LLM_API_BASE=http://127.0.0.1:9`):**
+  - `./.venv/bin/ruff check .` and `./.venv/bin/ruff format --check .`: pass; 419 Python files formatted.
+  - `./.venv/bin/python -m unittest discover -q`: 1,112 tests passed; two skips.
+  - `./.venv/bin/python -m pytest tests/test_api tests/test_cli tests/test_infra -v --tb=short`: 671 passed and 2,230 subtests; one opt-in real Linux qualification skipped.
+  - `./.venv/bin/python -m pytest tests/test_services -v --tb=short`: 1,232 passed and 2,248 subtests.
+  - `./.venv/bin/python -m pytest tests/test_infra_automation -v --tb=short`: 393 passed and 1,311 subtests.
+  - `bash scripts/ci-local.sh`: pass; all 10 registered directories (2,558 unittest tests), plus 8 prompt-injection pytest tests and 96 subtests, skill harness, compile, dependency, lint/format and Bandit gates. New tests are included in the pre-existing dedicated automation GitHub shard and local target registration.
+  - `python app.py` in a temporary pinned-dependency environment: health 200 and clean shutdown. `git diff --check`: pass.
+- **UI validation not applicable.** No React/browser surface changed. No production collector, receiver, exact-plan grant, action runtime or release qualification is claimed.
+- **Definition of Done: PASS (29/29 applicable checklist items).** All story task/verification boxes are complete. BMad Help recommends `[CR] bmad-code-review` in a fresh context. Implementation is ready for review; final reviewer must verify branch compliance, push and optionally open the PR to `develop` before marking the story done. No remote push or PR is claimed here.
 
 ### File List
 

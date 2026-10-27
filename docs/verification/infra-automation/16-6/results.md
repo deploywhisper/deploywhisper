@@ -57,7 +57,7 @@ artifact helpers could otherwise replace/delete a linked snapshot without SQL.
 - Pinned dependencies were synchronized with `./.venv/bin/python -m pip install -r requirements.txt`; the existing local environment had an older Anthropic SDK and lacked the already-declared httpx2. No dependency manifest changed. `pip check` is clean.
 - Final API/CLI/infra pytest shard: 671 passed + 2,230 subtests; one opt-in disposable real Linux collector/custody test skipped. Final services pytest shard: 1,232 passed + 2,248 subtests.
 - `./.venv/bin/python -m unittest discover -q`: 1,112 tests passed, two skips.
-- `bash scripts/ci-local.sh`: passed all ten registered test directories (2,558 unittest methods), plus its prompt-injection/skill harness, compile, lint, format, dependency and Bandit gates. Automation discovery collected and local CI executed 393 methods. The dedicated automation pytest CI shard is additionally running for exact runner parity.
+- `bash scripts/ci-local.sh`: passed all ten registered test directories (2,558 unittest methods), plus its prompt-injection/skill harness, compile, lint, format, dependency and Bandit gates. Automation discovery collected and local CI executed 393 methods. The dedicated automation pytest CI shard also passed 393 tests and 1,311 subtests, proving exact runner parity.
 - Broad runs use `LLM_API_BASE=http://127.0.0.1:9` to exercise unavailable-provider fallback without the operator's live model. Initial live-provider runs were interrupted; no pass is claimed for interrupted runs. Initial full checks found the obsolete implicit-empty-registry test assumption, reload-stale snapshot exception and stale local dependency installation; all were corrected, the focused regressions pass, and root/local CI were rerun successfully.
 
 
@@ -69,4 +69,4 @@ complete advisory report. Synthetic collected envelopes do not establish collect
 admission or raw saved-plan integrity. Later stories own human workflow screens,
 policy/approval, canonical decision snapshots, real collection and release proof.
 Independent code-review workflow must verify the final branch, commit/push and PR
-closure before this story is marked done. This dev-story hands off at review.
+closure before this story is marked done. This dev-story hands off at review. Implementation commit: 5289b8d. Final story/sprint/status map all record review.
