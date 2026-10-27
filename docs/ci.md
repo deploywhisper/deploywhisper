@@ -173,7 +173,16 @@ These logs are retained for 14 days.
 
 ### Dependency freshness and delivery permissions
 
-Dependabot proposes weekly Python, root/frontend npm and GitHub Actions updates targeting `develop`; updates must pass normal review/CI. Frontend CI audits both npm graphs at all severities. Runtime Python audit remains enabled. Workflow defaults are read-only; container pushes, release creation and committed analytics snapshots receive only their required job-scoped writes. Public analytics feeds receive no GitHub bearer credential. Third-party workflow actions are SHA-pinned and included in automated update coverage. See [the remediation record](security/remediation-2026-10-07.md) for advisory dispositions and validation limits.
+Automatic dependency PRs are paused at the maintainer's request: every ecosystem
+has a zero PR limit, and analytics is manual-only and disabled in GitHub. See
+[dependency maintenance](dependency-maintenance.md) for deliberate updates and
+explicit resumption. Frontend CI audits both npm graphs at all severities;
+Python security checks audit both runtime and development locks, including audit
+tooling dependencies. Workflow defaults are read-only; container pushes, release
+creation and explicitly requested analytics snapshots receive only their required
+job-scoped writes. Public analytics feeds receive no GitHub bearer credential.
+Third-party actions remain SHA-pinned. See [the remediation
+record](security/remediation-2026-10-07.md) for earlier advisory dispositions.
 
 ### Hash-locked Python installations
 
@@ -182,6 +191,12 @@ for runtime-only setup. Contributors and local CI use the same command with
 `requirements-dev.txt`, which includes runtime dependencies and reviewed test,
 lint and audit tools. Both locks include transitive distributions and SHA256
 hashes; a version pin alone does not verify downloaded bytes.
+
+Use Python 3.11+ for the security-audit tooling. Its patched filelock dependency
+requires that floor, so `pip-audit` and its dependency chain are conditional on
+Python 3.11+. The application runtime lock still retains Python 3.10 support;
+Python 3.10 development installs do not include the auditor. Hosted CI audits on
+Python 3.11. Do not restore a vulnerable legacy auditor dependency for 3.10.
 
 For runtime updates, edit `requirements-runtime.txt` and keep the dependency
 list in `pyproject.toml` synchronized. For tool updates, edit

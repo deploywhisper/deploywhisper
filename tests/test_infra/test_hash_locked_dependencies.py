@@ -74,7 +74,8 @@ class HashLockedDependenciesTests(unittest.TestCase):
                 lock = runtime if filename == "requirements-runtime.txt" else dev
                 self.assertIn(name, lock)
                 self.assertEqual(
-                    declaration.split("==")[1], lock[name].split("==")[1].split()[0]
+                    declaration.split("==")[1].split()[0],
+                    lock[name].split("==")[1].split()[0],
                 )
         for lock in (runtime, dev):
             self.assertGreater(len(lock), 15)
@@ -93,6 +94,33 @@ class HashLockedDependenciesTests(unittest.TestCase):
             "bandit",
         ):
             self.assertIn(name, dev)
+
+    def test_audit_tool_chain_uses_patched_python_311_profile(self) -> None:
+        from packaging.requirements import Requirement
+
+        dev = requirements("requirements-dev.txt")
+        for name in ("pip-audit", "cachecontrol", "filelock"):
+            declaration = Requirement(dev[name].split("--hash=", 1)[0].strip())
+            self.assertIsNotNone(declaration.marker, name)
+            self.assertFalse(
+                declaration.marker.evaluate(
+                    {"python_version": "3.10", "python_full_version": "3.10.20"}
+                ),
+                name,
+            )
+            self.assertTrue(
+                declaration.marker.evaluate(
+                    {"python_version": "3.11", "python_full_version": "3.11.15"}
+                ),
+                name,
+            )
+        filelock = Requirement(dev["filelock"].split("--hash=", 1)[0].strip())
+        self.assertGreaterEqual(
+            tuple(
+                int(part) for part in next(iter(filelock.specifier)).version.split(".")
+            ),
+            (4, 2, 1),
+        )
 
     def test_packaging_metadata_matches_runtime_roots(self) -> None:
         metadata = (ROOT / "pyproject.toml").read_text()

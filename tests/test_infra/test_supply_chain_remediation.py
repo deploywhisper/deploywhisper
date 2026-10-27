@@ -77,6 +77,10 @@ class SupplyChainRemediationTests(unittest.TestCase):
         scripts = "\n".join(s.get("run", "") for s in data["jobs"]["frontend"]["steps"])
         self.assertIn("npm audit --audit-level=low", scripts)
         self.assertIn("npm audit --prefix frontend --audit-level=low", scripts)
+        security_steps = data["jobs"]["security"]["steps"]
+        security_scripts = "\n".join(s.get("run", "") for s in security_steps)
+        self.assertIn("--requirement requirements.txt", security_scripts)
+        self.assertIn("--requirement requirements-dev.txt", security_scripts)
 
     def test_analytics_defaults_read_only_and_limits_committed_paths(self):
         data = self.workflow("refresh-skill-analytics")

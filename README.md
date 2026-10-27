@@ -706,6 +706,10 @@ tests/        API, CLI, parser, service, frontend, and infra tests
 
 Install dependencies:
 
+Use Python 3.11 or newer for the development security-audit tools. The runtime
+lock retains Python 3.10 compatibility; the auditor requires patched dependencies
+available on Python 3.11+. See [dependency maintenance](docs/dependency-maintenance.md).
+
 ```bash
 python -m pip install --require-hashes --only-binary=:all: -r requirements-dev.txt
 ```
