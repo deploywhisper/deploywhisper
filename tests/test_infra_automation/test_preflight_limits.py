@@ -1,5 +1,7 @@
 """Bounded summaries and exact local snapshot quota accounting."""
 
+from __future__ import annotations
+
 import json
 import unittest
 from pathlib import Path
