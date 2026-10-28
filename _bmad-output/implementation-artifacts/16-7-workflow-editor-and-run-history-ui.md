@@ -68,6 +68,7 @@ Each packet is a bounded review unit under this stable story ID; split large pac
 - [x] [Review][P2] Keep run details hidden until denied-access recovery verifies the current account and all required reads.
 - [x] [Review][P2] Request the server's evidence state once when a deadline has elapsed; never invent a local freshness verdict.
 - [x] [Review][P2] Preserve report-ID feedback invalidation when the report query also keys by identity epoch.
+- [x] [Review][High] Resolve the browser fixture file race reported by CodeQL: open with `O_NOFOLLOW`, verify with `fstat`, and read through the same descriptor.
 
 ## Dev Notes
 
@@ -140,7 +141,8 @@ Historical preparation note: application/Compose/browser qualification had not b
 - Browser proof: 14 authenticated Compose Playwright cases passed with real named accounts, workflow publication, uploaded preflight, worker completion, report URL, scope/feature-off/denial/conflict/network/expiry states, keyboard focus and axe gates. The default-profile legacy lane passed 15 tests; its 16 skips are 14 identity-only scenarios tested separately and two existing opt-ins.
 - Visual QA: approved v3 shell/account 94/100, workflow/run/report 92/100 at 1440px and 760px; 12 final composed screenshots recorded in `docs/verification/infra-automation/16-7/screenshots/`.
 - Validation: `npm run ui:typecheck`, `npm run ui:test` (158 passed), `npm run ui:build`, repo-wide `ruff check .` and `ruff format --check .` (428 files), `unittest discover -q` (1,161 tests/two skips), exact API/CLI/infra pytest shard (685 passed/2,267 subtests/one skip), and `BASE_URL=http://localhost:8080 RUN_UI_A11Y=1 bash scripts/ci-local.sh` (2,607 Python tests/all ten directories and 15 baseline browser tests) passed. `git diff --check` passed.
-- Three native AI review layers completed and the eight findings above were corrected and rechecked. The old incident-leak test's whole-JSON numeric assertion was narrowed to incident references and made deterministic against public timestamp digits; no backend behavior changed in this UI PR.
+- Three native AI review layers completed and their eight initial findings above were corrected and rechecked. The old incident-leak test's whole-JSON numeric assertion was narrowed to incident references and made deterministic against public timestamp digits; no backend behavior changed in this UI PR.
+- GitHub CodeQL flagged a high-severity race in the initial browser-only credential fixture reader. It now opens the 0600 file once with `O_NOFOLLOW`, verifies type/owner/mode/size through the descriptor and reads that same descriptor. The authenticated Compose suite was rerun after this fix: 14/14 passed. This did not change application credential handling.
 - A real preflight exposed the existing coordinator's expiring-session bug. Separate [backend-for-UI PR #201](https://github.com/deploywhisper/deploywhisper/pull/201) fixes it and passed 248 engine/API tests plus production Compose browser integration here. Merge #201 before this UI PR. This UI branch contains no coordinator runtime patch.
 - The disposable Compose project/volume and private synthetic credential fixture were removed. Original `deploywhisper-deploywhisper-1` was restarted with its original ID; health returned HTTP 200. No human review, external receiver, production TLS pilot or release qualification is claimed.
 

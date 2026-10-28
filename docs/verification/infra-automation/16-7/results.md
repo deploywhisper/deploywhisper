@@ -98,6 +98,13 @@ also covered report tab Arrow/Home/End behavior, focus after actions, semantic
 error summaries and axe critical/serious gates. No unresolved introduced review
 finding is recorded. Independent human approval is not claimed.
 
+The first GitHub CodeQL pass also found a high-severity file race in the
+browser-only fixture reader, which had checked its path twice before reading it.
+The reader now uses one `O_NOFOLLOW` descriptor for `fstat` and the bounded read;
+the same 14 authenticated browser cases passed again on a fresh disposable
+database. The changed production UI and API contracts are unchanged. The new
+commit receives a fresh CodeQL check before merge.
+
 Remaining boundary: PR #201 is open and must merge before this UI can run durable
 preflights on `develop`. Production identity TLS/proxy qualification and the later
 approval, runner, receiver and operations screens remain their owning stories.

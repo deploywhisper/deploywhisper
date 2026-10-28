@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { mkdirSync, readFileSync, statSync } from "node:fs";
+import { closeSync, constants, fstatSync, mkdirSync, openSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page, type BrowserContext } from "@playwright/test";
@@ -12,9 +12,17 @@ let nextOperator = 0;
 test.use({ trace: "off", screenshot: "off", video: "off" });
 function fixture(): Fixture {
   if (!fixturePath) throw new Error("Disposable automation fixture is required.");
-  if ((statSync(fixturePath).mode & 0o077) !== 0) throw new Error("Fixture must be operator-owned mode 0600.");
-  if (statSync(fixturePath).uid !== process.getuid?.()) throw new Error("Fixture must belong to the current operator.");
-  const value = JSON.parse(readFileSync(fixturePath, "utf8")) as Fixture;
+  const descriptor = openSync(fixturePath, constants.O_RDONLY | constants.O_NOFOLLOW);
+  let value: Fixture;
+  try {
+    const metadata = fstatSync(descriptor);
+    if (!metadata.isFile() || (metadata.mode & 0o777) !== 0o600 || metadata.uid !== process.getuid?.() || metadata.size < 1 || metadata.size > 65_536) {
+      throw new Error("Fixture must be a bounded operator-owned regular file with mode 0600.");
+    }
+    value = JSON.parse(readFileSync(descriptor, "utf8")) as Fixture;
+  } finally {
+    closeSync(descriptor);
+  }
   const operator = value.operatorPool[nextOperator++];
   if (!operator) throw new Error("Synthetic operator pool exhausted; reseed the disposable qualification lane.");
   value.accounts.operator = operator;
