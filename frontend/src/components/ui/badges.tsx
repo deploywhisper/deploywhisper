@@ -21,6 +21,7 @@ export function VerdictChip({ verdict: value, size = "md" }: { verdict: Verdict;
   return (
     <span
       className={`dw-verdict-chip dw-verdict-chip-${size}`}
+      data-verdict={value}
       style={{ background: fill, boxShadow: `0 2px 8px ${fill}55` }}
     >
       <Icon size={12} />

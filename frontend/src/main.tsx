@@ -34,22 +34,31 @@ import { IncidentsScreen } from "./screens/Incidents";
 import { ReportScreen } from "./screens/Report";
 import { SettingsScreen } from "./screens/Settings";
 import { SkillsScreen } from "./screens/Skills";
+import { IdentityProvider, useIdentity } from "./screens/IdentitySession";
+import { AccountAccessScreen } from "./screens/AccountAccess";
+import { InfraAutomationScreen, InfraWorkflowScreen } from "./screens/InfraAutomation";
+import { InfraAutomationRunScreen } from "./screens/InfraAutomationRun";
 
 const queryClient = new QueryClient();
 
 function App() {
+  const { epoch } = useIdentity();
   return (
     <BrowserRouter>
       <Routes>
+        <Route element={<AccountAccessScreen />} path="/settings/account" />
+        <Route element={<InfraAutomationScreen />} path="/infra-automation" />
+        <Route element={<InfraWorkflowScreen />} path="/infra-automation/workflows/:workflowId" />
+        <Route element={<InfraAutomationRunScreen />} path="/infra-automation/runs/:runId" />
         <Route element={<ComponentGallery />} path="/dev/components" />
-        <Route element={<HistoryScreen />} path="/history" />
-        <Route element={<SettingsScreen />} path="/settings" />
-        <Route element={<IncidentsScreen />} path="/incidents" />
-        <Route element={<SkillsScreen />} path="/skills" />
-        <Route element={<SkillsScreen />} path="/skills/:skillId" />
-        <Route element={<ReportScreen />} path="/reports/:id" />
-        <Route element={<DashboardScreen />} path="/" />
-        <Route element={<DashboardScreen />} path="*" />
+        <Route element={<HistoryScreen key={epoch} />} path="/history" />
+        <Route element={<SettingsScreen key={epoch} />} path="/settings" />
+        <Route element={<IncidentsScreen key={epoch} />} path="/incidents" />
+        <Route element={<SkillsScreen key={epoch} />} path="/skills" />
+        <Route element={<SkillsScreen key={epoch} />} path="/skills/:skillId" />
+        <Route element={<ReportScreen key={epoch} />} path="/reports/:id" />
+        <Route element={<DashboardScreen key={epoch} />} path="/" />
+        <Route element={<DashboardScreen key={epoch} />} path="*" />
       </Routes>
     </BrowserRouter>
   );
@@ -201,7 +210,7 @@ function ComponentGallery() {
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>
     <QueryClientProvider client={queryClient}>
-      <App />
+      <IdentityProvider><App /></IdentityProvider>
     </QueryClientProvider>
   </React.StrictMode>,
 );

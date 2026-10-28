@@ -365,10 +365,12 @@ class LinkedAuthorizationTests(unittest.TestCase):
             drift.assert_not_called()
 
     def test_public_outcomes_do_not_expose_private_incident_references(self):
-        from models.tables import IncidentRecord, DeploymentOutcome
+        from models.tables import IncidentRecord, DeploymentOutcome, Project
         import json
 
         with self.factory.begin() as db:
+            # Public timestamps may contain the private ID's digits incidentally.
+            db.get(Project, 3).created_at = self.now.replace(microsecond=444000)
             db.add(
                 IncidentRecord(
                     id=444,
@@ -395,7 +397,9 @@ class LinkedAuthorizationTests(unittest.TestCase):
         summary = backtesting_service.run_weekly_backtest(project_id=3, now=self.now)
         self.assertIsNone(summary["backtest_rows"][0]["incident_id"])
         self.assertNotIn("private-linked-incident", json.dumps(summary))
-        self.assertNotIn("444", json.dumps(summary))
+        self.assertFalse(
+            any(row.get("incident_id") == 444 for row in summary["backtest_rows"])
+        )
         # Existing shared caches must re-check incident authority on every read.
         from models.tables import AppSetting
 

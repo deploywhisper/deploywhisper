@@ -49,6 +49,7 @@ import {
 } from "../components/ui";
 import type { Severity, Verdict } from "../theme/tokens";
 import { AppBrand } from "./AppBrand";
+import { AutomationNavItem } from "./AutomationNavigation";
 import { projectToOption, usePersistentProjectSelection } from "./projectSelection";
 import "./dashboard.css";
 import "./history.css";
@@ -157,6 +158,7 @@ function HistorySidebar({ selectedProject }: { selectedProject: ProjectOption })
     <aside className="dw-sidebar">
       <AppBrand />
       <nav className="dw-sidebar-nav" aria-label="Primary">
+        <AutomationNavItem projectId={selectedProject.id} />
         <Link className="dw-nav-item" to="/">
           <LayoutGrid color="var(--dw-faint)" size={17} />
           <span>Dashboard</span>

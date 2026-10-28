@@ -1,5 +1,5 @@
 # generated: 2026-05-01
-# last_updated: 2026-10-27
+# last_updated: 2026-10-28
 # project: deploywhisper
 # project_key: NOKEY
 # tracking_system: file-system
@@ -39,7 +39,7 @@
 # - Dev moves story to review, then runs code-review
 
 generated: 2026-05-01
-last_updated: 2026-10-27
+last_updated: 2026-10-28
 project: deploywhisper
 project_key: NOKEY
 tracking_system: file-system
@@ -217,7 +217,7 @@ development_status:
   16-4-scoped-workflows-and-immutable-revisions: done
   16-5-durable-engine-and-fenced-recovery: done
   16-6-uploaded-artifact-preflight-and-report-linkage: done
-  16-7-workflow-editor-and-run-history-ui: backlog
+  16-7-workflow-editor-and-run-history-ui: done
   16-8-evidence-bound-decisions-and-freshness: backlog
   16-9-human-approval-inbox-and-decision-ux: backlog
   16-10-registered-targets-outbox-grants-and-locks: backlog

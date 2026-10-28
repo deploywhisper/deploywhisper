@@ -37,6 +37,8 @@ import {
 } from "../components/ui";
 import type { Confidence, Severity, Verdict } from "../theme/tokens";
 import { Phase6Shell } from "./Phase6Shell";
+import { ReportAutomationContext } from "./ReportAutomationContext";
+import { useIdentity } from "./IdentitySession";
 import "./report.css";
 
 const tabs = [
@@ -406,7 +408,7 @@ function ReportHeader({
             )}
           </div>
         </div>
-        <SegmentedTabs activeId={activeTab} label="Report sections" onChange={setActiveTab} tabs={findingsTab} />
+        <SegmentedTabs activeId={activeTab} idPrefix="report" label="Report sections" onChange={setActiveTab} tabs={findingsTab} />
       </div>
     </header>
   );
@@ -1010,7 +1012,9 @@ function ReportBody({
     <div className={`dw-report-page dw-ui${publicView ? "" : " dw-report-page-shell"}`}>
       <ReportHeader activeTab={active} copyBriefing={copyBriefing} publicView={publicView} report={report} setActiveTab={setActiveTab} />
       <main className="dw-report-content">
-        <section aria-labelledby={`tab-${active}`} role="tabpanel">
+        <ReportAutomationContext reportId={report.id} projectId={report.project.id} publicView={publicView} />
+        {tabs.filter((tab) => tab.id !== active).map((tab) => <section aria-labelledby={`report-tab-${tab.id}`} hidden id={`report-panel-${tab.id}`} key={tab.id} role="tabpanel" />)}
+        <section aria-labelledby={`report-tab-${active}`} id={`report-panel-${active}`} role="tabpanel" tabIndex={0}>
           {active === "overview" && <OverviewTab goFindings={() => setActiveTab("findings")} report={report} />}
           {active === "findings" && <FindingsTab publicView={publicView} report={report} setToast={setToast} />}
           {active === "confidence" && <ConfidenceTab report={report} />}
@@ -1025,6 +1029,7 @@ function ReportBody({
 }
 
 export function ReportScreen() {
+  const { epoch } = useIdentity();
   const params = useParams();
   const location = useLocation();
   const [searchParams] = useSearchParams();
@@ -1034,12 +1039,12 @@ export function ReportScreen() {
   const [toast, setToast] = useState<string | null>(null);
   const comparePrevious = searchParams.get("compare") === "previous";
   const queryClient = useQueryClient();
-  const reportQueryKey = ["report", reportId, publicView, comparePrevious];
+  const reportQueryKey = ["report", reportId, epoch, publicView, comparePrevious];
 
   const reportQuery = useQuery({
     enabled: Number.isFinite(reportId),
     queryKey: reportQueryKey,
-    queryFn: () => getReportDetail(reportId, { publicView, comparePrevious }),
+    queryFn: ({ signal }) => getReportDetail(reportId, { publicView, comparePrevious }, signal),
     retry: false,
   });
 

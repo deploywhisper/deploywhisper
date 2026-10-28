@@ -20,8 +20,8 @@ function reportPath(reportId: number, scope: ReportScope = {}) {
   return base;
 }
 
-export function getReportDetail(reportId: number, scope: ReportScope = {}): Promise<ReportDetail> {
-  return requestData<ReportDetail>(reportPath(reportId, scope));
+export function getReportDetail(reportId: number, scope: ReportScope = {}, signal?: AbortSignal): Promise<ReportDetail> {
+  return requestData<ReportDetail>(reportPath(reportId, scope), { signal, credentials: "same-origin", cache: "no-store" });
 }
 
 export function unlockSharedReport(reportId: number, password: string, scope: ReportScope = {}): Promise<ReportDetail> {
