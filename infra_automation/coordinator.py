@@ -338,6 +338,10 @@ class Coordinator:
             pulse_deadline = time.monotonic() + min(
                 OWNER_PULSE_SECONDS, (lease_until - validated_at).total_seconds()
             )
+            # Keep loaded scheduling hints usable after commit expiration. Actual
+            # transitions re-read the run inside their own authorized session.
+            for candidate in candidates:
+                session.expunge(candidate)
         # Only retain a capability whose acquisition actually committed.
         self._owner, self._scope = owner, scope
         self._pulse_deadline = pulse_deadline
