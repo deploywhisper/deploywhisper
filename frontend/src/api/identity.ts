@@ -41,6 +41,7 @@ export function safeAccountReturnTo(value: string | null | undefined): string {
       if (seen.has(key)) return true;
       seen.add(key);
       if (key === "project_id" || key === "workspace_id") return !positiveId(item);
+      if (path === "/infra-automation" && key === "view") return item !== "runs" && item !== "workflows";
       if (report && key === "private") return item !== "1";
       if (report && key === "automation_run") return !identifier.test(item);
       return true;

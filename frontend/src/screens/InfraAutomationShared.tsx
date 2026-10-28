@@ -54,9 +54,13 @@ function ScopeWorkspace({ shell, project, children }: { shell: ShellProjectConte
   const identity = useIdentity();
   const [params, setParams] = useSearchParams();
   const [chosen, setChosen] = useState<number | null | undefined>(() => initialWorkspaceSelection(project.id, params));
+  const routeWorkspace = params.get("workspace_id");
+  const lastRouteWorkspace = useRef<string | null | undefined>(undefined);
+  const routeChanged = lastRouteWorkspace.current !== routeWorkspace;
+  const effectiveChosen = routeChanged ? initialWorkspaceSelection(project.id, params) : chosen;
   const [online, setOnline] = useState(() => typeof navigator === "undefined" || navigator.onLine);
   const workspaces = useQuery({ queryKey: ["automation", "workspaces", identity.epoch, project.id], queryFn: ({ signal }) => getWorkspaces(project.project_key, signal), retry: false, gcTime: 0 });
-  const workspaceId = chosen === undefined ? workspaces.data?.[0]?.id ?? null : chosen;
+  const workspaceId = effectiveChosen === undefined ? workspaces.data?.[0]?.id ?? null : effectiveChosen;
   const scope = { projectId: project.id, workspaceId };
   const key = `${identity.epoch}:${project.id}:${workspaceId}`;
   const active = useRef(key);
@@ -70,12 +74,21 @@ function ScopeWorkspace({ shell, project, children }: { shell: ShellProjectConte
     return () => { active.current = "disposed"; window.removeEventListener("online", update); window.removeEventListener("offline", update); };
   }, []);
   useEffect(() => {
+    if (!routeChanged) return;
+    lastRouteWorkspace.current = routeWorkspace;
+    setChosen(initialWorkspaceSelection(project.id, params));
+  }, [routeChanged, routeWorkspace, project.id, params]);
+  useEffect(() => {
+    if (routeChanged) return;
     if (!workspaces.isSuccess) return;
     const next = new URLSearchParams(params);
     next.set("project_id", String(project.id));
     if (workspaceId === null) next.delete("workspace_id"); else next.set("workspace_id", String(workspaceId));
-    if (next.toString() !== params.toString()) setParams(next, { replace: true });
-  }, [project.id, workspaceId, workspaces.isSuccess, params, setParams]);
+    if (next.toString() !== params.toString()) {
+      const initialSelection = chosen === undefined && params.get("project_id") === String(project.id);
+      setParams(next, { replace: params.get("project_id") === null || initialSelection });
+    }
+  }, [project.id, workspaceId, workspaces.isSuccess, params, setParams, routeChanged, chosen]);
   const fresh = online && !identity.loading && identity.status === "ready" && capabilities.isSuccess && !capabilities.isFetching && !capabilities.isError;
   async function refreshAccess() {
     const expected = key;
@@ -122,18 +135,19 @@ function ScopeWorkspace({ shell, project, children }: { shell: ShellProjectConte
 
 function ProjectScope({ shell, children }: { shell: ShellProjectContext; children: (context: AutomationContext) => ReactNode }) {
   const [params] = useSearchParams();
-  const synced = useRef(false);
-  const target = Number(params.get("project_id"));
+  const routeProject = params.get("project_id");
+  const lastRouteProject = useRef<string | null | undefined>(undefined);
+  const routeChanged = lastRouteProject.current !== routeProject;
+  const target = Number(routeProject);
   const requested = shell.projects.find((project) => project.id === target);
   useEffect(() => {
-    if (!shell.projectsQuery.isSuccess || synced.current) return;
-    if (params.has("project_id") && !requested) return;
-    synced.current = true;
+    if (!shell.projectsQuery.isSuccess || !routeChanged) return;
+    lastRouteProject.current = routeProject;
     if (requested && requested.id !== shell.selectedProject?.id) shell.setSelectedProject(projectToOption(requested));
-  }, [requested, shell]);
-  if (shell.projectsQuery.isLoading || (!synced.current && requested && requested.id !== shell.selectedProject?.id)) return <p role="status">Loading authorized project…</p>;
+  }, [requested, shell, routeChanged, routeProject]);
+  if (shell.projectsQuery.isLoading || (routeChanged && requested && requested.id !== shell.selectedProject?.id)) return <p role="status">Loading authorized project…</p>;
   if (shell.projectsQuery.isError) return <p role="alert">Project access could not be verified.</p>;
-  if (!synced.current && params.has("project_id") && !requested) return <div role="alert"><p>This project or operation is unavailable for your account.</p><Link to="/infra-automation">Open an authorized project workspace</Link></div>;
+  if (routeProject !== null && !requested) return <div role="alert"><p>This project or operation is unavailable for your account.</p><Link to="/infra-automation">Open an authorized project workspace</Link></div>;
   if (!shell.selectedProject) return <div className="dw-automation"><h1>No permitted projects</h1><p>Ask your project administrator for project membership.</p></div>;
   return <ScopeWorkspace key={shell.selectedProject.id} shell={shell} project={shell.selectedProject}>{children}</ScopeWorkspace>;
 }

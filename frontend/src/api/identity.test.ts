@@ -8,6 +8,31 @@ describe("account return destinations", () => {
       expect(safeAccountReturnTo(path)).toBe(path);
     }
   });
+  it.each([
+    "/infra-automation?view=runs",
+    "/infra-automation?view=workflows",
+    "/infra-automation?project_id=1&view=runs&workspace_id=2",
+  ])("preserves the selected index tab in %j", (path) => {
+    expect(safeAccountReturnTo(path)).toBe(path);
+  });
+  it.each([
+    "/infra-automation?view=runs&view=workflows",
+    "/infra-automation?view=runs&view=runs",
+    "/infra-automation?view=publish",
+    "/infra-automation?view=start",
+    "/infra-automation?view=",
+    "/infra-automation?view=Runs",
+    "/infra-automation?view=%72uns",
+    "/infra-automation?view=runs\n",
+    "/infra-automation?view=runs&action=start",
+    "/infra-automation/workflows?view=workflows",
+    "/infra-automation/workflows/wf_1?view=runs",
+    "/infra-automation/runs/run_1?view=runs",
+    "/reports/1?view=runs",
+    "/history?view=runs",
+  ])("rejects unsafe or misplaced index tab in %j", (path) => {
+    expect(safeAccountReturnTo(path)).toBe("/infra-automation");
+  });
   it.each(["https://evil.test", "//evil.test", "/\\evil.test", "/%2f%2fevil", "/infra-automation/%252f", "/infra-automation/runs/1\n", "/unknown", "/settings/account", "/reports/1?token=secret", "/reports/1?action=delete", "/infra-automation/start", "/reports/../settings", "/reports/1#token", "/reports/1?project_id=1&project_id=2", "/reports/abc", "/reports/0", "/reports/9007199254740992", "/reports/1?private=2", "/reports/1?automation_run=run/evil", "/history?private=1", "/infra-automation/runs/run?private=1", "/reports/1?project_id=9007199254740992", "/infra-automation/runs/-bad", "/infra-automation/workflows/.", "/infra-automation/workflows/.."])("rejects unsafe target %j", (path) => {
     expect(safeAccountReturnTo(path)).toBe("/infra-automation");
   });

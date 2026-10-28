@@ -56,16 +56,30 @@ describe("immutable automation run details", () => {
     expect(html).toContain("Mandatory evidence is missing");
     expect(html).not.toContain("Earlier pending response");
   });
-  it("schedules one server freshness read even when evidence arrives expired without looping on server clock differences", () => {
-    const evidence = evidenceFixture.evidence_status;
+  it("checks an elapsed evidence deadline once promptly then spaces retries while the server still says available", () => {
+    const evidence = { ...evidenceFixture.evidence_status, status: "available" as const };
     const deadline = Date.parse(evidence.evidence_deadline);
     expect(evidenceRefreshDelay(evidence, deadline - 1000)).toBe(1100);
-    expect(evidenceRefreshDelay(evidence, deadline)).toBe(0);
-    const refreshed = new Set([evidence.evidence_deadline]);
-    expect(evidenceRefreshDelay(evidence, deadline, refreshed)).toBeNull();
-    expect(evidenceRefreshDelay({ ...evidence, evaluated_at: "later-server-evaluation" }, deadline + 1000, refreshed)).toBeNull();
-    expect(evidenceRefreshDelay({ ...evidence, status: "stale" }, deadline - 1000)).toBeNull();
-    expect(evidenceRefreshDelay(undefined, deadline - 1000)).toBeNull();
+    expect(evidenceRefreshDelay(evidence, deadline)).toBe(100);
+    const checks = new Set([evidence.evidence_deadline]);
+    expect(evidenceRefreshDelay(evidence, deadline, checks)).toBe(5000);
+    expect(evidenceRefreshDelay({ ...evidence, evaluated_at: "later-server-evaluation" }, deadline + 1000, checks)).toBe(5000);
+    for (const status of ["pending", "stale", "failed", "missing", "interrupted"] as const) {
+      expect(evidenceRefreshDelay({ ...evidence, status }, deadline + 1000, checks)).toBeNull();
+    }
+    expect(evidenceRefreshDelay(undefined, deadline + 1000, checks)).toBeNull();
+  });
+  it("hides an earlier available evidence response if its refresh fails and offers manual retry", () => {
+    const client = new QueryClient();
+    const key = ["automation", 1, 1, 2, "run", "run-one"];
+    client.setQueryData(key, runFixture);
+    const reportKey = [...key, "reports", 3];
+    client.setQueryData(reportKey, { ...evidenceFixture, evidence_status: { ...evidenceFixture.evidence_status, status: "available", limitations: ["Old available evidence"] } });
+    client.getQueryCache().find({ queryKey: reportKey })?.setState({ error: new Error("connection lost"), status: "error" });
+    const html = render(<QueryClientProvider client={client}><RunContent context={context} runId="run-one" /></QueryClientProvider>);
+    expect(html).toContain("Evidence status unavailable");
+    expect(html).toContain("Retry evidence");
+    expect(html).not.toContain("Old available evidence");
   });
   const context = { scope: { projectId: 1, workspaceId: 2 }, identity: { epoch: 1 }, fresh: true, refresh: async () => {}, selectProject: () => {}, selectWorkspace: () => {} } as unknown as AutomationContext;
   function renderCachedRun(value: Run, error?: Error) {

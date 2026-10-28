@@ -14,9 +14,9 @@ contract. Actual composed uploaded preflight revealed an earlier coordinator
 bug: the production session expires scheduling candidates on commit, while the
 earlier tests used nonexpiring sessions. The narrow fix and its expiring-session
 regression are in separate [backend-for-UI PR #201](https://github.com/deploywhisper/deploywhisper/pull/201).
-Composed browser proof builds the UI source with the exact coordinator source from
-that PR in a disposable Docker build context. PR #201 must merge before the UI PR
-can deliver a working uploaded run on `develop`. No operator database was used.
+Composed browser proof built the UI source with the exact coordinator source from
+that PR in a disposable Docker build context. PR #201 merged into `develop` on
+2026-10-28. No operator database was used.
 
 ## Browser proof
 
@@ -38,6 +38,9 @@ network loss and same-scope draft retention, revocation and server expiry while 
 protected report remains mounted. Keyboard focus and axe critical/serious gates
 are checked on the new account, workflow and run screens. The report's tab
 Arrow/Home/End and panel relationship checks are part of the final browser pass.
+The editor and upload controls also have explicit Tab-order assertions. Playwright
+injects a synthetic text file through the native file input; the operating-system
+file picker itself is outside browser automation coverage.
 
 Screenshots from the composed app use root SPA routes and actual API data:
 
@@ -62,7 +65,7 @@ changing the visible composition. The structured verdict is in
 | Command / gate | Actual result |
 | --- | --- |
 | `npm run ui:typecheck` | Passed after the final report-tab and contrast changes. |
-| `npm run ui:test` | 158 passed. The verdict-chip snapshot was updated only for its new semantic `data-verdict` attribute. |
+| `npm run ui:test` | 176 passed after the BMad code review fixes. The verdict-chip snapshot was updated only for its new semantic `data-verdict` attribute. |
 | `npm run ui:build` | Passed; the existing Dockerfile also built the React assets and served them from FastAPI. |
 | `./.venv/bin/python -m unittest discover -q` | 1,161 tests, two expected skips, passed. |
 | `./.venv/bin/python -m pytest tests/test_api tests/test_cli tests/test_infra -v --tb=short` | 685 passed, 2,267 subtests, one opt-in qualification skipped. |
@@ -105,6 +108,31 @@ the same 14 authenticated browser cases passed again on a fresh disposable
 database. The changed production UI and API contracts are unchanged. The new
 commit receives a fresh CodeQL check before merge.
 
-Remaining boundary: PR #201 is open and must merge before this UI can run durable
-preflights on `develop`. Production identity TLS/proxy qualification and the later
+Remaining boundary: Production identity TLS/proxy qualification and the later
 approval, runner, receiver and operations screens remain their owning stories.
+
+## BMad code review follow-up — 2026-10-28
+
+Blind, edge-case and acceptance review found seven actionable UI/test issues. The
+fixes cover project/workspace URL history, safe account return to the runs tab,
+server evidence-deadline retries, ambiguous publish-response retention, first-page
+error copy, live disposable-container verification before fixture use, and actual
+Tab focus through editor/upload controls. The approved feature-off navigation
+contract explains the one dismissed suggestion. The native operating-system file
+picker remains outside Playwright coverage; the synthetic file is selected with
+`setInputFiles` after focus traversal is checked.
+
+Review-fix gates: `npm run ui:test` 176/176 passed; `npm run ui:typecheck` and
+`npm run ui:build` passed; `./.venv/bin/ruff check .`,
+`./.venv/bin/ruff format --check .` (428 files), and `git diff --check` passed.
+The final `./.venv/bin/python -m unittest discover -q` smoke run passed 1,161
+tests with two expected skips. The earlier complete local CI and exact API shard
+remain recorded above; this review changed no Python runtime or API contract.
+The identity-enabled disposable Compose lane was rebuilt from current UI source,
+seeded with synthetic accounts and run through the actual FastAPI mount: 14/14
+Playwright cases passed. It verified browser Back/Forward scope restoration and a
+real server-committed publication whose response was lost; Reload and same-session
+route remount retained the unknown-outcome guard, and no duplicate publish request
+followed. The disposable volume and private fixture were removed, and the
+pre-existing local container was
+restored healthy at `http://localhost:8080/api/v1/health`.

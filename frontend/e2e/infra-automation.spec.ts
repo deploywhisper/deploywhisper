@@ -10,8 +10,32 @@ type Fixture = { accounts: Record<"operator" | "viewer" | "unassigned" | "revoke
 const fixturePath = process.env.AUTOMATION_UI_FIXTURE;
 let nextOperator = 0;
 test.use({ trace: "off", screenshot: "off", video: "off" });
+function verifyDisposableTarget(): void {
+  try {
+    const container = process.env.AUTOMATION_UI_CONTAINER;
+    if (!container || !/^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$/.test(container) || process.env.BASE_URL !== "http://localhost:8080") throw new Error();
+    const inspected = JSON.parse(execFileSync("docker", ["inspect", "--type", "container", container], {
+      encoding: "utf8", timeout: 10_000, stdio: ["ignore", "pipe", "pipe"],
+    }))[0];
+    const environment = new Map<string, string>((inspected.Config.Env as string[]).map((entry) => {
+      const separator = entry.indexOf("=");
+      return [entry.slice(0, separator), entry.slice(separator + 1)];
+    }));
+    const bindings = inspected.NetworkSettings.Ports?.["8080/tcp"] as { HostIp: string; HostPort: string }[] | undefined;
+    if (!inspected.State.Running || inspected.Config.Labels?.["com.docker.compose.project"] !== "deploywhisper-story16-7" ||
+      environment.get("AUTOMATION_UI_DISPOSABLE") !== "1" ||
+      environment.get("DEPLOYWHISPER_IDENTITY_PROFILE") !== "local-development" ||
+      environment.get("DEPLOYWHISPER_IDENTITY_ORIGIN") !== "http://localhost:8080" ||
+      !bindings?.some((binding) => binding.HostPort === "8080" && ["", "0.0.0.0", "127.0.0.1", "::", "::1"].includes(binding.HostIp))) throw new Error();
+  } catch {
+    // Docker inspection may include secret environment values. Never propagate
+    // its output, parse failures or child-process errors into test artifacts.
+    throw new Error("The live disposable Compose qualification target could not be verified.");
+  }
+}
 function fixture(): Fixture {
   if (!fixturePath) throw new Error("Disposable automation fixture is required.");
+  verifyDisposableTarget();
   const descriptor = openSync(fixturePath, constants.O_RDONLY | constants.O_NOFOLLOW);
   let value: Fixture;
   try {
@@ -93,6 +117,16 @@ test.describe("isolated authenticated infrastructure automation", () => {
     await expect(page.getByRole("button", { name: "Create workflow", exact: true })).toBeEnabled();
     await page.getByRole("button", { name: "Create workflow", exact: true }).press("Enter");
     await page.getByLabel("Workflow name", { exact: true }).fill(`Browser uploaded preflight ${Date.now()}`);
+    await page.getByLabel("Workflow name", { exact: true }).focus();
+    await page.keyboard.press("Tab");
+    await expect(page.getByRole("button", { name: "Use upload template", exact: true })).toBeFocused();
+    await page.keyboard.press("Tab");
+    await expect(page.getByLabel("Workflow YAML", { exact: true })).toBeFocused();
+    await page.keyboard.press("Tab");
+    await expect(page.getByLabel("Reason", { exact: true })).toBeFocused();
+    await expect(page.getByRole("button", { name: "Validate", exact: true })).toBeEnabled();
+    await page.keyboard.press("Tab");
+    await expect(page.getByRole("button", { name: "Validate", exact: true })).toBeFocused();
     await expect(page.getByRole("button", { name: "Use upload template", exact: true })).toBeEnabled();
     await page.getByRole("button", { name: "Use upload template", exact: true }).press("Enter");
     await page.getByLabel("Reason", { exact: true }).fill("Review synthetic uploaded configuration");
@@ -120,6 +154,14 @@ test.describe("isolated authenticated infrastructure automation", () => {
     await expect(page.getByLabel("Uploaded artifacts", { exact: true })).toBeEnabled();
     await page.getByLabel("Uploaded artifacts", { exact: true }).setInputFiles({ name: "main.tf", mimeType: "text/plain", buffer: Buffer.from('resource "aws_s3_bucket" "synthetic" { bucket = "ui-proof-local" }\n') });
     await page.getByLabel("Run reason", { exact: true }).fill("Review synthetic uploaded evidence");
+    await expect(page.getByRole("button", { name: "Start preflight", exact: true })).toBeEnabled();
+    await page.getByLabel("Uploaded artifacts", { exact: true }).focus();
+    await page.keyboard.press("Tab");
+    await expect(page.getByLabel("Run inputs (JSON)", { exact: true })).toBeFocused();
+    await page.keyboard.press("Tab");
+    await expect(page.getByLabel("Run reason", { exact: true })).toBeFocused();
+    await page.keyboard.press("Tab");
+    await expect(page.getByRole("button", { name: "Start preflight", exact: true })).toBeFocused();
     await expect(page.getByRole("button", { name: "Start preflight", exact: true })).toBeEnabled();
     const admitted = page.waitForResponse((response) => response.url().endsWith("/infra-automation/preflights") && response.request().method() === "POST", { timeout: 15_000 });
     await page.getByRole("button", { name: /start.*preflight|run.*preflight/i }).press("Enter");
@@ -269,7 +311,19 @@ test.describe("isolated authenticated infrastructure automation", () => {
     expect((await disabled.json()).data.execution_enabled).toBe(false);
     const selectedWorkflows = page.getByRole("link", { name: "Open selected project workflows", exact: true });
     if (await selectedWorkflows.isVisible()) await selectedWorkflows.click();
-    await page.getByRole("tab", { name: "Runs", exact: true }).click();
+    await page.getByRole("tab", { name: "Runs", exact: true }).focus();
+    await page.keyboard.press("Enter");
+    await expect(page.getByRole("link", { name: historicalRun!.id, exact: true })).toBeVisible();
+    await page.getByRole("link", { name: historicalRun!.id, exact: true }).press("Enter");
+    await expect(page).toHaveURL(new RegExp(`/infra-automation/runs/${historicalRun!.id}`));
+    await page.getByRole("link", { name: /Run history$/ }).press("Enter");
+    await expect(page.getByRole("tab", { name: "Runs", exact: true })).toHaveAttribute("aria-selected", "true");
+    await expect(page).toHaveURL((url) => url.searchParams.get("project_id") === String(disabledScope.projectId) && url.searchParams.get("workspace_id") === String(disabledScope.workspaceId) && url.searchParams.get("view") === "runs");
+    await page.goBack();
+    await expect(page).toHaveURL(new RegExp(`/infra-automation/runs/${historicalRun!.id}`));
+    await expect(page.getByRole("combobox", { name: "Workspace", exact: true })).toHaveValue(String(disabledScope.workspaceId));
+    await page.goForward();
+    await expect(page.getByRole("tab", { name: "Runs", exact: true })).toHaveAttribute("aria-selected", "true");
     await expect(page.getByRole("link", { name: historicalRun!.id, exact: true })).toBeVisible();
     const reports = await context.request.get(`/api/v1/infra-automation/runs/${historicalRun!.id}/reports`);
     expect(reports.status()).toBe(200);
@@ -284,6 +338,27 @@ test.describe("isolated authenticated infrastructure automation", () => {
     const afterRuns = await context.request.get(runsPath);
     expect(afterRuns.status()).toBe(200);
     expect((await afterRuns.json()).data.items.map((run: { id: string }) => run.id)).toEqual(previousRunIds);
+    await page.getByRole("combobox", { name: "Workspace", exact: true }).selectOption("project");
+    await expect(page).toHaveURL((url) => url.searchParams.get("project_id") === String(disabledScope.projectId) && !url.searchParams.has("workspace_id"));
+    await page.goBack();
+    await expect(page.getByRole("combobox", { name: "Workspace", exact: true })).toHaveValue(String(disabledScope.workspaceId));
+    await expect(page.getByRole("link", { name: historicalRun!.id, exact: true })).toBeVisible();
+    await page.goForward();
+    await expect(page.getByRole("combobox", { name: "Workspace", exact: true })).toHaveValue("project");
+    await page.goBack();
+    await page.locator(".dw-project-trigger").focus();
+    await page.keyboard.press("Enter");
+    await page.getByPlaceholder("Search projects...").fill(projects.enabled.projectName);
+    await page.keyboard.press("Tab");
+    await page.getByRole("option", { name: new RegExp(projects.enabled.projectName) }).press("Enter");
+    await expect(page).toHaveURL((url) => url.searchParams.get("project_id") === String(projects.enabled.projectId));
+    await page.goBack();
+    await expect(page).toHaveURL((url) => url.searchParams.get("project_id") === String(disabledScope.projectId) && url.searchParams.get("workspace_id") === String(disabledScope.workspaceId));
+    await expect(page.getByRole("link", { name: historicalRun!.id, exact: true })).toBeVisible();
+    await page.goForward();
+    await expect(page).toHaveURL((url) => url.searchParams.get("project_id") === String(projects.enabled.projectId));
+    await page.goBack();
+    await expect(page.getByRole("link", { name: historicalRun!.id, exact: true })).toBeVisible();
     await screenshot(page, "execution-disabled");
     const otherContext = await browser.newContext({ baseURL: origin() });
     try {
@@ -340,14 +415,40 @@ test.describe("isolated authenticated infrastructure automation", () => {
     await page.getByRole("button", { name: "Validate", exact: true }).click();
     expect((await (await reviewed).json()).data.valid).toBe(true);
     await expect(page.getByRole("button", { name: /publish/i })).toBeEnabled();
+    let committedRevision: string | undefined;
+    let publishRequests = 0;
+    const publicationPath = `**/api/v1/infra-automation/workflows/${workflow.id}/revisions`;
+    await page.route(publicationPath, async (intercepted) => {
+      if (intercepted.request().method() !== "POST") return intercepted.continue();
+      publishRequests += 1;
+      const committed = await intercepted.fetch();
+      expect(committed.status()).toBe(200);
+      committedRevision = (await committed.json()).data.id;
+      await intercepted.abort("failed");
+    });
+    await page.getByRole("button", { name: "Publish revision", exact: true }).press("Enter");
+    await expect(page.getByRole("alert").filter({ hasText: /last mutation was not confirmed/i })).toBeVisible();
+    expect(committedRevision).toBeTruthy();
+    expect(publishRequests).toBe(1);
+    await page.getByRole("button", { name: "Reload server state", exact: true }).click();
+    await expect(page.getByRole("button", { name: "Publish revision", exact: true })).toBeDisabled();
+    const revisionRead = await context.request.get(`/api/v1/infra-automation/workflows/${workflow.id}/revisions`);
+    expect(revisionRead.status()).toBe(200);
+    expect((await revisionRead.json()).data.items.map((revision: { id: string }) => revision.id)).toEqual([committedRevision]);
+    await page.getByRole("link", { name: "Back to workflows", exact: true }).click();
+    await page.getByRole("link", { name: workflowName, exact: true }).click();
+    await expect(page.getByRole("alert").filter({ hasText: /last mutation was not confirmed/i })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Publish revision", exact: true })).toBeDisabled();
+    expect(publishRequests).toBe(1);
+    await page.unroute(publicationPath);
   });
 
   test("workflow list network failure exposes explicit recovery", async ({ page }) => {
     const { accounts, projects } = fixture();
-    await login(page, accounts.operator, route(projects.enabled));
     await page.route("**/api/v1/infra-automation/workflows?*", (intercepted) => intercepted.abort("failed"));
-    await page.getByRole("button", { name: "Refresh workflows", exact: true }).click();
+    await login(page, accounts.operator, route(projects.enabled));
     await expect(page.getByRole("alert").first()).toBeVisible();
+    await expect(page.getByText(/No workflows in this scope|No uploaded preflight runs in this scope/)).toHaveCount(0);
     await page.unroute("**/api/v1/infra-automation/workflows?*");
     await page.getByRole("button", { name: "Refresh workflows", exact: true }).click();
     await expect(page.getByRole("button", { name: "Create workflow", exact: true })).toBeEnabled();

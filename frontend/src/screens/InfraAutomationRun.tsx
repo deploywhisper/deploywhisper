@@ -23,25 +23,32 @@ export function retainAttemptPage(previous: StepPage | undefined, previousKey: r
   return previousKey.every((value, index) => index === previousKey.length - 2 || value === currentKey[index]) ? previous : undefined;
 }
 
-export function evidenceRefreshDelay(evidence: RunReports["evidence_status"] | undefined, now = Date.now(), refreshedDeadlines: ReadonlySet<string> = new Set()): number | null {
-  if (!evidence || evidence.status === "stale" || refreshedDeadlines.has(evidence.evidence_deadline)) return null;
+export function evidenceRefreshDelay(evidence: RunReports["evidence_status"] | undefined, now = Date.now(), deadlineChecks: ReadonlySet<string> = new Set()): number | null {
+  if (!evidence || evidence.status !== "available") return null;
   const remaining = Date.parse(evidence.evidence_deadline) - now;
   if (!Number.isFinite(remaining)) return null;
-  return remaining <= 0 ? 0 : Math.min(remaining + 100, 2_147_483_647);
+  if (remaining > 0) return Math.min(remaining + 100, 2_147_483_647);
+  return deadlineChecks.has(evidence.evidence_deadline) ? 5000 : 100;
 }
 
 export function useEvidenceDeadlineRefresh(evidence: RunReports["evidence_status"] | undefined, refresh: () => Promise<unknown>) {
-  const refreshedDeadlines = useRef(new Set<string>());
+  const deadlineChecks = useRef(new Set<string>());
+  const [cycle, setCycle] = useState(0);
   useEffect(() => {
-    const delay = evidenceRefreshDelay(evidence, Date.now(), refreshedDeadlines.current);
+    const delay = evidenceRefreshDelay(evidence, Date.now(), deadlineChecks.current);
     if (delay === null) return;
-    // Only the server may decide freshness; the deadline triggers a read, not a local state transition.
+    let cancelled = false;
+    // Only the server decides freshness. Clock differences may require another bounded read.
     const timer = setTimeout(() => {
-      if (evidence && Date.now() >= Date.parse(evidence.evidence_deadline)) refreshedDeadlines.current.add(evidence.evidence_deadline);
-      void refresh();
+      if (evidence && Date.now() >= Date.parse(evidence.evidence_deadline)) {
+        deadlineChecks.current.add(evidence.evidence_deadline);
+      }
+      void refresh().catch(() => {}).finally(() => {
+        if (!cancelled) setCycle((previous) => previous + 1);
+      });
     }, delay);
-    return () => clearTimeout(timer);
-  }, [evidence?.evidence_deadline, evidence?.status, evidence?.evaluated_at, refresh]);
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [evidence?.evidence_deadline, evidence?.status, evidence?.evaluated_at, refresh, cycle]);
 }
 
 export async function recoverAutomationRunAccess(refresh: () => Promise<unknown>, reads: Array<() => Promise<unknown>>): Promise<void> {

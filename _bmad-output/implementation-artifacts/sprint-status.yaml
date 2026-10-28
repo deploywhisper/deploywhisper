@@ -48,7 +48,7 @@ story_location: _bmad-output/implementation-artifacts
 release_priorities:
   v1.5.0:
     highest_priority_feature: epic-16
-    next_planning_story: 16-7-workflow-editor-and-run-history-ui
+    next_planning_story: 16-8-evidence-bound-decisions-and-freshness
     release_enablers:
       - 12-5-sbom-and-release-checksums
       - 12-7-backup-restore-upgrade-and-retention-docs

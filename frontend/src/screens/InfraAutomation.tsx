@@ -11,6 +11,9 @@ import { Button, SegmentedTabs } from "../components/ui";
 import { AutomationFrame, AccountLink, automationError, scopeQuery, type AutomationContext } from "./InfraAutomationShared";
 
 const denied = (error: unknown) => error instanceof ApiClientError && [401, 403].includes(error.status);
+// Keep an unknown mutation outcome guarded across same-session route remounts.
+// Identity changes use a different epoch; no credential is persisted.
+const uncertainMutationKeys = new Set<string>();
 
 export function uploadWorkflowTemplate(scope: AutomationScope): string {
   return `workflow_version: 2\nproject_id: "${scope.projectId}"\nworkspace_id: ${scope.workspaceId === null ? "null" : `"${scope.workspaceId}"`}\nenvironment: review\ninputs: {}\nsteps:\n  - id: artifacts\n    kind: uploaded_intake\n    depends_on: []\n    source:\n      kind: uploaded\n  - id: analysis\n    kind: shared_analysis\n    depends_on: [artifacts]\n    artifact:\n      ref: step\n      step_id: artifacts\n      output: screened_artifacts\n`;
@@ -45,7 +48,7 @@ export function WorkflowList({ context }: { context: AutomationContext }) {
     {query.isPending && <p role="status">Loading workflows…</p>}
     {query.isError && <p className="dw-automation-notice" role="alert">{automationError(query.error)}</p>}
     {!denied(query.error) && <>
-      {!query.isPending && !items.length && <p>No workflows in this scope. A permitted author can create a validated draft.</p>}
+      {!query.isPending && !query.isError && !items.length && <p>No workflows in this scope. A permitted author can create a validated draft.</p>}
       {items.length > 0 && <div className="dw-automation-table-wrap" role="region" aria-label="Workflow table" tabIndex={0}><table><caption>Workflows in the selected project and workspace</caption><thead><tr><th scope="col">Workflow</th><th scope="col">Draft version</th><th scope="col">State</th><th scope="col">Updated</th></tr></thead><tbody>{items.map((item) => <tr key={item.id}><td><Link to={`/infra-automation/workflows/${encodeURIComponent(item.id)}${scopeQuery(context.scope)}`}>{item.name}</Link></td><td>{item.draft_version}</td><td>{item.archived ? "Archived" : "Draft / published history"}</td><td>{item.updated_at}</td></tr>)}</tbody></table></div>}
       {query.data?.pages.some((page) => page.cursor.gap) && <p role="status">The retained list has a gap. Refresh to read current history.</p>}
       {query.hasNextPage && <Button disabled={query.isFetchingNextPage} onClick={() => { void query.fetchNextPage(); }}>More workflows</Button>}
@@ -60,7 +63,7 @@ export function RunHistory({ context }: { context: AutomationContext }) {
   return <section aria-labelledby="automation-index-tab-runs" id="automation-index-panel-runs" role="tabpanel" tabIndex={0}>
     <div className="dw-automation-actions"><h2>Run history</h2><Button disabled={query.isFetching} onClick={() => { void query.refetch(); }}>Refresh runs</Button></div>
     {query.isPending && <p role="status">Loading runs…</p>}{query.isError && <p role="alert">{automationError(query.error)}</p>}
-    {!denied(query.error) && <>{!query.isPending && !items.length && <p>No uploaded preflight runs in this scope.</p>}
+    {!denied(query.error) && <>{!query.isPending && !query.isError && !items.length && <p>No uploaded preflight runs in this scope.</p>}
       {items.length > 0 && <div className="dw-automation-table-wrap" role="region" aria-label="Run history table" tabIndex={0}><table><caption>Immutable runs in the selected scope</caption><thead><tr><th scope="col">Run</th><th scope="col">Recorded state</th><th scope="col">Revision</th><th scope="col">Created at</th></tr></thead><tbody>{items.map((run) => <tr key={run.id}><td><Link to={`/infra-automation/runs/${encodeURIComponent(run.id)}${scopeQuery(context.scope)}`}>{run.id}</Link></td><td><span className="dw-automation-status">{run.state}</span></td><td><code>{run.revision_id}</code></td><td>{run.created_at}</td></tr>)}</tbody></table></div>}
       {query.data?.pages.some((page) => page.cursor.gap) && <p role="status">The retained run list has a gap. Refresh to read current history.</p>}
       {query.hasNextPage && <Button disabled={query.isFetchingNextPage} onClick={() => { void query.fetchNextPage(); }}>More runs</Button>}
@@ -81,6 +84,7 @@ export function InfraAutomationScreen() {
 
 function WorkflowEditor({ context, workflowId }: { context: AutomationContext; workflowId: string }) {
   const isNew = workflowId === "new";
+  const mutationKey = `${context.identity.epoch}:${context.scope.projectId}:${context.scope.workspaceId}:${workflowId}`;
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const key = ["automation", "workflow", context.identity.epoch, context.scope.projectId, context.scope.workspaceId, workflowId];
@@ -104,12 +108,12 @@ function WorkflowEditor({ context, workflowId }: { context: AutomationContext; w
   const [files, setFiles] = useState<File[]>([]);
   const [inputs, setInputs] = useState("{}");
   const [runReason, setRunReason] = useState("");
-  const [uncertain, setUncertain] = useState(false);
+  const [uncertain, setUncertain] = useState(() => uncertainMutationKeys.has(mutationKey));
   const revisions = useInfiniteQuery({ queryKey: ["automation", "revisions", context.identity.epoch, context.scope.projectId, context.scope.workspaceId, workflowId], initialPageParam: undefined as string | undefined,
     queryFn: ({ pageParam, signal }) => getRevisions(workflowId, pageParam, signal), getNextPageParam: (page) => page.cursor.next_cursor ?? undefined, enabled: !isNew, retry: false, gcTime: 0 });
   const revisionItems = revisions.data?.pages.flatMap((page) => page.items) ?? [];
   const selected = useQuery({ queryKey: ["automation", "revision", context.identity.epoch, context.scope.projectId, context.scope.workspaceId, workflowId, revisionId], queryFn: ({ signal }) => getRevision(workflowId, revisionId, signal), enabled: !isNew && Boolean(revisionId), retry: false, gcTime: 0 });
-  function loadRecord(value: WorkflowDetail) { setRecord(value); setName(value.name); setDefinition(JSON.stringify(value.definition, null, 2)); setDirty(false); setConflict(false); setNeedsReview(false); setValidation(null); setValidatedText(null); setFiles([]); setUncertain(false); }
+  function loadRecord(value: WorkflowDetail) { setRecord(value); setName(value.name); setDefinition(JSON.stringify(value.definition, null, 2)); setDirty(false); setConflict(false); setNeedsReview(false); setValidation(null); setValidatedText(null); setFiles([]); }
   useEffect(() => { if (workflowQuery.data && !record) loadRecord(workflowQuery.data); else if (!busy && workflowQuery.data && record && workflowQuery.data.draft_version !== record.draft_version) { setConflict(true); setNeedsReview(true); setValidation(null); setValidatedText(null); } }, [workflowQuery.data, record, busy]);
   useEffect(() => { if (!revisionId && revisionItems[0]) setRevisionId(revisionItems[0].id); }, [revisionId, revisionItems]);
   useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
@@ -129,7 +133,7 @@ function WorkflowEditor({ context, workflowId }: { context: AutomationContext; w
       const current = await workflowQuery.refetch();
       if (alive.current && current.data && !current.error) { loadRecord(current.data); setConflict(true); setNeedsReview(true); setMessage("Current state changed. Server state was reloaded; validate and review again."); }
       else setMessage("Current state changed and could not be reloaded. Refresh server state before continuing.");
-    } else { setMessage(automationError(error)); if (ambiguous && !(error instanceof ApiClientError && error.status >= 400 && error.status < 500)) setUncertain(true); }
+    } else { setMessage(automationError(error)); if (ambiguous && !(error instanceof ApiClientError && error.status >= 400 && error.status < 500)) { uncertainMutationKeys.add(mutationKey); setUncertain(true); } }
   }
   async function fresh(permission: "automation.draft" | "automation.publish" | "automation.request") {
     const value = await context.ensureFresh();

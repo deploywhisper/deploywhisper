@@ -70,6 +70,20 @@ Each packet is a bounded review unit under this stable story ID; split large pac
 - [x] [Review][P2] Preserve report-ID feedback invalidation when the report query also keys by identity epoch.
 - [x] [Review][High] Resolve the browser fixture file race reported by CodeQL: open with `O_NOFOLLOW`, verify with `fstat`, and read through the same descriptor.
 
+### Review Findings
+
+BMad code review, 2026-10-28:
+
+- [x] [Review][Patch] Reconcile project and workspace URL changes after browser Back/Forward without rendering the old scope; preserve user scope selections as history entries (`frontend/src/screens/InfraAutomationShared.tsx`).
+- [x] [Review][Patch] Permit the exact workflow/runs tab in the screened account return URL (`frontend/src/api/identity.ts`).
+- [x] [Review][Patch] Repeat bounded server reads when the evidence deadline passes but the server still reports available (`frontend/src/screens/InfraAutomationRun.tsx`).
+- [x] [Review][Patch] Retain unknown mutation outcome after Reload server state or same-session route remount so a lost publish response cannot enable a duplicate request (`frontend/src/screens/InfraAutomation.tsx`).
+- [x] [Review][Patch] Do not show an empty workflow or run list alongside an initial load error (`frontend/src/screens/InfraAutomation.tsx`).
+- [x] [Review][Patch] Verify the live disposable Docker target before browser fixtures mutate it (`frontend/e2e/infra-automation.spec.ts`).
+- [x] [Review][Patch] Prove editor and upload control Tab order and state the native file-picker test boundary precisely (`frontend/e2e/infra-automation.spec.ts`).
+
+The proposed feature-off navigation change was dismissed: the approved UX contract explicitly hides normal Automation navigation while preserving authorized direct-route history (`docs/design/infra-automation-ux.md`).
+
 ## Dev Notes
 
 Supporting identity UX obligations: IAU15-FR-002..004 and FR-007/008 remain backend-owned by 16.1/16.2; this story owns browser entry/logout/expired-session and recovery guidance using those earlier APIs. It does not require future approval or runner handlers.
@@ -143,8 +157,9 @@ Historical preparation note: application/Compose/browser qualification had not b
 - Validation: `npm run ui:typecheck`, `npm run ui:test` (158 passed), `npm run ui:build`, repo-wide `ruff check .` and `ruff format --check .` (428 files), `unittest discover -q` (1,161 tests/two skips), exact API/CLI/infra pytest shard (685 passed/2,267 subtests/one skip), and `BASE_URL=http://localhost:8080 RUN_UI_A11Y=1 bash scripts/ci-local.sh` (2,607 Python tests/all ten directories and 15 baseline browser tests) passed. `git diff --check` passed.
 - Three native AI review layers completed and their eight initial findings above were corrected and rechecked. The old incident-leak test's whole-JSON numeric assertion was narrowed to incident references and made deterministic against public timestamp digits; no backend behavior changed in this UI PR.
 - GitHub CodeQL flagged a high-severity race in the initial browser-only credential fixture reader. It now opens the 0600 file once with `O_NOFOLLOW`, verifies type/owner/mode/size through the descriptor and reads that same descriptor. The authenticated Compose suite was rerun after this fix: 14/14 passed. This did not change application credential handling.
-- A real preflight exposed the existing coordinator's expiring-session bug. Separate [backend-for-UI PR #201](https://github.com/deploywhisper/deploywhisper/pull/201) fixes it and passed 248 engine/API tests plus production Compose browser integration here. Merge #201 before this UI PR. This UI branch contains no coordinator runtime patch.
+- A real preflight exposed the existing coordinator's expiring-session bug. Separate [backend-for-UI PR #201](https://github.com/deploywhisper/deploywhisper/pull/201) fixed it, passed 248 engine/API tests plus production Compose browser integration here, and merged into `develop` on 2026-10-28. This UI branch contains no coordinator runtime patch.
 - The disposable Compose project/volume and private synthetic credential fixture were removed. Original `deploywhisper-deploywhisper-1` was restarted with its original ID; health returned HTTP 200. No human review, external receiver, production TLS pilot or release qualification is claimed.
+- BMad code review of UI PR #202 used blind, edge-case and acceptance layers. Seven patch findings were fixed and one feature-off navigation suggestion dismissed against the approved UX contract. The refreshed frontend suite passed 176 tests, production build and typecheck passed, Ruff lint/format and diff checks passed, the root Python smoke passed 1,161 tests/two expected skips, and the 14-case authenticated composed browser suite passed with scope history, lost publish response, file fixture guard, empty/error state and keyboard control order checks. The disposable stack was removed and the original local app restored healthy.
 
 
 
@@ -233,4 +248,5 @@ above has been implemented.
 
 - 2026-10-28: Independent refreshed-story review found no implementation blocker; development started on the UI branch.
 
-- 2026-10-28: Implemented full Story 16.7 UI, passed composed dual-profile browser/CI gates and native review, and set status done. Runtime coordinator fix remains separate PR #201; human PR approval and later release qualification remain open.
+- 2026-10-28: Implemented full Story 16.7 UI, passed composed dual-profile browser/CI gates and native review, and set status done. Runtime coordinator fix merged separately in PR #201; human approval of UI PR #202 and later release qualification remain open.
+- 2026-10-28: BMad code review resolved seven actionable findings, dismissed one UX-contract mismatch, reran the focused production browser and frontend/static gates, and retained status done.

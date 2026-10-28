@@ -150,7 +150,7 @@ composed serious contrast gate; the canonical report verdict is unchanged.
 
 This is proof for Story 16.7's scope only. The real-run browser lane includes the
 separate coordinator correction in [PR #201](https://github.com/deploywhisper/deploywhisper/pull/201),
-which must merge before the UI PR can deliver that journey on `develop`.
+which merged into `develop` on 2026-10-28. The UI PR remains separate.
 Approval, runner, receiver, Settings administration and release qualification
 remain with their later owners. Earlier planning/unverified statements above
 remain the historical starting point and do not describe the completed 16.7
