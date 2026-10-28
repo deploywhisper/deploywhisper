@@ -582,6 +582,12 @@ def export_audit(
         )
 
 
+def get_capabilities(project_id: int, workspace_id: int | None = None) -> dict:
+    from services.infra_automation_policy import get_capabilities as operation
+
+    return operation(project_id, workspace_id=workspace_id)
+
+
 def get_settings(project_id: int) -> dict:
     from services.infra_automation_policy import get_settings as operation
 

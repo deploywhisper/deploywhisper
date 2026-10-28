@@ -27,6 +27,47 @@ from services import infra_automation_support as support
 from services import project_service as authorization
 
 
+def get_capabilities(project_id: int, workspace_id: int | None = None) -> dict:
+    """Project editor permissions and feature state from one live read operation.
+
+    Permissions remain descriptive: every mutation still checks its own current
+    credentials, resource, scope and policy. Execution disable does not remove
+    authoring permissions or authorized historical reads.
+    """
+    with authorization.authorized_session() as session:
+        grant = support.scope(
+            session, project_id, workspace_id, "automation.read", mutation=False
+        )
+        if (
+            grant.principal.principal_type != "human"
+            or grant.principal.credential_audience != "human"
+        ):
+            raise authorization.TrustedAuthorizationError()
+        row, settings = support.policy_state(session, project_id)
+        return support.bounded_payload(
+            {
+                "version": 1,
+                "project_id": project_id,
+                "workspace_id": workspace_id,
+                "membership_version": grant.authorization_version,
+                "policy_version": row.version if row else 0,
+                "execution_enabled": settings.enabled,
+                "capabilities": [
+                    capability
+                    for capability in (
+                        "automation.read",
+                        "automation.draft",
+                        "automation.publish",
+                        "automation.request",
+                    )
+                    if authorization.trusted_capability_allowed(
+                        grant.principal, grant.role, capability
+                    )
+                ],
+            }
+        )
+
+
 def get_settings(project_id: int) -> dict:
     with authorization.authorized_session() as session:
         support.scope(session, project_id, None, "automation.draft", mutation=False)

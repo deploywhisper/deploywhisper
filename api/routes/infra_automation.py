@@ -31,6 +31,7 @@ from api.schemas import (
     AutomationStepListResponse,
     AutomationLogListResponse,
     AutomationPreflightLinksResponse,
+    AutomationCapabilitiesResponse,
 )
 from infra_automation.state import CancelRunRequest, RunRequest
 from infra_automation.preflight_contracts import PreflightRequest
@@ -220,6 +221,11 @@ router = APIRouter(
 
 def _response(data):
     return {"data": data, "meta": build_meta(correlation_id=secrets.token_hex(16))}
+
+
+@router.get("/capabilities", response_model=AutomationCapabilitiesResponse)
+def get_capabilities(project_id: ScopeId, workspace_id: OptionalScopeId = None):
+    return _response(service.get_capabilities(project_id, workspace_id=workspace_id))
 
 
 @router.post("/runs", response_model=AutomationRunResponse)

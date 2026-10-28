@@ -2828,6 +2828,42 @@ class AutomationPolicy(AutomationClosedModel):
     settings: AutomationSettings
 
 
+class AutomationCapabilities(AutomationClosedModel):
+    """Live scope permissions, never a credential or run eligibility grant."""
+
+    version: Annotated[int, Field(ge=1, le=1)]
+    project_id: AutomationPositive
+    workspace_id: AutomationPositive | None
+    membership_version: AutomationPositive
+    policy_version: AutomationVersion
+    execution_enabled: bool
+    capabilities: list[
+        Literal[
+            "automation.read",
+            "automation.draft",
+            "automation.publish",
+            "automation.request",
+        ]
+    ] = Field(min_length=1, max_length=4)
+
+    @field_validator("capabilities")
+    @classmethod
+    def canonical_capabilities(cls, value: list[str]) -> list[str]:
+        canonical = [
+            capability
+            for capability in (
+                "automation.read",
+                "automation.draft",
+                "automation.publish",
+                "automation.request",
+            )
+            if capability in value
+        ]
+        if "automation.read" not in value or value != canonical:
+            raise ValueError("Capabilities must be an ordered unique subset with read.")
+        return value
+
+
 class AutomationAuditItem(AutomationClosedModel):
     id: AutomationIdentifier
     project_id: AutomationPositive
@@ -2883,6 +2919,11 @@ class AutomationValidationResponse(AutomationClosedModel):
 
 class AutomationPolicyResponse(AutomationClosedModel):
     data: AutomationPolicy
+    meta: AutomationMeta
+
+
+class AutomationCapabilitiesResponse(AutomationClosedModel):
+    data: AutomationCapabilities
     meta: AutomationMeta
 
 

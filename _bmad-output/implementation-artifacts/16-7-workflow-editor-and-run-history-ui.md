@@ -94,18 +94,33 @@ Supporting identity UX obligations: IAU15-FR-002..004 and FR-007/008 remain back
 
 ### Agent Model Used
 
-Documentation preparation only; implementation agent/version to be recorded when gates open.
+Codex; 2026-10-28 readiness assessment and separately authorized backend-for-UI prerequisite with native implementation and independent reviewers. Full UI implementation has not started.
 
 ### Debug Log References
 
 Not executed: application, runner, receiver, Compose, browser, fault/load or production qualification. This preparation records obligations, not passing results.
+
+- 2026-10-28: Requested dev-story entry assessment found earlier Stories 16.0–16.6 accepted/done; the original unresolved-dependency preparation text is historical. See [scoped readiness assessment](../planning-artifacts/implementation-readiness-report-2026-10-28-story-16-7.md).
+- Current blocker: no API supplies the verified caller's live scoped automation capabilities and feature state. Static role definitions, admin-only membership reads and draft-only settings reads cannot establish AC3/AC4 eligibility. AGENTS.md and Packet 5 require separate backend-for-UI delivery for additive support; no permission inference or speculative backend contract was implemented.
 
 ### Completion Notes List
 
 - Preparation: refined. Status remains backlog. All implementation tasks unchecked; Story 16.0 and earlier dependency acceptance remain unresolved.
 - UI validation: Required at implementation; not executed.
 - Independent review, actual command results, residual risks and release qualification evidence must be recorded during implementation.
+- 2026-10-28: Independent readiness review cleared the earlier dependency evidence but confirmed the capability/feature-state contract gap. Status remains backlog; tasks remain unchecked pending separate support-contract resolution. This is a readiness finding, not feature completion. BMad Help recommends resolving that prerequisite, refreshing the story context and then resuming dev-story.
+- Verification: `git diff --check` passed for the readiness documentation. No application code/config changed; implementation and required UI validation were not run.
+- Subsequent maintainer instruction, 2026-10-28: implement and verify the necessary prerequisite in a separate backend-for-UI workstream. See [prerequisite specification](spec-16-7-backend-for-ui-capabilities.md) and [API contract](../../docs/infra-automation/ui-capabilities.md) for the current implementation/review/validation record. The earlier no-code/blocker notes describe the initial assessment. Full UI tasks remain unchecked; backend support does not establish browser acceptance.
+- Prerequisite completion: the read-only scoped capability/feature-state API reuses live human/membership/policy checks. Actual Story 16.6 admission/history/report-relation continuity is covered; existing mutation/report contracts remain intact. Three review layers and re-review cleared the change. Final validation passed: focused 68 tests /130 subtests; full local CI 2,607 tests; final root smoke 1,161 tests /two expected skips; exact affected shard 685 tests /2,267 subtests /one opt-in skip; production Python 3.11 new tests 20 passed and actual app startup/health/OpenAPI/protected denial passed. Ruff/repo-wide formatting/scoped Bandit/diff checks passed. See [verification record](../../docs/verification/infra-automation/16-7-backend-for-ui/results.md) for initial recovery-test failure, successful rerun and unchanged existing static-analysis debt. UI validation not applicable to the separate backend slice; full UI story remains backlog.
 
 ### File List
 
 This story specification only; planned ownership paths above are not implemented files.
+
+2026-10-28 readiness assessment changes only:
+- `_bmad-output/implementation-artifacts/16-7-workflow-editor-and-run-history-ui.md`
+- `_bmad-output/planning-artifacts/implementation-readiness-report-2026-10-28-story-16-7.md`
+
+The separate backend-for-UI prerequisite's complete file list is maintained in
+`spec-16-7-backend-for-ui-capabilities.md`; it does not claim any planned UI path
+above has been implemented.
