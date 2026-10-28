@@ -93,6 +93,10 @@ checks. UI validation not applicable: no rendered React surface changes.
 Production collector, browser workflow UI, policy decisions and snapshot exports
 remain 16.14, 16.7, 16.8–16.9 respectively.
 
+The separate [UI capability projection](ui-capabilities.md) provides live scoped
+editor/request permissions and feature state for Story 16.7. It does not change
+these preflight/report contracts or replace admission authority checks.
+
 
 ## Operator request and response
 
