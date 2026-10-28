@@ -183,6 +183,23 @@ class EngineCoordinatorRuntimeTests(repository_tests.EngineRepositoryTests):
                 connection.exec_driver_sql("PRAGMA synchronous").scalar(), 2
             )
 
+    def test_expiring_sessions_schedule_and_complete_queued_run(self):
+        run_id = self.admit().id
+        # Production SessionLocal uses SQLAlchemy's default commit expiration.
+        self.factory.configure(expire_on_commit=True)
+        coordinator = self.scheduler()
+
+        coordinator.tick()
+
+        self.assertEqual(len(self.workers.handles), 1)
+        with self.factory() as session:
+            self.assertEqual(repository.get_run(session, run_id).state, "running")
+            self.assertEqual(len(repository.list_attempts(session, run_id=run_id)), 1)
+        attempts = self.await_attempts(coordinator, 1)
+        self.assertEqual(attempts[0].state, "succeeded")
+        with self.factory() as session:
+            self.assertEqual(repository.get_run(session, run_id).state, "succeeded")
+
     def test_physical_capacity_backpressure_preserves_unstarted_run(self):
         run = self.admit()
         coordinator = self.scheduler()
