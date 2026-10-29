@@ -34,6 +34,7 @@ Phase = Literal["decision", "dispatch", "consume"]
 EligibilityReason = Literal[
     "invalid_evidence",
     "invalid_clock",
+    "run_timed_out",
     "invalid_phase",
     "invalid_freshness",
     "stale_evidence",
@@ -70,6 +71,10 @@ _RECOVERY: dict[EligibilityReason, tuple[str, str]] = {
     "invalid_clock": (
         "Current UTC time cannot be verified.",
         "Restore a trustworthy UTC clock and recheck eligibility.",
+    ),
+    "run_timed_out": (
+        "The run's total execution deadline has expired.",
+        "Start a new run with current evidence and obtain a new decision.",
     ),
     "invalid_phase": (
         "The eligibility phase is unsupported.",

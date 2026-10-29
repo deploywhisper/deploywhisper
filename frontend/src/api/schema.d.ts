@@ -3542,7 +3542,7 @@ export interface components {
              * Reasons
              * @default []
              */
-            reasons: ("invalid_evidence" | "invalid_clock" | "invalid_phase" | "invalid_freshness" | "stale_evidence" | "incomplete_evidence" | "missing_report" | "unverified_source" | "insufficient_context" | "unsupported_recommendation" | "unsupported_policy" | "canonical_contract_changed" | "policy_denied" | "binding_changed" | "membership_revoked" | "target_unavailable" | "custody_unavailable" | "missing_approval" | "approval_expired" | "custody_expired" | "source_expired" | "invalid_workflow" | "missing_handoff" | "prerequisite_unsuccessful" | "decision_missing" | "decision_mismatch" | "lineage_mismatch" | "scope_unresolved")[];
+            reasons: ("invalid_evidence" | "invalid_clock" | "run_timed_out" | "invalid_phase" | "invalid_freshness" | "stale_evidence" | "incomplete_evidence" | "missing_report" | "unverified_source" | "insufficient_context" | "unsupported_recommendation" | "unsupported_policy" | "canonical_contract_changed" | "policy_denied" | "binding_changed" | "membership_revoked" | "target_unavailable" | "custody_unavailable" | "missing_approval" | "approval_expired" | "custody_expired" | "source_expired" | "invalid_workflow" | "missing_handoff" | "prerequisite_unsuccessful" | "decision_missing" | "decision_mismatch" | "lineage_mismatch" | "scope_unresolved")[];
             /**
              * Limitations
              * @default []

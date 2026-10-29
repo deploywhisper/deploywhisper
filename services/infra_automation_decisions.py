@@ -16,6 +16,7 @@ from sqlalchemy import select
 from infra_automation.approval_eligibility import (
     EvidenceFacts,
     LiveBinding,
+    eligibility_from_reasons,
     evaluate_handoff,
     evaluate_decision,
 )
@@ -56,6 +57,45 @@ class DecisionMaterial:
     evidence: EvidenceFacts
     live: LiveBinding
     registry_contract: RegistryContract
+
+
+def _run_time_reasons(run, now, receipt=None):
+    floors = [runs.utc(run.last_observed_at)]
+    if receipt is not None:
+        floors.append(runs.utc(receipt.created_at))
+        if receipt.decided_at is not None:
+            floors.append(runs.utc(receipt.decided_at))
+    if now < max(floors):
+        return ("invalid_clock",)
+    return ("run_timed_out",) if now >= runs.utc(run.deadline_at) else ()
+
+
+def _expiry_reasons(binding, now):
+    deadlines = [
+        ("stale_evidence", binding.evidence_deadline),
+        ("approval_expired", binding.approval_deadline),
+    ]
+    if binding.provenance.source.kind == "collected":
+        deadlines.append(("source_expired", binding.provenance.source.source_deadline))
+    if binding.provenance.custody:
+        deadlines.append(("custody_expired", binding.provenance.custody.expires_at))
+    return tuple(reason for reason, deadline in deadlines if now >= instant(deadline))
+
+
+def _denied_run_state(reasons):
+    if "run_timed_out" in reasons:
+        return "timed_out"
+    if any(
+        reason in reasons
+        for reason in (
+            "stale_evidence",
+            "approval_expired",
+            "source_expired",
+            "custody_expired",
+        )
+    ):
+        return "expired"
+    return "stopped_by_gate"
 
 
 class DecisionService:
@@ -373,7 +413,6 @@ class DecisionService:
         document,
         step_id,
         material,
-        now,
         *,
         phase="decision",
         approval=None,
@@ -391,7 +430,8 @@ class DecisionService:
         # Human steps have durable receipts rather than manufactured attempts.
         # Verify each latest receipt without traversing its graph before projecting
         # it; the full selected DAG traversal below enforces prerequisite order.
-        for receipt in repository.list_latest_for_run(session, run.id):
+        receipts = repository.list_latest_for_run(session, run.id)
+        for receipt in receipts:
             if (
                 receipt.status == "approved"
                 and self._receipt_evidence(
@@ -399,10 +439,22 @@ class DecisionService:
                 ).eligible
             ):
                 states[receipt.step_id] = "succeeded"
+        # Material resolution may outlive an earlier receipt's check. Project all
+        # human facts against the same final clock before traversing the graph.
+        now = self._now()
+        for receipt in receipts:
+            if states.get(receipt.step_id) == "succeeded" and (
+                _run_time_reasons(run, now, receipt)
+                or _expiry_reasons(
+                    DecisionBinding.model_validate_json(receipt.binding_bytes), now
+                )
+            ):
+                states.pop(receipt.step_id)
+        time_reasons = _run_time_reasons(run, now, approval)
         # Requests and mandatory prerequisite receipts bind the human step's own
         # gate/ancestry. They do not need to own a handoff receipt reference.
         if phase == "decision" or not matching:
-            return [
+            results = [
                 evaluate_decision(
                     definition_bytes=support.canonical(
                         document.definition.model_dump(mode="json")
@@ -421,27 +473,67 @@ class DecisionService:
                     and approval.status == "approved",
                 )
             ]
-        results = [
-            evaluate_handoff(
-                definition_bytes=support.canonical(
-                    document.definition.model_dump(mode="json")
-                ),
-                registry_contract=material.registry_contract,
-                handoff_step_id=handoff.id,
-                step_states=tuple(states.items()),
-                evidence=material.evidence,
-                live=material.live,
-                now=now,
-                phase=phase,
-                decision_binding_digest=approval.binding_digest
-                if approval is not None
-                else None,
-                decision_approved=approval is not None
-                and approval.status == "approved",
-            )
-            for handoff in matching
-        ]
-        return results
+        else:
+            results = [
+                evaluate_handoff(
+                    definition_bytes=support.canonical(
+                        document.definition.model_dump(mode="json")
+                    ),
+                    registry_contract=material.registry_contract,
+                    handoff_step_id=handoff.id,
+                    step_states=tuple(states.items()),
+                    evidence=material.evidence,
+                    live=material.live,
+                    now=now,
+                    phase=phase,
+                    decision_binding_digest=approval.binding_digest
+                    if approval is not None
+                    else None,
+                    decision_approved=approval is not None
+                    and approval.status == "approved",
+                )
+                for handoff in matching
+            ]
+        return [
+            eligibility_from_reasons((*time_reasons, *result.reasons))
+            for result in results
+        ], now
+
+    def _waiting_for_human(self, session, run, document, step_id):
+        """Only an unfinished human ancestor defers otherwise valid evidence."""
+        nodes = {step.id: step for step in document.definition.steps}
+        states = {
+            attempt.step_id: attempt.state
+            for attempt in runs.list_attempts(session, run_id=run.id)
+        }
+        receipts = {
+            receipt.step_id: receipt
+            for receipt in repository.list_latest_for_run(session, run.id)
+        }
+        pending = list(nodes[step_id].depends_on)
+        visited = set()
+        waiting = False
+        while pending:
+            name = pending.pop()
+            if name in visited:
+                continue
+            visited.add(name)
+            node = nodes[name]
+            if node.kind == "human_decision":
+                receipt = receipts.get(name)
+                if receipt is None or receipt.status == "pending":
+                    if states.get(name) not in (None, "pending", "waiting_approval"):
+                        return False
+                    waiting = True
+                elif (
+                    receipt.status != "approved"
+                    or not self._receipt_evidence(session, receipt.id).eligible
+                ):
+                    return False
+            elif states.get(name) != "succeeded":
+                return False
+            pending.extend(node.depends_on)
+        return waiting
 
     def request_decision(self, run_id: str, step_id: str) -> dict:
         """Persist a pending request from a fully analyzed admitted server context."""
@@ -450,12 +542,16 @@ class DecisionService:
             run, grant, document = self._run(
                 session, run_id, "automation.request", mutation=True
             )
+            time_reasons = _run_time_reasons(run, now)
+            if time_reasons:
+                raise LifecycleError(503 if "invalid_clock" in time_reasons else 409)
             check_live_policy(session, document.authority, "dispatch")
             if run.state not in {"running", "waiting_approval"} or run.cancel_requested:
                 raise LifecycleError(409)
             material, report_bytes = self._material(
                 session, run, document, support.identifier(step_id)
             )
+            now = self._now()
             binding = material.binding
             if instant(binding.approval_deadline) > now + timedelta(
                 seconds=document.policy.approval_ttl_seconds
@@ -472,7 +568,18 @@ class DecisionService:
             )
             if link is None:
                 raise LifecycleError(409)
-            results = self._eligibility(session, run, document, step_id, material, now)
+            results, now = self._eligibility(session, run, document, step_id, material)
+            denied = tuple(
+                dict.fromkeys(reason for result in results for reason in result.reasons)
+            )
+            if "invalid_clock" in denied:
+                raise LifecycleError(503)
+            if "run_timed_out" in denied:
+                raise LifecycleError(409)
+            if denied == ("prerequisite_unsuccessful",) and self._waiting_for_human(
+                session, run, document, step_id
+            ):
+                raise LifecycleError(409)
             from infra_automation import claims
             from models.tables import InfraAutomationDecision
 
@@ -495,9 +602,6 @@ class DecisionService:
                     None,
                 )
                 run = runs.get_run(session, run.id)
-            denied = tuple(
-                dict.fromkeys(reason for result in results for reason in result.reasons)
-            )
             values = dict(
                 run_id=run.id,
                 step_id=step_id,
@@ -513,7 +617,7 @@ class DecisionService:
                     session,
                     run,
                     grant,
-                    "expired" if row.status == "expired" else "stopped_by_gate",
+                    _denied_run_state(denied),
                     now,
                 )
             else:
@@ -582,13 +686,19 @@ class DecisionService:
                 raise LifecycleError(409)
             support.screened_label(request.reason)
             binding = DecisionBinding.model_validate_json(row.binding_bytes)
-            expired = now >= instant(support.utc(row.deadline_at))
-            reasons = ("approval_expired",) if expired else ("binding_changed",)
+            reasons = (
+                *_run_time_reasons(run, now, row),
+                *_expiry_reasons(binding, now),
+            )
+            if "invalid_clock" in reasons:
+                raise LifecycleError(503)
             valid = (
-                not expired
+                not reasons
                 and run.state == "waiting_approval"
                 and not run.cancel_requested
             )
+            if not valid and not reasons:
+                reasons = ("binding_changed",)
             if valid:
                 try:
                     check_live_policy(session, document.authority, "dispatch")
@@ -597,28 +707,49 @@ class DecisionService:
                     )
                     valid = binding_digest(material.binding) == row.binding_digest
                     if valid:
-                        eligibility = self._eligibility(
-                            session, run, document, row.step_id, material, now
+                        eligibility, now = self._eligibility(
+                            session, run, document, row.step_id, material
                         )
                         reasons = tuple(
                             dict.fromkeys(
                                 code for item in eligibility for code in item.reasons
                             )
                         )
+                        reasons = tuple(
+                            dict.fromkeys(
+                                (
+                                    *reasons,
+                                    *_run_time_reasons(run, now, row),
+                                    *_expiry_reasons(binding, now),
+                                )
+                            )
+                        )
+                        if "invalid_clock" in reasons:
+                            raise LifecycleError(503)
                         valid = not reasons
+                    else:
+                        reasons = ("binding_changed",)
+                except LifecycleError as error:
+                    if error.status_code == 503:
+                        raise
+                    valid = False
+                    reasons = ("binding_changed",)
                 except (
                     authorization.TrustedAuthorizationError,
-                    LifecycleError,
                     ValueError,
                     TypeError,
                 ):
                     valid = False
+                    reasons = ("binding_changed",)
             if not valid:
+                state = _denied_run_state(reasons)
                 row = repository.invalidate(
                     session,
                     row.id,
                     expected_version=row.version,
-                    status="expired" if expired else "invalidated",
+                    status="expired"
+                    if state in {"expired", "timed_out"}
+                    else "invalidated",
                     reason=json.dumps(reasons),
                     now=now,
                 )
@@ -627,7 +758,7 @@ class DecisionService:
                         session,
                         run,
                         grant,
-                        "expired" if expired else "stopped_by_gate",
+                        state,
                         now,
                     )
                 invalid = True
@@ -711,7 +842,6 @@ class DecisionService:
             return eligibility_from_reasons(("binding_changed",))
         try:
             _view(row)
-            now = self._now()
             run = runs.get_run(session, row.run_id)
             if (
                 run is None
@@ -780,12 +910,20 @@ class DecisionService:
                 return eligibility_from_reasons(("binding_changed",))
             from infra_automation.approval_eligibility import evaluate_evidence
 
-            return evaluate_evidence(
+            now = self._now()
+            result = evaluate_evidence(
                 material.evidence, material.live, now=now, phase=phase
+            )
+            return eligibility_from_reasons(
+                (*_run_time_reasons(run, now, row), *result.reasons)
             )
         except authorization.TrustedAuthorizationError:
             return eligibility_from_reasons(("membership_revoked",))
-        except (LifecycleError, ValueError, TypeError):
+        except LifecycleError as error:
+            if error.status_code == 503:
+                raise
+            return eligibility_from_reasons(("binding_changed",))
+        except (ValueError, TypeError):
             return eligibility_from_reasons(("binding_changed",))
 
     def _recheck_graph(self, session, approval_id, *, phase="dispatch"):
@@ -803,13 +941,12 @@ class DecisionService:
             material, _ = self._material(
                 session, run, document, row.step_id, binding, row.report_bytes
             )
-            results = self._eligibility(
+            results, _ = self._eligibility(
                 session,
                 run,
                 document,
                 row.step_id,
                 material,
-                self._now(),
                 phase=phase,
                 approval=row,
             )
@@ -820,7 +957,11 @@ class DecisionService:
             )
         except authorization.TrustedAuthorizationError:
             return eligibility_from_reasons(("membership_revoked",))
-        except (LifecycleError, ValueError, TypeError):
+        except LifecycleError as error:
+            if error.status_code == 503:
+                raise
+            return eligibility_from_reasons(("binding_changed",))
+        except (ValueError, TypeError):
             return eligibility_from_reasons(("binding_changed",))
 
     def recheck_approved(self, session, approval_id, *, phase="dispatch"):

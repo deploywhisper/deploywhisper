@@ -22,7 +22,9 @@ request into approval. Shared-mode requesters cannot approve their own requests.
 Server-selected single-operator mode records acknowledgement, not independent
 review. Human rejection and a policy gate stopping work have distinct outcomes.
 
-Eligibility uses the earliest evidence, approval, source and custody deadline.
+Eligibility uses the earliest evidence, approval, source and custody deadline,
+with the run total deadline as an additional hard ceiling. A consumer must also
+reject a clock before the run or receipt's last observed durable timestamp.
 The exact deadline is expired, not a final opportunity to approve. Evidence has
 at most 60 minutes of validity; stricter policy may shorten it. Longer approval
 validity cannot extend evidence. Call the same eligibility checks at decision,
@@ -89,3 +91,18 @@ binding checks before it supplies a successful human-step fact. The final
 handoff check then evaluates the complete immutable DAG, including additional
 mandatory human prerequisites. This keeps receipt validation independent of
 recursive handoff evaluation while retaining every required gate.
+
+Review-time boundary handling keeps temporary unavailability distinct from invalid
+identity: a material-port 503 is retryable, never authorizes, and preserves the
+pending request. Re-read current evidence before retrying. A request made before
+its mandatory human predecessor finishes returns a conflict without consuming
+quota or stopping an otherwise viable run; failed mandatory evidence still stops
+at the gate. Material and receipt callbacks finish before the authorization clock
+is sampled. Expiry retains the actual evidence/source/custody/approval reason,
+including recollection guidance; a total run timeout has its own typed reason.
+The effective decision window shown to reviewers must also respect the run's
+absolute deadline, even before background reconciliation updates its state.
+
+This slice qualifies pre-handoff review paths. Staged execution that resumes
+human decisions after an external handoff needs the later fixed handoff/receiver
+integration; a statically valid graph alone does not admit an external handler.

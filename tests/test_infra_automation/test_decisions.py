@@ -405,6 +405,29 @@ class DurableDecisionTests(LifecycleCase):
             }
             self.assertEqual(indexes["uq_infra_decision_active"], 1)
 
+    def test_replace_cannot_reuse_retained_sequence_with_fresh_public_identity(self):
+        from sqlalchemy import insert, literal, select
+
+        row = self.create()
+        table = InfraAutomationDecision.__table__
+        names = [column.name for column in table.columns]
+        replacements = {
+            "id": literal("replacement-request"),
+            "step_id": literal("different-decision"),
+            "generation": table.c.generation + 1,
+        }
+        values = [replacements.get(name, table.c[name]) for name in names]
+        with self.factory.begin() as db, self.assertRaises(IntegrityError):
+            self.assertEqual(db.execute(text("PRAGMA recursive_triggers")).scalar(), 0)
+            db.execute(
+                insert(table)
+                .prefix_with("OR REPLACE")
+                .from_select(names, select(*values).where(table.c.id == row.id))
+            )
+        with self.factory() as db:
+            self.assertEqual(repository.get_request(db, row.id).sequence, row.sequence)
+            self.assertIsNone(repository.get_request(db, "replacement-request"))
+
     def test_terminal_requires_reviewer_reason_and_live_deadline(self):
         self.create()
         for values in (

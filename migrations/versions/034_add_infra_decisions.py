@@ -35,7 +35,7 @@ _CHANGED = " OR ".join(f"NEW.{column} IS NOT OLD.{column}" for column in _IMMUTA
 GUARDS = {
     "infra_decision_immutable": f"BEFORE UPDATE ON infra_automation_decisions WHEN {_CHANGED} BEGIN SELECT RAISE(ABORT, 'Immutable decision evidence'); END",
     "infra_decision_no_delete": "BEFORE DELETE ON infra_automation_decisions BEGIN SELECT RAISE(ABORT, 'Retained decision evidence'); END",
-    "infra_decision_no_replace": "BEFORE INSERT ON infra_automation_decisions WHEN EXISTS (SELECT 1 FROM infra_automation_decisions WHERE id=NEW.id OR (run_id=NEW.run_id AND step_id=NEW.step_id AND generation=NEW.generation)) BEGIN SELECT RAISE(ABORT, 'Immutable decision identity'); END",
+    "infra_decision_no_replace": "BEFORE INSERT ON infra_automation_decisions WHEN EXISTS (SELECT 1 FROM infra_automation_decisions WHERE sequence=NEW.sequence OR id=NEW.id OR (run_id=NEW.run_id AND step_id=NEW.step_id AND generation=NEW.generation)) BEGIN SELECT RAISE(ABORT, 'Immutable decision identity'); END",
     "infra_decision_transition": "BEFORE UPDATE ON infra_automation_decisions WHEN OLD.status != 'pending' OR NEW.status NOT IN ('approved','rejected','expired','invalidated','superseded') OR NEW.version != OLD.version+1 BEGIN SELECT RAISE(ABORT, 'Invalid decision transition'); END",
     "infra_decision_scope": "BEFORE INSERT ON infra_automation_decisions WHEN NOT EXISTS (SELECT 1 FROM analysis_reports WHERE id=NEW.report_id AND project_id=NEW.project_id AND workspace_id=NEW.workspace_id) BEGIN SELECT RAISE(ABORT, 'Decision report scope mismatch'); END",
     "infra_decision_live_deadline": "BEFORE UPDATE ON infra_automation_decisions WHEN NEW.status IN ('approved','rejected') AND NEW.decided_at >= OLD.deadline_at BEGIN SELECT RAISE(ABORT, 'Decision expired'); END",
