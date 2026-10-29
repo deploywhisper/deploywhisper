@@ -17,7 +17,7 @@ from alembic.config import Config
 import config
 import models.database as database
 
-HEAD = "033_add_infra_preflight"
+HEAD = "034_add_infra_decisions"
 PREVIOUS = "029_add_identity_lifecycle"
 
 

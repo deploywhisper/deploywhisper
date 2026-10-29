@@ -49,6 +49,9 @@ from infra_automation.lifecycle import (
     ValidateWorkflowRequest,
 )
 from services import infra_automation_service as service
+from services import infra_automation_decisions as decisions
+from services.infra_automation_decisions import DecisionRequest
+from api.schemas import AutomationApprovalListResponse, AutomationApprovalResponse
 from services.identity_service import IdentityError
 from services import project_service as authorization
 
@@ -395,3 +398,24 @@ def request_preflight(payload: PreflightRequest):
 @router.get("/runs/{run_id}/reports", response_model=AutomationPreflightLinksResponse)
 def list_run_reports(run_id: ObjectId):
     return _response(service.list_run_reports(run_id))
+
+
+@router.get("/approvals", response_model=AutomationApprovalListResponse)
+def list_approvals(
+    project_id: ScopeId,
+    workspace_id: OptionalScopeId = None,
+    limit: PageLimit = 25,
+    cursor: PageCursor = None,
+):
+    return _response(
+        decisions.list_approvals(
+            project_id, workspace_id=workspace_id, limit=limit, cursor=cursor
+        )
+    )
+
+
+@router.post(
+    "/approvals/{approval_id}/decision", response_model=AutomationApprovalResponse
+)
+def decide_approval(approval_id: ObjectId, payload: DecisionRequest):
+    return _response(decisions.decide(approval_id, payload))

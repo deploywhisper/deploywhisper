@@ -2,7 +2,13 @@
 
 from __future__ import annotations
 
+from infra_automation.decisions import DecisionBinding as AutomationDecisionBinding
+from infra_automation.approval_eligibility import (
+    EligibilityResult as AutomationEligibilityResult,
+)
+
 import math
+import json
 from typing import Annotated, Any, Literal
 
 from config import settings
@@ -2998,4 +3004,59 @@ class AutomationPreflightLinks(AutomationClosedModel):
 
 class AutomationPreflightLinksResponse(AutomationClosedModel):
     data: AutomationPreflightLinks
+    meta: AutomationMeta
+
+
+# Decisions are independently v1; the retained canonical report stays v2.
+
+
+class AutomationApprovalView(AutomationClosedModel):
+    id: str
+    run_id: str
+    step_id: str
+    project_id: int
+    workspace_id: int
+    requested_by: str
+    reviewer_id: str | None
+    decision_kind: Literal["independent-approval", "acknowledgement"] | None
+    generation: int
+    version: int
+    status: Literal[
+        "pending", "approved", "rejected", "invalidated", "expired", "superseded"
+    ]
+    reason: str | None
+    binding: AutomationDecisionBinding
+    eligibility: AutomationEligibilityResult
+    binding_digest: str
+    deadline_at: str
+    created_at: str
+    decided_at: str | None
+
+    @field_validator("binding", "eligibility", mode="before")
+    @classmethod
+    def immutable_contract_from_wire(cls, value: Any, info):
+        # Service views are JSON-shaped. Strict immutable domain tuples accept
+        # arrays through the JSON boundary, without allowing scalar coercion.
+        if isinstance(value, dict):
+            contract = (
+                AutomationDecisionBinding
+                if info.field_name == "binding"
+                else AutomationEligibilityResult
+            )
+            return contract.model_validate_json(json.dumps(value, allow_nan=False))
+        return value
+
+
+class AutomationApprovalPage(AutomationClosedModel):
+    items: list[AutomationApprovalView] = Field(max_length=100)
+    cursor: AutomationCursor
+
+
+class AutomationApprovalResponse(AutomationClosedModel):
+    data: AutomationApprovalView
+    meta: AutomationMeta
+
+
+class AutomationApprovalListResponse(AutomationClosedModel):
+    data: AutomationApprovalPage
     meta: AutomationMeta
