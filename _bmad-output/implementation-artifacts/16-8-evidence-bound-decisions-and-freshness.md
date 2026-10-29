@@ -1,6 +1,6 @@
 # Story 16.8: Evidence Bound Decisions and Freshness
 
-Status: backlog
+Status: done
 Preparation: refined
 Release: v1.5.0
 
@@ -10,9 +10,9 @@ As a reviewer, I want to decide only against current immutable evidence and the 
 
 ## Entry gates and slice boundary
 
-- Release priority: P0 feature work for v1.5.0. **Blocked for implementation** until Story 16.0 has recorded public RFC/CODEOWNERS acceptance, executable identity/fencing/isolation/custody/receiver qualification and final interface decisions; planning adoption alone is not authorization evidence.
-- Hard earlier dependencies: **16.2, 16.6**, accepted and verified before advancing this story. These dependency results are currently unresolved; refined preparation does not mean ready-for-dev. No prior implementation learning is available for the new Epic 16 story set.
-- Promote only after contract freeze, earlier dependency evidence, bounded task ownership/re-estimation and independent story review. Preserve IDs and backlog status; no feature/release implementation is claimed here.
+- Release priority: P0 feature work for v1.5.0. Story 16.0's accepted RFC and bounded governance/disposable qualification evidence opened the foundation gate; frozen contract-v1 and workflow-v2 remain authoritative. That qualification does not establish general production collection or receiver support.
+- Hard earlier dependencies **16.2 and 16.6** are accepted/done. Stories 16.0–16.7 and the current project context supply the implemented identity, scope, workflow, durable engine and immutable preflight boundaries reused here.
+- The 2026-10-29 scoped readiness assessment records bounded ownership/estimation and independent review. This story implements only its six acceptance criteria using scoped target/custody ports; later collector, registry, receiver and release qualification remain outside its completion claim. Stable story and requirement IDs are preserved.
 
 ## Acceptance Criteria
 
@@ -39,20 +39,29 @@ Coverage intent: Delta over the v1.4.0 baseline. These exact mapped requirements
 
 ## Tasks / Subtasks and bounded ownership
 
-- [ ] **Packet 1 — Domain owner: immutable binding and clock (AC 1,3,6).** Owned output: `infra_automation/decisions.py and typed contracts (planned), models/tables.py/repositories and current-head migration only for decision snapshots`.
-  - [ ] Persist exact versioned tuple, finite deadline, requester/reviewer and decision generations; use injected UTC clock and frozen Pydantic values; mutate every field independently.
-  - [ ] Attach focused proof for the referenced ACs, implementation docs and reviewer findings before packet acceptance.
-- [ ] **Packet 2 — Domain owner: all-path gate (AC 2,4).** Owned output: `infra_automation/workflow_validation.py from 16.3 (reuse) and infra_automation/approval_eligibility.py for runtime evidence/policy checks (planned)`.
-  - [ ] Traverse reachable executable handoff paths with scoped seeded target/custody ports; prove skipped/failed/wrong-branch analysis and decision cannot authorize another target.
-  - [ ] Attach focused proof for the referenced ACs, implementation docs and reviewer findings before packet acceptance.
-- [ ] **Packet 3 — Service/API owner: policy and durable decision (AC 1,3–6).** Owned output: `services/infra_automation_service.py, api/routes/infra_automation.py (planned), services/policy_adapter_service.py reuse`.
-  - [ ] Revalidate live membership and hard floors transactionally at decision; typed conflicts/expiry/insufficient-context reasons; explicit rejection versus stopped_by_gate; no bypass endpoints.
-  - [ ] Attach focused proof for the referenced ACs, implementation docs and reviewer findings before packet acceptance.
-- [ ] **Packet 4 — Test/documentation owner: adversarial matrix (AC 1–6).** Owned output: `tests/test_infra_automation, tests/test_api and docs/infra-automation (planned)`.
-  - [ ] Publish tuple mutation, restart, concurrent decision, expiry boundary, supersession, missing-custody, partial evidence and all-path corpus; verify canonical report bytes/hash unchanged.
-  - [ ] Attach focused proof for the referenced ACs, implementation docs and reviewer findings before packet acceptance.
+- [x] **Packet 1 — Domain owner: immutable binding and clock (AC 1,3,6).** Owned output: `infra_automation/decisions.py and typed contracts (planned), models/tables.py/repositories and current-head migration only for decision snapshots`.
+  - [x] Persist exact versioned tuple, finite deadline, requester/reviewer and decision generations; use injected UTC clock and frozen Pydantic values; mutate every field independently.
+  - [x] Attach focused proof for the referenced ACs, implementation docs and reviewer findings before packet acceptance.
+- [x] **Packet 2 — Domain owner: all-path gate (AC 2,4).** Owned output: `infra_automation/workflow_validation.py from 16.3 (reuse) and infra_automation/approval_eligibility.py for runtime evidence/policy checks (planned)`.
+  - [x] Traverse reachable executable handoff paths with scoped seeded target/custody ports; prove skipped/failed/wrong-branch analysis and decision cannot authorize another target.
+  - [x] Attach focused proof for the referenced ACs, implementation docs and reviewer findings before packet acceptance.
+- [x] **Packet 3 — Service/API owner: policy and durable decision (AC 1,3–6).** Owned output: `services/infra_automation_service.py, api/routes/infra_automation.py (planned), services/policy_adapter_service.py reuse`.
+  - [x] Revalidate live membership and hard floors transactionally at decision; typed conflicts/expiry/insufficient-context reasons; explicit rejection versus stopped_by_gate; no bypass endpoints.
+  - [x] Attach focused proof for the referenced ACs, implementation docs and reviewer findings before packet acceptance.
+- [x] **Packet 4 — Test/documentation owner: adversarial matrix (AC 1–6).** Owned output: `tests/test_infra_automation, tests/test_api and docs/infra-automation (planned)`.
+  - [x] Publish tuple mutation, restart, concurrent decision, expiry boundary, supersession, missing-custody, partial evidence and all-path corpus; verify canonical report bytes/hash unchanged.
+  - [x] Attach focused proof for the referenced ACs, implementation docs and reviewer findings before packet acceptance.
 
 Each packet is a bounded review unit under this stable story ID; split large packets after 16.0 estimation instead of silently broadening scope. One story branch follows Git Flow; coordinate shared-file edits and do not revert other work.
+
+### Review Findings
+
+- [x] [Review][Patch][P1][R1] Enforce total run deadlines and monotonic clock floors at every decision/recheck boundary [services/infra_automation_decisions.py:716]
+- [x] [Review][Patch][P1][R2] Refresh the clock after material resolution before authorizing a decision [services/infra_automation_decisions.py:558]
+- [x] [Review][Patch][P2][R3] Preserve the actual evidence/source/custody expiry reasons [services/infra_automation_decisions.py:585]
+- [x] [Review][Patch][P2][R4] Protect the decision sequence primary key from SQLite OR REPLACE [migrations/versions/034_add_infra_decisions.py:38]
+- [x] [Review][Patch][P2][R5] Keep a valid run waiting when a later decision is requested before its human prerequisite [services/infra_automation_decisions.py:508]
+- [x] [Review][Patch][P2][R6] Preserve transient authority-unavailable responses without inventing binding changes [services/infra_automation_decisions.py:600]
 
 ## Dev Notes
 
@@ -73,11 +82,11 @@ Reuse Story 16.3's static schema/reference/DAG validator; do not create a compet
 
 ## Required implementation verification
 
-- [ ] Register new `tests/test_infra_automation` directories in `scripts/ci-local.sh` and affected GitHub discovery/shards; root discovery alone skips non-package test directories.
-- [ ] For every Pydantic/schema/dataclass/constructor change, use repository-wide `rg` searches for direct instantiations/fixtures and update all consumers, including CLI/agent/action/report compatibility where affected.
-- [ ] Run `./.venv/bin/python -m unittest discover -q`, story-focused tests and exactly `./.venv/bin/python -m pytest tests/test_api tests/test_cli tests/test_infra -v --tb=short` for affected API/CLI/infra contracts.
-- [ ] Run `./.venv/bin/ruff check .`, **`./.venv/bin/ruff format --check .` repo-wide**, `bash scripts/ci-local.sh` and `git diff --check`; add applicable static/security/type checks. Record commands and actual results rather than assumed passes.
-- [ ] UI validation not applicable only if no rendered surface changes; if a UI surface is touched, use the complete composed-app Playwright/keyboard/axe/screenshot loop required by project context before review.
+- [x] Register new `tests/test_infra_automation` directories in `scripts/ci-local.sh` and affected GitHub discovery/shards; root discovery alone skips non-package test directories.
+- [x] For every Pydantic/schema/dataclass/constructor change, use repository-wide `rg` searches for direct instantiations/fixtures and update all consumers, including CLI/agent/action/report compatibility where affected.
+- [x] Run `./.venv/bin/python -m unittest discover -q`, story-focused tests and exactly `./.venv/bin/python -m pytest tests/test_api tests/test_cli tests/test_infra -v --tb=short` for affected API/CLI/infra contracts.
+- [x] Run `./.venv/bin/ruff check .`, **`./.venv/bin/ruff format --check .` repo-wide**, `bash scripts/ci-local.sh` and `git diff --check`; add applicable static/security/type checks. Record commands and actual results rather than assumed passes.
+- [x] UI validation not applicable only if no rendered surface changes; if a UI surface is touched, use the complete composed-app Playwright/keyboard/axe/screenshot loop required by project context before review.
 
 ## References
 
@@ -90,18 +99,86 @@ Reuse Story 16.3's static schema/reference/DAG validator; do not create a compet
 
 ### Agent Model Used
 
-Documentation preparation only; implementation agent/version to be recorded when gates open.
+Codex (GPT-6), with independent native agents for bounded domain, eligibility and service work.
+
+### Implementation Plan
+
+1. Persist closed immutable version-1 decision tuples and exact report export bytes through migration034, durable generations and CAS transitions.
+2. Reuse workflow-v2 static validation and the existing policy adapter for typed current evidence, own-decision ancestry and full handoff ancestry checks.
+3. Derive authority, report/source lineage, policy and deadlines from durable state in one verified human transaction. Use unavailable-by-default scoped target/custody material ports.
+4. Recheck latest receipts, reviewer generations, exact evidence and earliest deadlines before dispatch/consumption; preserve historical snapshots and advisory report semantics.
+5. Exercise mutation/restart/race/revocation/expiry/graph/API matrices, independent review, actual app startup and repository validation.
 
 ### Debug Log References
 
-Not executed: application, runner, receiver, Compose, browser, fault/load or production qualification. This preparation records obligations, not passing results.
+Entry assessment: accepted dependencies verified against current sprint tracker and frozen contracts; independent reviewer found no unresolved product/interface blocker.
+
+Verification logs for this execution are stored locally under `/tmp/story16-8-*`; final command results are recorded below when checks complete. Actual application startup health returned 200; approval GET/decision POST operations are present in OpenAPI. Production runner/receiver, Compose/browser and load qualification are outside this backend slice; no such result is claimed.
 
 ### Completion Notes List
 
-- Preparation: refined. Status remains backlog. All implementation tasks unchecked; Story 16.0 and earlier dependency acceptance remain unresolved.
-- UI validation: Not executed; applicability to be recorded against the actual change.
-- Independent review, actual command results, residual risks and release qualification evidence must be recorded during implementation.
+- 2026-10-29 entry reassessment: current sprint records Stories 16.0–16.7 done. Original unresolved-dependency preparation notes are superseded by accepted dependency evidence. Independent native reviewer confirmed the frozen decision/export/route contracts settle the owned implementation choices; no new product or dependency authorization is needed.
+- Bounded execution: domain/persistence owner handles Packet 1 (large); eligibility owner handles Packet 2 (large); service/API owner handles Packet 3 (large); root integrates Packet 4 adversarial tests/docs and verification (large). Existing WP7 estimate remains planning guidance, not elapsed delivery evidence. Target/custody ports are scoped fixtures; no collector or receiver production support is claimed.
+
+- Prepared entry-gate text is historical: accepted dependency evidence and the independent 2026-10-29 readiness assessment opened this bounded implementation. Stable IDs and all six ACs are preserved.
+- UI validation not applicable: backend behavior and generated API declarations only; no rendered surface or browser interaction changed. Generated TypeScript declarations pass `npm run ui:typecheck`.
+- Independent native reviews (`readiness_review`, `eligibility`, `final_review`) identified and closed lineage, strict response conversion, current reviewer generations, pagination, supersession and serial/indirect human prerequisite defects. All 59 final focused tests and 140 subtests pass; full verification and the known worker teardown retry are recorded in `docs/verification/infra-automation/16-8/results.md`.
+
+- Final validation: `./.venv/bin/python -m unittest discover -q` passed 1,194 tests (2 skips). Final affected pytest shard passed 688 tests /2,274 subtests (1 opt-in skip). Final focused matrix passed 59 tests /140 subtests. Serial `LLM_API_BASE=http://127.0.0.1:1 bash scripts/ci-local.sh` passed all 2,670 directory tests after the documented existing worker teardown retry.
+- Ruff lint, repo-wide Ruff formatting (438 files), scoped mypy/Bandit, compile checks, actual app health and generated API typecheck passed. Repo-wide mypy retains 312 findings versus 314 on the original archived baseline, with no introduced file/message findings.
+- Implementation is committed as `bc05965` on the compliant story branch. Remaining boundaries: production target/custody/collector/receiver support belongs to later stories; database/host administrators remain trusted. The subsequent formal BMad review and push/PR closure are recorded below; this dev-story does not claim release qualification.
+
+- Formal BMad code review found six patchable issues, fixed with red/green regressions and independent re-review (77 focused tests /154 subtests). Details and triage are in `docs/verification/infra-automation/16-8/code-review.md`; final root smoke passed 1,242 tests (2 skips), the exact affected shard passed 688 tests /2,274 subtests (1 opt-in skip), and full serial local CI passed 2,688 directory tests. Ruff lint and formatting (439 files), scoped typing/security and API typecheck passed.
 
 ### File List
 
-This story specification only; planned ownership paths above are not implemented files.
+- `README.md`
+- `_bmad-output/implementation-artifacts/16-8-evidence-bound-decisions-and-freshness.md`
+- `_bmad-output/implementation-artifacts/sprint-status.yaml`
+- `_bmad-output/planning-artifacts/epics.md`
+- `_bmad-output/planning-artifacts/implementation-readiness-report-2026-10-29-story-16-8.md`
+- `_bmad-output/project-context.md`
+- `api/routes/infra_automation.py`
+- `api/schemas.py`
+- `docs/infra-automation/decisions.md`
+- `docs/verification/infra-automation/16-8/results.md`
+- `docs/verification/infra-automation/16-8/code-review.md`
+- `frontend/src/api/schema.d.ts`
+- `infra_automation/approval_eligibility.py`
+- `infra_automation/decisions.py`
+- `migrations/versions/034_add_infra_decisions.py`
+- `models/database.py`
+- `models/repositories/infra_automation_decisions.py`
+- `models/tables.py`
+- `services/infra_automation_decisions.py`
+- `tests/test_api/test_infra_automation_decisions.py`
+- `tests/test_infra/test_container_contract.py`
+- `tests/test_infra/test_identity_migration.py`
+- `tests/test_infra/test_infra_automation_engine_migration.py`
+- `tests/test_infra/test_infra_automation_workflow_migration.py`
+- `tests/test_infra/test_migrations.py`
+- `tests/test_infra/test_project_membership_migration.py`
+- `tests/test_infra_automation/test_approval_eligibility.py`
+- `tests/test_infra_automation/test_decision_binding_adversarial.py`
+- `tests/test_infra_automation/test_decision_service.py`
+- `tests/test_infra_automation/test_decisions.py`
+- `tests/test_infra_automation/test_decision_review_regressions.py`
+- `tests/test_infra_automation/test_preflight_repository.py`
+
+### Change Log
+
+- 2026-10-29: Implemented evidence-bound decision snapshots, migration034,
+  exact-path runtime policy/freshness checks, human decision API/service,
+  conservative historical projections and live dispatch/consume rechecks.
+  Reused existing static validation, policy adapter and report serialization;
+  no dependencies or remote execution were added. Independent review fixes
+  cover exact lineage, reviewer generations, pagination, supersession,
+  serial/indirect human prerequisites and strict HTTP response conversion.
+
+## Senior Developer Review (AI)
+
+- Date: 2026-10-29. Reviewer: Codex with independent Blind Hunter, Edge Case Hunter and Acceptance Auditor agents.
+- Outcome: Approved. Six patch findings resolved; zero unresolved high/medium issues, zero deferred, three conditional findings dismissed with evidence.
+- Reviewed full branch diff from `b2e87ec` through `6238a59`; review corrections are in `15b8197`. Detailed findings, dismissals and actual verification results: `docs/verification/infra-automation/16-8/code-review.md`.
+- Current source preserves the pre-handoff contract and unavailable-by-default production ports. No deployment/receiver or release qualification is claimed. UI validation not applicable.
+- Git Flow branch `feature/16-8-evidence-bound-decisions-freshness` is committed and pushed to origin. [PR #203](https://github.com/deploywhisper/deploywhisper/pull/203) targets `develop`; no merge or release was performed.

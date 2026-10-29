@@ -478,7 +478,7 @@ class PreflightRepositoryTests(LifecycleCase):
                     ).scalar()
                     self.assertEqual(
                         revision,
-                        target if target != "head" else "033_add_infra_preflight",
+                        target if target != "head" else "034_add_infra_decisions",
                     )
                     if target == "head":
                         self.assertTrue(

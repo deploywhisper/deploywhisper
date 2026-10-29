@@ -1137,6 +1137,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/infra-automation/approvals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Approvals */
+        get: operations["list_approvals_api_v1_infra_automation_approvals_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/infra-automation/approvals/{approval_id}/decision": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Decide Approval */
+        post: operations["decide_approval_api_v1_infra_automation_approvals__approval_id__decision_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/scanner-imports/sarif": {
         parameters: {
             query?: never;
@@ -1346,7 +1380,7 @@ export interface components {
              * @enum {string}
              */
             kind: "admitted_collection";
-            source: components["schemas"]["CollectedSource"];
+            source: components["schemas"]["infra_automation__workflow_schema__CollectedSource"];
             parameters?: components["schemas"]["CollectionParameters"];
         };
         /** AdvanceEpochRequest */
@@ -2319,6 +2353,62 @@ export interface components {
                 [key: string]: unknown;
             };
         };
+        /** AutomationApprovalListResponse */
+        AutomationApprovalListResponse: {
+            data: components["schemas"]["AutomationApprovalPage"];
+            meta: components["schemas"]["AutomationMeta"];
+        };
+        /** AutomationApprovalPage */
+        AutomationApprovalPage: {
+            /** Items */
+            items: components["schemas"]["AutomationApprovalView"][];
+            cursor: components["schemas"]["CursorEnvelope"];
+        };
+        /** AutomationApprovalResponse */
+        AutomationApprovalResponse: {
+            data: components["schemas"]["AutomationApprovalView"];
+            meta: components["schemas"]["AutomationMeta"];
+        };
+        /** AutomationApprovalView */
+        AutomationApprovalView: {
+            /** Id */
+            id: string;
+            /** Run Id */
+            run_id: string;
+            /** Step Id */
+            step_id: string;
+            /** Project Id */
+            project_id: number;
+            /** Workspace Id */
+            workspace_id: number;
+            /** Requested By */
+            requested_by: string;
+            /** Reviewer Id */
+            reviewer_id: string | null;
+            /** Decision Kind */
+            decision_kind: ("independent-approval" | "acknowledgement") | null;
+            /** Generation */
+            generation: number;
+            /** Version */
+            version: number;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "pending" | "approved" | "rejected" | "invalidated" | "expired" | "superseded";
+            /** Reason */
+            reason: string | null;
+            binding: components["schemas"]["DecisionBinding"];
+            eligibility: components["schemas"]["EligibilityResult"];
+            /** Binding Digest */
+            binding_digest: string;
+            /** Deadline At */
+            deadline_at: string;
+            /** Created At */
+            created_at: string;
+            /** Decided At */
+            decided_at: string | null;
+        };
         /** AutomationAuditItem */
         AutomationAuditItem: {
             /** Id */
@@ -2836,20 +2926,6 @@ export interface components {
                 [key: string]: unknown;
             };
         };
-        /** CollectedSource */
-        CollectedSource: {
-            /**
-             * Kind
-             * @constant
-             */
-            kind: "collected";
-            /** Repository Id */
-            repository_id: string | (components["schemas"]["InputReference"] | components["schemas"]["ProjectReference"] | components["schemas"]["RunReference"]);
-            /** Commit Sha */
-            commit_sha: string | components["schemas"]["InputReference"];
-            /** Profile Digest */
-            profile_digest: string;
-        };
         /** CollectionParameters */
         CollectionParameters: {
             /**
@@ -3156,6 +3232,20 @@ export interface components {
              */
             gap: boolean;
         };
+        /** Custody */
+        Custody: {
+            /**
+             * Version
+             * @default 1
+             */
+            version: number;
+            /** Handle */
+            handle: string;
+            /** Raw Local Digest */
+            raw_local_digest: string;
+            /** Expires At */
+            expires_at: string;
+        };
         /** CustomSkillListResponse */
         CustomSkillListResponse: {
             /** Data */
@@ -3218,6 +3308,108 @@ export interface components {
         CustomSkillUploadResponse: {
             data: components["schemas"]["CustomSkillUploadData"];
             meta: components["schemas"]["MetaPayload"];
+        };
+        /** DecisionBinding */
+        DecisionBinding: {
+            /**
+             * Version
+             * @default 1
+             */
+            version: number;
+            /**
+             * Authorization Kind
+             * @enum {string}
+             */
+            authorization_kind: "advisory_request" | "exact_plan";
+            /** Workflow Id */
+            workflow_id: string;
+            /** Revision Id */
+            revision_id: string;
+            /** Workflow Revision Digest */
+            workflow_revision_digest: string;
+            /** Input Digest */
+            input_digest: string;
+            provenance: components["schemas"]["DecisionProvenance"];
+            /** Project Id */
+            project_id: number;
+            /** Workspace Id */
+            workspace_id: number;
+            /** Environment */
+            environment: string;
+            /** Canonical Target */
+            canonical_target: string;
+            /** Receiver Id */
+            receiver_id: string;
+            /** Pipeline Repository Id */
+            pipeline_repository_id: string;
+            /** Pipeline Workflow Id */
+            pipeline_workflow_id: string;
+            /** Pipeline Workflow Revision */
+            pipeline_workflow_revision: string;
+            /** Report Id */
+            report_id: number;
+            /**
+             * Report Schema Version
+             * @constant
+             */
+            report_schema_version: "v2";
+            /** Report Bytes Digest */
+            report_bytes_digest: string;
+            /** Policy Version */
+            policy_version: number;
+            /**
+             * Policy Result
+             * @constant
+             */
+            policy_result: "passed";
+            /** Policy Digest */
+            policy_digest: string;
+            /** Unit Waves Digest */
+            unit_waves_digest: string;
+            /** Screened Artifact Digests */
+            screened_artifact_digests: string[];
+            /** Redaction Version */
+            redaction_version: number;
+            /** Payload Digest */
+            payload_digest: string;
+            /** Evidence Deadline */
+            evidence_deadline: string;
+            /** Approval Deadline */
+            approval_deadline: string;
+            /** Authorization Epoch */
+            authorization_epoch: number;
+            /** Restore Epoch */
+            restore_epoch: number;
+        };
+        /** DecisionProvenance */
+        DecisionProvenance: {
+            /**
+             * Version
+             * @default 1
+             */
+            version: number;
+            /**
+             * Authorization Kind
+             * @enum {string}
+             */
+            authorization_kind: "advisory_request" | "exact_plan";
+            /** Source */
+            source: components["schemas"]["UploadedProvenance"] | components["schemas"]["infra_automation__decisions__CollectedSource"];
+            custody?: components["schemas"]["Custody"] | null;
+        };
+        /** DecisionRequest */
+        DecisionRequest: {
+            /** Reason */
+            reason: string;
+            /** Expected Version */
+            expected_version: number;
+            /** Binding Digest */
+            binding_digest: string;
+            /**
+             * Outcome
+             * @enum {string}
+             */
+            outcome: "approve" | "reject";
         };
         /** DeploymentOutcomeCreateRequest */
         DeploymentOutcomeCreateRequest: {
@@ -3341,6 +3533,26 @@ export interface components {
         DeploymentOutcomeResponse: {
             data: components["schemas"]["DeploymentOutcomeData"];
             meta: components["schemas"]["ResourceOnlyMetaPayload"];
+        };
+        /** EligibilityResult */
+        EligibilityResult: {
+            /** Eligible */
+            eligible: boolean;
+            /**
+             * Reasons
+             * @default []
+             */
+            reasons: ("invalid_evidence" | "invalid_clock" | "run_timed_out" | "invalid_phase" | "invalid_freshness" | "stale_evidence" | "incomplete_evidence" | "missing_report" | "unverified_source" | "insufficient_context" | "unsupported_recommendation" | "unsupported_policy" | "canonical_contract_changed" | "policy_denied" | "binding_changed" | "membership_revoked" | "target_unavailable" | "custody_unavailable" | "missing_approval" | "approval_expired" | "custody_expired" | "source_expired" | "invalid_workflow" | "missing_handoff" | "prerequisite_unsuccessful" | "decision_missing" | "decision_mismatch" | "lineage_mismatch" | "scope_unresolved")[];
+            /**
+             * Limitations
+             * @default []
+             */
+            limitations: string[];
+            /**
+             * Context Todos
+             * @default []
+             */
+            context_todos: string[];
         };
         /** ErrorPayload */
         ErrorPayload: {
@@ -7261,9 +7473,8 @@ export interface components {
              */
             version: number;
             /**
-             * Kind
-             * @default uploaded
-             * @constant
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
              */
             kind: "uploaded";
             /**
@@ -7490,6 +7701,49 @@ export interface components {
         WorkspaceResponse: {
             data: components["schemas"]["WorkspaceData"];
             meta: components["schemas"]["ResourceOnlyMetaPayload"];
+        };
+        /** CollectedSource */
+        infra_automation__decisions__CollectedSource: {
+            /**
+             * Version
+             * @default 1
+             */
+            version: number;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "collected";
+            /** Repository Id */
+            repository_id: string;
+            /** Commit Sha */
+            commit_sha: string;
+            /** Collector Id */
+            collector_id: string;
+            /** Profile Digest */
+            profile_digest: string;
+            /** Screened Transport Digest */
+            screened_transport_digest: string;
+            /** Redaction Version */
+            redaction_version: number;
+            /** Collected At */
+            collected_at: string;
+            /** Source Deadline */
+            source_deadline: string;
+        };
+        /** CollectedSource */
+        infra_automation__workflow_schema__CollectedSource: {
+            /**
+             * Kind
+             * @constant
+             */
+            kind: "collected";
+            /** Repository Id */
+            repository_id: string | (components["schemas"]["InputReference"] | components["schemas"]["ProjectReference"] | components["schemas"]["RunReference"]);
+            /** Commit Sha */
+            commit_sha: string | components["schemas"]["InputReference"];
+            /** Profile Digest */
+            profile_digest: string;
         };
     };
     responses: never;
@@ -12121,6 +12375,165 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AutomationPreflightLinksResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+        };
+    };
+    list_approvals_api_v1_infra_automation_approvals_get: {
+        parameters: {
+            query: {
+                project_id: number;
+                workspace_id?: number | null;
+                limit?: number;
+                cursor?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationApprovalListResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+        };
+    };
+    decide_approval_api_v1_infra_automation_approvals__approval_id__decision_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                approval_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DecisionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationApprovalResponse"];
                 };
             };
             /** @description Unauthorized */

@@ -1,5 +1,5 @@
 # generated: 2026-05-01
-# last_updated: 2026-10-28
+# last_updated: 2026-10-29
 # project: deploywhisper
 # project_key: NOKEY
 # tracking_system: file-system
@@ -28,7 +28,7 @@
 #   - done: Retrospective has been completed
 #
 # RECONCILIATION BASELINE: v1.4.0 published 2026-10-07; accepted through 12.4, plus 12.6 and 13.8
-# NEXT IMPLEMENTATION: assess 16.7 scoped readiness; Stories 16.1–16.6 done
+# NEXT IMPLEMENTATION: assess 16.9 scoped readiness; Stories 16.0–16.8 done
 # RELEASE ENABLER: 12-5-sbom-and-release-checksums (SBOM remains unshipped)
 # EVIDENCE: story-implementation-status-map.md and planning-artifacts/sprint-change-proposal-2026-10-07-v1.4.0-status-reconciliation.md
 # WORKFLOW NOTES:
@@ -39,7 +39,7 @@
 # - Dev moves story to review, then runs code-review
 
 generated: 2026-05-01
-last_updated: 2026-10-28
+last_updated: 2026-10-29
 project: deploywhisper
 project_key: NOKEY
 tracking_system: file-system
@@ -48,7 +48,7 @@ story_location: _bmad-output/implementation-artifacts
 release_priorities:
   v1.5.0:
     highest_priority_feature: epic-16
-    next_planning_story: 16-8-evidence-bound-decisions-and-freshness
+    next_planning_story: 16-9-human-approval-inbox-and-decision-ux
     release_enablers:
       - 12-5-sbom-and-release-checksums
       - 12-7-backup-restore-upgrade-and-retention-docs
@@ -218,7 +218,7 @@ development_status:
   16-5-durable-engine-and-fenced-recovery: done
   16-6-uploaded-artifact-preflight-and-report-linkage: done
   16-7-workflow-editor-and-run-history-ui: done
-  16-8-evidence-bound-decisions-and-freshness: backlog
+  16-8-evidence-bound-decisions-and-freshness: done
   16-9-human-approval-inbox-and-decision-ux: backlog
   16-10-registered-targets-outbox-grants-and-locks: backlog
   16-11-github-receiver-and-outcome-reconciliation: backlog

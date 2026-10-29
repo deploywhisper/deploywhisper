@@ -1409,3 +1409,86 @@ if "InfraAutomationReportLink" not in globals():
         created_at: Mapped[datetime] = mapped_column(
             DateTime(timezone=True), nullable=False
         )
+
+
+if "InfraAutomationDecision" not in globals():
+
+    class InfraAutomationDecision(Base):
+        """Durable decision generation with immutable evidence and exact report bytes."""
+
+        __tablename__ = "infra_automation_decisions"
+        __table_args__ = (
+            ForeignKeyConstraint(
+                ["run_id", "project_id", "workspace_id", "requested_by"],
+                [
+                    "infra_automation_runs.id",
+                    "infra_automation_runs.project_id",
+                    "infra_automation_runs.workspace_id",
+                    "infra_automation_runs.requested_by",
+                ],
+                ondelete="RESTRICT",
+            ),
+            ForeignKeyConstraint(
+                ["report_id"], ["analysis_reports.id"], ondelete="RESTRICT"
+            ),
+            UniqueConstraint("run_id", "step_id", "generation"),
+            CheckConstraint(
+                "generation > 0 AND version > 0", name="ck_infra_decision_versions"
+            ),
+            CheckConstraint(
+                "status IN ('pending','approved','rejected','expired','invalidated','superseded')",
+                name="ck_infra_decision_status",
+            ),
+            CheckConstraint(
+                "length(binding_bytes) BETWEEN 1 AND 131072 AND length(report_bytes) BETWEEN 1 AND 8388608 AND length(binding_digest)=71 AND length(report_digest)=71",
+                name="ck_infra_decision_bounds",
+            ),
+            CheckConstraint(
+                "(status='pending' AND reviewer_id IS NULL AND reason IS NULL AND decided_at IS NULL) OR (status IN ('approved','rejected') AND reviewer_id IS NOT NULL AND length(reviewer_id)>0 AND reason IS NOT NULL AND length(reason) BETWEEN 1 AND 2048 AND decided_at IS NOT NULL) OR (status IN ('expired','invalidated','superseded') AND reviewer_id IS NULL AND reason IS NOT NULL AND length(reason) BETWEEN 1 AND 2048 AND decided_at IS NOT NULL)",
+                name="ck_infra_decision_terminal",
+            ),
+            CheckConstraint(
+                "(status IN ('approved','rejected') AND reviewer_authentication_version > 0 AND reviewer_authorization_version > 0 AND reviewer_authentication_version IS NOT NULL AND reviewer_authorization_version IS NOT NULL) OR (status NOT IN ('approved','rejected') AND reviewer_authentication_version IS NULL AND reviewer_authorization_version IS NULL)",
+                name="ck_infra_decision_reviewer_versions",
+            ),
+            CheckConstraint(
+                "(status IN ('approved','rejected') AND decision_kind IS NOT NULL AND decision_kind IN ('independent-approval','acknowledgement')) OR (status NOT IN ('approved','rejected') AND decision_kind IS NULL)",
+                name="ck_infra_decision_kind",
+            ),
+            {"sqlite_autoincrement": True},
+        )
+        sequence: Mapped[int] = mapped_column(
+            Integer, primary_key=True, autoincrement=True
+        )
+        id: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
+        run_id: Mapped[str] = mapped_column(String(64), nullable=False)
+        step_id: Mapped[str] = mapped_column(String(128), nullable=False)
+        project_id: Mapped[int] = mapped_column(Integer, nullable=False)
+        workspace_id: Mapped[int] = mapped_column(Integer, nullable=False)
+        requested_by: Mapped[str] = mapped_column(String(64), nullable=False)
+        report_id: Mapped[int] = mapped_column(Integer, nullable=False)
+        generation: Mapped[int] = mapped_column(Integer, nullable=False)
+        version: Mapped[int] = mapped_column(Integer, nullable=False)
+        status: Mapped[str] = mapped_column(String(32), nullable=False)
+        binding_bytes: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+        binding_digest: Mapped[str] = mapped_column(String(71), nullable=False)
+        report_bytes: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+        report_digest: Mapped[str] = mapped_column(String(71), nullable=False)
+        decision_kind: Mapped[str | None] = mapped_column(String(32), nullable=True)
+        reviewer_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+        reviewer_authentication_version: Mapped[int | None] = mapped_column(
+            Integer, nullable=True
+        )
+        reviewer_authorization_version: Mapped[int | None] = mapped_column(
+            Integer, nullable=True
+        )
+        reason: Mapped[str | None] = mapped_column(String(2048), nullable=True)
+        created_at: Mapped[datetime] = mapped_column(
+            DateTime(timezone=True), nullable=False
+        )
+        deadline_at: Mapped[datetime] = mapped_column(
+            DateTime(timezone=True), nullable=False
+        )
+        decided_at: Mapped[datetime | None] = mapped_column(
+            DateTime(timezone=True), nullable=True
+        )

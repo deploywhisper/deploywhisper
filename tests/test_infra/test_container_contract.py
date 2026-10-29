@@ -47,6 +47,7 @@ class ContainerContractTests(unittest.TestCase):
                 "031_add_infra_workflows.py",
                 "032_add_infra_automation_engine.py",
                 "033_add_infra_preflight.py",
+                "034_add_infra_decisions.py",
             ],
         )
         baseline_content = migrations[0].read_text(encoding="utf-8")
