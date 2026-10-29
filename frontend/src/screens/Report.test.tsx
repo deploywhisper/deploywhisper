@@ -244,7 +244,7 @@ const report = {
 function renderReport(path = "/reports/77?private=1", detail: ReportDetail = report) {
   const client = new QueryClient();
   const publicView = path.startsWith("/reports/") && !path.includes("private=1");
-  client.setQueryData(["report", detail.id, publicView, false], detail);
+  client.setQueryData(["report", detail.id, 0, publicView, false], detail);
 
   return renderToStaticMarkup(
     <QueryClientProvider client={client}>

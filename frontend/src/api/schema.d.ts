@@ -21,6 +21,108 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/auth/login": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Login */
+        post: operations["login_api_v1_auth_login_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/session": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Current Principal */
+        get: operations["current_principal_api_v1_auth_session_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/logout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Logout */
+        post: operations["logout_api_v1_auth_logout_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/session/rotate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Rotate Session */
+        post: operations["rotate_session_api_v1_auth_session_rotate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/accounts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create Account */
+        post: operations["create_account_api_v1_auth_accounts_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/accounts/{principal_id}/revoke": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Revoke Account */
+        post: operations["revoke_account_api_v1_auth_accounts__principal_id__revoke_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/agent/analyses": {
         parameters: {
             query?: never;
@@ -288,6 +390,58 @@ export interface paths {
         /** Create Workspace Route */
         post: operations["create_workspace_route_api_v1_projects__project_key__workspaces_post"];
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{project_key}/memberships/bootstrap": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Bootstrap Membership */
+        post: operations["bootstrap_membership_api_v1_projects__project_key__memberships_bootstrap_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{project_key}/memberships": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Memberships */
+        get: operations["get_memberships_api_v1_projects__project_key__memberships_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{project_key}/memberships/{principal_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Put Membership */
+        put: operations["put_membership_api_v1_projects__project_key__memberships__principal_id__put"];
+        post?: never;
+        /** Delete Membership */
+        delete: operations["delete_membership_api_v1_projects__project_key__memberships__principal_id__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -622,6 +776,367 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/infra-automation/capabilities": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Capabilities */
+        get: operations["get_capabilities_api_v1_infra_automation_capabilities_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/infra-automation/runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Runs */
+        get: operations["list_runs_api_v1_infra_automation_runs_get"];
+        put?: never;
+        /** Request Run */
+        post: operations["request_run_api_v1_infra_automation_runs_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/infra-automation/runs/{run_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Run */
+        get: operations["get_run_api_v1_infra_automation_runs__run_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/infra-automation/runs/{run_id}/steps": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Steps */
+        get: operations["list_steps_api_v1_infra_automation_runs__run_id__steps_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/infra-automation/runs/{run_id}/logs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Logs */
+        get: operations["get_logs_api_v1_infra_automation_runs__run_id__logs_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/infra-automation/runs/{run_id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Cancel Run */
+        post: operations["cancel_run_api_v1_infra_automation_runs__run_id__cancel_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/infra-automation/workflows": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Workflows */
+        get: operations["list_workflows_api_v1_infra_automation_workflows_get"];
+        put?: never;
+        /** Create Workflow */
+        post: operations["create_workflow_api_v1_infra_automation_workflows_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/infra-automation/workflows/validate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Validate Definition */
+        post: operations["validate_definition_api_v1_infra_automation_workflows_validate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/infra-automation/workflows/{workflow_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Workflow */
+        get: operations["get_workflow_api_v1_infra_automation_workflows__workflow_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/infra-automation/workflows/{workflow_id}/draft": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Save Draft */
+        put: operations["save_draft_api_v1_infra_automation_workflows__workflow_id__draft_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/infra-automation/workflows/{workflow_id}/validate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Validate Draft */
+        post: operations["validate_draft_api_v1_infra_automation_workflows__workflow_id__validate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/infra-automation/workflows/{workflow_id}/revisions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Revisions */
+        get: operations["list_revisions_api_v1_infra_automation_workflows__workflow_id__revisions_get"];
+        put?: never;
+        /** Publish Workflow */
+        post: operations["publish_workflow_api_v1_infra_automation_workflows__workflow_id__revisions_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/infra-automation/workflows/{workflow_id}/revisions/{revision_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Revision */
+        get: operations["get_revision_api_v1_infra_automation_workflows__workflow_id__revisions__revision_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/infra-automation/workflows/{workflow_id}/archive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Archive Workflow */
+        post: operations["archive_workflow_api_v1_infra_automation_workflows__workflow_id__archive_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/infra-automation/workflows/{workflow_id}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Restore Workflow */
+        post: operations["restore_workflow_api_v1_infra_automation_workflows__workflow_id__restore_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/infra-automation/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Settings */
+        get: operations["get_settings_api_v1_infra_automation_settings_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update Settings */
+        patch: operations["update_settings_api_v1_infra_automation_settings_patch"];
+        trace?: never;
+    };
+    "/api/v1/infra-automation/settings/revoke": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Revoke Epoch */
+        post: operations["revoke_epoch_api_v1_infra_automation_settings_revoke_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/infra-automation/settings/restore-epoch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Restore Epoch */
+        post: operations["restore_epoch_api_v1_infra_automation_settings_restore_epoch_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/infra-automation/audit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Export Audit */
+        get: operations["export_audit_api_v1_infra_automation_audit_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/infra-automation/preflights": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Request Preflight */
+        post: operations["request_preflight_api_v1_infra_automation_preflights_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/infra-automation/runs/{run_id}/reports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Run Reports */
+        get: operations["list_run_reports_api_v1_infra_automation_runs__run_id__reports_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/scanner-imports/sarif": {
         parameters: {
             query?: never;
@@ -666,6 +1181,21 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** AccountView */
+        AccountView: {
+            /** Principal Id */
+            principal_id: string;
+            /** Username */
+            username: string;
+            /** Principal Type */
+            principal_type: string;
+            /** Is Admin */
+            is_admin: boolean;
+            /** Enabled */
+            enabled: boolean;
+            /** Authentication Version */
+            authentication_version: number;
+        };
         /**
          * AdapterCanonicalSummary
          * @description Immutable canonical report summary consumed by all workflow adapters.
@@ -804,6 +1334,29 @@ export interface components {
             adapter_payload?: {
                 [key: string]: unknown;
             };
+        };
+        /** AdmittedCollectionStep */
+        AdmittedCollectionStep: {
+            /** Id */
+            id: string;
+            /** Depends On */
+            depends_on: string[];
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "admitted_collection";
+            source: components["schemas"]["CollectedSource"];
+            parameters?: components["schemas"]["CollectionParameters"];
+        };
+        /** AdvanceEpochRequest */
+        AdvanceEpochRequest: {
+            /** Reason */
+            reason: string;
+            /** Project Id */
+            project_id: number;
+            /** Expected Version */
+            expected_version: number;
         };
         /** AdvisorySummaryData */
         AdvisorySummaryData: {
@@ -1618,6 +2171,20 @@ export interface components {
             data: components["schemas"]["AnalysisShareConfigData"];
             meta: components["schemas"]["ResourceMetaPayload"];
         };
+        /** ArchiveWorkflowRequest */
+        ArchiveWorkflowRequest: {
+            /** Reason */
+            reason: string;
+            /** Expected Version */
+            expected_version: number;
+        };
+        /** ArtifactUpload */
+        ArtifactUpload: {
+            /** Name */
+            name: string;
+            /** Content */
+            content: string;
+        };
         /** AssessmentData */
         AssessmentData: {
             /**
@@ -1752,6 +2319,362 @@ export interface components {
                 [key: string]: unknown;
             };
         };
+        /** AutomationAuditItem */
+        AutomationAuditItem: {
+            /** Id */
+            id: string;
+            /** Project Id */
+            project_id: number;
+            /** Workspace Id */
+            workspace_id: number | null;
+            /** Actor Principal Id */
+            actor_principal_id: string;
+            /**
+             * Actor Type
+             * @enum {string}
+             */
+            actor_type: "human" | "service";
+            /**
+             * Actor Role
+             * @enum {string}
+             */
+            actor_role: "admin" | "maintainer" | "reviewer" | "contributor" | "read-only" | "coordinator";
+            /** Event Type */
+            event_type: string;
+            /** Target Id */
+            target_id: string;
+            /** Reason */
+            reason: string;
+            /** Before Digest */
+            before_digest: string | null;
+            /** After Digest */
+            after_digest: string | null;
+            /** Created At */
+            created_at: string;
+        };
+        /** AutomationAuditPage */
+        AutomationAuditPage: {
+            /** Items */
+            items: components["schemas"]["AutomationAuditItem"][];
+            cursor: components["schemas"]["CursorEnvelope"];
+        };
+        /** AutomationAuditResponse */
+        AutomationAuditResponse: {
+            data: components["schemas"]["AutomationAuditPage"];
+            meta: components["schemas"]["AutomationMeta"];
+        };
+        /**
+         * AutomationCapabilities
+         * @description Live scope permissions, never a credential or run eligibility grant.
+         */
+        AutomationCapabilities: {
+            /** Version */
+            version: number;
+            /** Project Id */
+            project_id: number;
+            /** Workspace Id */
+            workspace_id: number | null;
+            /** Membership Version */
+            membership_version: number;
+            /** Policy Version */
+            policy_version: number;
+            /** Execution Enabled */
+            execution_enabled: boolean;
+            /** Capabilities */
+            capabilities: ("automation.read" | "automation.draft" | "automation.publish" | "automation.request")[];
+        };
+        /** AutomationCapabilitiesResponse */
+        AutomationCapabilitiesResponse: {
+            data: components["schemas"]["AutomationCapabilities"];
+            meta: components["schemas"]["AutomationMeta"];
+        };
+        /** AutomationDiagnostic */
+        AutomationDiagnostic: {
+            /**
+             * Code
+             * @enum {string}
+             */
+            code: "invalid_input" | "resource_limit" | "yaml_syntax" | "yaml_duplicate_key" | "yaml_key_type" | "yaml_feature_forbidden" | "schema_version" | "schema_field" | "scope_unsupported" | "dependency_invalid" | "graph_cycle" | "reference_invalid" | "reference_type" | "binding_mismatch" | "profile_unsupported" | "input_value_invalid" | "metadata_mismatch" | "output_invalid";
+            /** Message */
+            message: string;
+            /** Path */
+            path: (string | number)[];
+            /** Step Index */
+            step_index?: number | null;
+            /** Line */
+            line?: number | null;
+            /** Column */
+            column?: number | null;
+        };
+        /** AutomationError */
+        AutomationError: {
+            /**
+             * Code
+             * @enum {string}
+             */
+            code: "authentication_required" | "permission_denied" | "binding_conflict" | "request_validation_failed" | "quota_exceeded" | "authority_unavailable";
+            /**
+             * Message
+             * @enum {string}
+             */
+            message: "Authentication required." | "Operation unavailable." | "Review current evidence again." | "Request validation failed." | "Request limit reached." | "Current authority could not be verified.";
+            details: components["schemas"]["AutomationErrorDetails"];
+        };
+        /** AutomationErrorDetails */
+        AutomationErrorDetails: {
+            /** Retryable */
+            retryable: boolean;
+            /** Correlation Id */
+            correlation_id: string;
+        };
+        /** AutomationErrorResponse */
+        AutomationErrorResponse: {
+            error: components["schemas"]["AutomationError"];
+        };
+        /** AutomationLogListResponse */
+        AutomationLogListResponse: {
+            data: components["schemas"]["LogPage"];
+            meta: components["schemas"]["AutomationMeta"];
+        };
+        /** AutomationMeta */
+        AutomationMeta: {
+            /** App */
+            app: string;
+            /** Version */
+            version: string;
+            /** Correlation Id */
+            correlation_id: string;
+        };
+        /** AutomationPolicy */
+        AutomationPolicy: {
+            /** Project Id */
+            project_id: number;
+            /** Version */
+            version: number;
+            /** Authorization Epoch */
+            authorization_epoch: number;
+            /** Restore Epoch */
+            restore_epoch: number;
+            settings: components["schemas"]["AutomationSettings"];
+        };
+        /** AutomationPolicyResponse */
+        AutomationPolicyResponse: {
+            data: components["schemas"]["AutomationPolicy"];
+            meta: components["schemas"]["AutomationMeta"];
+        };
+        /** AutomationPreflightLinks */
+        AutomationPreflightLinks: {
+            /** Items */
+            items: components["schemas"]["PreflightLinkView"][];
+            evidence_status: components["schemas"]["PreflightEvidenceStatus"];
+        };
+        /** AutomationPreflightLinksResponse */
+        AutomationPreflightLinksResponse: {
+            data: components["schemas"]["AutomationPreflightLinks"];
+            meta: components["schemas"]["AutomationMeta"];
+        };
+        /** AutomationRevisionDetail */
+        AutomationRevisionDetail: {
+            /** Id */
+            id: string;
+            /** Workflow Id */
+            workflow_id: string;
+            /** Project Id */
+            project_id: number;
+            /** Workspace Id */
+            workspace_id: number | null;
+            /** Revision Number */
+            revision_number: number;
+            /** Digest */
+            digest: string;
+            /** Published By */
+            published_by: string;
+            /** Created At */
+            created_at: string;
+            definition: components["schemas"]["Workflow"];
+        };
+        /** AutomationRevisionListResponse */
+        AutomationRevisionListResponse: {
+            data: components["schemas"]["AutomationRevisionPage"];
+            meta: components["schemas"]["AutomationMeta"];
+        };
+        /** AutomationRevisionPage */
+        AutomationRevisionPage: {
+            /** Items */
+            items: components["schemas"]["AutomationRevisionSummary"][];
+            cursor: components["schemas"]["CursorEnvelope"];
+        };
+        /** AutomationRevisionResponse */
+        AutomationRevisionResponse: {
+            data: components["schemas"]["AutomationRevisionDetail"];
+            meta: components["schemas"]["AutomationMeta"];
+        };
+        /** AutomationRevisionSummary */
+        AutomationRevisionSummary: {
+            /** Id */
+            id: string;
+            /** Workflow Id */
+            workflow_id: string;
+            /** Project Id */
+            project_id: number;
+            /** Workspace Id */
+            workspace_id: number | null;
+            /** Revision Number */
+            revision_number: number;
+            /** Digest */
+            digest: string;
+            /** Published By */
+            published_by: string;
+            /** Created At */
+            created_at: string;
+        };
+        /** AutomationRunListResponse */
+        AutomationRunListResponse: {
+            data: components["schemas"]["RunPage"];
+            meta: components["schemas"]["AutomationMeta"];
+        };
+        /** AutomationRunResponse */
+        AutomationRunResponse: {
+            data: components["schemas"]["RunView"];
+            meta: components["schemas"]["AutomationMeta"];
+        };
+        /** AutomationSettings */
+        AutomationSettings: {
+            /**
+             * Enabled
+             * @default false
+             */
+            enabled: boolean;
+            /**
+             * Max Workflows
+             * @default 100
+             */
+            max_workflows: number;
+            /**
+             * Max Revisions Per Workflow
+             * @default 100
+             */
+            max_revisions_per_workflow: number;
+            /**
+             * Max Active Runs
+             * @default 10
+             */
+            max_active_runs: number;
+            /**
+             * Max Queued Runs
+             * @default 100
+             */
+            max_queued_runs: number;
+            /**
+             * Max Artifact Bytes
+             * @default 8388608
+             */
+            max_artifact_bytes: number;
+            /**
+             * Retention Seconds
+             * @default 604800
+             */
+            retention_seconds: number;
+            /**
+             * Evidence Ttl Seconds
+             * @default 3600
+             */
+            evidence_ttl_seconds: number;
+            /**
+             * Approval Ttl Seconds
+             * @default 900
+             */
+            approval_ttl_seconds: number;
+            /**
+             * Credential Ttl Seconds
+             * @default 900
+             */
+            credential_ttl_seconds: number;
+        };
+        /** AutomationStepListResponse */
+        AutomationStepListResponse: {
+            data: components["schemas"]["StepPage"];
+            meta: components["schemas"]["AutomationMeta"];
+        };
+        /** AutomationValidation */
+        AutomationValidation: {
+            /** Valid */
+            valid: boolean;
+            /** Digest */
+            digest: string | null;
+            /** Errors */
+            errors: components["schemas"]["AutomationDiagnostic"][];
+            /** Truncated */
+            truncated: boolean;
+        };
+        /** AutomationValidationResponse */
+        AutomationValidationResponse: {
+            data: components["schemas"]["AutomationValidation"];
+            meta: components["schemas"]["AutomationMeta"];
+        };
+        /** AutomationWorkflowDetail */
+        AutomationWorkflowDetail: {
+            /** Id */
+            id: string;
+            /** Project Id */
+            project_id: number;
+            /** Workspace Id */
+            workspace_id: number | null;
+            /** Name */
+            name: string;
+            /** Draft Version */
+            draft_version: number;
+            /** Archived */
+            archived: boolean;
+            /** Draft Digest */
+            draft_digest: string;
+            /** Created By */
+            created_by: string;
+            /** Created At */
+            created_at: string;
+            /** Updated At */
+            updated_at: string;
+            definition: components["schemas"]["Workflow"];
+        };
+        /** AutomationWorkflowListResponse */
+        AutomationWorkflowListResponse: {
+            data: components["schemas"]["AutomationWorkflowPage"];
+            meta: components["schemas"]["AutomationMeta"];
+        };
+        /** AutomationWorkflowPage */
+        AutomationWorkflowPage: {
+            /** Items */
+            items: components["schemas"]["AutomationWorkflowSummary"][];
+            cursor: components["schemas"]["CursorEnvelope"];
+        };
+        /** AutomationWorkflowResponse */
+        AutomationWorkflowResponse: {
+            data: components["schemas"]["AutomationWorkflowDetail"];
+            meta: components["schemas"]["AutomationMeta"];
+        };
+        /** AutomationWorkflowSummary */
+        AutomationWorkflowSummary: {
+            /** Id */
+            id: string;
+            /** Project Id */
+            project_id: number;
+            /** Workspace Id */
+            workspace_id: number | null;
+            /** Name */
+            name: string;
+            /** Draft Version */
+            draft_version: number;
+            /** Archived */
+            archived: boolean;
+            /** Draft Digest */
+            draft_digest: string;
+            /** Created By */
+            created_by: string;
+            /** Created At */
+            created_at: string;
+            /** Updated At */
+            updated_at: string;
+        };
         /** BlastRadiusData */
         BlastRadiusData: {
             /**
@@ -1856,6 +2779,28 @@ export interface components {
              */
             artifact_paths?: string[] | null;
         };
+        /** BooleanInput */
+        BooleanInput: {
+            /**
+             * Required
+             * @default true
+             */
+            required: boolean;
+            /** Default */
+            default?: boolean | null;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "boolean";
+        };
+        /** CancelRunRequest */
+        CancelRunRequest: {
+            /** Reason */
+            reason: string;
+            /** Expected Version */
+            expected_version: number;
+        };
         /** ChangeData */
         ChangeData: {
             /**
@@ -1890,6 +2835,48 @@ export interface components {
             metadata?: {
                 [key: string]: unknown;
             };
+        };
+        /** CollectedSource */
+        CollectedSource: {
+            /**
+             * Kind
+             * @constant
+             */
+            kind: "collected";
+            /** Repository Id */
+            repository_id: string | (components["schemas"]["InputReference"] | components["schemas"]["ProjectReference"] | components["schemas"]["RunReference"]);
+            /** Commit Sha */
+            commit_sha: string | components["schemas"]["InputReference"];
+            /** Profile Digest */
+            profile_digest: string;
+        };
+        /** CollectionParameters */
+        CollectionParameters: {
+            /**
+             * Max Artifact Bytes
+             * @default 8388608
+             */
+            max_artifact_bytes: number | components["schemas"]["InputReference"];
+            /**
+             * Timeout Seconds
+             * @default 600
+             */
+            timeout_seconds: number | components["schemas"]["InputReference"];
+        };
+        /** CommitShaInput */
+        CommitShaInput: {
+            /**
+             * Required
+             * @default true
+             */
+            required: boolean;
+            /** Default */
+            default?: string | null;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "commit_sha";
         };
         /** ConfidenceLedgerData */
         ConfidenceLedgerData: {
@@ -2132,6 +3119,42 @@ export interface components {
              * @description Current results page size
              */
             page_size?: number | null;
+        };
+        /** CreateWorkflowRequest */
+        CreateWorkflowRequest: {
+            /** Reason */
+            reason: string;
+            /** Project Id */
+            project_id: number;
+            /** Workspace Id */
+            workspace_id?: number | null;
+            /** Name */
+            name: string;
+            /** Definition */
+            definition: string;
+        };
+        /** CursorEnvelope */
+        CursorEnvelope: {
+            /**
+             * Version
+             * @default 1
+             */
+            version: number;
+            /** Snapshot Id */
+            snapshot_id: string;
+            /** Next Cursor */
+            next_cursor: string | null;
+            /** Limit */
+            limit: number;
+            /** Last Sequence */
+            last_sequence: number;
+            /** Truncated */
+            truncated: boolean;
+            /**
+             * Gap
+             * @default false
+             */
+            gap: boolean;
         };
         /** CustomSkillListResponse */
         CustomSkillListResponse: {
@@ -3010,6 +4033,84 @@ export interface components {
             data: components["schemas"]["HealthData"];
             meta: components["schemas"]["MetaPayload"];
         };
+        /** HumanAccountResponse */
+        HumanAccountResponse: {
+            data: components["schemas"]["AccountView"];
+            meta: components["schemas"]["IdentityMetaPayload"];
+        };
+        /** HumanDecisionStep */
+        HumanDecisionStep: {
+            /** Id */
+            id: string;
+            /** Depends On */
+            depends_on: string[];
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "human_decision";
+            binding: components["schemas"]["StepReference"];
+        };
+        /** HumanLogoutData */
+        HumanLogoutData: {
+            /**
+             * Logged Out
+             * @default true
+             * @constant
+             */
+            logged_out: true;
+        };
+        /** HumanLogoutResponse */
+        HumanLogoutResponse: {
+            data: components["schemas"]["HumanLogoutData"];
+            meta: components["schemas"]["IdentityMetaPayload"];
+        };
+        /** HumanPrincipalResponse */
+        HumanPrincipalResponse: {
+            data: components["schemas"]["VerifiedPrincipal"];
+            meta: components["schemas"]["IdentityMetaPayload"];
+        };
+        /** HumanSessionData */
+        HumanSessionData: {
+            principal: components["schemas"]["VerifiedPrincipal"];
+            /** Csrf Token */
+            csrf_token: string;
+        };
+        /** HumanSessionResponse */
+        HumanSessionResponse: {
+            data: components["schemas"]["HumanSessionData"];
+            meta: components["schemas"]["IdentityMetaPayload"];
+        };
+        /** IdentifierInput */
+        IdentifierInput: {
+            /**
+             * Required
+             * @default true
+             */
+            required: boolean;
+            /** Default */
+            default?: string | null;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "identifier";
+        };
+        /** IdentityMetaPayload */
+        IdentityMetaPayload: {
+            /**
+             * App
+             * @description Application identifier
+             */
+            app: string;
+            /**
+             * Version
+             * @description Application version
+             */
+            version: string;
+            /** Correlation Id */
+            correlation_id: string;
+        };
         /** ImpactNodeData */
         ImpactNodeData: {
             /**
@@ -3163,6 +4264,16 @@ export interface components {
              */
             remove_missing_sources: boolean;
         };
+        /** InputReference */
+        InputReference: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            ref: "input";
+            /** Name */
+            name: string;
+        };
         /** IntakeItem */
         IntakeItem: {
             /** Name */
@@ -3179,6 +4290,31 @@ export interface components {
             status: "ready" | "unsupported" | "sensitive";
             /** Message */
             message: string;
+        };
+        /** IntegerInput */
+        IntegerInput: {
+            /**
+             * Required
+             * @default true
+             */
+            required: boolean;
+            /** Default */
+            default?: number | null;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "integer";
+            /**
+             * Minimum
+             * @default -9007199254740991
+             */
+            minimum: number;
+            /**
+             * Maximum
+             * @default 9007199254740991
+             */
+            maximum: number;
         };
         /**
          * IntegrationEnforcementDecision
@@ -3302,6 +4438,34 @@ export interface components {
             /** @description Explicit capability metadata for the selected provider */
             capabilities: components["schemas"]["ProviderCapabilityData"];
         };
+        /** LogChunk */
+        LogChunk: {
+            /** Sequence */
+            sequence: number;
+            /** Text */
+            text: string;
+        };
+        /** LogPage */
+        LogPage: {
+            /** Items */
+            items: components["schemas"]["LogChunk"][];
+            cursor: components["schemas"]["CursorEnvelope"];
+        };
+        /** MembershipView */
+        MembershipView: {
+            /** Principal Id */
+            principal_id: string;
+            /** Project Id */
+            project_id: number;
+            /** Workspace Id */
+            workspace_id: number | null;
+            /** Role */
+            role: string;
+            /** Enabled */
+            enabled: boolean;
+            /** Authorization Version */
+            authorization_version: number;
+        };
         /** MetaPayload */
         MetaPayload: {
             /**
@@ -3381,6 +4545,18 @@ export interface components {
              * @description Resolved skill names included in the narrative prompt
              */
             skills_applied?: string[];
+        };
+        /** OutputReference */
+        OutputReference: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "screened_artifacts" | "report" | "action_binding" | "decision_receipt";
+            /** Reference */
+            reference: string;
+            /** Digest */
+            digest: string;
         };
         /** OwnerSignalData */
         OwnerSignalData: {
@@ -3807,12 +4983,108 @@ export interface components {
          * @enum {string}
          */
         PolicyAdapterStatus: "advisory" | "warn" | "soft-block" | "hard-block";
+        /** PolicyEvaluationStep */
+        PolicyEvaluationStep: {
+            /** Id */
+            id: string;
+            /** Depends On */
+            depends_on: string[];
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "policy_evaluation";
+            report: components["schemas"]["StepReference"];
+            /** Target Id */
+            target_id: string | (components["schemas"]["InputReference"] | components["schemas"]["ProjectReference"] | components["schemas"]["RunReference"]);
+            /** Environment */
+            environment: string | (components["schemas"]["InputReference"] | components["schemas"]["ProjectReference"] | components["schemas"]["RunReference"]);
+            /**
+             * Authorization Kind
+             * @enum {string}
+             */
+            authorization_kind: "advisory_request" | "exact_plan";
+        };
         /**
          * PolicySeverity
          * @description Canonical severities policy thresholds may interpret.
          * @enum {string}
          */
         PolicySeverity: "low" | "medium" | "high" | "critical";
+        /** PreflightEvidenceStatus */
+        PreflightEvidenceStatus: {
+            /**
+             * Version
+             * @default 1
+             */
+            version: number;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "pending" | "available" | "failed" | "missing" | "stale" | "interrupted";
+            /**
+             * Run State
+             * @enum {string}
+             */
+            run_state: "queued" | "running" | "waiting_approval" | "ready_handoff" | "handing_off" | "external_running" | "succeeded" | "failed" | "stopped_by_gate" | "rejected" | "expired" | "timed_out" | "cancelled" | "delivery_unknown";
+            /** Run Version */
+            run_version: number;
+            /** Attempt Id */
+            attempt_id: string | null;
+            /** Attempt State */
+            attempt_state: ("pending" | "claimed" | "running" | "succeeded" | "failed" | "timed_out" | "cancelled") | null;
+            /** Manifest Present */
+            manifest_present: boolean;
+            /** Report Available */
+            report_available: boolean;
+            /** Evaluated At */
+            evaluated_at: string;
+            /** Evidence Deadline */
+            evidence_deadline: string;
+            /** Limitations */
+            limitations: string[];
+            /** Context Todos */
+            context_todos: string[];
+            /**
+             * Approval Eligible
+             * @default false
+             * @constant
+             */
+            approval_eligible: false;
+        };
+        /** PreflightLinkView */
+        PreflightLinkView: {
+            /** Id */
+            id: string;
+            /** Run Id */
+            run_id: string;
+            /** Attempt Id */
+            attempt_id: string;
+            /** Manifest Id */
+            manifest_id: string;
+            /** Report Id */
+            report_id: number;
+            /** Report Url */
+            report_url: string;
+            provenance: components["schemas"]["UploadedProvenance"];
+            /** Limitations */
+            limitations: string[];
+            /** Context Todos */
+            context_todos: string[];
+            /**
+             * Approval Eligible
+             * @default false
+             * @constant
+             */
+            approval_eligible: false;
+        };
+        /** PreflightRequest */
+        PreflightRequest: {
+            run: components["schemas"]["RunRequest"];
+            /** Artifacts */
+            artifacts: components["schemas"]["ArtifactUpload"][];
+        };
         /** PreviousScanDiffData */
         PreviousScanDiffData: {
             /**
@@ -3949,6 +5221,36 @@ export interface components {
             /** Data */
             data: components["schemas"]["ProjectData"][];
             meta: components["schemas"]["ListMetaPayload"];
+        };
+        /** ProjectMembershipListResponse */
+        ProjectMembershipListResponse: {
+            /** Data */
+            data: components["schemas"]["MembershipView"][];
+            /** Meta */
+            meta: {
+                [key: string]: unknown;
+            };
+        };
+        /** ProjectMembershipResponse */
+        ProjectMembershipResponse: {
+            data: components["schemas"]["MembershipView"];
+            /** Meta */
+            meta: {
+                [key: string]: unknown;
+            };
+        };
+        /** ProjectReference */
+        ProjectReference: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            ref: "project";
+            /**
+             * Field
+             * @enum {string}
+             */
+            field: "id" | "workspace_id";
         };
         /** ProjectResponse */
         ProjectResponse: {
@@ -4149,6 +5451,38 @@ export interface components {
              */
             message: string;
         };
+        /** PublishWorkflowRequest */
+        PublishWorkflowRequest: {
+            /** Reason */
+            reason: string;
+            /** Expected Version */
+            expected_version: number;
+            /** Idempotency Key */
+            idempotency_key: string;
+        };
+        /** RegisteredGithubHandoffStep */
+        RegisteredGithubHandoffStep: {
+            /** Id */
+            id: string;
+            /** Depends On */
+            depends_on: string[];
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "registered_github_handoff";
+            binding: components["schemas"]["StepReference"];
+            decision: components["schemas"]["StepReference"];
+            /** Target Id */
+            target_id: string | (components["schemas"]["InputReference"] | components["schemas"]["ProjectReference"] | components["schemas"]["RunReference"]);
+            /** Environment */
+            environment: string | (components["schemas"]["InputReference"] | components["schemas"]["ProjectReference"] | components["schemas"]["RunReference"]);
+            /**
+             * Authorization Kind
+             * @enum {string}
+             */
+            authorization_kind: "advisory_request" | "exact_plan";
+        };
         /** ResourceMetaPayload */
         ResourceMetaPayload: {
             /**
@@ -4195,6 +5529,15 @@ export interface components {
              * @description Stable resource identifier
              */
             id: number;
+        };
+        /** RestoreWorkflowRequest */
+        RestoreWorkflowRequest: {
+            /** Reason */
+            reason: string;
+            /** Expected Version */
+            expected_version: number;
+            /** Revision Id */
+            revision_id?: string | null;
         };
         /** RiskContributorData */
         RiskContributorData: {
@@ -4347,6 +5690,83 @@ export interface components {
              */
             critical: boolean;
         };
+        /** RunPage */
+        RunPage: {
+            /** Items */
+            items: components["schemas"]["RunView"][];
+            cursor: components["schemas"]["CursorEnvelope"];
+        };
+        /** RunReference */
+        RunReference: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            ref: "run";
+            /**
+             * Field
+             * @enum {string}
+             */
+            field: "project_id" | "workspace_id" | "environment";
+        };
+        /** RunRequest */
+        RunRequest: {
+            /** Reason */
+            reason: string;
+            /** Workflow Id */
+            workflow_id: string;
+            /** Revision Id */
+            revision_id: string;
+            /** Workspace Id */
+            workspace_id: number;
+            /** Inputs */
+            inputs?: {
+                [key: string]: string | number | boolean;
+            };
+            /** Idempotency Key */
+            idempotency_key: string;
+            /**
+             * Total Timeout Seconds
+             * @default 3600
+             */
+            total_timeout_seconds: number;
+        };
+        /** RunView */
+        RunView: {
+            /** Id */
+            id: string;
+            /** Workflow Id */
+            workflow_id: string;
+            /** Revision Id */
+            revision_id: string;
+            /** Project Id */
+            project_id: number;
+            /** Workspace Id */
+            workspace_id: number;
+            /** Requested By */
+            requested_by: string;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "queued" | "running" | "waiting_approval" | "ready_handoff" | "handing_off" | "external_running" | "succeeded" | "failed" | "stopped_by_gate" | "rejected" | "expired" | "timed_out" | "cancelled" | "delivery_unknown";
+            /** Version */
+            version: number;
+            /** Snapshot Digest */
+            snapshot_digest: string;
+            /** Definition Digest */
+            definition_digest: string;
+            /** Input Digest */
+            input_digest: string;
+            /** Created At */
+            created_at: string;
+            /** Deadline At */
+            deadline_at: string;
+            /** Cancel Requested */
+            cancel_requested: boolean;
+            /** Cancellation Requested At */
+            cancellation_requested_at: string | null;
+        };
         /**
          * SarifImportRequest
          * @description SARIF import API request.
@@ -4364,6 +5784,15 @@ export interface components {
             workspace_id?: number | null;
             /** Workspace Key */
             workspace_key?: string | null;
+        };
+        /** SaveDraftRequest */
+        SaveDraftRequest: {
+            /** Reason */
+            reason: string;
+            /** Expected Version */
+            expected_version: number;
+            /** Definition */
+            definition: string;
         };
         /**
          * ScannerImportRequest
@@ -4682,6 +6111,19 @@ export interface components {
              * @description Reviewer action for resolving the conflict
              */
             recommended_verification: string;
+        };
+        /** SharedAnalysisStep */
+        SharedAnalysisStep: {
+            /** Id */
+            id: string;
+            /** Depends On */
+            depends_on: string[];
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "shared_analysis";
+            artifact: components["schemas"]["StepReference"];
         };
         /** SharedReportAccessResponse */
         SharedReportAccessResponse: {
@@ -5316,6 +6758,76 @@ export interface components {
              */
             avg_time_to_verdict_seconds?: number | null;
         };
+        /** StepPage */
+        StepPage: {
+            /** Items */
+            items: components["schemas"]["StepView"][];
+            cursor: components["schemas"]["CursorEnvelope"];
+        };
+        /** StepReference */
+        StepReference: {
+            /**
+             * Ref
+             * @constant
+             */
+            ref: "step";
+            /** Step Id */
+            step_id: string;
+            /**
+             * Output
+             * @enum {string}
+             */
+            output: "screened_artifacts" | "report" | "action_binding" | "decision_receipt";
+        };
+        /** StepView */
+        StepView: {
+            /** Id */
+            id: string;
+            /** Run Id */
+            run_id: string;
+            /** Step Id */
+            step_id: string;
+            /** Attempt Number */
+            attempt_number: number;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "pending" | "claimed" | "running" | "succeeded" | "failed" | "timed_out" | "cancelled";
+            /** Version */
+            version: number;
+            /** Fence */
+            fence: number;
+            /** Generation */
+            generation: number;
+            /** Deadline At */
+            deadline_at: string;
+            /** Lease Until */
+            lease_until: string | null;
+            output?: components["schemas"]["OutputReference"] | null;
+            /** Uploads */
+            uploads?: components["schemas"]["OutputReference"][];
+        };
+        /** StringInput */
+        StringInput: {
+            /**
+             * Required
+             * @default true
+             */
+            required: boolean;
+            /** Default */
+            default?: string | null;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "string";
+            /**
+             * Max Length
+             * @default 1024
+             */
+            max_length: number;
+        };
         /** SubmissionManifestData */
         SubmissionManifestData: {
             /**
@@ -5717,6 +7229,90 @@ export interface components {
             data: components["schemas"]["TopologyValidationData"];
             meta: components["schemas"]["MetaPayload"];
         };
+        /** UpdateSettingsRequest */
+        UpdateSettingsRequest: {
+            /** Reason */
+            reason: string;
+            /** Project Id */
+            project_id: number;
+            /** Expected Version */
+            expected_version: number;
+            settings: components["schemas"]["AutomationSettings"];
+        };
+        /** UploadedIntakeStep */
+        UploadedIntakeStep: {
+            /** Id */
+            id: string;
+            /** Depends On */
+            depends_on: string[];
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "uploaded_intake";
+            source: components["schemas"]["UploadedSource"];
+            parameters?: components["schemas"]["CollectionParameters"];
+        };
+        /** UploadedProvenance */
+        UploadedProvenance: {
+            /**
+             * Version
+             * @default 1
+             */
+            version: number;
+            /**
+             * Kind
+             * @default uploaded
+             * @constant
+             */
+            kind: "uploaded";
+            /**
+             * Repository Source
+             * @default unavailable
+             * @constant
+             */
+            repository_source: "unavailable";
+            /**
+             * Limitation
+             * @default Repository and immutable commit were not verified for uploaded evidence.
+             * @constant
+             */
+            limitation: "Repository and immutable commit were not verified for uploaded evidence.";
+        };
+        /** UploadedSource */
+        UploadedSource: {
+            /**
+             * Kind
+             * @constant
+             */
+            kind: "uploaded";
+            /** Repository Id */
+            repository_id?: null;
+            /** Commit Sha */
+            commit_sha?: null;
+            /**
+             * Limitation
+             * @default Uploaded evidence does not establish repository identity or exact-plan custody.
+             * @constant
+             */
+            limitation: "Uploaded evidence does not establish repository identity or exact-plan custody.";
+        };
+        /** ValidateDraftRequest */
+        ValidateDraftRequest: {
+            /** Expected Version */
+            expected_version: number;
+            /** Definition */
+            definition?: string | null;
+        };
+        /** ValidateWorkflowRequest */
+        ValidateWorkflowRequest: {
+            /** Project Id */
+            project_id: number;
+            /** Workspace Id */
+            workspace_id?: number | null;
+            /** Definition */
+            definition: string;
+        };
         /** ValidationError */
         ValidationError: {
             /** Location */
@@ -5764,6 +7360,54 @@ export interface components {
         VerdictDistributionResponse: {
             data: components["schemas"]["VerdictDistributionData"];
             meta: components["schemas"]["MetaPayload"];
+        };
+        /** VerifiedPrincipal */
+        VerifiedPrincipal: {
+            /** Principal Id */
+            principal_id: string;
+            /** Username */
+            username: string;
+            /** Principal Type */
+            principal_type: string;
+            /** Is Admin */
+            is_admin: boolean;
+            /** Enabled */
+            enabled: boolean;
+            /** Authentication Version */
+            authentication_version: number;
+            /** Credential Audience */
+            credential_audience: string;
+            /** Session Id */
+            session_id: string;
+            /**
+             * Expires At
+             * Format: date-time
+             */
+            expires_at: string;
+            /** Security Profile */
+            security_profile: string;
+            /** Production Eligible */
+            production_eligible: boolean;
+        };
+        /** Workflow */
+        Workflow: {
+            /**
+             * Workflow Version
+             * @constant
+             */
+            workflow_version: 2;
+            /** Project Id */
+            project_id: string;
+            /** Workspace Id */
+            workspace_id?: string | null;
+            /** Environment */
+            environment: string | components["schemas"]["InputReference"];
+            /** Inputs */
+            inputs?: {
+                [key: string]: components["schemas"]["IdentifierInput"] | components["schemas"]["CommitShaInput"] | components["schemas"]["StringInput"] | components["schemas"]["IntegerInput"] | components["schemas"]["BooleanInput"];
+            };
+            /** Steps */
+            steps: (components["schemas"]["UploadedIntakeStep"] | components["schemas"]["AdmittedCollectionStep"] | components["schemas"]["SharedAnalysisStep"] | components["schemas"]["PolicyEvaluationStep"] | components["schemas"]["HumanDecisionStep"] | components["schemas"]["RegisteredGithubHandoffStep"])[];
         };
         /** WorkspaceCreateRequest */
         WorkspaceCreateRequest: {
@@ -5872,6 +7516,442 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HealthResponse"];
+                };
+            };
+        };
+    };
+    login_api_v1_auth_login_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** Username */
+                    username: string;
+                    /**
+                     * Password
+                     * Format: password
+                     */
+                    password: string;
+                    /**
+                     * Audience
+                     * @default human
+                     * @constant
+                     */
+                    audience?: "human";
+                };
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HumanSessionResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    current_principal_api_v1_auth_session_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HumanPrincipalResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    logout_api_v1_auth_logout_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HumanLogoutResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    rotate_session_api_v1_auth_session_rotate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HumanSessionResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    create_account_api_v1_auth_accounts_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** Username */
+                    username: string;
+                    /**
+                     * Password
+                     * Format: password
+                     */
+                    password: string;
+                    /**
+                     * Is Admin
+                     * @default false
+                     */
+                    is_admin?: boolean;
+                };
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HumanAccountResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    revoke_account_api_v1_auth_accounts__principal_id__revoke_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                principal_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HumanAccountResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
         };
@@ -7087,6 +9167,144 @@ export interface operations {
             };
         };
     };
+    bootstrap_membership_api_v1_projects__project_key__memberships_bootstrap_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectMembershipResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_memberships_api_v1_projects__project_key__memberships_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectMembershipListResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    put_membership_api_v1_projects__project_key__memberships__principal_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_key: string;
+                principal_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /**
+                     * Role
+                     * @enum {string}
+                     */
+                    role: "admin" | "maintainer" | "reviewer" | "contributor" | "read-only";
+                    /** Workspace Id */
+                    workspace_id?: number | null;
+                };
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectMembershipResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_membership_api_v1_projects__project_key__memberships__principal_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_key: string;
+                principal_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectMembershipResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_project_topology_api_v1_context_topology_get: {
         parameters: {
             query?: {
@@ -7998,6 +10216,1965 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_capabilities_api_v1_infra_automation_capabilities_get: {
+        parameters: {
+            query: {
+                project_id: number;
+                workspace_id?: number | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationCapabilitiesResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+        };
+    };
+    list_runs_api_v1_infra_automation_runs_get: {
+        parameters: {
+            query: {
+                project_id: number;
+                workspace_id?: number | null;
+                limit?: number;
+                cursor?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationRunListResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+        };
+    };
+    request_run_api_v1_infra_automation_runs_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RunRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationRunResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+        };
+    };
+    get_run_api_v1_infra_automation_runs__run_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationRunResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+        };
+    };
+    list_steps_api_v1_infra_automation_runs__run_id__steps_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                cursor?: string | null;
+            };
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationStepListResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+        };
+    };
+    get_logs_api_v1_infra_automation_runs__run_id__logs_get: {
+        parameters: {
+            query: {
+                attempt_id: string;
+                limit?: number;
+                cursor?: string | null;
+            };
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationLogListResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+        };
+    };
+    cancel_run_api_v1_infra_automation_runs__run_id__cancel_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CancelRunRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationRunResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+        };
+    };
+    list_workflows_api_v1_infra_automation_workflows_get: {
+        parameters: {
+            query: {
+                project_id: number;
+                workspace_id?: number | null;
+                limit?: number;
+                cursor?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationWorkflowListResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+        };
+    };
+    create_workflow_api_v1_infra_automation_workflows_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateWorkflowRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationWorkflowResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+        };
+    };
+    validate_definition_api_v1_infra_automation_workflows_validate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ValidateWorkflowRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationValidationResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+        };
+    };
+    get_workflow_api_v1_infra_automation_workflows__workflow_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workflow_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationWorkflowResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+        };
+    };
+    save_draft_api_v1_infra_automation_workflows__workflow_id__draft_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workflow_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SaveDraftRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationWorkflowResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+        };
+    };
+    validate_draft_api_v1_infra_automation_workflows__workflow_id__validate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workflow_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ValidateDraftRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationValidationResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+        };
+    };
+    list_revisions_api_v1_infra_automation_workflows__workflow_id__revisions_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                cursor?: string | null;
+            };
+            header?: never;
+            path: {
+                workflow_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationRevisionListResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+        };
+    };
+    publish_workflow_api_v1_infra_automation_workflows__workflow_id__revisions_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workflow_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PublishWorkflowRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationRevisionResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+        };
+    };
+    get_revision_api_v1_infra_automation_workflows__workflow_id__revisions__revision_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workflow_id: string;
+                revision_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationRevisionResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+        };
+    };
+    archive_workflow_api_v1_infra_automation_workflows__workflow_id__archive_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workflow_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ArchiveWorkflowRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationWorkflowResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+        };
+    };
+    restore_workflow_api_v1_infra_automation_workflows__workflow_id__restore_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workflow_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RestoreWorkflowRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationWorkflowResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+        };
+    };
+    get_settings_api_v1_infra_automation_settings_get: {
+        parameters: {
+            query: {
+                project_id: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationPolicyResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+        };
+    };
+    update_settings_api_v1_infra_automation_settings_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateSettingsRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationPolicyResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+        };
+    };
+    revoke_epoch_api_v1_infra_automation_settings_revoke_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdvanceEpochRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationPolicyResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+        };
+    };
+    restore_epoch_api_v1_infra_automation_settings_restore_epoch_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdvanceEpochRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationPolicyResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+        };
+    };
+    export_audit_api_v1_infra_automation_audit_get: {
+        parameters: {
+            query: {
+                project_id: number;
+                workspace_id?: number | null;
+                limit?: number;
+                cursor?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationAuditResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+        };
+    };
+    request_preflight_api_v1_infra_automation_preflights_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PreflightRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationRunResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+        };
+    };
+    list_run_reports_api_v1_infra_automation_runs__run_id__reports_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationPreflightLinksResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
                 };
             };
         };

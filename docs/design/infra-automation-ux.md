@@ -137,3 +137,21 @@ Status always includes text and must not depend on color. Use existing focus/red
 Implementation must run `npm run ui:typecheck`, `npm run ui:test` and `npm run ui:build`, then `docker compose up -d --build`, wait for `http://localhost:8080/api/v1/health`, seed synthetic authorized data and run Playwright against `BASE_URL=http://localhost:8080` using root SPA routes. Capture required 1440/760-width screenshots and keyboard/a11y/error/unknown-state evidence from the composed FastAPI app, then `docker compose down`. The relevant expanded browser suite must cover these new journeys; passing existing report tests alone is insufficient. Record commands/results in each story's Dev Agent Record. Backend-for-UI changes require their own labeled PR under repository rules.
 
 This document resolves planning-level scope and flows only. Identity mechanism, exact wire enums/routes, receiver admission and retained-plan custody, isolation profile and reviewed final screen compositions remain Story 16.0 gates. Rendering, keyboard, contrast, Compose/runtime and production acceptance are unverified until implemented. No story is moved to ready-for-dev or done by this UX artifact alone.
+
+## Story 16.7 scoped implementation evidence — 2026-10-28
+
+The account entry, workflow editor/list and uploaded preflight run/history views
+have been implemented in the React SPA. The [browser proof and 1440/760 captures](../verification/infra-automation/16-7/results.md)
+record real local-account/API journeys, keyboard/axe gates and visual verdicts
+(94 for account access, 92 for workflow/run/report). The approved v3 shell and
+tokens remain the visual authority. Report verdict-chip text uses the existing
+ink token on the approved fill where the former white foreground failed the
+composed serious contrast gate; the canonical report verdict is unchanged.
+
+This is proof for Story 16.7's scope only. The real-run browser lane includes the
+separate coordinator correction in [PR #201](https://github.com/deploywhisper/deploywhisper/pull/201),
+which merged into `develop` on 2026-10-28. The UI PR remains separate.
+Approval, runner, receiver, Settings administration and release qualification
+remain with their later owners. Earlier planning/unverified statements above
+remain the historical starting point and do not describe the completed 16.7
+slice.

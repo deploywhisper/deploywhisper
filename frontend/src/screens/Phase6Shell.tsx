@@ -6,6 +6,8 @@ import { getProjects } from "../api/dashboard";
 import { ProjectSwitcher, SkeletonLine, type ProjectOption } from "../components/ui";
 import { useQuery } from "@tanstack/react-query";
 import { AppBrand } from "./AppBrand";
+import { AutomationNavItem } from "./AutomationNavigation";
+import { useIdentity } from "./IdentitySession";
 import { projectToOption, usePersistentProjectSelection } from "./projectSelection";
 import "./dashboard.css";
 
@@ -14,7 +16,8 @@ export type ShellProjectContext = ReturnType<typeof useSelectedProject> & {
 };
 
 export function useSelectedProject() {
-  const projectsQuery = useQuery({ queryKey: ["projects"], queryFn: getProjects });
+  const { epoch } = useIdentity();
+  const projectsQuery = useQuery({ queryKey: ["projects", epoch], queryFn: getProjects });
   const projects = projectsQuery.data ?? [];
   const projectOptions = useMemo(() => projects.map(projectToOption), [projects]);
   const { selectedProject, setSelectedProjectId } = usePersistentProjectSelection(projects);
@@ -45,6 +48,7 @@ function Sidebar({ active, selectedProject }: { active: string; selectedProject?
     <aside className="dw-sidebar">
       <AppBrand />
       <nav className="dw-sidebar-nav" aria-label="Primary">
+        <AutomationNavItem projectId={selectedProject?.id} active={active === "automation"} />
         {nav.map(({ label, icon: Icon, href, key }) => {
           const isActive = active === key;
           return (
@@ -104,7 +108,7 @@ function TopBar({
         />
       )}
       <span className="dw-topbar-divider" />
-      <div className="dw-avatar">DW</div>
+      <Link className="dw-avatar" to="/settings/account" aria-label="Account access">DW</Link>
     </header>
   );
 }
@@ -114,7 +118,7 @@ export function Phase6Shell({
   children,
   selectedProjectOverride,
 }: {
-  active: "dashboard" | "history" | "settings" | "incidents" | "skills";
+  active: "dashboard" | "history" | "settings" | "incidents" | "skills" | "automation";
   children: (context: ShellProjectContext) => ReactNode;
   selectedProjectOverride?: ProjectOption;
 }) {

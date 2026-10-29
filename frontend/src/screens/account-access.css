@@ -1,0 +1,7 @@
+.dw-account-access { display: grid; gap: 20px; max-width: 1120px; }
+.dw-account-access h1 { color: var(--dw-ink); font: 700 var(--dw-h1-size) var(--dw-font-display); margin: 0 0 8px; }
+.dw-account-access p { color: var(--dw-muted); font-size: var(--dw-body-size); line-height: var(--dw-body-line-height); }
+.dw-account-access p.dw-phase6-warning { color: var(--dw-warning-text); }
+.dw-account-access a { color: var(--dw-brand-dark); }
+.dw-account-access form { max-width: 480px; }
+.dw-account-access code { font-family: var(--dw-font-mono); overflow-wrap: anywhere; }

@@ -2,6 +2,18 @@
   padding-bottom: 42px;
 }
 
+.dw-phase6-shell .dw-global-search kbd {
+  color: var(--dw-muted);
+}
+
+.dw-phase6-shell .dw-card-eyebrow {
+  color: var(--dw-muted);
+}
+
+.dw-phase6-shell .dw-nav-item-active {
+  color: var(--dw-warning-text);
+}
+
 .dw-phase6-shell .dw-global-search > span,
 .dw-phase6-shell .dw-project-trigger-env,
 .dw-phase6-content .eyebrow,

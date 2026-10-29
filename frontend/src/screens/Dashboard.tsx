@@ -46,6 +46,7 @@ import {
   type VerdictDistribution,
 } from "../api/dashboard";
 import { AppBrand } from "./AppBrand";
+import { AutomationNavItem } from "./AutomationNavigation";
 import { projectToOption, usePersistentProjectSelection } from "./projectSelection";
 import "./dashboard.css";
 
@@ -178,6 +179,7 @@ function Sidebar({ selectedProject }: { selectedProject: ProjectOption }) {
     <aside className="dw-sidebar">
       <AppBrand />
       <nav className="dw-sidebar-nav" aria-label="Primary">
+        <AutomationNavItem projectId={selectedProject.id} />
         {nav.map(({ label, icon: Icon, href, active, count }) => (
           <Link key={label} className={`dw-nav-item${active ? " dw-nav-item-active" : ""}`} to={href}>
             <Icon color={active ? "var(--dw-brand)" : "var(--dw-faint)"} size={17} />

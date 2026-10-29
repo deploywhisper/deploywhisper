@@ -17,6 +17,11 @@
   backdrop-filter: blur(16px);
 }
 
+.dw-report-header .dw-verdict-chip[data-verdict="PROCEED"],
+.dw-report-header .dw-verdict-chip[data-verdict="CAUTION"] {
+  color: var(--dw-ink);
+}
+
 .dw-report-header-inner {
   display: grid;
   gap: 14px;
