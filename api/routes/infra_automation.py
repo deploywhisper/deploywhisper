@@ -49,9 +49,14 @@ from infra_automation.lifecycle import (
     ValidateWorkflowRequest,
 )
 from services import infra_automation_service as service
+from services import infra_automation_review as approval_review
 from services import infra_automation_decisions as decisions
 from services.infra_automation_decisions import DecisionRequest
-from api.schemas import AutomationApprovalListResponse, AutomationApprovalResponse
+from api.schemas import (
+    AutomationApprovalListResponse,
+    AutomationApprovalResponse,
+    AutomationApprovalReviewResponse,
+)
 from services.identity_service import IdentityError
 from services import project_service as authorization
 
@@ -411,6 +416,15 @@ def list_approvals(
         decisions.list_approvals(
             project_id, workspace_id=workspace_id, limit=limit, cursor=cursor
         )
+    )
+
+
+@router.get("/approvals/{approval_id}", response_model=AutomationApprovalReviewResponse)
+def get_approval(
+    approval_id: ObjectId, project_id: ScopeId, workspace_id: OptionalScopeId = None
+):
+    return _response(
+        approval_review.get_approval(approval_id, project_id, workspace_id)
     )
 
 

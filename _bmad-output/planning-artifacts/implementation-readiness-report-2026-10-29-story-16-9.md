@@ -1,6 +1,6 @@
 ---
 assessmentScope: Story 16.9 only
-status: blocked-on-backend-for-ui-contract
+status: approved-backend-prerequisite-in-progress
 ---
 # Story 16.9 scoped implementation readiness
 
@@ -46,3 +46,13 @@ unit/integration suite or production qualification was executed by this assessme
 All implementation/browser tasks remain unchecked. BMad Help next: resolve this
 backend-for-UI prerequisite contract, then its separate delivery/review, then resume
 the requested UI dev-story from the accepted API contract.
+
+## Maintainer decision — 2026-10-29
+
+The maintainer approved the referenced prerequisite and explicitly requested its
+implementation first, followed by continuation of Story16.9. The contract-question
+gate is closed. Deliver and independently review the backend support in its own
+`backend-for-ui` PR, integrate it, then use a separate UI branch. The earlier
+assessment remains the evidence for why this prerequisite exists; no new
+permission question is needed for the approved work. Full UI/browser acceptance
+and implementation are still outstanding.

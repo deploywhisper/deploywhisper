@@ -1,0 +1,81 @@
+# Approval review packet for the React UI
+
+This separately delivered backend-for-UI contract supports Story16.9. It adds a
+reviewer-aware read and high/critical confirmation to the durable decisions from
+Story16.8. Production target/custody material remains unavailable by default;
+synthetic scoped ports qualify this contract without enabling remote actions.
+
+## Read the exact packet
+
+`GET /api/v1/infra-automation/approvals/{id}?project_id=1&workspace_id=1`
+requires a verified human session, live review capability and report access in the
+selected scope. Reads do not require CSRF or write approval audit events. Scope
+mismatch/inaccessibility uses the existing generic denial. The response uses the
+standard `data`/`meta` envelope, `Cache-Control: no-store`, and a closed integer
+version1 contract. Unknown or coerced protocol literals fail validation.
+
+The typed packet separates these facts:
+
+- `receipt`: exact retained generation/version, binding and historical outcome.
+- `report`: bounded confidence/context, blast radius, rollback, recommendation,
+  severity and report identity derived from verified stored export bytes, plus
+  the permanent report URL. Summary screening never rewrites those bytes.
+- `action`: an equivalent typed payload summary of the bound authorization kind,
+  target/environment, receiver/pipeline identity, source identity and unit/payload
+  digests. Uploaded repository/commit remain explicitly unavailable.
+- `context`: current reviewer eligibility, server-selected decision model,
+  required confirmation phrases, evaluation time, individual deadlines and their
+  effective minimum including the run deadline. This is descriptive data, never
+  an authorization credential. Unknown/unavailable proof disables submission.
+- `attribution`: the actual retained decision event's actor/type/role/scope/reason,
+  time and state digests. Current membership never substitutes for history.
+- `can_export_audit`: a descriptive projection of the existing admin-only scoped
+  export permission; the export endpoint independently rechecks it.
+
+Feature-off, missing material or an unavailable decision clock preserve authorized
+historical packet/receipt reads while submission stays blocked. An unavailable
+clock has `evaluated_at: null` and explicit guidance; no current time is invented.
+Corrupt retained data remains unavailable. Bounded/screened summary omissions are
+marked rather than silently presented as complete evidence. Raw artifacts, plan
+bytes, grants, credentials and secret-bearing paths are excluded.
+
+## Submit deliberately and recover receipts
+
+Existing POST `/approvals/{id}/decision` still requires explicit outcome, nonblank
+screened reason, expected version, binding digest, live human authority and CSRF.
+It additionally accepts a bounded optional `confirmation` string. High/critical
+severity comes from the retained report and requires an exact server-selected
+phrase:
+
+| Outcome/model | Required phrase |
+| --- | --- |
+| Shared approval | `APPROVE <canonical_target>` |
+| Single-operator approval | `ACKNOWLEDGE <canonical_target>` |
+| Rejection | `REJECT <canonical_target>` |
+
+Missing/wrong confirmation fails before a decision or audit transition commits.
+Lower severities retain their existing behavior. Canonical no-go stays advisory
+and is evaluated separately by workflow policy; insufficient mandatory context
+and hard gate failures cannot be overridden by a reason or confirmation. Shared
+requesters remain excluded; no client field selects acknowledgement mode.
+
+Every mutation rechecks the full current packet, membership, policy, clock floors
+and earliest deadlines. After a conflict, connection loss or ambiguous response,
+read the exact approval ID before allowing another submission. A recorded
+version/generation is a durable receipt, not a request to replay the mutation.
+Existing CAS preserves one decision; no second generation is minted by recovery.
+The frontend must clear transient forms/eligibility on identity or scope changes.
+
+## Audit identity and trust boundary
+
+Decision transitions use a versioned screened decision-state projection for their
+before/after digests, independent of report bytes and binding identity. Creation
+can have no prior state; request replay does not create another generation.
+Legacy events are retained as recorded and identified without inventing missing
+state digests or historical roles. Existing application append-only SQL guards
+and admin-only scoped JSON export are reused; no audit subsystem or permission
+expansion is added. DB/host administrators remain trusted.
+
+The frontend must use current context before enabling controls and re-read after
+uncertainty; successful packet reads alone never authorize a later mutation.
+Actual React/browser qualification remains with the Story16.9 UI branch.

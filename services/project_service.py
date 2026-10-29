@@ -1684,13 +1684,22 @@ def list_project_memberships(project_id: int) -> list[MembershipView]:
         ]
 
 
-def authorize_automation_decision(context: DecisionContext) -> dict[str, Any]:
+def check_automation_decision(
+    context: DecisionContext, *, mutation: bool = False
+) -> dict[str, Any]:
+    """Read-safe current decision authority; the result is not a credential."""
     with authorized_session() as session:
-        _verified_principal(session, mutation=True)
+        _verified_principal(session, mutation=mutation)
         scope = guard_project(
-            session, context.project_id, context.workspace_id, "automation.decision"
+            session,
+            context.project_id,
+            context.workspace_id,
+            "automation.decision",
+            mutation=mutation,
         )
-        report = guard_report(session, context.report_id, "report.review")
+        report = guard_report(
+            session, context.report_id, "report.review", mutation=mutation
+        )
         if (
             scope is None
             or report is None
@@ -1725,13 +1734,20 @@ def authorize_automation_decision(context: DecisionContext) -> dict[str, Any]:
             "actor_principal_id": scope.principal.principal_id,
             "authorization_version": scope.authorization_version,
         }
+        return result
+
+
+def authorize_automation_decision(context: DecisionContext) -> dict[str, Any]:
+    """Authorize a mutation and retain the existing append-only attribution."""
+    with authorized_session() as session:
+        result = check_automation_decision(context, mutation=True)
         membership_repository.append_audit(
             session,
-            actor_principal_id=scope.principal.principal_id,
+            actor_principal_id=result["actor_principal_id"],
             project_id=context.project_id,
             workspace_id=context.workspace_id,
             object_id=context.object_id,
-            action=f"automation.{kind}",
+            action=f"automation.{result['decision_kind']}",
             after=result,
         )
         return result

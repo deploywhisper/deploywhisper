@@ -9,7 +9,9 @@ from __future__ import annotations
 from dataclasses import dataclass, replace
 from datetime import datetime, timezone, timedelta
 import json
-from typing import Callable, Literal
+from typing import Annotated, Callable, Literal
+
+from pydantic import Field, StrictInt, StrictStr, field_validator
 
 from sqlalchemy import select
 
@@ -20,7 +22,7 @@ from infra_automation.approval_eligibility import (
     evaluate_handoff,
     evaluate_decision,
 )
-from infra_automation.contracts import Digest, RegistryContract
+from infra_automation.contracts import ClosedModel, Digest, Identifier, RegistryContract
 from infra_automation.decisions import (
     DecisionBinding,
     binding_bytes,
@@ -29,7 +31,8 @@ from infra_automation.decisions import (
     instant,
 )
 from infra_automation.lifecycle import LifecycleError, MutationRequest, Positive
-from infra_automation.state import AuditActor
+from infra_automation.state import AuditActor, UTCText
+from infra_automation.review_contracts import ConfirmationRequirements
 from models.repositories import infra_automation_decisions as repository
 from models.repositories import infra_automation_runs as runs
 from models.tables import (
@@ -47,6 +50,121 @@ class DecisionRequest(MutationRequest):
     expected_version: Positive
     binding_digest: Digest
     outcome: Literal["approve", "reject"]
+    confirmation: Annotated[StrictStr, Field(max_length=256)] | None = None
+
+    @field_validator("confirmation")
+    @classmethod
+    def printable_confirmation(cls, value):
+        if value is not None:
+            if any(
+                ord(char) < 32 or 127 <= ord(char) <= 159 or char in "\u2028\u2029"
+                for char in value
+            ):
+                raise ValueError("Confirmation must be a bounded single line.")
+            value.encode("utf-8", errors="strict")
+        return value
+
+
+def confirmation_requirements(binding, report_payload, decision_kind):
+    """Derive nonsecret typed phrases from immutable severity and server mode."""
+    severity = report_payload.get("severity") if type(report_payload) is dict else None
+    if (
+        type(severity) is not str
+        or severity not in {"low", "medium", "high", "critical"}
+        or type(decision_kind) is not str
+        or decision_kind not in {"independent-approval", "acknowledgement"}
+    ):
+        raise LifecycleError(503)
+    binding = support.revalidate(binding, DecisionBinding)
+    required = report_payload["severity"] in {"high", "critical"}
+    approval = "ACKNOWLEDGE" if decision_kind == "acknowledgement" else "APPROVE"
+    return ConfirmationRequirements(
+        required=required,
+        approve_phrase=f"{approval} {binding.canonical_target}" if required else None,
+        reject_phrase=f"REJECT {binding.canonical_target}" if required else None,
+    )
+
+
+class DecisionAuditState(ClosedModel):
+    """Versioned screened receipt state; independent of binding/report identity."""
+
+    version: Annotated[StrictInt, Field(ge=1, le=1)] = 1
+    id: Identifier
+    run_id: Identifier
+    step_id: Identifier
+    project_id: Positive
+    workspace_id: Positive
+    generation: Positive
+    transition_version: Positive
+    status: Literal[
+        "pending", "approved", "rejected", "expired", "invalidated", "superseded"
+    ]
+    binding_digest: Digest
+    requested_by: Identifier
+    reviewer_id: Identifier | None
+    reviewer_authentication_version: Positive | None
+    reviewer_authorization_version: Positive | None
+    decision_kind: Literal["independent-approval", "acknowledgement"] | None
+    reason: Annotated[StrictStr, Field(max_length=2048)] | None
+    created_at: UTCText
+    deadline_at: UTCText
+    decided_at: UTCText | None
+    actor_principal_id: Identifier | None
+    actor_type: Literal["human", "service"] | None
+    actor_role: (
+        Literal[
+            "admin", "maintainer", "reviewer", "contributor", "read-only", "coordinator"
+        ]
+        | None
+    )
+
+
+def decision_audit_snapshot(row, *, actor=None):
+    """Capture actual immutable receipt facts, never current membership guesses."""
+    from infra_automation.artifact_intake import screen_metadata
+
+    try:
+        binding = DecisionBinding.model_validate_json(row.binding_bytes)
+        if (
+            binding_digest(binding) != row.binding_digest
+            or support.digest(row.report_bytes) != binding.report_bytes_digest
+        ):
+            raise ValueError
+        value = DecisionAuditState(
+            id=row.id,
+            run_id=row.run_id,
+            step_id=row.step_id,
+            project_id=row.project_id,
+            workspace_id=row.workspace_id,
+            generation=row.generation,
+            transition_version=row.version,
+            status=row.status,
+            binding_digest=row.binding_digest,
+            requested_by=row.requested_by,
+            reviewer_id=row.reviewer_id,
+            reviewer_authentication_version=row.reviewer_authentication_version,
+            reviewer_authorization_version=row.reviewer_authorization_version,
+            decision_kind=row.decision_kind,
+            reason=row.reason,
+            created_at=support.utc(row.created_at),
+            deadline_at=support.utc(row.deadline_at),
+            decided_at=support.utc(row.decided_at) if row.decided_at else None,
+            actor_principal_id=actor.principal_id if actor else None,
+            actor_type=actor.principal_type if actor else None,
+            actor_role=actor.role if actor else None,
+        )
+        screen_metadata(value.model_dump(mode="json"))
+        return value
+    except (ValueError, TypeError, AttributeError):
+        raise LifecycleError(503) from None
+
+
+def decision_audit_digest(row, *, actor=None):
+    return support.digest(
+        support.canonical(
+            decision_audit_snapshot(row, actor=actor).model_dump(mode="json")
+        )
+    )
 
 
 @dataclass(frozen=True)
@@ -590,6 +708,16 @@ class DecisionService:
                     InfraAutomationDecision.status == "pending",
                 )
             )
+            request_actor = AuditActor(
+                grant.principal.principal_id,
+                grant.principal.principal_type,
+                grant.role,
+            )
+            request_before_digest = (
+                decision_audit_digest(existing, actor=request_actor)
+                if existing is not None
+                else None
+            )
             if existing is None:
                 from services.infra_automation_engine_support import ensure_engine_actor
 
@@ -631,7 +759,8 @@ class DecisionService:
                 event_type="decision_gate_denied" if denied else "decision_requested",
                 target_id=row.id,
                 reason="Evidence-bound decision request",
-                after_digest=row.binding_digest,
+                before_digest=request_before_digest,
+                after_digest=decision_audit_digest(row, actor=request_actor),
             )
             response = _view(row)
         if denied:
@@ -686,6 +815,22 @@ class DecisionService:
                 raise LifecycleError(409)
             support.screened_label(request.reason)
             binding = DecisionBinding.model_validate_json(row.binding_bytes)
+            if (
+                support.digest(row.report_bytes) != binding.report_bytes_digest
+                or row.report_digest != binding.report_bytes_digest
+            ):
+                raise LifecycleError(503)
+            phrases = confirmation_requirements(
+                binding, json.loads(row.report_bytes), result["decision_kind"]
+            )
+            expected_phrase = (
+                phrases.approve_phrase
+                if request.outcome == "approve"
+                else phrases.reject_phrase
+            )
+            if phrases.required and request.confirmation != expected_phrase:
+                raise LifecycleError(422)
+            before_digest = decision_audit_digest(row)
             reasons = (
                 *_run_time_reasons(run, now, row),
                 *_expiry_reasons(binding, now),
@@ -805,7 +950,15 @@ class DecisionService:
                 else "decision_" + request.outcome,
                 target_id=row.id,
                 reason=request.reason,
-                after_digest=row.binding_digest,
+                before_digest=before_digest,
+                after_digest=decision_audit_digest(
+                    row,
+                    actor=AuditActor(
+                        grant.principal.principal_id,
+                        grant.principal.principal_type,
+                        grant.role,
+                    ),
+                ),
             )
             response = _view(row)
         # Invalidations commit before conflict is returned; no retry can revive them.

@@ -1,6 +1,6 @@
 # Story 16.9 backend-for-UI prerequisite proposal
 
-Status: proposed — contract decision pending; no implementation is claimed.
+Status: approved for implementation by the maintainer on 2026-10-29; implementation and verification in progress.
 Date: 2026-10-29. Baseline: `develop` at `5693c09` (merged Story 16.8 / PR203).
 
 ## Problem and boundary
@@ -17,7 +17,7 @@ React contract, and backend-for-UI behavior to ship in its own labeled PR. This
 proposal is the reviewable prerequisite for that decision. It does not change
 frozen workflow/receiver protocols, canonical reports, or product scope.
 
-## Proposed bounded contract
+## Approved bounded contract
 
 1. Add a scoped approval-by-ID read under the existing `/approvals` resource.
    It returns the exact retained generation/version, binding digest, historical
@@ -70,9 +70,10 @@ frozen workflow/receiver protocols, canonical reports, or product scope.
    events or infer historical roles from current memberships. Return descriptive
    audit-export availability so the UI can render only permitted export actions.
 
-These are proposed resource behaviors, not frozen response field names or an
-approved change to audit permissions. The contract decision is whether to adopt
-this boundary/confirmation behavior before its separate backend implementation.
+These resource behaviors and confirmation semantics were approved by the maintainer
+on 2026-10-29, with explicit direction to deliver this prerequisite first and then
+continue Story16.9. Exact typed field names are frozen by the separate reviewed
+backend implementation. Existing audit permissions remain unchanged.
 
 ## Required proof and handoff
 
@@ -97,3 +98,20 @@ this boundary/confirmation behavior before its separate backend implementation.
   1440/760 screenshots. No Vite-only or mocked-UI proof replaces that acceptance.
 
 UI implementation and browser acceptance remain entirely outstanding.
+
+## Implementation record
+
+The approved backend is implemented on its dedicated prerequisite branch. New
+closed contracts are in `infra_automation/review_contracts.py`; historical/current
+packet reads are in `services/infra_automation_review.py`; confirmation and state
+audit mutations reuse `services/infra_automation_decisions.py`. The project
+service shares a read-safe authority check while preserving mutation credentials
+and audit behavior. GET requires selected project scope, with optional workspace
+scope. Read context evaluation time is nullable only when current clock authority
+is unavailable; historical evidence remains readable without inventing a time.
+
+The frozen behavior and exact phrases are documented in
+`docs/infra-automation/approval-review.md`. Current verification/review/delivery
+is recorded in `docs/verification/infra-automation/16-9-backend-for-ui/results.md`.
+Full UI implementation and browser acceptance remain outstanding until this
+separately labeled backend support is integrated.
