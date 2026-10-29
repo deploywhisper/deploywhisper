@@ -1,6 +1,6 @@
 # Story 16.9 backend-for-UI prerequisite proposal
 
-Status: approved for implementation by the maintainer on 2026-10-29; implementation and verification in progress.
+Status: approved for implementation by the maintainer on 2026-10-29; implementation, independent review and local verification passed; separate PR integration pending.
 Date: 2026-10-29. Baseline: `develop` at `5693c09` (merged Story 16.8 / PR203).
 
 ## Problem and boundary
@@ -115,3 +115,5 @@ The frozen behavior and exact phrases are documented in
 is recorded in `docs/verification/infra-automation/16-9-backend-for-ui/results.md`.
 Full UI implementation and browser acceptance remain outstanding until this
 separately labeled backend support is integrated.
+
+Final backend verification passed: 1,271 root tests (2 skips), 693 affected-shard tests /2,279 subtests (1 skip), 72 focused tests /57 subtests and 2720 local-CI directory tests. Ruff formatting covers445 Python files; new service/model typing/security, compile and API typecheck passed.
