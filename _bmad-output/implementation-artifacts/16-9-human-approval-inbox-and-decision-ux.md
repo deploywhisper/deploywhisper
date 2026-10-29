@@ -87,13 +87,17 @@ Each packet is a bounded review unit under this stable story ID; split large pac
 
 ### Agent Model Used
 
-Documentation preparation only; implementation agent/version to be recorded when gates open.
+Codex — scoped entry/readiness assessment only; no implementation is claimed.
 
 ### Debug Log References
 
-Not executed: application, runner, receiver, Compose, browser, fault/load or production qualification. This preparation records obligations, not passing results.
+2026-10-29: inspected current story/project context, merged dependency evidence, UX/composition contracts and delivered approval/audit APIs. Independent native reviewer confirmed the backend-for-UI gaps. Documentation diff checks only; no application, Compose/browser, test-suite or production qualification run.
 
 ### Completion Notes List
+
+- 2026-10-29 entry reassessment: Stories16.7/16.8 are accepted/done; PR203 merged at `5693c09`. The original unresolved-dependency preparation notes are superseded by this evidence.
+- Current gate: the UI lacks a delivered fresh decision context, immutable review summary, pending decision-model label, effective deadline, by-ID receipt read and server confirmation contract. Existing audit/export is reused, but decision before/after digest semantics need qualification. The repository requires raising API/flow/validation changes before guessing and shipping backend-for-UI behavior in a separate labeled PR.
+- Prepared `spec-16-9-backend-for-ui-review-packet.md` and the dated scoped readiness report for the contract decision. Status remains backlog; no implementation or browser task is marked complete.
 
 - Preparation: refined. Status remains backlog. All implementation tasks unchecked; Story 16.0 and earlier dependency acceptance remain unresolved.
 - UI validation: Required at implementation; not executed.
@@ -101,4 +105,10 @@ Not executed: application, runner, receiver, Compose, browser, fault/load or pro
 
 ### File List
 
-This story specification only; planned ownership paths above are not implemented files.
+- `_bmad-output/implementation-artifacts/16-9-human-approval-inbox-and-decision-ux.md`
+- `_bmad-output/implementation-artifacts/spec-16-9-backend-for-ui-review-packet.md`
+- `_bmad-output/planning-artifacts/implementation-readiness-report-2026-10-29-story-16-9.md`
+
+### Change Log
+
+- 2026-10-29: Assessed delivered prerequisites and recorded the concrete backend-for-UI contract proposal before UI implementation; backlog status and all acceptance obligations are preserved.
