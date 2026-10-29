@@ -2384,7 +2384,7 @@ As a reviewer,
 I want to decide only against the current immutable evidence and policy packet,
 So that stale or unrelated approval cannot authorize an action.
 
-**Status:** review (bounded backend implementation and independent review complete; final serial local CI passed 2,670 tests).
+**Status:** done (formal BMad code review complete; six findings fixed, independent re-review clear, final serial local CI passed 2,688 tests).
 
 **Dedicated context:** [16-8-evidence-bound-decisions-and-freshness.md](../implementation-artifacts/16-8-evidence-bound-decisions-and-freshness.md). This prepared file owns specific GWT cases, bounded packets, actual reuse paths, migration limits and required verification; no task is reported complete.
 

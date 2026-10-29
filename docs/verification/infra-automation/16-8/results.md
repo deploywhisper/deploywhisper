@@ -79,3 +79,12 @@ separate BMad code-review workflow and Git Flow push/PR closure. No remote push,
 release, production collection or receiver execution is claimed. New decision
 modules have no scoped typing/security findings; existing repository-wide typing
 debt and the observed pre-existing worker teardown retry remain documented limits.
+
+## Formal code-review follow-up
+
+The subsequent BMad code review fixed six additional deadline/storage/recovery
+issues. Final verification passed 1,242 root tests (2 skips), 688 affected-shard
+tests /2,274 subtests (1 skip), 77 focused tests /154 subtests and all 2,688 local
+CI directory tests. Formatting covers 439 Python files. The final review record
+is [code-review.md](code-review.md). Earlier counts and retry chronology above
+remain historical dev-story evidence, superseded by this final review outcome.
