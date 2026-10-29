@@ -126,7 +126,7 @@ Verification logs for this execution are stored locally under `/tmp/story16-8-*`
 
 - Final validation: `./.venv/bin/python -m unittest discover -q` passed 1,194 tests (2 skips). Final affected pytest shard passed 688 tests /2,274 subtests (1 opt-in skip). Final focused matrix passed 59 tests /140 subtests. Serial `LLM_API_BASE=http://127.0.0.1:1 bash scripts/ci-local.sh` passed all 2,670 directory tests after the documented existing worker teardown retry.
 - Ruff lint, repo-wide Ruff formatting (438 files), scoped mypy/Bandit, compile checks, actual app health and generated API typecheck passed. Repo-wide mypy retains 312 findings versus 314 on the original archived baseline, with no introduced file/message findings.
-- Implementation is committed as `bc05965` on the compliant story branch. Remaining boundaries: production target/custody/collector/receiver support belongs to later stories; database/host administrators remain trusted. Formal BMad code-review and push/PR closure are next; this dev-story does not claim release qualification.
+- Implementation is committed as `bc05965` on the compliant story branch. Remaining boundaries: production target/custody/collector/receiver support belongs to later stories; database/host administrators remain trusted. The subsequent formal BMad review and push/PR closure are recorded below; this dev-story does not claim release qualification.
 
 - Formal BMad code review found six patchable issues, fixed with red/green regressions and independent re-review (77 focused tests /154 subtests). Details and triage are in `docs/verification/infra-automation/16-8/code-review.md`; final root smoke passed 1,242 tests (2 skips), the exact affected shard passed 688 tests /2,274 subtests (1 opt-in skip), and full serial local CI passed 2,688 directory tests. Ruff lint and formatting (439 files), scoped typing/security and API typecheck passed.
 
@@ -181,4 +181,4 @@ Verification logs for this execution are stored locally under `/tmp/story16-8-*`
 - Outcome: Approved. Six patch findings resolved; zero unresolved high/medium issues, zero deferred, three conditional findings dismissed with evidence.
 - Reviewed full branch diff from `b2e87ec` through `6238a59`; review corrections are in `15b8197`. Detailed findings, dismissals and actual verification results: `docs/verification/infra-automation/16-8/code-review.md`.
 - Current source preserves the pre-handoff contract and unavailable-by-default production ports. No deployment/receiver or release qualification is claimed. UI validation not applicable.
-- Git Flow branch is `feature/16-8-evidence-bound-decisions-freshness`; final remote/PR linkage follows this verified review outcome.
+- Git Flow branch `feature/16-8-evidence-bound-decisions-freshness` is committed and pushed to origin. [PR #203](https://github.com/deploywhisper/deploywhisper/pull/203) targets `develop`; no merge or release was performed.

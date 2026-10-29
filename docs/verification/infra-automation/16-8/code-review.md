@@ -71,7 +71,9 @@ Commands ran with `LLM_API_BASE=http://127.0.0.1:1` to exercise optional-narrati
 - Repo-wide mypy: 312 existing findings versus 314 on the original archived baseline; no introduced file/message findings.
 
 Review-fix commit: `15b8197`. Story/sprint status: **done**. The existing feature
-branch is compliant with Git Flow; remote push and PR linkage are being completed.
+branch is compliant with Git Flow and was committed and pushed to origin.
+[PR #203](https://github.com/deploywhisper/deploywhisper/pull/203) is open against `develop`.
+No merge or release was performed.
 The prior dev-story worker-teardown retry is retained in results.md; this formal
 review's root, affected shard and full local CI runs passed without a retry.
 
