@@ -59,3 +59,5 @@ Dedicated branch: `feature/16-9-approval-review-prerequisite`.
 This support must be independently reviewed and delivered in its own
 `backend-for-ui` PR before the Story16.9 UI branch. Final broad validation passed. The separately labeled PR and actual integration
 commit are recorded below once published.
+
+Integration: [PR204](https://github.com/deploywhisper/deploywhisper/pull/204) merged at `7ecec1f` after all GitHub CI/security/Docker/CodeQL/fuzz checks passed. The separate UI branch follows this accepted contract.

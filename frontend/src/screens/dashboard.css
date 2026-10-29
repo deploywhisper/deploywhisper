@@ -276,7 +276,7 @@
 }
 
 .dw-topbar .dw-project-trigger-name {
-  flex: 1;
+  flex: 1 1 auto;
   max-width: none;
   min-width: 0;
 }
@@ -960,4 +960,12 @@
     align-items: flex-start;
     flex-direction: column;
   }
+}
+
+/* Preserve fixed header geometry when a real environment label is long. */
+.dw-topbar .dw-project-trigger-env {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }

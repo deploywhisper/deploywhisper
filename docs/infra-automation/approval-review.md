@@ -76,6 +76,39 @@ state digests or historical roles. Existing application append-only SQL guards
 and admin-only scoped JSON export are reused; no audit subsystem or permission
 expansion is added. DB/host administrators remain trusted.
 
-The frontend must use current context before enabling controls and re-read after
-uncertainty; successful packet reads alone never authorize a later mutation.
-Actual React/browser qualification remains with the Story16.9 UI branch.
+## Review and decide in the browser
+
+Open **Infra Automation → Approvals** in the selected project. The inbox at
+`/infra-automation/approvals` filters the records already loaded; recorded
+pending status does not establish current eligibility. Load older pages when
+needed. Each review link identifies the exact run and approval in that scope.
+
+The review screen shows the retained action and report context before decision
+controls: authorization kind, registered target/payload, source, policy,
+confidence, blast radius, rollback, full fingerprints and absolute UTC deadlines.
+The permanent report link uses the protected report read. Screened or unavailable
+details are explicitly labeled. An eligible advisory no-go still requires a
+deliberate decision and reason; a hard eligibility failure disables both actions.
+
+Choose approve, reject or the server-selected acknowledgement action. The modal
+keeps keyboard focus inside, requires a reason and, for high/critical severity,
+the exact displayed confirmation phrase. Escape cancels confirmation and returns
+focus. Expiry preserves the local reason while disabling submission. Switching
+project or identity clears the local form. Single-operator acknowledgement
+explicitly makes no independent-review claim.
+
+The browser rechecks session and current packet before posting once. It never
+automatically retries a decision. After a lost response it disables another
+submission until an exact-ID read recovers current state. Concurrent decisions
+close stale confirmation and focus the existing receipt. A role revocation
+removes protected review content; unavailable reads cannot leave usable stale
+controls. The server still independently authorizes every request.
+
+Receipts show retained attribution and state digests. Authorized administrators
+can download bounded, paginated scoped audit JSON; its completeness flag reports
+whether all pages were read. Other accounts do not receive an export control.
+The export contains screened application audit data and shares the DB/host-admin
+trust limit described above.
+
+Browser evidence and disposable-fixture instructions are recorded in
+[Story16.9 verification](../verification/infra-automation/16-9/results.md).

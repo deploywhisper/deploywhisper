@@ -103,3 +103,166 @@ describe("automation resource adapters", () => {
     expect(fetcher).toHaveBeenCalledTimes(1);
   });
 });
+
+const digest = `sha256:${"a".repeat(64)}`;
+const stamp = "2026-10-29T00:00:00Z";
+const deadline = "2026-10-29T00:15:00Z";
+function approvalReview(): api.ApprovalReview {
+  const binding = {
+    version: 1, authorization_kind: "exact_plan" as const, workflow_id: "workflow-1", revision_id: "revision-1",
+    workflow_revision_digest: digest, input_digest: digest,
+    provenance: { version: 1, authorization_kind: "exact_plan" as const,
+      source: { version: 1, kind: "collected" as const, repository_id: "iac-repo", commit_sha: "a".repeat(40), collector_id: "collector", profile_digest: digest, screened_transport_digest: digest, redaction_version: 1, collected_at: stamp, source_deadline: deadline },
+      custody: { version: 1, handle: "custody-1", raw_local_digest: digest, expires_at: deadline } },
+    project_id: 7, workspace_id: 9, environment: "test", canonical_target: "target-1", receiver_id: "receiver-1",
+    pipeline_repository_id: "pipeline-repo", pipeline_workflow_id: "pipeline-workflow", pipeline_workflow_revision: "b".repeat(40),
+    report_id: 15, report_schema_version: "v2" as const, report_bytes_digest: digest, policy_version: 1,
+    policy_result: "passed" as const, policy_digest: digest, unit_waves_digest: digest, screened_artifact_digests: [digest],
+    redaction_version: 1, payload_digest: digest, evidence_deadline: deadline, approval_deadline: deadline, authorization_epoch: 1, restore_epoch: 1,
+  };
+  return {
+    version: 1,
+    receipt: { id: "approval-1", run_id: "run-1", step_id: "decision", project_id: 7, workspace_id: 9, requested_by: "requester-1", reviewer_id: null, decision_kind: null, generation: 1, version: 1, status: "pending", reason: null, binding, eligibility: { eligible: false, reasons: ["missing_approval"], limitations: ["No decision"], context_todos: ["Review evidence"] }, binding_digest: digest, deadline_at: deadline, created_at: stamp, decided_at: null },
+    report: { report_id: 15, schema_version: "v2", report_bytes_digest: digest, report_url: "/reports/15", recommendation: "go", severity: "low", should_block: false,
+      confidence: { score: 0.9, level: "high", context_score: 0.9, uncertainty: null, context_todos: [], partial_context: false, insufficient_context: false },
+      blast_radius: { direct_count: 1, transitive_count: 0, affected_services: ["storage"], unmatched_resource_count: 0, warning: null },
+      rollback: { complexity: "low", complexity_score: 1, explanation: "Restore the prior version", warning: null, steps: [{ order: 1, title: "Restore", estimated_minutes: 3, critical: true }] }, summary_limited: false },
+    action: { kind: "registered_github_handoff", authorization_kind: "exact_plan", canonical_target: "target-1", environment: "test", receiver_id: "receiver-1", pipeline_repository_id: "pipeline-repo", pipeline_workflow_id: "pipeline-workflow", pipeline_workflow_revision: "b".repeat(40), source_kind: "collected", source_repository_id: "iac-repo", source_commit_sha: "a".repeat(40), unit_waves_digest: digest, payload_digest: digest },
+    context: { status: "eligible", can_submit: true, evaluated_at: stamp, decision_kind: "independent-approval", confirmation: { required: false, approve_phrase: null, reject_phrase: null }, effective_deadline: deadline, deadlines: { run: deadline, evidence: deadline, approval: deadline, source: deadline, custody: deadline }, policy_status: "advisory", policy_passed: true, reasons: [], limitations: [], context_todos: [] },
+    attribution: null, can_export_audit: false, screening_limited: false,
+  };
+}
+
+describe("approval packet adapters", () => {
+  it("reads the exact selected packet with abortable no-store credentials", async () => {
+    const value = approvalReview();
+    const fetcher = response(value);
+    const signal = new AbortController().signal;
+    await expect(api.getApprovalReview("approval-1", scope, signal)).resolves.toEqual(value);
+    expect(fetcher).toHaveBeenCalledWith("/api/v1/infra-automation/approvals/approval-1?project_id=7&workspace_id=9", expect.objectContaining({ signal, credentials: "same-origin", cache: "no-store" }));
+  });
+
+  it("keeps paginated historical approvals separate from decision authority", async () => {
+    const value = { items: [approvalReview().receipt], cursor };
+    const fetcher = response(value);
+    await expect(api.getApprovals(scope, "cursor-1")).resolves.toEqual(value);
+    expect(fetcher.mock.calls[0][0]).toBe("/api/v1/infra-automation/approvals?project_id=7&workspace_id=9&limit=25&cursor=cursor-1");
+    expect(value.items[0].eligibility.eligible).toBe(false);
+  });
+
+  const malformed = [
+    (v: any) => { v.version = true; },
+    (v: any) => { v.receipt.id = "other-approval"; },
+    (v: any) => { v.receipt.project_id = 8; },
+    (v: any) => { v.receipt.binding.workspace_id = 12; },
+    (v: any) => { v.context.status = "automatic"; },
+    (v: any) => { v.context.status = { toString: "automatic" }; },
+    (v: any) => { v.context.future_floor = true; },
+    (v: any) => { v.context.deadlines.future = deadline; },
+    (v: any) => { v.receipt.deadline_at = "2026-10-29T00:16:00Z"; },
+    (v: any) => { v.context.can_submit = "true"; },
+    (v: any) => { v.context.decision_kind = "delegated"; },
+    (v: any) => { v.context.evaluated_at = null; },
+    (v: any) => { v.context.evaluated_at = deadline; },
+    (v: any) => { v.context.reasons = ["unknown_floor"]; },
+    (v: any) => { v.context.policy_passed = false; },
+    (v: any) => { v.report.report_url = "https://elsewhere.invalid/15"; },
+    (v: any) => { v.report.report_bytes_digest = `sha256:${"b".repeat(64)}`; },
+    (v: any) => { v.report.should_block = 0; },
+    (v: any) => { v.report.recommendation = "no_go"; },
+    (v: any) => { v.report.confidence.score = 1.1; },
+    (v: any) => { v.action.canonical_target = "other-target"; },
+    (v: any) => { v.report.severity = "high"; },
+  ];
+  it.each(malformed)("rejects malformed or contradictory action eligibility", async (change) => {
+    const value = approvalReview(); change(value); response(value);
+    await expect(api.getApprovalReview("approval-1", scope)).rejects.toMatchObject({ name: "ApiClientError", status: 422 });
+  });
+
+  it("accepts readable unavailable clock context without authorizing", async () => {
+    const value = approvalReview();
+    value.context = { ...value.context, status: "unavailable", evaluated_at: null, can_submit: false, reasons: ["invalid_clock"], limitations: ["Clock unavailable"], context_todos: ["Refresh"] };
+    response(value);
+    await expect(api.getApprovalReview("approval-1", scope)).resolves.toEqual(value);
+  });
+
+  it("preserves bounded multiline report context without accepting multiline decision inputs", async () => {
+    const value = approvalReview(); value.report.rollback.explanation = "Restore the prior version.\nVerify health.";
+    response(value);
+    await expect(api.getApprovalReview("approval-1", scope)).resolves.toEqual(value);
+    const fetcher = response(null);
+    await expect(api.submitApprovalDecision("approval-1", { expected_version: 1, binding_digest: digest, outcome: "reject", reason: "Review\nreason" }, "csrf")).rejects.toMatchObject({ status: 422 });
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+
+  it("recovers a recorded receipt with retained attribution even when material is unavailable", async () => {
+    const value = approvalReview();
+    value.receipt = { ...value.receipt, version: 2, status: "approved", reviewer_id: "reviewer-1", decision_kind: "independent-approval", reason: "Reviewed", decided_at: stamp };
+    value.context = { ...value.context, status: "decided", can_submit: false, reasons: ["decision_recorded"] };
+    value.attribution = { event_id: "event-1", principal_id: "reviewer-1", principal_type: "human", role: "reviewer", project_id: 7, workspace_id: 9, reason: "Reviewed", occurred_at: stamp, before_digest: digest, after_digest: digest, state_digest_version: 1 };
+    response(value);
+    await expect(api.getApprovalReview("approval-1", scope)).resolves.toEqual(value);
+    response({ ...value, attribution: null });
+    await expect(api.getApprovalReview("approval-1", scope)).rejects.toMatchObject({ status: 422 });
+  });
+
+  it("requires exact high-risk mode-sensitive confirmation before trusting eligible context", async () => {
+    const value = approvalReview(); value.report.severity = "critical";
+    value.context.decision_kind = "acknowledgement";
+    value.context.confirmation = { required: true, approve_phrase: "ACKNOWLEDGE target-1", reject_phrase: "REJECT target-1" };
+    response(value);
+    await expect(api.getApprovalReview("approval-1", scope)).resolves.toEqual(value);
+    response({ ...value, context: { ...value.context, confirmation: { ...value.context.confirmation, approve_phrase: "APPROVE target-1" } } });
+    await expect(api.getApprovalReview("approval-1", scope)).rejects.toMatchObject({ status: 422 });
+  });
+
+  it("submits a closed human decision once with transient CSRF and validates the receipt", async () => {
+    const value = approvalReview().receipt;
+    const result = { ...value, version: 2, status: "approved", reviewer_id: "reviewer-1", decision_kind: "independent-approval", reason: "Reviewed", decided_at: stamp };
+    const fetcher = response(result);
+    const payload = { expected_version: 1, binding_digest: digest, outcome: "approve" as const, reason: "Reviewed", confirmation: null };
+    await expect(api.submitApprovalDecision("approval-1", payload, "csrf-only-in-memory")).resolves.toEqual(result);
+    const [path, init] = fetcher.mock.calls[0];
+    expect(path).toBe("/api/v1/infra-automation/approvals/approval-1/decision");
+    expect(new Headers(init.headers).get("X-CSRF-Token")).toBe("csrf-only-in-memory");
+    expect(JSON.parse(init.body)).toEqual(payload);
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([{ reviewer: "admin" }, { actor: "admin" }, { decision_kind: "acknowledgement" }, { outcome: "bypass" }, { expected_version: true }, { reason: " " }, { confirmation: 1 }])("rejects actor/mode or malformed fields before transport", async (extra) => {
+    const fetcher = response(null);
+    await expect(api.submitApprovalDecision("approval-1", { expected_version: 1, binding_digest: digest, outcome: "approve", reason: "Reviewed", ...extra } as any, "csrf")).rejects.toMatchObject({ status: 422 });
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+
+
+  it("rejects missing CSRF and unsafe IDs/scopes before transport", async () => {
+    const fetcher = response(null);
+    await expect(api.submitApprovalDecision("approval-1", { expected_version: 1, binding_digest: digest, outcome: "approve", reason: "Reviewed" }, "")).rejects.toMatchObject({ status: 403 });
+    await expect(api.getApprovalReview("unsafe/id", scope)).rejects.toMatchObject({ status: 422 });
+    await expect(api.getApprovals({ projectId: 7, workspaceId: NaN })).rejects.toMatchObject({ status: 422 });
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+
+  it("rejects successful responses that fail to prove the requested decision transition", async () => {
+    const value = { ...approvalReview().receipt, version: 2, status: "rejected", reviewer_id: "reviewer-1", decision_kind: "independent-approval", reason: "Reviewed", decided_at: stamp };
+    response(value);
+    await expect(api.submitApprovalDecision("approval-1", { expected_version: 1, binding_digest: digest, outcome: "approve", reason: "Reviewed" }, "csrf")).rejects.toMatchObject({ status: 422 });
+  });
+
+  it("keeps conflicts observable without automatic replay", async () => {
+    const fetcher = vi.fn().mockResolvedValue(Response.json({ error: { code: "binding_conflict" } }, { status: 409 }));
+    vi.stubGlobal("fetch", fetcher);
+    await expect(api.submitApprovalDecision("approval-1", { expected_version: 1, binding_digest: digest, outcome: "reject", reason: "Reviewed" }, "csrf")).rejects.toMatchObject({ status: 409 });
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+
+  it("fetches scoped audit pages without broadening permission or draining cursors", async () => {
+    const event = { id: "audit-1", project_id: 7, workspace_id: 9, actor_principal_id: "reviewer-1", actor_type: "human", actor_role: "reviewer", event_type: "decision_approve", target_id: "approval-1", reason: "Reviewed", before_digest: digest, after_digest: digest, created_at: stamp };
+    const fetcher = response({ items: [event], cursor });
+    await expect(api.getAutomationAudit(scope)).resolves.toEqual({ items: [event], cursor });
+    expect(fetcher.mock.calls[0][0]).toBe("/api/v1/infra-automation/audit?project_id=7&workspace_id=9&limit=25");
+    response({ items: [{ ...event, project_id: 8 }], cursor });
+    await expect(api.getAutomationAudit(scope)).rejects.toMatchObject({ status: 422 });
+  });
+});

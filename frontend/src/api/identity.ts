@@ -30,8 +30,9 @@ export function safeAccountReturnTo(value: string | null | undefined): string {
   const positiveId = (item: string) => /^[1-9]\d*$/.test(item) && Number.isSafeInteger(Number(item));
   const report = /^\/reports\/([^/]+)$/.exec(path);
   const automation = /^\/infra-automation(?:\/(workflows|runs)(?:\/([^/]+))?)?$/.exec(path);
+  const approvals = path === "/infra-automation/approvals";
   const basic = /^(?:\/(?:history|settings|skills|incidents)?)$/.test(path);
-  if (!(basic || (report && positiveId(report[1])) || (automation && (!automation[2] || identifier.test(automation[2]))))) return fallback;
+  if (!(basic || approvals || (report && positiveId(report[1])) || (automation && (!automation[2] || identifier.test(automation[2]))))) return fallback;
   if (query !== undefined) {
     const seen = new Set<string>();
     if (!query || query.split("&").some((pair) => {
@@ -42,6 +43,7 @@ export function safeAccountReturnTo(value: string | null | undefined): string {
       seen.add(key);
       if (key === "project_id" || key === "workspace_id") return !positiveId(item);
       if (path === "/infra-automation" && key === "view") return item !== "runs" && item !== "workflows";
+      if (automation?.[1] === "runs" && automation[2] && key === "approval_id") return !identifier.test(item);
       if (report && key === "private") return item !== "1";
       if (report && key === "automation_run") return !identifier.test(item);
       return true;

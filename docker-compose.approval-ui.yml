@@ -1,0 +1,52 @@
+# Disposable Story16.9 browser proof; requires exclusive localhost:8080.
+# Never mount operator data. The guarded launcher requires nonroot tmpfs storage.
+# Shared lane is the default. Single-operator uses a fresh project/container/tmpfs:
+# APPROVAL_UI_DECISION_MODE=single-operator docker compose -f ... up -d --build
+# Always down this exact disposable project before switching profiles.
+name: deploywhisper-story16-9
+services:
+  deploywhisper:
+    image: deploywhisper-story16-9:ui-proof
+    build:
+      context: .
+      target: runtime
+    user: appuser
+    working_dir: /app
+    command: [python, /tmp/approval_fixture.py, --serve]
+    init: true
+    restart: "no"
+    ports:
+      - "127.0.0.1:8080:8080"
+    environment:
+      APPROVAL_UI_DISPOSABLE: "1"
+      APP_HOST: 0.0.0.0
+      APP_PORT: "8080"
+      APP_BASE_URL: http://localhost:8080
+      DATABASE_URL: sqlite:////app/data/deploywhisper.db
+      DEPLOYWHISPER_IDENTITY_PROFILE: local-development
+      DEPLOYWHISPER_IDENTITY_ORIGIN: http://localhost:8080
+      DEPLOYWHISPER_AUTHORIZATION_PROFILE: verified
+      DEPLOYWHISPER_IDENTITY_DECISION_MODE: ${APPROVAL_UI_DECISION_MODE:-shared}
+      NARRATOR_ENABLED: "false"
+      LLM_PROVIDER: ollama
+      LLM_API_BASE: http://127.0.0.1:9
+      LLM_API_KEY: ""
+      OPENAI_API_KEY: ""
+      ANTHROPIC_API_KEY: ""
+      GEMINI_API_KEY: ""
+      GOOGLE_API_KEY: ""
+      OPENROUTER_API_KEY: ""
+      GROQ_API_KEY: ""
+      XAI_API_KEY: ""
+      DEPLOYWHISPER_SHARE_TOKEN: ""
+      LOG_LEVEL: WARNING
+    # Dockerfile USER is symbolic appuser, created with useradd --system; the
+    # file does not freeze a numeric UID/GID. Do not guess IDs. mode1777 allows
+    # that nonroot image user to create files with the launcher's umask0077.
+    tmpfs:
+      - /app/data:rw,noexec,nosuid,nodev,mode=1777,size=256m
+    volumes:
+      - type: bind
+        source: ./scripts/approval_ui_fixture.py
+        target: /tmp/approval_fixture.py
+        read_only: true

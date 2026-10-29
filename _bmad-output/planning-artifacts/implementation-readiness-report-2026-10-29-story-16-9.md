@@ -1,6 +1,6 @@
 ---
 assessmentScope: Story 16.9 only
-status: approved-backend-prerequisite-in-progress
+status: implemented-awaiting-story-review
 ---
 # Story 16.9 scoped implementation readiness
 
@@ -56,3 +56,35 @@ gate is closed. Deliver and independently review the backend support in its own
 assessment remains the evidence for why this prerequisite exists; no new
 permission question is needed for the approved work. Full UI/browser acceptance
 and implementation are still outstanding.
+
+## Backend prerequisite integrated — 2026-10-29
+
+[PR204](https://github.com/deploywhisper/deploywhisper/pull/204), labeled
+`backend-for-ui`, merged into develop as `7ecec1f`. All GitHub CI/security/Docker/
+CodeQL/fuzz checks passed. Local proof: 1,271 root tests (2 skips), 693 affected
+shard tests /2,279 subtests (1 skip), 72 focused tests /57 subtests and all2,720
+local-CI directory tests. Independent packet and mutation/audit reviews are clear.
+The actual immutable review/confirmation contract is available in
+`docs/infra-automation/approval-review.md` and generated API declarations.
+
+The previously missing contract gate is satisfied. Proceed with the maintainer's
+already-authorized Story16.9 UI on its separate feature branch. UI/browser proof
+is still required; backend qualification does not claim it has run.
+
+
+## UI implementation qualified for story review — 2026-10-29
+
+The separate UI branch implements the approved packet/confirmation contract and
+all six acceptance criteria. Actual composed shared7 and one-human single1
+journeys, keyboard/serious-critical axe checks, both-width screenshots and
+independent source review pass. Frontend241 tests/typecheck/build, root1,278-run
+smoke, the697-pass exact shard/2,279 subtests and all10 local-CI Python directories
+(2,724 run) pass. The existing browser lane passes15 active tests after correcting
+its Docker helper's Compose project/file environment; the initial combined CI
+command and recovered browser result are recorded separately and accurately.
+The original operator container/image/volume were restored healthy.
+
+See [UI verification](../../docs/verification/infra-automation/16-9/results.md)
+for actual commands, exclusions, corrections, screenshots, trust limits and
+remaining production collector/receiver scope. Story/sprint status is `review`;
+formal `bmad-code-review` is the next workflow, rather than release acceptance.

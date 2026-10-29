@@ -38,6 +38,7 @@ import { IdentityProvider, useIdentity } from "./screens/IdentitySession";
 import { AccountAccessScreen } from "./screens/AccountAccess";
 import { InfraAutomationScreen, InfraWorkflowScreen } from "./screens/InfraAutomation";
 import { InfraAutomationRunScreen } from "./screens/InfraAutomationRun";
+import { InfraAutomationApprovalsScreen } from "./screens/InfraAutomationApprovals";
 
 const queryClient = new QueryClient();
 
@@ -48,6 +49,7 @@ function App() {
       <Routes>
         <Route element={<AccountAccessScreen />} path="/settings/account" />
         <Route element={<InfraAutomationScreen />} path="/infra-automation" />
+        <Route element={<InfraAutomationApprovalsScreen />} path="/infra-automation/approvals" />
         <Route element={<InfraWorkflowScreen />} path="/infra-automation/workflows/:workflowId" />
         <Route element={<InfraAutomationRunScreen />} path="/infra-automation/runs/:runId" />
         <Route element={<ComponentGallery />} path="/dev/components" />

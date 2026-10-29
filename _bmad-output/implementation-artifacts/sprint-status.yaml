@@ -219,7 +219,7 @@ development_status:
   16-6-uploaded-artifact-preflight-and-report-linkage: done
   16-7-workflow-editor-and-run-history-ui: done
   16-8-evidence-bound-decisions-and-freshness: done
-  16-9-human-approval-inbox-and-decision-ux: backlog
+  16-9-human-approval-inbox-and-decision-ux: review
   16-10-registered-targets-outbox-grants-and-locks: backlog
   16-11-github-receiver-and-outcome-reconciliation: backlog
   16-12-runner-enrollment-and-attempt-protocol: backlog
