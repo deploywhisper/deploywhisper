@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from infra_automation.review_contracts import (
+    ApprovalReviewPacket as AutomationReviewPacket,
+)
 from infra_automation.decisions import DecisionBinding as AutomationDecisionBinding
 from infra_automation.approval_eligibility import (
     EligibilityResult as AutomationEligibilityResult,
@@ -3060,3 +3063,17 @@ class AutomationApprovalResponse(AutomationClosedModel):
 class AutomationApprovalListResponse(AutomationClosedModel):
     data: AutomationApprovalPage
     meta: AutomationMeta
+
+
+class AutomationApprovalReviewResponse(AutomationClosedModel):
+    data: AutomationReviewPacket
+    meta: AutomationMeta
+
+    @field_validator("data", mode="before")
+    @classmethod
+    def review_packet_from_wire(cls, value: Any):
+        if isinstance(value, dict):
+            return AutomationReviewPacket.model_validate_json(
+                json.dumps(value, allow_nan=False)
+            )
+        return value

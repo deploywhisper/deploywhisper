@@ -1154,6 +1154,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/infra-automation/approvals/{approval_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Approval */
+        get: operations["get_approval_api_v1_infra_automation_approvals__approval_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/infra-automation/approvals/{approval_id}/decision": {
         parameters: {
             query?: never;
@@ -2205,6 +2222,225 @@ export interface components {
             data: components["schemas"]["AnalysisShareConfigData"];
             meta: components["schemas"]["ResourceMetaPayload"];
         };
+        /** ApprovalActionSummary */
+        ApprovalActionSummary: {
+            /**
+             * Kind
+             * @default registered_github_handoff
+             * @constant
+             */
+            kind: "registered_github_handoff";
+            /**
+             * Authorization Kind
+             * @enum {string}
+             */
+            authorization_kind: "advisory_request" | "exact_plan";
+            /** Canonical Target */
+            canonical_target: string;
+            /** Environment */
+            environment: string;
+            /** Receiver Id */
+            receiver_id: string;
+            /** Pipeline Repository Id */
+            pipeline_repository_id: string;
+            /** Pipeline Workflow Id */
+            pipeline_workflow_id: string;
+            /** Pipeline Workflow Revision */
+            pipeline_workflow_revision: string;
+            /**
+             * Source Kind
+             * @enum {string}
+             */
+            source_kind: "uploaded" | "collected";
+            /** Source Repository Id */
+            source_repository_id: string | null;
+            /** Source Commit Sha */
+            source_commit_sha: string | null;
+            /** Unit Waves Digest */
+            unit_waves_digest: string;
+            /** Payload Digest */
+            payload_digest: string;
+        };
+        /** ApprovalAttribution */
+        ApprovalAttribution: {
+            /** Event Id */
+            event_id: string;
+            /** Principal Id */
+            principal_id: string;
+            /**
+             * Principal Type
+             * @enum {string}
+             */
+            principal_type: "human" | "service";
+            /**
+             * Role
+             * @enum {string}
+             */
+            role: "admin" | "maintainer" | "reviewer" | "contributor" | "read-only" | "coordinator";
+            /** Project Id */
+            project_id: number;
+            /** Workspace Id */
+            workspace_id: number;
+            /** Reason */
+            reason: string;
+            /** Occurred At */
+            occurred_at: string;
+            /** Before Digest */
+            before_digest: string | null;
+            /** After Digest */
+            after_digest: string;
+            /** State Digest Version */
+            state_digest_version: 1 | null;
+        };
+        /** ApprovalDeadlines */
+        ApprovalDeadlines: {
+            /** Run */
+            run: string;
+            /** Evidence */
+            evidence: string;
+            /** Approval */
+            approval: string;
+            /** Source */
+            source: string | null;
+            /** Custody */
+            custody: string | null;
+        };
+        /** ApprovalDecisionContext */
+        ApprovalDecisionContext: {
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "eligible" | "blocked" | "unavailable" | "decided";
+            /** Can Submit */
+            can_submit: boolean;
+            /** Evaluated At */
+            evaluated_at: string | null;
+            /** Decision Kind */
+            decision_kind: ("independent-approval" | "acknowledgement") | null;
+            confirmation: components["schemas"]["ConfirmationRequirements"];
+            /** Effective Deadline */
+            effective_deadline: string;
+            deadlines: components["schemas"]["ApprovalDeadlines"];
+            /** Policy Status */
+            policy_status?: ("advisory" | "warn" | "soft-block" | "hard-block") | null;
+            /** Policy Passed */
+            policy_passed?: boolean | null;
+            /**
+             * Reasons
+             * @default []
+             */
+            reasons: string[];
+            /**
+             * Limitations
+             * @default []
+             */
+            limitations: string[];
+            /**
+             * Context Todos
+             * @default []
+             */
+            context_todos: string[];
+        };
+        /** ApprovalReceipt */
+        ApprovalReceipt: {
+            /** Id */
+            id: string;
+            /** Run Id */
+            run_id: string;
+            /** Step Id */
+            step_id: string;
+            /** Project Id */
+            project_id: number;
+            /** Workspace Id */
+            workspace_id: number;
+            /** Requested By */
+            requested_by: string;
+            /** Reviewer Id */
+            reviewer_id: string | null;
+            /** Decision Kind */
+            decision_kind: ("independent-approval" | "acknowledgement") | null;
+            /** Generation */
+            generation: number;
+            /** Version */
+            version: number;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "pending" | "approved" | "rejected" | "invalidated" | "expired" | "superseded";
+            /** Reason */
+            reason: string | null;
+            binding: components["schemas"]["DecisionBinding"];
+            eligibility: components["schemas"]["EligibilityResult"];
+            /** Binding Digest */
+            binding_digest: string;
+            /** Deadline At */
+            deadline_at: string;
+            /** Created At */
+            created_at: string;
+            /** Decided At */
+            decided_at: string | null;
+        };
+        /** ApprovalReportSummary */
+        ApprovalReportSummary: {
+            /** Report Id */
+            report_id: number;
+            /**
+             * Schema Version
+             * @constant
+             */
+            schema_version: "v2";
+            /** Report Bytes Digest */
+            report_bytes_digest: string;
+            /** Report Url */
+            report_url: string;
+            /**
+             * Recommendation
+             * @enum {string}
+             */
+            recommendation: "go" | "caution" | "no-go";
+            /**
+             * Severity
+             * @enum {string}
+             */
+            severity: "low" | "medium" | "high" | "critical";
+            /**
+             * Should Block
+             * @default false
+             * @constant
+             */
+            should_block: false;
+            confidence: components["schemas"]["ReviewConfidence"];
+            blast_radius: components["schemas"]["ReviewBlastRadius"];
+            rollback: components["schemas"]["ReviewRollback"];
+            /**
+             * Summary Limited
+             * @default false
+             */
+            summary_limited: boolean;
+        };
+        /** ApprovalReviewPacket */
+        ApprovalReviewPacket: {
+            /**
+             * Version
+             * @default 1
+             * @constant
+             */
+            version: 1;
+            receipt: components["schemas"]["ApprovalReceipt"];
+            report: components["schemas"]["ApprovalReportSummary"];
+            action: components["schemas"]["ApprovalActionSummary"];
+            context: components["schemas"]["ApprovalDecisionContext"];
+            attribution: components["schemas"]["ApprovalAttribution"] | null;
+            /** Can Export Audit */
+            can_export_audit: boolean;
+            /**
+             * Screening Limited
+             * @default false
+             */
+            screening_limited: boolean;
+        };
         /** ArchiveWorkflowRequest */
         ArchiveWorkflowRequest: {
             /** Reason */
@@ -2367,6 +2603,11 @@ export interface components {
         /** AutomationApprovalResponse */
         AutomationApprovalResponse: {
             data: components["schemas"]["AutomationApprovalView"];
+            meta: components["schemas"]["AutomationMeta"];
+        };
+        /** AutomationApprovalReviewResponse */
+        AutomationApprovalReviewResponse: {
+            data: components["schemas"]["ApprovalReviewPacket"];
             meta: components["schemas"]["AutomationMeta"];
         };
         /** AutomationApprovalView */
@@ -2982,6 +3223,15 @@ export interface components {
              */
             uncertainty_drivers?: string[];
         };
+        /** ConfirmationRequirements */
+        ConfirmationRequirements: {
+            /** Required */
+            required: boolean;
+            /** Approve Phrase */
+            approve_phrase?: string | null;
+            /** Reject Phrase */
+            reject_phrase?: string | null;
+        };
         /** ContextCompletenessData */
         ContextCompletenessData: {
             /**
@@ -3410,6 +3660,8 @@ export interface components {
              * @enum {string}
              */
             outcome: "approve" | "reject";
+            /** Confirmation */
+            confirmation?: string | null;
         };
         /** DeploymentOutcomeCreateRequest */
         DeploymentOutcomeCreateRequest: {
@@ -5750,6 +6002,75 @@ export interface components {
             expected_version: number;
             /** Revision Id */
             revision_id?: string | null;
+        };
+        /** ReviewBlastRadius */
+        ReviewBlastRadius: {
+            /** Direct Count */
+            direct_count: number;
+            /** Transitive Count */
+            transitive_count: number;
+            /**
+             * Affected Services
+             * @default []
+             */
+            affected_services: string[];
+            /** Unmatched Resource Count */
+            unmatched_resource_count: number;
+            /** Warning */
+            warning?: string | null;
+        };
+        /** ReviewConfidence */
+        ReviewConfidence: {
+            /** Score */
+            score: number;
+            /**
+             * Level
+             * @enum {string}
+             */
+            level: "low" | "medium" | "high";
+            /** Context Score */
+            context_score: number;
+            /** Uncertainty */
+            uncertainty?: string | null;
+            /**
+             * Context Todos
+             * @default []
+             */
+            context_todos: string[];
+            /** Partial Context */
+            partial_context: boolean;
+            /** Insufficient Context */
+            insufficient_context: boolean;
+        };
+        /** ReviewRollback */
+        ReviewRollback: {
+            /**
+             * Complexity
+             * @enum {string}
+             */
+            complexity: "low" | "medium" | "high";
+            /** Complexity Score */
+            complexity_score: number;
+            /** Explanation */
+            explanation: string;
+            /** Warning */
+            warning?: string | null;
+            /**
+             * Steps
+             * @default []
+             */
+            steps: components["schemas"]["ReviewRollbackStep"][];
+        };
+        /** ReviewRollbackStep */
+        ReviewRollbackStep: {
+            /** Order */
+            order: number;
+            /** Title */
+            title: string;
+            /** Estimated Minutes */
+            estimated_minutes: number;
+            /** Critical */
+            critical: boolean;
         };
         /** RiskContributorData */
         RiskContributorData: {
@@ -12454,6 +12775,85 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AutomationApprovalListResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+        };
+    };
+    get_approval_api_v1_infra_automation_approvals__approval_id__get: {
+        parameters: {
+            query: {
+                project_id: number;
+                workspace_id?: number | null;
+            };
+            header?: never;
+            path: {
+                approval_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationApprovalReviewResponse"];
                 };
             };
             /** @description Unauthorized */
