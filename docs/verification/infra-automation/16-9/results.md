@@ -208,3 +208,9 @@ fresh1440/760 captures, including `freshness-window-*`. The earlier implementati
 counts above remain historical evidence. The final root smoke passes (1,278 run, two skips); Git Flow
 closure is recorded in the review report. Production Python backend and fixture
 launcher are unchanged; their earlier full directory/shard proofs remain applicable.
+
+
+Review closure: all eight findings resolved, story/sprint done, branch
+`feature/16-9-human-approval-inbox-decision-ux` pushed to origin and
+[PR205](https://github.com/deploywhisper/deploywhisper/pull/205) opened to develop.
+The PR remains subject to its GitHub checks and maintainer approval/merge.

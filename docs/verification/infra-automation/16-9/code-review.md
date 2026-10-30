@@ -98,7 +98,8 @@ All profiles are disposed before the original operator is restored.
 ## Git Flow closure
 
 The branch is a dedicated `feature/*` child of the accepted develop baseline.
-All eight findings are resolved and validation is complete. The review correction
-and closeout records are committed on this branch; remote push and the PR to
-develop are the final workflow closure steps. The PR URL is recorded in the
-completion message and closeout metadata.
+All eight findings are resolved and validation is complete. Review correction
+`da41287` is committed on this existing compliant branch and pushed to origin.
+[PR205](https://github.com/deploywhisper/deploywhisper/pull/205) targets `develop`.
+The story/sprint are done. Maintainer PR approval/merge and later production
+qualification remain separate; this review does not merge or deploy the UI.

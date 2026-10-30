@@ -202,7 +202,7 @@ Codex — BMad dev-story with bounded native API, screen, browser-fixture and in
 
 ### Change Log
 
-- 2026-10-30: Completed layered code review, fixed eight findings with regressions, verified all current checks, restored the operator runtime and marked story/sprint done; Git Flow push/PR closure follows.
+- 2026-10-30: Completed layered code review, fixed eight findings with regressions, verified all current checks, restored the operator runtime and marked story/sprint done; published [PR205](https://github.com/deploywhisper/deploywhisper/pull/205) to develop.
 - 2026-10-29: Delivered and merged the approved backend prerequisite separately as PR204, then implemented the scoped approval inbox/review/confirmation/receipt/audit UI, strict adapters, protected return/report navigation, disposable browser proof and documentation. Completed full Python gates, corrected composed browser regression, both approval profiles, visual/a11y proof and exact operator restoration; status review.
 
 
@@ -216,8 +216,8 @@ Codex — BMad dev-story with bounded native API, screen, browser-fixture and in
   acceptance and edge paths are clear. Details and exact commands are in
   `docs/verification/infra-automation/16-9/code-review.md`.
 - Git Flow branch: `feature/16-9-human-approval-inbox-decision-ux`, based on accepted
-  develop prerequisite `7ecec1f`; review corrections are committed and the branch
-  is pushed with a PR targeting develop as the final closure action. Maintainer
+  develop prerequisite `7ecec1f`; review correction `da41287` is committed and the
+  branch is pushed to origin with [PR205](https://github.com/deploywhisper/deploywhisper/pull/205) targeting develop. Maintainer
   PR approval/merge remains distinct from this automated story review.
 - BMad help: assess/refine Story16.10 after16.9 integration; production target,
   custody/registry and receiver qualification remains with its owning stories.
