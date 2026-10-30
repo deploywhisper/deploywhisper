@@ -1,6 +1,6 @@
 ---
 assessmentScope: Story 16.9 only
-status: implemented-awaiting-story-review
+status: reviewed-ready-for-integration
 ---
 # Story 16.9 scoped implementation readiness
 
@@ -88,3 +88,13 @@ See [UI verification](../../docs/verification/infra-automation/16-9/results.md)
 for actual commands, exclusions, corrections, screenshots, trust limits and
 remaining production collector/receiver scope. Story/sprint status is `review`;
 formal `bmad-code-review` is the next workflow, rather than release acceptance.
+
+
+## Code review completed — 2026-10-30
+
+Layered review resolved eight findings with no open or deferred item. Final
+frontend256 tests/type/build, shared11/single1/existing15 composed journeys,
+keyboard/axe/visual94 proof, Ruff/format447 and root1,278-run/two-skip smoke pass.
+See `docs/verification/infra-automation/16-9/code-review.md`. Story/sprint are done;
+feature-branch push/PR to develop closes the workflow, with maintainer integration
+separate. Production collector/receiver qualification remains out of scope.

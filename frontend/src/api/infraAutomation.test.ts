@@ -133,6 +133,14 @@ function approvalReview(): api.ApprovalReview {
   };
 }
 
+function decidedReview(status: "approved" | "rejected" = "approved"): api.ApprovalReview {
+  const value = approvalReview();
+  value.receipt = { ...value.receipt, version: 2, status, reviewer_id: "reviewer-1", decision_kind: "independent-approval", reason: "Reviewed", decided_at: stamp };
+  value.context = { ...value.context, status: "decided", can_submit: false, reasons: ["decision_recorded"] };
+  value.attribution = { event_id: "event-1", principal_id: "reviewer-1", principal_type: "human", role: "reviewer", project_id: 7, workspace_id: 9, reason: "Reviewed", occurred_at: stamp, before_digest: digest, after_digest: digest, state_digest_version: 1 };
+  return value;
+}
+
 describe("approval packet adapters", () => {
   it("reads the exact selected packet with abortable no-store credentials", async () => {
     const value = approvalReview();
@@ -204,6 +212,36 @@ describe("approval packet adapters", () => {
     await expect(api.getApprovalReview("approval-1", scope)).resolves.toEqual(value);
     response({ ...value, attribution: null });
     await expect(api.getApprovalReview("approval-1", scope)).rejects.toMatchObject({ status: 422 });
+  });
+
+  it.each(["approved", "rejected"] as const)("rejects service attribution for a human %s receipt even when the principal matches", async (status) => {
+    const value = decidedReview(status);
+    value.attribution = { ...value.attribution!, principal_type: "service", role: "coordinator" };
+    response(value);
+    await expect(api.getApprovalReview("approval-1", scope)).rejects.toMatchObject({ status: 422 });
+  });
+
+  it.each(["approved", "rejected"] as const)("rejects mismatched human attribution for a %s receipt", async (status) => {
+    const value = decidedReview(status);
+    value.attribution = { ...value.attribution!, principal_id: "other-reviewer" };
+    response(value);
+    await expect(api.getApprovalReview("approval-1", scope)).rejects.toMatchObject({ status: 422 });
+  });
+
+  it.each(["coordinator", "unknown"])("rejects a human decision attribution with unsupported role %s", async (role) => {
+    const value = decidedReview();
+    (value.attribution as any).role = role;
+    response(value);
+    await expect(api.getApprovalReview("approval-1", scope)).rejects.toMatchObject({ status: 422 });
+  });
+
+  it.each([false, true])("preserves separately screened reasons and audit timestamps for retained attribution (legacy: %s)", async (legacy) => {
+    const value = decidedReview();
+    value.receipt.reason = "a".repeat(600);
+    value.attribution = { ...value.attribution!, reason: `${"a".repeat(509)}…`, occurred_at: "2026-10-29T00:00:01Z", before_digest: legacy ? null : digest, state_digest_version: legacy ? null : 1 };
+    value.screening_limited = true;
+    response(value);
+    await expect(api.getApprovalReview("approval-1", scope)).resolves.toEqual(value);
   });
 
   it("requires exact high-risk mode-sensitive confirmation before trusting eligible context", async () => {

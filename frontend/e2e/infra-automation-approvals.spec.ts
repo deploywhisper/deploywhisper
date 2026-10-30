@@ -103,7 +103,20 @@ const reviewRoute = (item: Case) => `/infra-automation/runs/${item.runId}?projec
 const approvalPath = (item: Case) => `/api/v1/infra-automation/approvals/${item.approvalId}`;
 const approvalReadPath = (item: Case) => `${approvalPath(item)}?project_id=${item.projectId}&workspace_id=${item.workspaceId}`;
 
+// The real identity service allows five sign-ins per account/minute. Keep the
+// proof below that boundary rather than disabling or bypassing the limiter.
+const signInTimes = new Map<string, number[]>();
+async function paceSignIn(account: Account): Promise<void> {
+  const now = Date.now(), recent = (signInTimes.get(account.username) ?? []).filter((time) => now - time < 61_000);
+  if (recent.length >= 5) {
+    await new Promise((resolve) => setTimeout(resolve, Math.min(59_000, Math.max(1, 61_000 - (now - recent[0])))));
+    return paceSignIn(account);
+  }
+  signInTimes.set(account.username, [...recent, now]);
+}
+
 async function login(page: Page, account: Account, returnTo: string): Promise<string> {
+  await paceSignIn(account);
   await page.goto(`/settings/account?returnTo=${encodeURIComponent(returnTo)}`);
   const username = page.getByLabel("Username", { exact: true });
   await expect(username).toBeEnabled();
@@ -124,6 +137,7 @@ async function login(page: Page, account: Account, returnTo: string): Promise<st
 }
 
 async function apiLogin(request: APIRequestContext, account: Account): Promise<string> {
+  await paceSignIn(account);
   const response = await request.post(`${origin}/api/v1/auth/login`, { headers: { Origin: origin }, data: { username: account.username, password: account.password } });
   expect(response.status()).toBe(200);
   return (await response.json()).data.csrf_token as string;
@@ -205,7 +219,10 @@ test.describe("disposable human approval decision journeys", () => {
     const missingCsrf = await context.request.post(`${approvalPath(high)}/decision`, { headers: { Origin: origin }, data: { expected_version: current.receipt.version, binding_digest: current.receipt.binding_digest, outcome: "approve", reason: "Missing mutation credential must deny", confirmation: "APPROVE ui-proof-target" } });
     expect(missingCsrf.status()).toBe(403);
     await expect(page.getByRole("link", { name: /permanent.*briefing|report/i }).first()).toHaveAttribute("href", new RegExp(`/reports/${high.reportId}`));
+    for (const label of ["Collected at", "Source verification", "Redaction version", "Evidence deadline", "Approval expiry", "Remaining validity"]) await expect(page.getByText(label, { exact: true })).toBeVisible();
+    await expect(page.getByText(/^\d+ minutes? \d+ seconds? remaining$/)).toBeVisible();
     await screenshot(page, "review-high");
+    await screenshot(page, "freshness-window", page.getByText("Remaining validity", { exact: true }));
     await screenshot(page, "evidence-high", page.getByRole("heading", { name: "Confidence and context", exact: true }));
     await screenshot(page, "decision-controls-high", page.getByRole("button", { name: "Approve handoff", exact: true }));
     await page.getByRole("heading", { name: "Review approval", exact: true }).scrollIntoViewIfNeeded();
@@ -244,6 +261,41 @@ test.describe("disposable human approval decision journeys", () => {
     expect((await packet(context.request, noGo)).receipt.status).toBe("approved");
   });
 
+  test("shared expiry during confirmation preserves reason and disables stale submission", async ({ page, context }) => {
+    test.skip(fixture?.profile !== "shared", "Shared decision profile.");
+    const item = newCase("expiry");
+    await login(page, fixture!.accounts.reviewer2, reviewRoute(item));
+    const { dialog, confirm } = await openDecision(page, "approval");
+    const reason = "Preserve this local reason while evidence expires";
+    await dialog.getByLabel("Reason", { exact: true }).fill(reason);
+    await expect(confirm).toBeEnabled();
+    await expect.poll(async () => (await packet(context.request, item)).context.can_submit, { timeout: 40_000, intervals: [1000] }).toBe(false);
+    await expect(confirm).toBeDisabled({ timeout: 15_000 });
+    await expect(dialog.getByLabel("Reason", { exact: true })).toHaveValue(reason);
+    await cleanAxe(page);
+    await screenshot(page, "expired-confirmation");
+  });
+
+  test("shared delayed review response cannot renew an elapsed server window", async ({ page }) => {
+    test.skip(fixture?.profile !== "shared", "Shared decision profile.");
+    const item = newCase("expiry");
+    let delayed = false;
+    await page.route((url) => url.pathname === approvalPath(item), async (route) => {
+      if (delayed) { await route.continue(); return; }
+      delayed = true;
+      const response = await route.fetch();
+      const data = (await response.json()).data;
+      expect(data.context.can_submit).toBe(true);
+      const wait = Math.max(0, Date.parse(data.context.effective_deadline) - Date.now() + 100);
+      await new Promise((resolve) => setTimeout(resolve, wait));
+      await route.fulfill({ response });
+    });
+    await login(page, fixture!.accounts.reviewer, reviewRoute(item));
+    await expect(page.getByText("Elapsed; current server verification required", { exact: true })).toBeVisible({ timeout: 40_000 });
+    await expect(page.getByRole("button", { name: "Approve handoff", exact: true })).toBeDisabled();
+    await cleanAxe(page);
+  });
+
   test("shared lost response reloads exact durable receipt without a second decision", async ({ page, context }) => {
     test.skip(fixture?.profile !== "shared", "Shared decision profile.");
     const item = newCase();
@@ -269,6 +321,7 @@ test.describe("disposable human approval decision journeys", () => {
     await confirm.press("Enter");
     await expect.poll(() => committed).toBe(true);
     await expect.poll(() => failedRecoveryReads).toBeGreaterThan(0);
+    await expect(page.locator(".dw-automation-error-summary")).toBeFocused();
     if (await dialog.isVisible()) {
       await expect(dialog.getByRole("button", { name: "Cancel", exact: true })).toBeEnabled();
       await page.keyboard.press("Escape");
@@ -286,6 +339,55 @@ test.describe("disposable human approval decision journeys", () => {
     await expect(page.getByRole("button", { name: "Approve handoff", exact: true })).toHaveCount(0);
     await cleanAxe(page);
     await screenshot(page, "receipt-recovered", page.getByRole("heading", { name: "Decision receipt", exact: true }));
+  });
+
+  test("shared ambiguous submission stays blocked after an unchanged pending read", async ({ page, playwright }) => {
+    test.skip(fixture?.profile !== "shared", "Shared decision profile.");
+    const item = newCase();
+    await login(page, fixture!.accounts.reviewer, reviewRoute(item));
+    let posts = 0;
+    await page.route(`**${approvalPath(item)}/decision`, async (route) => { posts += 1; await route.abort("failed"); });
+    const { dialog, confirm } = await openDecision(page, "approval");
+    await dialog.getByLabel("Reason", { exact: true }).fill("A pending recovery cannot prove this request completed");
+    await confirm.press("Enter");
+    await expect(page.locator(".dw-automation-error-summary")).toBeFocused();
+    await page.keyboard.press("Escape");
+    await page.getByRole("button", { name: "Reload approval", exact: true }).press("Enter");
+    await expect(page.getByText(/previous submission is unconfirmed/i)).toBeVisible();
+    await expect(page.getByRole("button", { name: "Approve handoff", exact: true })).toBeDisabled();
+    const other = await playwright.request.newContext({ baseURL: origin });
+    try {
+      const csrf = await apiLogin(other, fixture!.accounts.reviewer2), current = await packet(other, item);
+      expect(current.receipt.status).toBe("pending");
+      const response = await other.post(`${approvalPath(item)}/decision`, { headers: { Origin: origin, "X-CSRF-Token": csrf }, data: { expected_version: current.receipt.version, binding_digest: current.receipt.binding_digest, outcome: "reject", reason: "Resolve the retained request with one verified decision" } });
+      expect(response.status()).toBe(200);
+      await page.getByRole("button", { name: "Reload approval", exact: true }).press("Enter");
+      await expect(page.getByRole("heading", { name: "Decision receipt", exact: true })).toBeFocused();
+      expect(posts).toBe(1);
+      await cleanAxe(page);
+    } finally { await other.dispose(); }
+  });
+
+  test("shared definite server rejection allows a corrected manual decision", async ({ page }) => {
+    test.skip(fixture?.profile !== "shared", "Shared decision profile.");
+    const item = newCase("high");
+    await login(page, fixture!.accounts.reviewer2, reviewRoute(item));
+    let rejected = false;
+    await page.route(`**${approvalPath(item)}/decision`, async (route) => {
+      const body = route.request().postDataJSON();
+      const response = await route.fetch({ postData: JSON.stringify({ ...body, confirmation: "WRONG" }) });
+      expect(response.status()).toBe(422); rejected = true;
+      await route.fulfill({ response });
+    });
+    const { dialog, confirm } = await openDecision(page, "approval");
+    await dialog.getByLabel("Reason", { exact: true }).fill("A definite validation rejection may be corrected");
+    await dialog.getByLabel("Type the confirmation phrase", { exact: true }).fill("APPROVE ui-proof-target");
+    await confirm.press("Enter"); await expect.poll(() => rejected).toBe(true);
+    await expect(page.locator(".dw-automation-error-summary")).toBeFocused();
+    await page.keyboard.press("Escape");
+    await expect(page.getByRole("button", { name: "Approve handoff", exact: true })).toBeEnabled();
+    await page.unroute(`**${approvalPath(item)}/decision`);
+    await submitDecision(page, item, "approval", "APPROVE ui-proof-target");
   });
 
   test("shared concurrent reviewer decision refreshes the existing receipt", async ({ page, context, playwright }) => {
@@ -313,21 +415,6 @@ test.describe("disposable human approval decision journeys", () => {
       expect(result.receipt.reviewer_id).toBe(fixture!.accounts.reviewer2.principalId);
       await cleanAxe(page);
     } finally { await other.dispose(); }
-  });
-
-  test("shared expiry during confirmation preserves reason and disables stale submission", async ({ page, context }) => {
-    test.skip(fixture?.profile !== "shared", "Shared decision profile.");
-    const item = newCase("expiry");
-    await login(page, fixture!.accounts.reviewer2, reviewRoute(item));
-    const { dialog, confirm } = await openDecision(page, "approval");
-    const reason = "Preserve this local reason while evidence expires";
-    await dialog.getByLabel("Reason", { exact: true }).fill(reason);
-    await expect(confirm).toBeEnabled();
-    await expect.poll(async () => (await packet(context.request, item)).context.can_submit, { timeout: 40_000, intervals: [1000] }).toBe(false);
-    await expect(confirm).toBeDisabled({ timeout: 15_000 });
-    await expect(dialog.getByLabel("Reason", { exact: true })).toHaveValue(reason);
-    await cleanAxe(page);
-    await screenshot(page, "expired-confirmation");
   });
 
   test("shared changed tuple, unavailable authority and mandatory evidence cannot be overridden", async ({ page }) => {
@@ -430,6 +517,35 @@ test.describe("disposable human approval decision journeys", () => {
       await cleanAxe(page);
       await screenshot(page, "audit-attribution", page.getByRole("heading", { name: "Decision receipt", exact: true }));
     } finally { harness(["--restore", "reviewer"]); }
+  });
+
+  test("shared late submission conflict cannot steal a recovered receipt's focus", async ({ page, playwright }) => {
+    test.skip(fixture?.profile !== "shared", "Shared decision profile.");
+    const item = newCase();
+    await login(page, fixture!.accounts.reviewer, reviewRoute(item));
+    let release!: () => void, held = false, replied = false;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    await page.route(`**${approvalPath(item)}/decision`, async (route) => {
+      held = true; await gate;
+      const response = await route.fetch(); expect(response.status()).toBe(409);
+      await route.fulfill({ response }); replied = true;
+    });
+    const other = await playwright.request.newContext({ baseURL: origin });
+    try {
+      const opened = await openDecision(page, "approval");
+      await opened.dialog.getByLabel("Reason", { exact: true }).fill("Wait for a late conflict after polling observes the receipt");
+      await opened.confirm.press("Enter"); await expect.poll(() => held).toBe(true);
+      const csrf = await apiLogin(other, fixture!.accounts.reviewer2), current = await packet(other, item);
+      const response = await other.post(`${approvalPath(item)}/decision`, { headers: { Origin: origin, "X-CSRF-Token": csrf }, data: { expected_version: current.receipt.version, binding_digest: current.receipt.binding_digest, outcome: "reject", reason: "First verified terminal decision" } });
+      expect(response.status()).toBe(200);
+      const receipt = page.getByRole("heading", { name: "Decision receipt", exact: true });
+      await expect(receipt).toBeFocused(); release();
+      await expect.poll(() => replied).toBe(true);
+      await expect(page.getByRole("button", { name: "Reload approval", exact: true })).toBeEnabled();
+      await expect(receipt).toBeFocused();
+      await expect(page.locator(".dw-automation-error-summary")).toHaveCount(0);
+      await cleanAxe(page);
+    } finally { release(); await other.dispose(); }
   });
 
   test("single-operator keyboard acknowledgement is explicit and high confirmation is server-selected", async ({ page, context }) => {

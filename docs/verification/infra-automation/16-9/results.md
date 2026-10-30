@@ -195,3 +195,16 @@ verified Docker-healthy with HTTP200. The operator volume was never mounted into
 the fixture app. Private exported browser credentials were removed. Story and
 sprint are `review`; implementation is committed on the dedicated feature branch,
 with formal BMad review and Git Flow push/optional PR closure next.
+
+
+## Code-review verification — 2026-10-30
+
+The subsequent [layered review and fixes](code-review.md) adds retained provenance,
+visible/monotonic freshness, a strict unknown-submission recovery barrier, human
+attribution/read consistency, safe unknown-model feedback, pagination/export
+consistency and committed focus handling. Final frontend256 tests and actual
+composed shared11/single1/existing15 journeys pass with serious/critical axe and
+fresh1440/760 captures, including `freshness-window-*`. The earlier implementation
+counts above remain historical evidence. The final root smoke passes (1,278 run, two skips); Git Flow
+closure is recorded in the review report. Production Python backend and fixture
+launcher are unchanged; their earlier full directory/shard proofs remain applicable.

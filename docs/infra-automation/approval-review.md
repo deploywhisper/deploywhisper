@@ -86,6 +86,11 @@ needed. Each review link identifies the exact run and approval in that scope.
 The review screen shows the retained action and report context before decision
 controls: authorization kind, registered target/payload, source, policy,
 confidence, blast radius, rollback, full fingerprints and absolute UTC deadlines.
+Retained collection time, source verification and redaction version are visible
+alongside evidence/approval expiry and readable remaining validity. Remaining
+time uses monotonic elapsed time from the read start, including response transit;
+it cannot renew a server deadline or grant authority. Source verification describes
+the server evaluation shown on the packet, not a new credential.
 The permanent report link uses the protected report read. Screened or unavailable
 details are explicitly labeled. An eligible advisory no-go still requires a
 deliberate decision and reason; a hard eligibility failure disables both actions.
@@ -99,7 +104,12 @@ explicitly makes no independent-review claim.
 
 The browser rechecks session and current packet before posting once. It never
 automatically retries a decision. After a lost response it disables another
-submission until an exact-ID read recovers current state. Concurrent decisions
+submission until an exact-ID read recovers current state. An advancing terminal
+receipt resolves uncertainty. An unchanged pending
+read cannot prove the earlier request stopped, so another submission stays
+blocked until a recorded outcome or operator recovery. A definite server rejection
+permits a corrected manual attempt after refresh; invalid success bodies, network
+loss and unknown server outcomes do not. Concurrent decisions
 close stale confirmation and focus the existing receipt. A role revocation
 removes protected review content; unavailable reads cannot leave usable stale
 controls. The server still independently authorizes every request.
@@ -107,6 +117,8 @@ controls. The server still independently authorizes every request.
 Receipts show retained attribution and state digests. Authorized administrators
 can download bounded, paginated scoped audit JSON; its completeness flag reports
 whether all pages were read. Other accounts do not receive an export control.
+An export with a reported gap or unfinished final page is explicitly incomplete;
+consumed continuation pages do not make a fully read snapshot incomplete.
 The export contains screened application audit data and shares the DB/host-admin
 trust limit described above.
 

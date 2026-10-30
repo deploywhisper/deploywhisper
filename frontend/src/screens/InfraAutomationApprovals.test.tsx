@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 import { ApiClientError } from "../api/client";
 import type { ApprovalReview } from "../api/infraAutomation";
 import type { AutomationContext } from "./InfraAutomationShared";
-import { ApprovalReviewPanel, approvalScopeKey, approvalFingerprint, approvalMatchesRun, approvalCanRestoreFocus, approvalReadAdvances, approvalIsUncertain, markApprovalUncertain, recoverApprovalRead, remainingApprovalTime, validApprovalReason, filterRecordedApprovals } from "./InfraAutomationApprovals";
+import { ApprovalReviewPanel, approvalScopeKey, approvalFingerprint, approvalMatchesRun, approvalCanRestoreFocus, approvalReadAdvances, approvalIsUncertain, markApprovalUncertain, recoverApprovalRead, remainingApprovalTime, validApprovalReason, filterRecordedApprovals, approvalAuditComplete, approvalPaginationAdvances, approvalDecisionRejected, finishApprovalRejection, approvalRemainingLabel } from "./InfraAutomationApprovals";
 const digest = `sha256:${"a".repeat(64)}`;
 const stamp = "2026-10-29T00:00:00Z";
 const deadline = "2026-10-29T00:15:00Z";
@@ -169,4 +169,49 @@ describe("human decision review", () => {
     expect(filterRecordedApprovals(rows,"expired").map(row=>row.id)).toEqual(["expired"]);
     expect(filterRecordedApprovals(rows,"decided").map(row=>row.id)).toEqual(["decided"]);
   });
+  it("keeps ambiguous equal-version pending recovery blocked until a terminal receipt advances", async () => {
+    const packet=approvalReviewFixture(), key="pending-unknown"; markApprovalUncertain(key,packet.receipt);
+    await recoverApprovalRead(key,async()=>packet); expect(approvalIsUncertain(key)).toBe(true);
+    await recoverApprovalRead(key,async()=>({...packet,receipt:{...packet.receipt,status:"approved",version:2}})); expect(approvalIsUncertain(key)).toBe(false);
+  });
+  it("clears only the matching definitely rejected submission and never an unknown response", () => {
+    const packet=approvalReviewFixture(), key="known-rejection", old=markApprovalUncertain(key,packet.receipt);
+    const current=markApprovalUncertain(key,packet.receipt); finishApprovalRejection(key,old); expect(approvalIsUncertain(key)).toBe(true);
+    finishApprovalRejection(key,current); expect(approvalIsUncertain(key)).toBe(false);
+    expect(approvalDecisionRejected(new ApiClientError("denied",422,{code:"request_validation_failed"}))).toBe(true);
+    expect(approvalDecisionRejected(new ApiClientError("invalid success body",422))).toBe(false);
+    expect(approvalDecisionRejected(new ApiClientError("unknown server outcome",503,{code:"authority_unavailable"}))).toBe(false);
+    expect(approvalDecisionRejected(new TypeError("lost connection"))).toBe(false);
+  });
+  it("rejects contradictory same-version terminal outcomes without rejecting current context refreshes", () => {
+    const first=approvalReviewFixture();first.receipt={...first.receipt,status:"approved",version:2,reviewer_id:"human",decision_kind:"independent-approval",reason:"Exact reason",decided_at:stamp};
+    expect(approvalReadAdvances(first,{...first,context:{...first.context,status:"unavailable",can_submit:false}})).toBe(true);
+    for(const patch of [{status:"rejected" as const},{reviewer_id:"other"},{reason:"Changed reason"},{decided_at:deadline},{decision_kind:"acknowledgement" as const}]) expect(approvalReadAdvances(first,{...first,receipt:{...first.receipt,...patch}})).toBe(false);
+  });
+  it("shows retained collection and redaction facts with the decision window before controls", () => {
+    const html=renderPacket(approvalReviewFixture());
+    for(const label of ["Collected at","Source verification","Redaction version","Evidence deadline","Approval expiry","Remaining validity"]) {
+      expect(html).toContain(label);expect(html.indexOf(label)).toBeLessThan(html.indexOf("Approve handoff"));
+    }
+    expect(approvalRemainingLabel(61000)).toBe("1 minute 1 second remaining");expect(approvalRemainingLabel(0)).toBe("Elapsed; current server verification required");expect(approvalRemainingLabel(null)).toBe("Unavailable; current server verification required");
+  });
+  it("labels unknown decision models and missing guidance without claiming independent review", () => {
+    const packet=approvalReviewFixture();packet.context={...packet.context,status:"blocked",can_submit:false,decision_kind:null,reasons:["unsupported_mode"],limitations:[],context_todos:[]};
+    const html=renderPacket(packet);expect(html).toContain("Decision model unavailable");expect(html).not.toContain("Independent human decision");expect(html).toContain("Current evidence or authority blocks this decision");
+  });
+  it("rejects repeated pagination tokens and duplicate rows", () => {
+    const row=approvalReviewFixture().receipt;
+    expect(approvalPaginationAdvances("page1","page2",new Set(["page1"]),[row],[{...row,id:"next"}])).toBe(true);
+    expect(approvalPaginationAdvances("page1","page1",new Set(),[],[row])).toBe(false);
+    expect(approvalPaginationAdvances("page2","page1",new Set(["page1"]),[],[row])).toBe(false);
+    expect(approvalPaginationAdvances(undefined,null,new Set(),[row],[row])).toBe(false);
+  });
+  it("marks audit completeness from gaps and the final page, allowing consumed continuation pages", () => {
+    const page=(truncated:boolean,gap=false,next:string|null=null)=>({cursor:{truncated,gap,next_cursor:next}});
+    expect(approvalAuditComplete([page(true,false,"next"),page(false)])).toBe(true);
+    expect(approvalAuditComplete([page(true,false,"next")])).toBe(false);
+    expect(approvalAuditComplete([page(false,true)])).toBe(false);
+    expect(approvalAuditComplete([page(true)])).toBe(false);
+  });
+
 });

@@ -1,6 +1,6 @@
 # Story 16.9: Human Approval Inbox and Decision UX
 
-Status: review
+Status: done
 Preparation: refined
 Release: v1.5.0
 
@@ -51,6 +51,17 @@ Coverage intent: Delta over the v1.4.0 baseline. These exact mapped requirements
   - [x] Attach focused proof for the referenced ACs, implementation docs and reviewer findings before packet acceptance.
 
 Each packet is a bounded review unit under this stable story ID; split large packets after 16.0 estimation instead of silently broadening scope. One story branch follows Git Flow; coordinate shared-file edits and do not revert other work.
+
+### Review Findings
+
+- [x] [Review][Patch] Show retained collection/source and redaction metadata [frontend/src/screens/InfraAutomationApprovals.tsx:247] — AC1 / UX Evidence row: collection time, source/trust flags and redaction version are retained but not rendered.
+- [x] [Review][Patch] Show current freshness deadlines and elapsed validity [frontend/src/screens/InfraAutomationApprovals.tsx:114] — AC1/AC4: expose evidence/approval deadlines and remaining validity before controls; account for request transit and monotonic elapsed time.
+- [x] [Review][Patch] Keep an ambiguous submission blocked on unchanged pending reads [frontend/src/screens/InfraAutomationApprovals.tsx:21] — AC4: pending equal-version recovery is not a terminal outcome. Retain uncertainty until a later terminal receipt; distinguish definite server rejection and test both paths.
+- [x] [Review][Patch] Reject contradictory terminal receipts and attribution [frontend/src/api/infraAutomation.ts:279] — Reject same-version conflicting outcomes and approved/rejected service attribution; preserve independent reason screening, audit clocks and legitimate legacy values.
+- [x] [Review][Patch] Label unavailable decision models without claiming independent review [frontend/src/screens/InfraAutomationApprovals.tsx:237] — AC2: null mode must stay unknown; provide a safe generic explanation when blocked guidance arrays are empty.
+- [x] [Review][Patch] Stop repeated approval pagination cursors [frontend/src/screens/InfraAutomationApprovals.tsx:79] — Reject already consumed cursors and duplicate receipt pages instead of appending indefinitely.
+- [x] [Review][Patch] Do not label audit exports complete when pages report gaps [frontend/src/screens/InfraAutomationApprovals.tsx:229] — AC5: complete must include each page gap/truncation flags, not only cursor exhaustion.
+- [x] [Review][Patch] Focus newly rendered errors after React commits them [frontend/src/screens/InfraAutomationApprovals.tsx:164] — AC6: microtask focus can precede mounting the summary; use committed message state and assert focus in browser.
 
 ## Dev Notes
 
@@ -118,7 +129,9 @@ Codex — BMad dev-story with bounded native API, screen, browser-fixture and in
 - Disposable Compose projects were removed after proof. The exact original operator container/image/persistent volume were restored and verified healthy with HTTP200. Private browser credential exports were removed. The actual runtime image was verified to contain no Node executable.
 - Enhanced dev-story definition of done: PASS. All ACs have mapped API/unit/browser evidence, all tasks are checked, only permitted story sections changed, the complete file list is recorded, and story/sprint status is review. Post-workflow `bmad-help` routing selects [CR] Code Review (`bmad-code-review`) next in a fresh context.
 - No production collector/registry/custody or remote receiver is qualified/enabled by this UI proof. Repository mypy retains the prerequisite's 312 pre-existing findings. The guarded fixture's five medium Bandit fixed-tmp-path diagnostics were reviewed with owned mode0600/no-follow/atomic-write safeguards; no suppressions were added.
-- Formal `bmad-code-review` and its Git Flow commit/push/optional-PR closure remain the next story workflow after dev-story completion; this record does not claim lifecycle acceptance.
+- Formal `bmad-code-review` completed on2026-10-30: eight findings resolved (one high, seven medium), four candidates dismissed with evidence, no deferred/decision-needed or remaining findings. See `docs/verification/infra-automation/16-9/code-review.md`. Fresh layer rechecks are clear.
+- Review correction validation: 256 frontend tests; typecheck/build;11 shared and1 fresh one-human approval journeys;15 existing browser regressions; serious/critical axe and both-width screenshots; repo-wide Ruff/format447; root1,278 run/two skips/OK. Actual new regressions cover equal-version pending recovery, definite422 retry, late409 receipt focus and response transit past expiry. Login pacing preserves the real account limit. The exact original operator container/image/volume are restored healthy and private exports removed.
+- Simplifications retain existing transport/auth, theme primitives and backend contracts. No production Python service, schema, migration or dependency changed. Source/validation evidence supports done status; Git Flow remote/PR closure is recorded below.
 
 ### File List
 
@@ -126,9 +139,11 @@ Codex — BMad dev-story with bounded native API, screen, browser-fixture and in
 - `_bmad-output/implementation-artifacts/16-9-human-approval-inbox-and-decision-ux.md`
 - `_bmad-output/implementation-artifacts/sprint-status.yaml`
 - `_bmad-output/planning-artifacts/implementation-readiness-report-2026-10-29-story-16-9.md`
+- `_bmad-output/project-context.md`
 - `docker-compose.approval-ui.yml`
 - `docs/infra-automation/approval-review.md`
 - `docs/verification/infra-automation/16-9-backend-for-ui/results.md`
+- `docs/verification/infra-automation/16-9/code-review.md`
 - `docs/verification/infra-automation/16-9/results.md`
 - `docs/verification/infra-automation/16-9/screenshots/acknowledgement-receipt-1440.png`
 - `docs/verification/infra-automation/16-9/screenshots/acknowledgement-receipt-760.png`
@@ -148,6 +163,8 @@ Codex — BMad dev-story with bounded native API, screen, browser-fixture and in
 - `docs/verification/infra-automation/16-9/screenshots/evidence-high-760.png`
 - `docs/verification/infra-automation/16-9/screenshots/expired-confirmation-1440.png`
 - `docs/verification/infra-automation/16-9/screenshots/expired-confirmation-760.png`
+- `docs/verification/infra-automation/16-9/screenshots/freshness-window-1440.png`
+- `docs/verification/infra-automation/16-9/screenshots/freshness-window-760.png`
 - `docs/verification/infra-automation/16-9/screenshots/hard-eligibility-block-1440.png`
 - `docs/verification/infra-automation/16-9/screenshots/hard-eligibility-block-760.png`
 - `docs/verification/infra-automation/16-9/screenshots/inbox-1440.png`
@@ -185,4 +202,22 @@ Codex — BMad dev-story with bounded native API, screen, browser-fixture and in
 
 ### Change Log
 
+- 2026-10-30: Completed layered code review, fixed eight findings with regressions, verified all current checks, restored the operator runtime and marked story/sprint done; Git Flow push/PR closure follows.
 - 2026-10-29: Delivered and merged the approved backend prerequisite separately as PR204, then implemented the scoped approval inbox/review/confirmation/receipt/audit UI, strict adapters, protected return/report navigation, disposable browser proof and documentation. Completed full Python gates, corrected composed browser regression, both approval profiles, visual/a11y proof and exact operator restoration; status review.
+
+
+## Senior Developer Review (AI)
+
+- Date:2026-10-30. Outcome: **Approve after fixes**. Three fresh BMad review layers
+  completed; no layer failed. All six ACs are covered by source, focused regressions
+  and actual composed keyboard/axe/profile evidence. No HIGH/MEDIUM item remains.
+- Eight patch findings are checked in Tasks/Subtasks; four candidates were
+  dismissed with backend/profile evidence. Independent rechecks of the final
+  acceptance and edge paths are clear. Details and exact commands are in
+  `docs/verification/infra-automation/16-9/code-review.md`.
+- Git Flow branch: `feature/16-9-human-approval-inbox-decision-ux`, based on accepted
+  develop prerequisite `7ecec1f`; review corrections are committed and the branch
+  is pushed with a PR targeting develop as the final closure action. Maintainer
+  PR approval/merge remains distinct from this automated story review.
+- BMad help: assess/refine Story16.10 after16.9 integration; production target,
+  custody/registry and receiver qualification remains with its owning stories.

@@ -275,7 +275,8 @@ function checkReview(value: unknown, approvalId: string, scope: AutomationScope)
         !member(attribution.role, actorRoles) || (attribution.principal_type === "service") !== (attribution.role === "coordinator") ||
         attribution.project_id !== value.receipt.project_id || attribution.workspace_id !== value.receipt.workspace_id || !textValue(attribution.reason, 2048) || !utc(attribution.occurred_at) ||
         !(attribution.before_digest === null || digestValue(attribution.before_digest)) || !digestValue(attribution.after_digest) || !(attribution.state_digest_version === null || attribution.state_digest_version === 1)) invalid();
-    if (["approved", "rejected"].includes(value.receipt.status) && attribution.principal_id !== value.receipt.reviewer_id) invalid();
+    if (["approved", "rejected"].includes(value.receipt.status) &&
+        (attribution.principal_type !== "human" || attribution.principal_id !== value.receipt.reviewer_id)) invalid();
   }
 }
 
