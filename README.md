@@ -598,6 +598,12 @@ every protected project (every project in `verified` mode).
 self-approval; `single-operator` records acknowledgement only. These backend
 contracts do not enable machine credentials or workflow execution.
 
+The project-scoped **Infra Automation → Approvals** inbox presents immutable
+evidence, current eligibility and deliberate reason/confirmation controls.
+Receipts recover decisions after response loss; single-operator mode labels
+acknowledgement explicitly. See the [approval review guide](docs/infra-automation/approval-review.md)
+for permissions, freshness, audit export and keyboard behavior.
+
 ### Core Runtime Variables
 
 - `APP_NAME`

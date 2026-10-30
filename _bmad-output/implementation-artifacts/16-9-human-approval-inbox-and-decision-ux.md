@@ -1,6 +1,6 @@
 # Story 16.9: Human Approval Inbox and Decision UX
 
-Status: backlog
+Status: done
 Preparation: refined
 Release: v1.5.0
 
@@ -37,20 +37,31 @@ Coverage intent: Delta over the v1.4.0 baseline. These exact mapped requirements
 
 ## Tasks / Subtasks and bounded ownership
 
-- [ ] **Packet 1 — UI owner: inbox and immutable packet (AC 1,2,4).** Owned output: `frontend/src/screens/InfraAutomationApprovals.tsx (planned), existing automation run screen and API client`.
-  - [ ] Implement scoped pending/expired/decided list, exact evidence/action summary and permanent report links with absolute timezone/deadline, explicit advisory_request versus exact_plan and acknowledgement labels.
-  - [ ] Attach focused proof for the referenced ACs, implementation docs and reviewer findings before packet acceptance.
-- [ ] **Packet 2 — UI owner: decision submission (AC 2–4,6).** Owned output: `typed frontend API adapter and confirmation/reason form`.
-  - [ ] Use verified sessions/CSRF and current server eligibility; accessible typed confirmation, reason validation and durable receipt recovery before retry; focus summary or receipt on outcome.
-  - [ ] Attach focused proof for the referenced ACs, implementation docs and reviewer findings before packet acceptance.
-- [ ] **Packet 3 — Service/test owner: audit and authorization verification (AC 2–5).** Owned output: `existing 16.8 decision API, models/repositories audit boundary and tests/test_api`.
-  - [ ] Prove malicious actor/role headers, service/runner credentials, self-approval, tuple mutation and concurrent submissions deny; add screened scoped JSON audit export if not delivered earlier in its own backend PR.
-  - [ ] Attach focused proof for the referenced ACs, implementation docs and reviewer findings before packet acceptance.
-- [ ] **Packet 4 — Test/documentation owner: browser proof (AC 1–6).** Owned output: `frontend/e2e, docs/infra-automation and record`.
-  - [ ] Capture keyboard approve/reject/acknowledgement and stale/lost-response/denied journeys, audit export and 1440/760 screenshots using actual API-backed data.
-  - [ ] Attach focused proof for the referenced ACs, implementation docs and reviewer findings before packet acceptance.
+- [x] **Packet 1 — UI owner: inbox and immutable packet (AC 1,2,4).** Owned output: `frontend/src/screens/InfraAutomationApprovals.tsx (planned), existing automation run screen and API client`.
+  - [x] Implement scoped pending/expired/decided list, exact evidence/action summary and permanent report links with absolute timezone/deadline, explicit advisory_request versus exact_plan and acknowledgement labels.
+  - [x] Attach focused proof for the referenced ACs, implementation docs and reviewer findings before packet acceptance.
+- [x] **Packet 2 — UI owner: decision submission (AC 2–4,6).** Owned output: `typed frontend API adapter and confirmation/reason form`.
+  - [x] Use verified sessions/CSRF and current server eligibility; accessible typed confirmation, reason validation and durable receipt recovery before retry; focus summary or receipt on outcome.
+  - [x] Attach focused proof for the referenced ACs, implementation docs and reviewer findings before packet acceptance.
+- [x] **Packet 3 — Service/test owner: audit and authorization verification (AC 2–5).** Owned output: `existing 16.8 decision API, models/repositories audit boundary and tests/test_api`.
+  - [x] Prove malicious actor/role headers, service/runner credentials, self-approval, tuple mutation and concurrent submissions deny; add screened scoped JSON audit export if not delivered earlier in its own backend PR.
+  - [x] Attach focused proof for the referenced ACs, implementation docs and reviewer findings before packet acceptance.
+- [x] **Packet 4 — Test/documentation owner: browser proof (AC 1–6).** Owned output: `frontend/e2e, docs/infra-automation and record`.
+  - [x] Capture keyboard approve/reject/acknowledgement and stale/lost-response/denied journeys, audit export and 1440/760 screenshots using actual API-backed data.
+  - [x] Attach focused proof for the referenced ACs, implementation docs and reviewer findings before packet acceptance.
 
 Each packet is a bounded review unit under this stable story ID; split large packets after 16.0 estimation instead of silently broadening scope. One story branch follows Git Flow; coordinate shared-file edits and do not revert other work.
+
+### Review Findings
+
+- [x] [Review][Patch] Show retained collection/source and redaction metadata [frontend/src/screens/InfraAutomationApprovals.tsx:247] — AC1 / UX Evidence row: collection time, source/trust flags and redaction version are retained but not rendered.
+- [x] [Review][Patch] Show current freshness deadlines and elapsed validity [frontend/src/screens/InfraAutomationApprovals.tsx:114] — AC1/AC4: expose evidence/approval deadlines and remaining validity before controls; account for request transit and monotonic elapsed time.
+- [x] [Review][Patch] Keep an ambiguous submission blocked on unchanged pending reads [frontend/src/screens/InfraAutomationApprovals.tsx:21] — AC4: pending equal-version recovery is not a terminal outcome. Retain uncertainty until a later terminal receipt; distinguish definite server rejection and test both paths.
+- [x] [Review][Patch] Reject contradictory terminal receipts and attribution [frontend/src/api/infraAutomation.ts:279] — Reject same-version conflicting outcomes and approved/rejected service attribution; preserve independent reason screening, audit clocks and legitimate legacy values.
+- [x] [Review][Patch] Label unavailable decision models without claiming independent review [frontend/src/screens/InfraAutomationApprovals.tsx:237] — AC2: null mode must stay unknown; provide a safe generic explanation when blocked guidance arrays are empty.
+- [x] [Review][Patch] Stop repeated approval pagination cursors [frontend/src/screens/InfraAutomationApprovals.tsx:79] — Reject already consumed cursors and duplicate receipt pages instead of appending indefinitely.
+- [x] [Review][Patch] Do not label audit exports complete when pages report gaps [frontend/src/screens/InfraAutomationApprovals.tsx:229] — AC5: complete must include each page gap/truncation flags, not only cursor exhaustion.
+- [x] [Review][Patch] Focus newly rendered errors after React commits them [frontend/src/screens/InfraAutomationApprovals.tsx:164] — AC6: microtask focus can precede mounting the summary; use committed message state and assert focus in browser.
 
 ## Dev Notes
 
@@ -68,13 +79,13 @@ Each packet is a bounded review unit under this stable story ID; split large pac
 
 ## Required implementation verification
 
-- [ ] Register new `tests/test_infra_automation` directories in `scripts/ci-local.sh` and affected GitHub discovery/shards; root discovery alone skips non-package test directories.
-- [ ] For every Pydantic/schema/dataclass/constructor change, use repository-wide `rg` searches for direct instantiations/fixtures and update all consumers, including CLI/agent/action/report compatibility where affected.
-- [ ] Run `./.venv/bin/python -m unittest discover -q`, story-focused tests and exactly `./.venv/bin/python -m pytest tests/test_api tests/test_cli tests/test_infra -v --tb=short` for affected API/CLI/infra contracts.
-- [ ] Run `./.venv/bin/ruff check .`, **`./.venv/bin/ruff format --check .` repo-wide**, `bash scripts/ci-local.sh` and `git diff --check`; add applicable static/security/type checks. Record commands and actual results rather than assumed passes.
-- [ ] Run `npm run ui:typecheck`, `npm run ui:test`, `npm run ui:build`; then `docker compose up -d --build`, wait for `http://localhost:8080/api/v1/health`, seed synthetic authorized API data and run `BASE_URL=http://localhost:8080 npm run test:ui-review` with new journey coverage.
-- [ ] Run `BASE_URL=http://localhost:8080 RUN_UI_A11Y=1 bash scripts/ci-local.sh` for keyboard/axe critical/serious coverage; capture required 1440/760-width screenshots from root SPA routes and permanent `/reports/{id}` links, then `docker compose down`.
-- [ ] Record browser commands/results/screenshots before review. Vite dev server, legacy prefixed routes and existing report tests alone do not establish this story's browser acceptance. Backend-for-UI behavior requires a separate labeled PR.
+- [x] Register new `tests/test_infra_automation` directories in `scripts/ci-local.sh` and affected GitHub discovery/shards; root discovery alone skips non-package test directories.
+- [x] For every Pydantic/schema/dataclass/constructor change, use repository-wide `rg` searches for direct instantiations/fixtures and update all consumers, including CLI/agent/action/report compatibility where affected.
+- [x] Run `./.venv/bin/python -m unittest discover -q`, story-focused tests and exactly `./.venv/bin/python -m pytest tests/test_api tests/test_cli tests/test_infra -v --tb=short` for affected API/CLI/infra contracts.
+- [x] Run `./.venv/bin/ruff check .`, **`./.venv/bin/ruff format --check .` repo-wide**, `bash scripts/ci-local.sh` and `git diff --check`; add applicable static/security/type checks. Record commands and actual results rather than assumed passes.
+- [x] Run `npm run ui:typecheck`, `npm run ui:test`, `npm run ui:build`; then `docker compose up -d --build`, wait for `http://localhost:8080/api/v1/health`, seed synthetic authorized API data and run `BASE_URL=http://localhost:8080 npm run test:ui-review` with new journey coverage.
+- [x] Run `BASE_URL=http://localhost:8080 RUN_UI_A11Y=1 bash scripts/ci-local.sh` for keyboard/axe critical/serious coverage; capture required 1440/760-width screenshots from root SPA routes and permanent `/reports/{id}` links, then `docker compose down`.
+- [x] Record browser commands/results/screenshots before review. Vite dev server, legacy prefixed routes and existing report tests alone do not establish this story's browser acceptance. Backend-for-UI behavior requires a separate labeled PR.
 
 ## References
 
@@ -87,28 +98,126 @@ Each packet is a bounded review unit under this stable story ID; split large pac
 
 ### Agent Model Used
 
-Codex — scoped entry/readiness assessment only; no implementation is claimed.
+Codex — BMad dev-story with bounded native API, screen, browser-fixture and independent review agents; root owns integration and final verification.
+
+### Implementation Plan
+
+- Deliver the approved immutable review/current-context/confirmation prerequisite in its own backend-for-UI PR, then base the separate UI branch on the accepted result.
+- Reuse existing scoped sessions, CSRF, API transport, query keys, automation frame, report reads, audit export and approved v3 primitives. No new dependencies or production backend behavior in the UI branch.
+- Present exact report/action/source/policy/deadline context before controls; use native accessible confirmation and server-selected acknowledgement. Recover the exact durable receipt before retry, with no automatic mutation replay.
+- Qualify actual composed production assets with protected synthetic fixtures in shared and fresh one-human profiles, keyboard/axe, 1440/760 screenshots and independent source review. Dispose only the test project and restore the exact operator container.
 
 ### Debug Log References
 
-2026-10-29: inspected current story/project context, merged dependency evidence, UX/composition contracts and delivered approval/audit APIs. Independent native reviewer confirmed the backend-for-UI gaps. Documentation diff checks only; no application, Compose/browser, test-suite or production qualification run.
+- Approved prerequisite: [spec](spec-16-9-backend-for-ui-review-packet.md), [readiness assessment](../planning-artifacts/implementation-readiness-report-2026-10-29-story-16-9.md), [PR204](https://github.com/deploywhisper/deploywhisper/pull/204), merged `7ecec1f`. Backend qualification is recorded in `docs/verification/infra-automation/16-9-backend-for-ui/results.md`.
+- UI evidence, acceptance mapping, actual commands, fixture boundaries, independent findings and screenshots: `docs/verification/infra-automation/16-9/results.md`.
+- Corrected initial stale-read controls, read regression, terminal modal/focus, protected report link, sign-in return allowlist, native focus wrapping/dialog margins, long project label containment and contrast findings. Independent rechecks found no remaining source blockers.
+- Corrected a stale concurrent-test expectation to require the closed dialog and focused existing receipt; focused receipt/acknowledgement screenshots now show the actual recorded state.
 
 ### Completion Notes List
 
-- 2026-10-29 entry reassessment: Stories16.7/16.8 are accepted/done; PR203 merged at `5693c09`. The original unresolved-dependency preparation notes are superseded by this evidence.
-- Current gate: the UI lacks a delivered fresh decision context, immutable review summary, pending decision-model label, effective deadline, by-ID receipt read and server confirmation contract. Existing audit/export is reused, but decision before/after digest semantics need qualification. The repository requires raising API/flow/validation changes before guessing and shipping backend-for-UI behavior in a separate labeled PR.
-- Prepared `spec-16-9-backend-for-ui-review-packet.md` and the dated scoped readiness report for the contract decision. Status remains backlog; no implementation or browser task is marked complete.
-
-- Preparation: refined. Status remains backlog. All implementation tasks unchecked; Story 16.0 and earlier dependency acceptance remain unresolved.
-- UI validation: Required at implementation; not executed.
-- Independent review, actual command results, residual risks and release qualification evidence must be recorded during implementation.
+- Earlier unresolved dependency/backlog preparation notes are superseded by accepted Stories16.7/16.8 and merged prerequisite PR204. The maintainer explicitly approved the prerequisite first and then continuation of this story.
+- UI branch: `feature/16-9-human-approval-inbox-decision-ux`, baseline `7ecec1f`. Inbox filters loaded recorded states; exact review is scoped by approval/run/project/workspace and identity epoch. Immutable evidence precedes controls. Full fingerprints and deadline components remain accessible.
+- Explicit reason and high/critical typed phrases use current server context. Canonical no-go remains advisory; hard evidence/policy/authority failures cannot be overridden. Single-operator mode labels authenticated acknowledgement without an independent-review claim.
+- Failed refreshes disable stale controls; authorization denial removes protected data. Project/identity change clears local forms. Expiry retains the local reason. Lost response recovers by exact-ID read without automatic POST replay; concurrent terminal refresh closes confirmation and focuses the retained receipt.
+- Scoped audit export reuses the administrator-only endpoint and bounded pagination/completeness flag. Receipts retain actual principal/type/role/scope/reason/time and before/after state digests. Application append-only audit retains DB/host-admin trust limits.
+- No new test directory or discovery registration was required: the four fixture guards live in existing `tests/test_infra`, already included by local CI and the exact GitHub shard. All production schema/constructor work shipped in the separately reviewed prerequisite; the UI branch adds strict TypeScript wire guards rather than changing Python constructors.
+- `npm run ui:typecheck`, `npm run ui:test` (241 tests), `npm run ui:build`: pass. Composed shared profile: seven journeys pass; fresh single-operator profile: one journey passes with exactly one enabled human. Profile-inapplicable tests are excluded in each run, with all eight active across the two profiles.
+- Browser command: `BASE_URL=http://localhost:8080 APPROVAL_UI_CONTAINER=deploywhisper-story16-9-deploywhisper-1 APPROVAL_UI_FIXTURE=<owned-mode0600-file> npm run test:ui-review -- infra-automation-approvals.spec.ts`, after `docker compose -p deploywhisper-story16-9 -f docker-compose.approval-ui.yml up -d --build`, health and real seed/export. Keyboard confirmation/focus, approve/reject/acknowledge, expiry, CSRF/self/denial, project/revocation, tuple/unavailable/hard blocks, concurrent/lost-response recovery, audit and protected report navigation pass the axe serious/critical gate. Screenshots at both widths are retained under `docs/verification/infra-automation/16-9/screenshots/`; visual verdict 94/100 against v3/WP6 and accepted16.7 captures.
+- `LLM_API_BASE=http://127.0.0.1:1 ./.venv/bin/python -m unittest discover -q`: 1,278 run, two skips, OK. Exact `./.venv/bin/python -m pytest tests/test_api tests/test_cli tests/test_infra -v --tb=short`: 697 pass, one opt-in skip, 2,279 subtests. Focused guard tests: four pass. Ruff lint/repo-wide format (447 files), Python compile, Docker Compose config, frontend checks and high/high Bandit pass.
+- Full `BASE_URL=http://localhost:8080 RUN_UI_A11Y=1 bash scripts/ci-local.sh` completed every Python/static gate: all10 directories OK (2,724 run, two skips), plus eight prompt-injection tests/96 subtests. Its initial browser phase failed safely because the existing report seed helper selected the stopped default Compose project. The entire browser lane then passed with `BASE_URL=http://localhost:8080 COMPOSE_PROJECT_NAME=deploywhisper-story16-9 COMPOSE_FILE=/tmp/story16-9-ui-fixture/regression-compose.yaml npm run test:ui-review`: 15 pass, 24 fixture-inapplicable exclusions (eight approval cases actively verified above,16 earlier workflow/identity cases). The combined initial command was nonzero; the corrected browser rerun exited0. Unaffected Python gates were not repeated and no test/production bypass was added.
+- Disposable Compose projects were removed after proof. The exact original operator container/image/persistent volume were restored and verified healthy with HTTP200. Private browser credential exports were removed. The actual runtime image was verified to contain no Node executable.
+- Enhanced dev-story definition of done: PASS. All ACs have mapped API/unit/browser evidence, all tasks are checked, only permitted story sections changed, the complete file list is recorded, and story/sprint status is review. Post-workflow `bmad-help` routing selects [CR] Code Review (`bmad-code-review`) next in a fresh context.
+- No production collector/registry/custody or remote receiver is qualified/enabled by this UI proof. Repository mypy retains the prerequisite's 312 pre-existing findings. The guarded fixture's five medium Bandit fixed-tmp-path diagnostics were reviewed with owned mode0600/no-follow/atomic-write safeguards; no suppressions were added.
+- Formal `bmad-code-review` completed on2026-10-30: eight findings resolved (one high, seven medium), four candidates dismissed with evidence, no deferred/decision-needed or remaining findings. See `docs/verification/infra-automation/16-9/code-review.md`. Fresh layer rechecks are clear.
+- Review correction validation: 256 frontend tests; typecheck/build;11 shared and1 fresh one-human approval journeys;15 existing browser regressions; serious/critical axe and both-width screenshots; repo-wide Ruff/format447; root1,278 run/two skips/OK. Actual new regressions cover equal-version pending recovery, definite422 retry, late409 receipt focus and response transit past expiry. Login pacing preserves the real account limit. The exact original operator container/image/volume are restored healthy and private exports removed.
+- Simplifications retain existing transport/auth, theme primitives and backend contracts. No production Python service, schema, migration or dependency changed. Source/validation evidence supports done status; Git Flow remote/PR closure is recorded below.
 
 ### File List
 
+- `README.md`
 - `_bmad-output/implementation-artifacts/16-9-human-approval-inbox-and-decision-ux.md`
-- `_bmad-output/implementation-artifacts/spec-16-9-backend-for-ui-review-packet.md`
+- `_bmad-output/implementation-artifacts/sprint-status.yaml`
 - `_bmad-output/planning-artifacts/implementation-readiness-report-2026-10-29-story-16-9.md`
+- `_bmad-output/project-context.md`
+- `docker-compose.approval-ui.yml`
+- `docs/infra-automation/approval-review.md`
+- `docs/verification/infra-automation/16-9-backend-for-ui/results.md`
+- `docs/verification/infra-automation/16-9/code-review.md`
+- `docs/verification/infra-automation/16-9/results.md`
+- `docs/verification/infra-automation/16-9/screenshots/acknowledgement-receipt-1440.png`
+- `docs/verification/infra-automation/16-9/screenshots/acknowledgement-receipt-760.png`
+- `docs/verification/infra-automation/16-9/screenshots/acknowledgement-review-1440.png`
+- `docs/verification/infra-automation/16-9/screenshots/acknowledgement-review-760.png`
+- `docs/verification/infra-automation/16-9/screenshots/audit-attribution-1440.png`
+- `docs/verification/infra-automation/16-9/screenshots/audit-attribution-760.png`
+- `docs/verification/infra-automation/16-9/screenshots/changed-binding-1440.png`
+- `docs/verification/infra-automation/16-9/screenshots/changed-binding-760.png`
+- `docs/verification/infra-automation/16-9/screenshots/confirmation-acknowledgement-1440.png`
+- `docs/verification/infra-automation/16-9/screenshots/confirmation-acknowledgement-760.png`
+- `docs/verification/infra-automation/16-9/screenshots/confirmation-high-1440.png`
+- `docs/verification/infra-automation/16-9/screenshots/confirmation-high-760.png`
+- `docs/verification/infra-automation/16-9/screenshots/decision-controls-high-1440.png`
+- `docs/verification/infra-automation/16-9/screenshots/decision-controls-high-760.png`
+- `docs/verification/infra-automation/16-9/screenshots/evidence-high-1440.png`
+- `docs/verification/infra-automation/16-9/screenshots/evidence-high-760.png`
+- `docs/verification/infra-automation/16-9/screenshots/expired-confirmation-1440.png`
+- `docs/verification/infra-automation/16-9/screenshots/expired-confirmation-760.png`
+- `docs/verification/infra-automation/16-9/screenshots/freshness-window-1440.png`
+- `docs/verification/infra-automation/16-9/screenshots/freshness-window-760.png`
+- `docs/verification/infra-automation/16-9/screenshots/hard-eligibility-block-1440.png`
+- `docs/verification/infra-automation/16-9/screenshots/hard-eligibility-block-760.png`
+- `docs/verification/infra-automation/16-9/screenshots/inbox-1440.png`
+- `docs/verification/infra-automation/16-9/screenshots/inbox-760.png`
+- `docs/verification/infra-automation/16-9/screenshots/linked-permanent-report-1440.png`
+- `docs/verification/infra-automation/16-9/screenshots/linked-permanent-report-760.png`
+- `docs/verification/infra-automation/16-9/screenshots/receipt-approved-1440.png`
+- `docs/verification/infra-automation/16-9/screenshots/receipt-approved-760.png`
+- `docs/verification/infra-automation/16-9/screenshots/receipt-recovered-1440.png`
+- `docs/verification/infra-automation/16-9/screenshots/receipt-recovered-760.png`
+- `docs/verification/infra-automation/16-9/screenshots/receipt-rejected-1440.png`
+- `docs/verification/infra-automation/16-9/screenshots/receipt-rejected-760.png`
+- `docs/verification/infra-automation/16-9/screenshots/requester-self-denied-1440.png`
+- `docs/verification/infra-automation/16-9/screenshots/requester-self-denied-760.png`
+- `docs/verification/infra-automation/16-9/screenshots/response-unconfirmed-1440.png`
+- `docs/verification/infra-automation/16-9/screenshots/response-unconfirmed-760.png`
+- `docs/verification/infra-automation/16-9/screenshots/review-high-1440.png`
+- `docs/verification/infra-automation/16-9/screenshots/review-high-760.png`
+- `docs/verification/infra-automation/16-9/screenshots/revoked-reviewer-1440.png`
+- `docs/verification/infra-automation/16-9/screenshots/revoked-reviewer-760.png`
+- `frontend/e2e/infra-automation-approvals.spec.ts`
+- `frontend/src/api/identity.test.ts`
+- `frontend/src/api/identity.ts`
+- `frontend/src/api/infraAutomation.test.ts`
+- `frontend/src/api/infraAutomation.ts`
+- `frontend/src/main.tsx`
+- `frontend/src/screens/InfraAutomationApprovals.test.tsx`
+- `frontend/src/screens/InfraAutomationApprovals.tsx`
+- `frontend/src/screens/InfraAutomationRun.tsx`
+- `frontend/src/screens/InfraAutomationShared.tsx`
+- `frontend/src/screens/dashboard.css`
+- `frontend/src/screens/infra-automation.css`
+- `scripts/approval_ui_fixture.py`
+- `tests/test_infra/test_approval_ui_fixture_guard.py`
 
 ### Change Log
 
-- 2026-10-29: Assessed delivered prerequisites and recorded the concrete backend-for-UI contract proposal before UI implementation; backlog status and all acceptance obligations are preserved.
+- 2026-10-30: Completed layered code review, fixed eight findings with regressions, verified all current checks, restored the operator runtime and marked story/sprint done; published [PR205](https://github.com/deploywhisper/deploywhisper/pull/205) to develop.
+- 2026-10-29: Delivered and merged the approved backend prerequisite separately as PR204, then implemented the scoped approval inbox/review/confirmation/receipt/audit UI, strict adapters, protected return/report navigation, disposable browser proof and documentation. Completed full Python gates, corrected composed browser regression, both approval profiles, visual/a11y proof and exact operator restoration; status review.
+
+
+## Senior Developer Review (AI)
+
+- Date:2026-10-30. Outcome: **Approve after fixes**. Three fresh BMad review layers
+  completed; no layer failed. All six ACs are covered by source, focused regressions
+  and actual composed keyboard/axe/profile evidence. No HIGH/MEDIUM item remains.
+- Eight patch findings are checked in Tasks/Subtasks; four candidates were
+  dismissed with backend/profile evidence. Independent rechecks of the final
+  acceptance and edge paths are clear. Details and exact commands are in
+  `docs/verification/infra-automation/16-9/code-review.md`.
+- Git Flow branch: `feature/16-9-human-approval-inbox-decision-ux`, based on accepted
+  develop prerequisite `7ecec1f`; review correction `da41287` is committed and the
+  branch is pushed to origin with [PR205](https://github.com/deploywhisper/deploywhisper/pull/205) targeting develop. Maintainer
+  PR approval/merge remains distinct from this automated story review.
+- BMad help: assess/refine Story16.10 after16.9 integration; production target,
+  custody/registry and receiver qualification remains with its owning stories.

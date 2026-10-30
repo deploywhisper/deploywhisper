@@ -52,6 +52,7 @@ export function AccountLink({ children = "Sign in again" }: { children?: ReactNo
 
 function ScopeWorkspace({ shell, project, children }: { shell: ShellProjectContext; project: Project; children: (context: AutomationContext) => ReactNode }) {
   const identity = useIdentity();
+  const location = useLocation();
   const [params, setParams] = useSearchParams();
   const [chosen, setChosen] = useState<number | null | undefined>(() => initialWorkspaceSelection(project.id, params));
   const routeWorkspace = params.get("workspace_id");
@@ -114,7 +115,7 @@ function ScopeWorkspace({ shell, project, children }: { shell: ShellProjectConte
     selectWorkspace: (id) => { if (id === null ? projectCapabilities.isSuccess : workspaces.data?.some((workspace) => workspace.id === id)) setChosen(id); },
   } : undefined;
   return <div className="dw-automation">
-    <div className="dw-automation-heading"><div><p className="dw-automation-eyebrow">Project workspace</p><h1>Infrastructure Automation</h1><p>Validate published workflows and review uploaded preflight evidence.</p></div><Link to="/settings/account">{identity.principal?.username} · Account</Link></div>
+    <div className="dw-automation-heading"><div><p className="dw-automation-eyebrow">Project workspace</p><h1>Infrastructure Automation</h1><p>Review published workflows, preflight evidence and human decisions.</p></div><Link to="/settings/account">{identity.principal?.username} · Account</Link></div>
     <div className="dw-automation-scope">
       <label className="dw-field" htmlFor="automation-workspace"><span>Workspace</span><select id="automation-workspace" disabled={!workspaces.isSuccess} value={workspaceId ?? "project"} onChange={(event) => setChosen(event.target.value === "project" ? null : Number(event.target.value))}>
         {projectCapabilities.isSuccess && <option value="project">Project-wide authoring and history</option>}
@@ -128,7 +129,11 @@ function ScopeWorkspace({ shell, project, children }: { shell: ShellProjectConte
     {!online && <p className="dw-automation-notice" role="alert">Connection lost. Same-scope edits stay in this page; consequential controls are disabled until access is refreshed.</p>}
     {identity.status === "unavailable" && identity.principal && <p className="dw-automation-notice" role="alert">Current account access could not be verified. Your same-scope edits are retained; refresh access before making changes.</p>}
     {context && !context.capabilities.execution_enabled && <p className="dw-automation-notice" role="status">Automation execution is disabled for this project. Authorized workflow and run history remain available; new runs cannot start. Contact your project administrator about enablement.</p>}
-    {context && !identity.csrfToken && <p className="dw-automation-notice">This restored session permits reading. <AccountLink /> before saving, publishing or starting a run.</p>}
+    {context && !identity.csrfToken && <p className="dw-automation-notice">This restored session permits reading. <AccountLink /> before making changes or submitting a decision.</p>}
+    {context && <nav className="dw-automation-actions dw-automation-nav" aria-label="Automation sections">
+      <Link to={`/infra-automation${scopeQuery(scope)}`} aria-current={location.pathname === "/infra-automation/approvals" || params.has("approval_id") ? undefined : "page"}>Workflows and runs</Link>
+      <Link to={`/infra-automation/approvals${scopeQuery(scope)}`} aria-current={location.pathname === "/infra-automation/approvals" || params.has("approval_id") ? "page" : undefined}>Approvals</Link>
+    </nav>}
     {context && children(context)}
   </div>;
 }

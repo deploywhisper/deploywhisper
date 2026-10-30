@@ -1,11 +1,12 @@
 import { Fragment, useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Link, useParams } from "react-router-dom";
+import { Link, useParams, useSearchParams } from "react-router-dom";
 import { ApiClientError } from "../api/client";
 import { getRun, getRunSteps, getRunLogs, getRunReports, type AutomationScope, type Run, type Step, type StepPage, type RunReports, type LogPage } from "../api/infraAutomation";
 import { Button } from "../components/ui/Button";
 import { Card } from "../components/ui/Card";
 import { AutomationFrame, scopeQuery, type AutomationContext } from "./InfraAutomationShared";
+import { ApprovalReviewPanel } from "./InfraAutomationApprovals";
 
 export function runMatchesScope(run: Run, scope: AutomationScope): boolean {
   return run.project_id === scope.projectId && run.workspace_id === scope.workspaceId;
@@ -209,5 +210,15 @@ export function RunContent({ context, runId }: { context: AutomationContext; run
 
 export function InfraAutomationRunScreen() {
   const params = useParams();
-  return <AutomationFrame>{(context) => <RunContent key={`${context.identity.epoch}:${context.scope.projectId}:${context.scope.workspaceId}:${params.runId}`} context={context} runId={params.runId ?? ""} />}</AutomationFrame>;
+  const [search] = useSearchParams();
+  const approvals = search.getAll("approval_id");
+  return <AutomationFrame>{(context) => {
+    const key = `${context.identity.epoch}:${context.scope.projectId}:${context.scope.workspaceId}:${params.runId}`;
+    if (approvals.length > 1) return <div role="alert"><h2>Review selection unavailable</h2><p>Choose one request from the scoped approval inbox.</p><Link to={`/infra-automation/approvals${scopeQuery(context.scope)}`}>Open approval inbox</Link></div>;
+    if (approvals.length === 1) return <div className="dw-automation-stack" key={`${key}:${approvals[0]}`}>
+      <div className="dw-automation-actions"><Link aria-label="Approval inbox" to={`/infra-automation/approvals${scopeQuery(context.scope)}`}>← Approval inbox</Link><Link to={`/infra-automation/runs/${encodeURIComponent(params.runId ?? "")}${scopeQuery(context.scope)}`}>View run timeline</Link></div>
+      <ApprovalReviewPanel context={context} approvalId={approvals[0]} expectedRunId={params.runId ?? ""} />
+    </div>;
+    return <RunContent key={key} context={context} runId={params.runId ?? ""} />;
+  }}</AutomationFrame>;
 }
