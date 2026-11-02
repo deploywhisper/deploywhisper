@@ -7,7 +7,7 @@
     "dev": "vite --host 127.0.0.1",
     "build": "tsc -b && vite build",
     "typecheck": "tsc -b --pretty false",
-    "test": "vitest run --passWithNoTests",
+    "test": "node --test scripts/check-openapi-compat.cjs && vitest run --passWithNoTests",
     "gen-api": "bash scripts/gen-api.sh"
   },
   "dependencies": {
@@ -34,5 +34,10 @@
     "typescript": "^5.9.3",
     "vite": "^8.1.6",
     "vitest": "^5.0.3"
+  },
+  "overrides": {
+    "@redocly/openapi-core": {
+      "minimatch": "11.0.1"
+    }
   }
 }

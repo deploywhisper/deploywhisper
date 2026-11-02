@@ -374,6 +374,7 @@ class PinnedGithubTransport:
             raw.connect(endpoint)
             self._check_peer(raw, selected, port)
             context = ssl.create_default_context()
+            context.minimum_version = ssl.TLSVersion.TLSv1_2
             if (
                 context.check_hostname is not True
                 or context.verify_mode != ssl.CERT_REQUIRED

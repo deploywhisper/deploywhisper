@@ -329,6 +329,43 @@ class TargetTransportTests(unittest.TestCase):
         self.assert_failure("peer_mismatch", False)
         self.assertEqual(self.socket.sent, [])
 
+    def test_protocol_floor_is_explicit_before_tls_wrap(self):
+        self.context.minimum_version = ssl.TLSVersion.MINIMUM_SUPPORTED
+
+        def wrap(raw, *, server_hostname):
+            self.assertGreaterEqual(
+                self.context.minimum_version, ssl.TLSVersion.TLSv1_2
+            )
+            return self.socket
+
+        self.context.wrap_socket.side_effect = wrap
+        self.send()
+        self.assertEqual(self.context.minimum_version, ssl.TLSVersion.TLSv1_2)
+
+    def test_unavailable_protocol_floor_denies_before_credentials_are_sent(self):
+        class UnavailableContext:
+            check_hostname = True
+            verify_mode = ssl.CERT_REQUIRED
+            wrap_socket = Mock()
+
+            @property
+            def minimum_version(self):
+                return ssl.TLSVersion.MINIMUM_SUPPORTED
+
+            @minimum_version.setter
+            def minimum_version(self, value):
+                raise ValueError("Unsupported TLS policy")
+
+        unavailable = UnavailableContext()
+        self.context_patch.stop()
+        with patch(
+            "infra_automation.target_transport.ssl.create_default_context",
+            return_value=unavailable,
+        ):
+            self.assert_failure("connection_failed", False)
+        unavailable.wrap_socket.assert_not_called()
+        self.assertEqual(self.socket.sent, [])
+
     def test_tls_verification_is_mandatory(self):
         self.context.verify_mode = ssl.CERT_NONE
         self.assert_failure("tls_unavailable", False)

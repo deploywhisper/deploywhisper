@@ -69,6 +69,8 @@ BMad code review on 2026-11-02: **changes requested**. Independent blind, edge-c
 
 - [x] [Review][Patch][Medium] R6 — Handle macOS killpg EPERM/exit-sentinel races through the existing bounded confirmation loop; release still requires sentinel plus whole-group death proof. Persistent denial remains fatal/dirty. Red/green units, full module,20 instrumented cancellation repetitions and Linux full CI passed. [infra_automation/worker_supervision.py:225]
 
+- [x] [Review][Patch][High] R7 — Make the handoff HTTPS protocol floor explicit at TLS1.2 before TLS wrapping; preserve certificate/hostname/peer checks and fail before credentials if the floor cannot be enforced. CodeQL-triggered red2/green2 regressions, full transport29 methods/183 subtests and independent review passed. [infra_automation/target_transport.py:384]
+
 ## Dev Notes
 
 ### Derived settings UX ownership
@@ -106,6 +108,13 @@ This earlier slice owns the feature/configuration or registered-target API and i
 - [Feature UX contract](../../docs/design/infra-automation-ux.md), [UX authority](../planning-artifacts/ux-design-specification.md), [v3 visual authority](../../docs/design/deploywhisper-redesign-v3.jsx) and [RFC 0001](../../docs/rfcs/0001-infra-automation-preflight-and-handoff.md).
 
 ## Dev Agent Record
+
+### Remote audit-gate follow-up — 2026-11-02
+
+- Initial commit3c18585/PR206 passed scoped source qualification, but online CI found existing pyasn1/minimatch advisories. Updated pyasn1 only to0.6.5 in both hash locks; strict runtime/dev audits now show no known vulnerabilities, isolated lock recompiles/install/pipcheck passed.
+- Kept OpenAPI generator7.13 with scoped patched minimatch11.0.1. Added generator-process callable/named export compatibility for Redocly1.x, preserving configured headers without node_modules file patches. Two regression tests failed before the adapter and pass after;256 frontend tests, typecheck/build and current-source API generation (zero schema diff) passed. Root/frontend npm audits are clean. No new direct app dependency or rendered behavior changed.
+- CodeQL-triggered R7 adds explicit TLS1.2 minimum before TLS wrap; red2/green2 and full transport29 methods/183 subtests passed, independent security review clean. Setter failure denies before credentials. Rebuilt patched runtime health/OpenAPI/nonroot/noNode smoke passed.
+- Provider/auth affected tests89 passed/1 skip/112 subtests. Underlying authority/storage/supervision source remains unchanged from final full qualification. Online gate rerun follows the focused security-patch commit. See r4-r5-resolution.md for primary advisory links and exact compatibility tradeoff.
 
 ### Final accepted verification and closeout — 2026-11-02
 
@@ -197,11 +206,17 @@ Codex — BMad dev-story with bounded native implementation lanes and independen
 - `api/routes/infra_automation.py`
 - `api/schemas.py`
 - `config.py`
+- `docs/ci.md`
 - `docs/infra-automation/handoff-contract-v1.md`
 - `docs/verification/infra-automation/16-10/code-review-rerun-2026-11-02.md`
 - `docs/verification/infra-automation/16-10/code-review.md`
 - `docs/verification/infra-automation/16-10/r4-r5-resolution.md`
 - `docs/verification/infra-automation/16-10/results.md`
+- `frontend/package-lock.json`
+- `frontend/package.json`
+- `frontend/scripts/check-openapi-compat.cjs`
+- `frontend/scripts/gen-api.sh`
+- `frontend/scripts/redocly-minimatch-compat.cjs`
 - `frontend/src/api/schema.d.ts`
 - `infra_automation/approval_eligibility.py`
 - `infra_automation/claims.py`
@@ -218,6 +233,8 @@ Codex — BMad dev-story with bounded native implementation lanes and independen
 - `models/repositories/infra_automation_handoffs.py`
 - `models/repositories/infra_automation_targets.py`
 - `models/tables.py`
+- `requirements-dev.txt`
+- `requirements.txt`
 - `services/content_security.py`
 - `services/infra_automation_decisions.py`
 - `services/infra_automation_engine_service.py`
@@ -255,6 +272,10 @@ Codex — BMad dev-story with bounded native implementation lanes and independen
 - `tests/test_infra_automation/test_target_transport.py`
 
 ## Change Log
+
+- 2026-11-02: Add explicit TLS1.2 floor and transport regression proof for the PR CodeQL check; retain verified peer/certificate policy and failclosed pre-send errors.
+
+- 2026-11-02: Fix PR206 online dependency-audit failures with hash-locked pyasn1 security patch and scoped patched matcher plus compatible API-generator preload; validate both audits, generator/header semantics, frontend and provider/auth checks.
 
 - 2026-11-02: Resolve R4/R5/R6 with consistent material witnesses, future metadata reservations and bounded positive process-exit confirmation. All independent reviews and final Linux/production qualification passed. Mark scoped story done and proceed with authorized Git Flow closeout.
 

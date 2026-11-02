@@ -73,6 +73,15 @@ npm run ui:gen-api
 ```
 
 `frontend/scripts/gen-api.sh` reads `http://localhost:8080/api/v1/openapi.json` and commits the resulting `frontend/src/api/schema.d.ts`.
+The generator preloads `frontend/scripts/redocly-minimatch-compat.cjs` for its
+own process. Redocly1.x expects a callable CommonJS matcher while the patched
+minimatch11 exports named functions. The scoped override and adapter preserve
+both APIs, including configured schema-header matching, without patching package
+files. `npm run ui:test` runs the Node compatibility checks before Vitest.
+Remove the adapter and override together once an upstream generator supports the
+patched matcher. Keep current-source generation/typecheck/build in dependency
+update validation; do not use a forced downgrade to silence an audit.
+
 
 Backend-for-ui changes must also run the compose verification loop before PR:
 

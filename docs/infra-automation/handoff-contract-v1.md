@@ -266,7 +266,7 @@ itself. The double must separately recheck admission before counted action.
 
 The fixed GitHub-compatible transport constructs its own bounded dispatch path
 from registry fields and pins `X-GitHub-Api-Version: 2026-03-10`. Origins must also satisfy operator-owned configured host
-policy (default only `https://api.github.com`). HTTPS only, no URL credentials,
+policy (default only `https://api.github.com`). HTTPS with an explicit TLS1.2 minimum, verified certificates and hostnames; no URL credentials,
 query/fragment, workflow URL, redirects, or TLS verification bypass. Resolve all
 addresses at connection time, reject mixed/forbidden results, pin the numerical
 connection address, verify peer address and retain TLS hostname verification.

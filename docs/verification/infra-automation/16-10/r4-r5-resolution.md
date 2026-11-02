@@ -181,3 +181,48 @@ scope. UI validation not applicable.
 BMad Help's next delivery step is planning Story 16.11 after integration of this
 story. This task's authorized next action is git add/commit/push and a PR to
 `develop`; no merge or release is part of closeout.
+
+
+## PR206 audit-gate follow-up
+
+The initial pushed commit3c18585 passed the source qualification above, but
+GitHub's online dependency audits found newly published advisories in existing
+pins. These were real gate failures, not suppressed or reclassified as passes.
+
+- Python: pyasn10.6.4→0.6.5 in runtime/dev hash locks, with all other lock bytes
+  unchanged. [Upstream0.6.5 release](https://github.com/pyasn1/pyasn1/releases/tag/v0.6.5)
+  fixes the four ASN.1 advisories reported by CI. Strict runtime AND dev pip-audit
+  now report no known vulnerabilities; isolated exact recompiles, hash-verified
+  installs and pip consistency checks passed.
+- Frontend: scoped Redocly minimatch11.0.1 override fixes
+  [GHSA-g3hv-75wg-m249](https://github.com/advisories/GHSA-g3hv-75wg-m249), keeping
+  openapi-typescript7.13.0. A plain override broke Redocly's old callable matcher
+  in configured remote-header matching; red regressions reproduced that error.
+  The generator-only preload preserves all named export identities and provides
+  the callable API in that process's cache only, with no node_modules file patch.
+  A fresh subprocess retains the original export. Upstream Redocly2.x override
+  was rejected because the generator's private import is not exported there.
+- No new direct application dependency was introduced. The fixed matcher has its
+  required locked transitive helper. Root/frontend npm audits both report zero
+  vulnerabilities. Two Node compatibility tests,256 frontend unit tests,
+  typecheck and production build passed. Current-source API generation succeeded
+  with no schema.d.ts diff. Tooling-only changes require no rendered UI gate.
+- Python provider/auth affected checks:89 passed,1 opt-in skip,112 subtests.
+  No live credentials or provider calls were used. Backend authority source is
+  unchanged from the full2912-test qualified snapshot.
+
+The dependency follow-up is committed separately with Lore trailers and pushed
+to the existing PR; current remote gate outcomes are recorded at closeout.
+
+
+CodeQL's initial PR check also reported an implicit SSL protocol floor at
+`infra_automation/target_transport.py:383`. The transport now explicitly sets
+`SSLContext.minimum_version=ssl.TLSVersion.TLSv1_2` before wrapping, while keeping
+certificate/hostname verification, numeric peer pinning and redirect denial.
+Two regressions failed before the change and pass afterward; the full transport
+suite29 methods/183 subtests passed and independent security review was clean.
+A context unable to enforce the floor fails before any credential bytes are sent.
+The [Python SSL minimum-version contract](https://docs.python.org/3.11/library/ssl.html#ssl.SSLContext.minimum_version)
+is the implementation reference. The follow-up Docker build and nonroot health/
+OpenAPI smoke with patched pyasn10.6.5 passed; current source-schema generation
+remained unchanged. Remote CodeQL/Frontend/Security gates are rerun after push.
