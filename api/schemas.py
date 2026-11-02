@@ -5,6 +5,11 @@ from __future__ import annotations
 from infra_automation.review_contracts import (
     ApprovalReviewPacket as AutomationReviewPacket,
 )
+from infra_automation.targets import TargetView, TargetPage
+from infra_automation.receiver_protocol import (
+    ReceiverMessage,
+    validate_receiver_message,
+)
 from infra_automation.decisions import DecisionBinding as AutomationDecisionBinding
 from infra_automation.approval_eligibility import (
     EligibilityResult as AutomationEligibilityResult,
@@ -3077,3 +3082,90 @@ class AutomationApprovalReviewResponse(AutomationClosedModel):
                 json.dumps(value, allow_nan=False)
             )
         return value
+
+
+class AutomationTargetResponse(AutomationClosedModel):
+    data: TargetView
+    meta: AutomationMeta
+
+    @field_validator("data", mode="before")
+    @classmethod
+    def from_wire(cls, value: Any):
+        return (
+            TargetView.model_validate_json(json.dumps(value, allow_nan=False))
+            if isinstance(value, dict)
+            else value
+        )
+
+
+class AutomationTargetListResponse(AutomationClosedModel):
+    data: TargetPage
+    meta: AutomationMeta
+
+    @field_validator("data", mode="before")
+    @classmethod
+    def from_wire(cls, value: Any):
+        return (
+            TargetPage.model_validate_json(json.dumps(value, allow_nan=False))
+            if isinstance(value, dict)
+            else value
+        )
+
+
+class AutomationTargetLockView(AutomationClosedModel):
+    id: str
+    target_id: str
+    run_id: str
+    project_id: int
+    workspace_id: int
+    version: int
+    status: Literal["held", "resolved", "broken"]
+
+
+class AutomationTargetLockResponse(AutomationClosedModel):
+    data: AutomationTargetLockView
+    meta: AutomationMeta
+
+
+class AutomationHandoffView(AutomationClosedModel):
+    protocol_version: Literal[1]
+    id: str
+    version: int
+    state: Literal[
+        "prepared",
+        "sending",
+        "delivery_unknown",
+        "consumed",
+        "accepted",
+        "running",
+        "succeeded",
+        "failed",
+        "cancelled",
+    ]
+    project_id: int
+    workspace_id: int
+    run_id: str
+    handoff_step_id: str
+    approval_id: str
+    target_id: str
+    receiver_id: str
+    authorization_kind: Literal["advisory_request", "exact_plan"]
+    decision_binding_digest: str
+    receiver_binding_digest: str
+    payload_digest: str
+    deadline_at: str
+    created_at: str
+    broken: bool
+    consumed_at: str | None
+    receipt: ReceiverMessage | None
+    outcome: ReceiverMessage | None
+
+    @field_validator("receipt", "outcome", mode="before")
+    @classmethod
+    def frozen_receiver_from_wire(cls, value: Any):
+        return validate_receiver_message(value) if value is not None else None
+
+
+class AutomationHandoffResponse(AutomationClosedModel):
+    data: AutomationHandoffView
+    meta: AutomationMeta

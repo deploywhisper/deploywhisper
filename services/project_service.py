@@ -1391,6 +1391,13 @@ def guard_report(
     mutation: bool | None = None,
 ) -> AnalysisReport | None:
     _require_operation(session)
+    from infra_automation.handoff_context import (
+        has_receiver_report_read,
+        read_receiver_report,
+    )
+
+    if has_receiver_report_read():
+        return read_receiver_report(session, report_id, capability, mutation=mutation)
     report = session.get(AnalysisReport, report_id)
     if report is None:
         _mask_missing_scope(session)

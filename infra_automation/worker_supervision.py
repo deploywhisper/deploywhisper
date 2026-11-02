@@ -225,11 +225,10 @@ def _stop_worker(process, grouped):
         except ProcessLookupError:
             pass
         except PermissionError:
-            # A group may exit between the confirmation and signal on macOS.
-            # Permission errors for any still-executing group remain fatal.
-            if confirmed_dead():
-                return True
-            raise
+            # EPERM may race exit before the sentinel is observable on macOS.
+            # It is never proof of death: retry the existing bounded loop until
+            # sentinel AND whole-group confirmation succeed, or fail unconfirmed.
+            return confirmed_dead()
         return False
 
     if confirmed_dead() or send(signal.SIGTERM):

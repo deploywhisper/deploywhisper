@@ -690,9 +690,20 @@ class InfraAutomationWorkflowApiTests(unittest.TestCase):
             "AutomationPolicyResponse",
         ):
             self.assertFalse(components[name]["additionalProperties"])
+        handoff_paths = {
+            "/api/v1/infra-automation/handoffs/prepare",
+            "/api/v1/infra-automation/handoffs/{operation_id}",
+            "/api/v1/infra-automation/handoffs/{operation_id}/dispatch",
+        }
+        self.assertEqual(
+            {path for path in schema["paths"] if "/handoffs" in path},
+            handoff_paths,
+        )
         for path, methods in schema["paths"].items():
             self.assertNotIn("/runners", path)
-            self.assertNotIn("/handoffs", path)
+            self.assertNotIn("/consume", path)
+            self.assertNotIn("/receipts", path)
+            self.assertNotIn("/outcomes", path)
             for operation in methods.values():
                 response = operation["responses"]["200"]["content"]["application/json"][
                     "schema"

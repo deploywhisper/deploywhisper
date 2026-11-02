@@ -63,6 +63,30 @@ _TOKEN = re.compile(
     r"\b(?:AKIA[A-Z0-9]{16}|ASIA[A-Z0-9]{16}|gh[pousr]_[A-Za-z0-9]{20,}"
     r"|github_pat_[A-Za-z0-9_]{20,}|sk-(?:proj-|ant-)?[A-Za-z0-9_-]{12,})\b"
 )
+_HANDOFF_GRANT = re.compile(r"handoff-v1\.[0-9a-f]{64}", re.IGNORECASE)
+
+
+def _encoded_handoff_pattern() -> re.Pattern[str]:
+    # Receiver grants have a fixed75-byte ASCII form. Reserve its recognizable
+    # encoded namespace too, including case-normalized identifiers and the four
+    # base64 layers that fit a bounded retained reason. URL decoding is handled
+    # by the existing bounded reference/text walkers below.
+    prefix, size = "handoff-v1.", 75
+    patterns = []
+    for level in range(4):
+        prefix = base64.b64encode(prefix.encode()).decode()[: len(prefix) * 8 // 6]
+        padding = (3 - size % 3) % 3
+        size = 4 * ((size + 2) // 3)
+        remaining = size - padding - len(prefix)
+        minimum = max(0, remaining - level * 4)
+        patterns.append(
+            re.escape(prefix)
+            + rf"[A-Za-z0-9+/_-]{{{minimum},{remaining}}}={{0,{padding}}}"
+        )
+    return re.compile("|".join(patterns), re.IGNORECASE)
+
+
+_ENCODED_HANDOFF_GRANT = _encoded_handoff_pattern()
 _AUTHORIZATION = re.compile(
     # Whitespace before an optional quote is consumed once. Separate repeats
     # on both sides of an absent quote would repartition failing whitespace.
@@ -250,6 +274,8 @@ def _lexical_sensitive_values(text: str) -> set[str]:
     found.difference_update({"|", ">"})
     for pattern, group in (
         (_TOKEN, 0),
+        (_HANDOFF_GRANT, 0),
+        (_ENCODED_HANDOFF_GRANT, 0),
         (_PRIVATE_KEY, 0),
         (_AUTHORIZATION, "credential"),
         (_URL_CREDENTIAL, "credential"),
@@ -371,6 +397,8 @@ def _redact_lexical_text(value: str, *, sensitive_values: Iterable[str] = ()) ->
             )
     text = _PRIVATE_KEY.sub(REDACTED, text)
     text = _TOKEN.sub(REDACTED, text)
+    text = _HANDOFF_GRANT.sub(REDACTED, text)
+    text = _ENCODED_HANDOFF_GRANT.sub(REDACTED, text)
     text = _AUTHORIZATION.sub(lambda match: match.group(1) + REDACTED, text)
     text = _URL_CREDENTIAL.sub(lambda match: match.group(1) + REDACTED + "@", text)
 

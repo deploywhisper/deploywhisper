@@ -1492,3 +1492,329 @@ if "InfraAutomationDecision" not in globals():
         decided_at: Mapped[datetime | None] = mapped_column(
             DateTime(timezone=True), nullable=True
         )
+
+
+if "InfraAutomationTarget" not in globals():
+
+    class InfraAutomationTarget(Base):
+        __tablename__ = "infra_automation_targets"
+        __table_args__ = (
+            ForeignKeyConstraint(
+                ["receiver_principal_id"], ["identity_accounts.id"], ondelete="RESTRICT"
+            ),
+            ForeignKeyConstraint(
+                ["created_by"], ["identity_accounts.id"], ondelete="RESTRICT"
+            ),
+            CheckConstraint("version > 0 AND epoch > 0", name="ck_target_versions"),
+            CheckConstraint(
+                "length(id) BETWEEN 1 AND 128 AND id=lower(id) AND length(definition_bytes) BETWEEN 1 AND 131072 AND length(definition_digest)=71",
+                name="ck_target_bounds",
+            ),
+            {"sqlite_autoincrement": True},
+        )
+        sequence: Mapped[int] = mapped_column(
+            Integer, primary_key=True, autoincrement=True
+        )
+        id: Mapped[str] = mapped_column(String(128), nullable=False, unique=True)
+        definition_bytes: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+        definition_digest: Mapped[str] = mapped_column(String(71), nullable=False)
+        version: Mapped[int] = mapped_column(Integer, nullable=False)
+        epoch: Mapped[int] = mapped_column(Integer, nullable=False)
+        enabled: Mapped[bool] = mapped_column(Boolean, nullable=False)
+        receiver_principal_id: Mapped[str] = mapped_column(String(64), nullable=False)
+        created_by: Mapped[str] = mapped_column(String(64), nullable=False)
+        created_at: Mapped[datetime] = mapped_column(
+            DateTime(timezone=True), nullable=False
+        )
+        updated_at: Mapped[datetime] = mapped_column(
+            DateTime(timezone=True), nullable=False
+        )
+        last_observed_at: Mapped[datetime] = mapped_column(
+            DateTime(timezone=True), nullable=False
+        )
+
+
+if "InfraAutomationTargetAlias" not in globals():
+
+    class InfraAutomationTargetAlias(Base):
+        __tablename__ = "infra_automation_target_aliases"
+        __table_args__ = (
+            ForeignKeyConstraint(
+                ["target_id"], ["infra_automation_targets.id"], ondelete="RESTRICT"
+            ),
+            CheckConstraint(
+                "version > 0 AND length(alias) BETWEEN 1 AND 128 AND alias=lower(alias)",
+                name="ck_target_alias_bounds",
+            ),
+        )
+        alias: Mapped[str] = mapped_column(
+            String(128), nullable=False, primary_key=True
+        )
+        target_id: Mapped[str] = mapped_column(String(128), nullable=False)
+        active: Mapped[bool] = mapped_column(Boolean, nullable=False)
+        version: Mapped[int] = mapped_column(Integer, nullable=False)
+        created_at: Mapped[datetime] = mapped_column(
+            DateTime(timezone=True), nullable=False
+        )
+        updated_at: Mapped[datetime] = mapped_column(
+            DateTime(timezone=True), nullable=False
+        )
+
+
+if "InfraAutomationTargetScope" not in globals():
+
+    class InfraAutomationTargetScope(Base):
+        __tablename__ = "infra_automation_target_scopes"
+        __table_args__ = (
+            ForeignKeyConstraint(
+                ["target_id"], ["infra_automation_targets.id"], ondelete="RESTRICT"
+            ),
+            ForeignKeyConstraint(["project_id"], ["projects.id"], ondelete="RESTRICT"),
+            ForeignKeyConstraint(
+                ["project_id", "workspace_id"],
+                ["project_workspaces.project_id", "project_workspaces.id"],
+                ondelete="RESTRICT",
+            ),
+        )
+        target_id: Mapped[str] = mapped_column(
+            String(128), nullable=False, primary_key=True
+        )
+        project_id: Mapped[int] = mapped_column(
+            Integer, nullable=False, primary_key=True
+        )
+        workspace_id: Mapped[int] = mapped_column(
+            Integer, nullable=False, primary_key=True
+        )
+
+
+if "InfraAutomationTargetLock" not in globals():
+
+    class InfraAutomationTargetLock(Base):
+        __tablename__ = "infra_automation_target_locks"
+        __table_args__ = (
+            ForeignKeyConstraint(
+                ["target_id"], ["infra_automation_targets.id"], ondelete="RESTRICT"
+            ),
+            ForeignKeyConstraint(
+                ["run_id"], ["infra_automation_runs.id"], ondelete="RESTRICT"
+            ),
+            ForeignKeyConstraint(
+                ["project_id", "workspace_id"],
+                ["project_workspaces.project_id", "project_workspaces.id"],
+                ondelete="RESTRICT",
+            ),
+            CheckConstraint(
+                "status IN ('held','resolved','broken') AND version > 0 AND length(reason) BETWEEN 1 AND 256",
+                name="ck_target_lock_state",
+            ),
+        )
+        id: Mapped[str] = mapped_column(String(64), nullable=False, primary_key=True)
+        target_id: Mapped[str] = mapped_column(String(128), nullable=False)
+        run_id: Mapped[str] = mapped_column(String(64), nullable=False)
+        project_id: Mapped[int] = mapped_column(Integer, nullable=False)
+        workspace_id: Mapped[int] = mapped_column(Integer, nullable=False)
+        version: Mapped[int] = mapped_column(Integer, nullable=False)
+        status: Mapped[str] = mapped_column(String(16), nullable=False)
+        created_at: Mapped[datetime] = mapped_column(
+            DateTime(timezone=True), nullable=False
+        )
+        updated_at: Mapped[datetime] = mapped_column(
+            DateTime(timezone=True), nullable=False
+        )
+        reason: Mapped[str] = mapped_column(String(256), nullable=False)
+
+    Index(
+        "uq_infra_target_held",
+        InfraAutomationTargetLock.target_id,
+        unique=True,
+        sqlite_where=text("status = 'held'"),
+        postgresql_where=text("status = 'held'"),
+    )
+
+
+if "InfraAutomationRunTarget" not in globals():
+
+    class InfraAutomationRunTarget(Base):
+        __tablename__ = "infra_automation_run_targets"
+        __table_args__ = (
+            ForeignKeyConstraint(
+                ["run_id"], ["infra_automation_runs.id"], ondelete="RESTRICT"
+            ),
+            ForeignKeyConstraint(
+                ["target_id"], ["infra_automation_targets.id"], ondelete="RESTRICT"
+            ),
+            ForeignKeyConstraint(
+                ["lock_id"], ["infra_automation_target_locks.id"], ondelete="RESTRICT"
+            ),
+            ForeignKeyConstraint(
+                ["project_id", "workspace_id"],
+                ["project_workspaces.project_id", "project_workspaces.id"],
+                ondelete="RESTRICT",
+            ),
+            CheckConstraint(
+                "target_epoch > 0 AND length(snapshot_bytes) BETWEEN 1 AND 131072 AND length(snapshot_digest)=71",
+                name="ck_run_target_bounds",
+            ),
+        )
+        run_id: Mapped[str] = mapped_column(
+            String(64), nullable=False, primary_key=True
+        )
+        handoff_step_id: Mapped[str] = mapped_column(
+            String(128), nullable=False, primary_key=True
+        )
+        project_id: Mapped[int] = mapped_column(Integer, nullable=False)
+        workspace_id: Mapped[int] = mapped_column(Integer, nullable=False)
+        target_id: Mapped[str] = mapped_column(String(128), nullable=False)
+        target_epoch: Mapped[int] = mapped_column(Integer, nullable=False)
+        requested_alias: Mapped[str] = mapped_column(String(128), nullable=False)
+        lock_id: Mapped[str] = mapped_column(String(64), nullable=False)
+        snapshot_bytes: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+        snapshot_digest: Mapped[str] = mapped_column(String(71), nullable=False)
+        created_at: Mapped[datetime] = mapped_column(
+            DateTime(timezone=True), nullable=False
+        )
+
+
+if "InfraAutomationHandoff" not in globals():
+
+    class InfraAutomationHandoff(Base):
+        __tablename__ = "infra_automation_handoffs"
+        __table_args__ = (
+            ForeignKeyConstraint(
+                ["run_id"], ["infra_automation_runs.id"], ondelete="RESTRICT"
+            ),
+            ForeignKeyConstraint(
+                ["approval_id"], ["infra_automation_decisions.id"], ondelete="RESTRICT"
+            ),
+            ForeignKeyConstraint(
+                ["target_id"], ["infra_automation_targets.id"], ondelete="RESTRICT"
+            ),
+            ForeignKeyConstraint(
+                ["prepared_by"], ["identity_accounts.id"], ondelete="RESTRICT"
+            ),
+            ForeignKeyConstraint(
+                ["receiver_principal_id"], ["identity_accounts.id"], ondelete="RESTRICT"
+            ),
+            ForeignKeyConstraint(
+                ["project_id", "workspace_id"],
+                ["project_workspaces.project_id", "project_workspaces.id"],
+                ondelete="RESTRICT",
+            ),
+            UniqueConstraint("run_id", "step_id"),
+            UniqueConstraint("approval_id"),
+            UniqueConstraint("approval_id", "step_id"),
+            UniqueConstraint("project_id", "workspace_id", "prepared_by", "key_digest"),
+            CheckConstraint(
+                "state IN ('prepared','sending','delivery_unknown','consumed','accepted','running','succeeded','failed','cancelled') AND version > 0 AND target_epoch > 0 AND authorization_epoch > 0 AND restore_epoch > 0",
+                name="ck_handoff_state",
+            ),
+            CheckConstraint(
+                "length(decision_binding_bytes) BETWEEN 1 AND 131072 AND length(decision_binding_digest)=71 AND length(receiver_binding_bytes) BETWEEN 1 AND 131072 AND length(receiver_binding_digest)=71 AND length(payload_bytes) BETWEEN 1 AND 131072 AND length(payload_digest)=71 AND length(target_snapshot_bytes) BETWEEN 1 AND 131072 AND length(target_snapshot_digest)=71 AND length(key_digest)=71 AND length(request_digest)=71",
+                name="ck_handoff_bounds",
+            ),
+        )
+        id: Mapped[str] = mapped_column(String(64), nullable=False, primary_key=True)
+        run_id: Mapped[str] = mapped_column(String(64), nullable=False)
+        step_id: Mapped[str] = mapped_column(String(128), nullable=False)
+        approval_id: Mapped[str] = mapped_column(String(64), nullable=False)
+        project_id: Mapped[int] = mapped_column(Integer, nullable=False)
+        workspace_id: Mapped[int] = mapped_column(Integer, nullable=False)
+        target_id: Mapped[str] = mapped_column(String(128), nullable=False)
+        receiver_id: Mapped[str] = mapped_column(String(128), nullable=False)
+        receiver_principal_id: Mapped[str] = mapped_column(String(64), nullable=False)
+        prepared_by: Mapped[str] = mapped_column(String(64), nullable=False)
+        key_digest: Mapped[str] = mapped_column(String(71), nullable=False)
+        request_digest: Mapped[str] = mapped_column(String(71), nullable=False)
+        decision_binding_bytes: Mapped[bytes] = mapped_column(
+            LargeBinary, nullable=False
+        )
+        decision_binding_digest: Mapped[str] = mapped_column(String(71), nullable=False)
+        receiver_binding_bytes: Mapped[bytes] = mapped_column(
+            LargeBinary, nullable=False
+        )
+        receiver_binding_digest: Mapped[str] = mapped_column(String(71), nullable=False)
+        payload_bytes: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+        payload_digest: Mapped[str] = mapped_column(String(71), nullable=False)
+        target_snapshot_bytes: Mapped[bytes] = mapped_column(
+            LargeBinary, nullable=False
+        )
+        target_snapshot_digest: Mapped[str] = mapped_column(String(71), nullable=False)
+        target_epoch: Mapped[int] = mapped_column(Integer, nullable=False)
+        authorization_epoch: Mapped[int] = mapped_column(Integer, nullable=False)
+        restore_epoch: Mapped[int] = mapped_column(Integer, nullable=False)
+        deadline_at: Mapped[datetime] = mapped_column(
+            DateTime(timezone=True), nullable=False
+        )
+        created_at: Mapped[datetime] = mapped_column(
+            DateTime(timezone=True), nullable=False
+        )
+        last_observed_at: Mapped[datetime] = mapped_column(
+            DateTime(timezone=True), nullable=False
+        )
+        version: Mapped[int] = mapped_column(Integer, nullable=False)
+        state: Mapped[str] = mapped_column(String(32), nullable=False)
+        broken: Mapped[bool] = mapped_column(Boolean, nullable=False)
+
+
+if "InfraAutomationOutbox" not in globals():
+
+    class InfraAutomationOutbox(Base):
+        __tablename__ = "infra_automation_outbox"
+        __table_args__ = (
+            ForeignKeyConstraint(
+                ["operation_id"], ["infra_automation_handoffs.id"], ondelete="RESTRICT"
+            ),
+            CheckConstraint(
+                "state IN ('pending','sending','delivery_unknown','delivered','cancelled') AND version > 0",
+                name="ck_outbox_state",
+            ),
+        )
+        operation_id: Mapped[str] = mapped_column(
+            String(64), nullable=False, primary_key=True
+        )
+        version: Mapped[int] = mapped_column(Integer, nullable=False)
+        state: Mapped[str] = mapped_column(String(32), nullable=False)
+        attempted_at: Mapped[datetime | None] = mapped_column(
+            DateTime(timezone=True), nullable=True
+        )
+        updated_at: Mapped[datetime] = mapped_column(
+            DateTime(timezone=True), nullable=False
+        )
+
+
+if "InfraAutomationGrant" not in globals():
+
+    class InfraAutomationGrant(Base):
+        __tablename__ = "infra_automation_grants"
+        __table_args__ = (
+            ForeignKeyConstraint(
+                ["operation_id"], ["infra_automation_handoffs.id"], ondelete="RESTRICT"
+            ),
+            UniqueConstraint("operation_id"),
+            CheckConstraint(
+                "status IN ('available','consumed','invalidated') AND version > 0 AND length(verifier_digest)=71 AND length(key_ref) BETWEEN 1 AND 128",
+                name="ck_grant_state",
+            ),
+            CheckConstraint(
+                "(status='consumed' AND consumed_at IS NOT NULL AND receipt_bytes IS NOT NULL AND length(receipt_bytes) BETWEEN 1 AND 131072 AND receipt_digest IS NOT NULL AND length(receipt_digest)=71) OR (status IN ('available','invalidated') AND consumed_at IS NULL AND receipt_bytes IS NULL AND receipt_digest IS NULL)",
+                name="ck_grant_receipt",
+            ),
+        )
+        id: Mapped[str] = mapped_column(String(64), nullable=False, primary_key=True)
+        operation_id: Mapped[str] = mapped_column(String(64), nullable=False)
+        verifier_digest: Mapped[str] = mapped_column(String(71), nullable=False)
+        key_ref: Mapped[str] = mapped_column(String(128), nullable=False)
+        receiver_id: Mapped[str] = mapped_column(String(128), nullable=False)
+        deadline_at: Mapped[datetime] = mapped_column(
+            DateTime(timezone=True), nullable=False
+        )
+        created_at: Mapped[datetime] = mapped_column(
+            DateTime(timezone=True), nullable=False
+        )
+        status: Mapped[str] = mapped_column(String(16), nullable=False)
+        version: Mapped[int] = mapped_column(Integer, nullable=False)
+        consumed_at: Mapped[datetime | None] = mapped_column(
+            DateTime(timezone=True), nullable=True
+        )
+        receipt_bytes: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
+        receipt_digest: Mapped[str | None] = mapped_column(String(71), nullable=True)

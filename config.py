@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import json
 import math
 import os
+import re
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -80,8 +82,91 @@ def connector_credential_values() -> tuple[str, ...]:
 def configured_credential_values() -> tuple[str, ...]:
     """Return credentials shared by screening boundaries, never persistent storage."""
     return tuple(
-        dict.fromkeys(provider_credential_values() + connector_credential_values())
+        dict.fromkeys(
+            provider_credential_values()
+            + connector_credential_values()
+            + handoff_credential_values()
+        )
     )
+
+
+def handoff_allowed_origins() -> tuple[str, ...]:
+    """Operator-owned allowlist; a workflow/registry cannot broaden it."""
+    raw = os.getenv("DEPLOYWHISPER_INFRA_ALLOWED_ORIGINS", '["https://api.github.com"]')
+    value = json.loads(raw)
+    if (
+        type(value) is not list
+        or not 1 <= len(value) <= 16
+        or any(type(item) is not str for item in value)
+    ):
+        raise ValueError("Invalid handoff origin configuration")
+    from infra_automation.target_transport import canonical_origin
+
+    origins = tuple(canonical_origin(item) for item in value)
+    if len(origins) != len(set(origins)):
+        raise ValueError("Duplicate handoff origin configuration")
+    return origins
+
+
+def handoff_credentials(kind: str) -> dict[str, str]:
+    """Resolve only dedicated operator maps, never arbitrary environment names."""
+    names = {
+        "dispatch": "DEPLOYWHISPER_INFRA_DISPATCH_CREDENTIALS",
+        "receiver": "DEPLOYWHISPER_INFRA_RECEIVER_CREDENTIALS",
+    }
+    if kind not in names:
+        raise ValueError("Unknown handoff credential purpose")
+    raw = os.getenv(names[kind], "{}")
+    if len(raw) > 65536:
+        raise ValueError("Handoff credential configuration exceeds its bound")
+    value = json.loads(raw)
+    if (
+        type(value) is not dict
+        or len(value) > 32
+        or any(
+            type(key) is not str
+            or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}", key)
+            or type(secret) is not str
+            or not 32 <= len(secret) <= 4096
+            or any(ord(char) < 33 or ord(char) > 126 for char in secret)
+            for key, secret in value.items()
+        )
+    ):
+        raise ValueError("Invalid handoff credential configuration")
+    return value
+
+
+def handoff_grant_key(key_ref: str = "handoff-v1") -> bytes:
+    """Dedicated stable grant derivation key; caller refs cannot name env vars."""
+    value = os.getenv("DEPLOYWHISPER_INFRA_GRANT_KEY", "")
+    if (
+        key_ref != "handoff-v1"
+        or not 32 <= len(value) <= 4096
+        or any(ord(char) < 33 or ord(char) > 126 for char in value)
+    ):
+        raise ValueError("Handoff grant key unavailable")
+    return value.encode("ascii")
+
+
+def handoff_credential_values() -> tuple[str, ...]:
+    """Include dedicated ephemeral handoff credentials in existing screening."""
+    values = [os.getenv("DEPLOYWHISPER_INFRA_GRANT_KEY", "")]
+    for name in (
+        "DEPLOYWHISPER_INFRA_DISPATCH_CREDENTIALS",
+        "DEPLOYWHISPER_INFRA_RECEIVER_CREDENTIALS",
+    ):
+        raw = os.getenv(name, "")
+        if raw:
+            values.append(raw)
+            try:
+                parsed = json.loads(raw)
+                if type(parsed) is dict:
+                    values.extend(
+                        item for item in parsed.values() if type(item) is str and item
+                    )
+            except (ValueError, TypeError):
+                pass
+    return tuple(dict.fromkeys(value for value in values if value))
 
 
 def _float_env(name: str, default: float) -> float:

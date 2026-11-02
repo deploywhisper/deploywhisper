@@ -51,6 +51,16 @@ from infra_automation.lifecycle import (
 from services import infra_automation_service as service
 from services import infra_automation_review as approval_review
 from services import infra_automation_decisions as decisions
+from services import infra_automation_targets as targets
+from services import infra_automation_handoffs as handoffs
+from infra_automation.handoff import PrepareHandoffRequest, DispatchHandoffRequest
+from api.schemas import AutomationHandoffResponse
+from infra_automation.targets import RegisterTargetRequest, BreakLockRequest
+from api.schemas import (
+    AutomationTargetResponse,
+    AutomationTargetListResponse,
+    AutomationTargetLockResponse,
+)
 from services.infra_automation_decisions import DecisionRequest
 from api.schemas import (
     AutomationApprovalListResponse,
@@ -433,3 +443,49 @@ def get_approval(
 )
 def decide_approval(approval_id: ObjectId, payload: DecisionRequest):
     return _response(decisions.decide(approval_id, payload))
+
+
+@router.post("/targets", response_model=AutomationTargetResponse)
+def register_target(payload: RegisterTargetRequest):
+    return _response(targets.register_target(payload))
+
+
+@router.get("/targets", response_model=AutomationTargetListResponse)
+def list_targets(
+    project_id: ScopeId,
+    workspace_id: ScopeId,
+    limit: PageLimit = 25,
+    cursor: PageCursor = None,
+):
+    return _response(
+        targets.list_targets(project_id, workspace_id, limit=limit, cursor=cursor)
+    )
+
+
+@router.get("/targets/{target_id}", response_model=AutomationTargetResponse)
+def get_target(target_id: ObjectId, project_id: ScopeId, workspace_id: ScopeId):
+    return _response(targets.get_target(target_id, project_id, workspace_id))
+
+
+@router.post(
+    "/targets/{target_id}/break-lock", response_model=AutomationTargetLockResponse
+)
+def break_target_lock(target_id: ObjectId, payload: BreakLockRequest):
+    return _response(targets.break_lock(target_id, payload))
+
+
+@router.post("/handoffs/prepare", response_model=AutomationHandoffResponse)
+def prepare_handoff(payload: PrepareHandoffRequest):
+    return _response(handoffs.prepare(payload))
+
+
+@router.get("/handoffs/{operation_id}", response_model=AutomationHandoffResponse)
+def get_handoff(operation_id: ObjectId, project_id: ScopeId, workspace_id: ScopeId):
+    return _response(handoffs.get_operation(operation_id, project_id, workspace_id))
+
+
+@router.post(
+    "/handoffs/{operation_id}/dispatch", response_model=AutomationHandoffResponse
+)
+def dispatch_handoff(operation_id: ObjectId, payload: DispatchHandoffRequest):
+    return _response(handoffs.dispatch(operation_id, payload))

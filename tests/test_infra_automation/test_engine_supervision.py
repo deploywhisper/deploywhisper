@@ -205,6 +205,94 @@ class WorkerSupervisionTests(TestCase):
         send.assert_not_called()
         process.join.assert_called_once()
 
+    def test_permission_error_waits_for_delayed_exit_and_group_confirmation(self):
+        process = Mock(pid=12345)
+        process.exitcode = 0
+        observed = []
+        readiness = iter(([], [], [process.sentinel]))
+
+        def sentinel_ready(*args, **kwargs):
+            observed.append("sentinel")
+            return next(readiness)
+
+        def group_executing(pgid):
+            self.assertEqual(pgid, process.pid)
+            observed.append("group-clear")
+            return False
+
+        def join(*args, **kwargs):
+            self.assertEqual(observed[-1], "group-clear")
+            observed.append("join")
+
+        process.join.side_effect = join
+        with (
+            patch("infra_automation.worker_supervision.os.getpgid", return_value=12345),
+            patch(
+                "infra_automation.worker_supervision.wait", side_effect=sentinel_ready
+            ),
+            patch(
+                "infra_automation.worker_supervision._group_executing",
+                side_effect=group_executing,
+            ) as group,
+            patch(
+                "infra_automation.worker_supervision.os.killpg",
+                side_effect=PermissionError,
+            ) as send,
+        ):
+            _stop_worker(process, True)
+        self.assertEqual(
+            observed, ["sentinel", "sentinel", "sentinel", "group-clear", "join"]
+        )
+        send.assert_called_once_with(process.pid, signal.SIGTERM)
+        group.assert_called_once_with(process.pid)
+        process.join.assert_called_once_with(timeout=0.2)
+        process.close.assert_not_called()
+
+    def test_persistent_permission_error_keeps_execution_unconfirmed_and_bounded(self):
+        for leader_exited in (False, True):
+            with self.subTest(leader_exited=leader_exited):
+                process = Mock(pid=12345)
+                process.exitcode = 0
+                observed = [0.0]
+                timer = Mock()
+                timer.monotonic.side_effect = lambda: observed[0]
+
+                def sleep(seconds):
+                    observed[0] += seconds
+
+                timer.sleep.side_effect = sleep
+                with (
+                    patch("infra_automation.worker_supervision.time", timer),
+                    patch(
+                        "infra_automation.worker_supervision.os.getpgid",
+                        return_value=12345,
+                    ),
+                    patch(
+                        "infra_automation.worker_supervision.wait",
+                        return_value=[process.sentinel] if leader_exited else [],
+                    ),
+                    patch(
+                        "infra_automation.worker_supervision._group_executing",
+                        return_value=True,
+                    ) as group,
+                    patch(
+                        "infra_automation.worker_supervision.os.killpg",
+                        side_effect=PermissionError,
+                    ) as send,
+                    self.assertRaisesRegex(RuntimeError, "termination unconfirmed"),
+                ):
+                    _stop_worker(process, True)
+                self.assertGreaterEqual(observed[0], 1.5)
+                self.assertLessEqual(observed[0], 1.55)
+                self.assertLessEqual(timer.sleep.call_count, 80)
+                self.assertGreater(send.call_count, 1)
+                if leader_exited:
+                    self.assertGreater(group.call_count, 1)
+                else:
+                    group.assert_not_called()
+                process.join.assert_not_called()
+                process.close.assert_not_called()
+
     def test_unsupported_file_locking_is_inert_before_touching_storage(self):
         with (
             patch("infra_automation.worker_supervision.fcntl", None),

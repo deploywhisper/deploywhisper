@@ -350,6 +350,7 @@ def _evaluate_action_path(
     decision_binding_digest: str | None = None,
     decision_approved: bool = False,
     phase: Phase = "dispatch",
+    resolved_targets: tuple[tuple[str, str], ...] = (),
 ) -> EligibilityResult:
     """Require this exact validated handoff's complete successful AND ancestry.
 
@@ -395,10 +396,28 @@ def _evaluate_action_path(
         or type(gate.environment) is not str
     ):
         reasons.append("scope_unresolved")
+    try:
+        if (
+            type(resolved_targets) is not tuple
+            or len(resolved_targets) > 50
+            or any(
+                type(item) is not tuple
+                or len(item) != 2
+                or any(
+                    type(part) is not str or not 1 <= len(part) <= 128 for part in item
+                )
+                for item in resolved_targets
+            )
+            or len(dict(resolved_targets)) != len(resolved_targets)
+        ):
+            raise ValueError
+        target_id = dict(resolved_targets).get(gate.target_id, gate.target_id)
+    except (ValueError, TypeError):
+        return _result(reasons + ["lineage_mismatch"])
     if (
         evidence.report_step_id != analysis.id
         or evidence.artifact_step_id != source.id
-        or live.target_id != gate.target_id
+        or live.target_id != target_id
         or live.environment != gate.environment
         or live.authorization_kind != gate.authorization_kind
         or (source.kind == "admitted_collection")
@@ -460,6 +479,7 @@ def evaluate_decision(
     decision_binding_digest: str | None = None,
     decision_approved: bool = False,
     phase: Phase = "decision",
+    resolved_targets: tuple[tuple[str, str], ...] = (),
 ) -> EligibilityResult:
     """Check a human decision's own exact gate and mandatory prerequisite path.
 
@@ -478,6 +498,7 @@ def evaluate_decision(
         decision_binding_digest=decision_binding_digest,
         decision_approved=decision_approved,
         phase=phase,
+        resolved_targets=resolved_targets,
     )
 
 
@@ -493,6 +514,7 @@ def evaluate_handoff(
     decision_binding_digest: str | None = None,
     decision_approved: bool = False,
     phase: Phase = "dispatch",
+    resolved_targets: tuple[tuple[str, str], ...] = (),
 ) -> EligibilityResult:
     """Check the exact human binding and, before effects, full handoff ancestry."""
     return _evaluate_action_path(
@@ -506,4 +528,5 @@ def evaluate_handoff(
         decision_binding_digest=decision_binding_digest,
         decision_approved=decision_approved,
         phase=phase,
+        resolved_targets=resolved_targets,
     )

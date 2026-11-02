@@ -604,6 +604,15 @@ Receipts recover decisions after response loss; single-operator mode labels
 acknowledgement explicitly. See the [approval review guide](docs/infra-automation/approval-review.md)
 for permissions, freshness, audit export and keyboard behavior.
 
+Registered infrastructure targets bind canonical aliases, concrete project/workspace
+scope, destination policy and durable handoff locks. Preparation retains an exact
+approved payload, outbox intent and one-use grant before dispatch. Configure
+operator-owned origins and environment-backed credential references using the
+[registered targets and handoff guide](docs/infra-automation/handoff-contract-v1.md#operator-configuration-and-limits).
+Default execution ports remain unavailable; handoff admission also requires a
+qualified server-owned material-generation witness covering the complete decision
+graph. This slice does not qualify a live GitHub receiver or collector.
+
 ### Core Runtime Variables
 
 - `APP_NAME`
@@ -692,6 +701,7 @@ Project documentation currently lives in a few places:
 - [Uploaded Artifact Preflight and Report Linkage](./docs/infra-automation/preflight.md)
 - [Evidence-bound Decisions and Freshness](./docs/infra-automation/decisions.md)
 - [Approval Review Packet and Confirmation](./docs/infra-automation/approval-review.md)
+- [Registered Targets, Durable Handoffs, and Operator Configuration](./docs/infra-automation/handoff-contract-v1.md)
 - [Workflow Editor, Account Access, and Run History](./docs/infra-automation/browser-ui.md)
 - [CI Guide](./docs/ci.md)
 - [CI Secrets Checklist](./docs/ci-secrets-checklist.md)
