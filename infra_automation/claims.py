@@ -319,6 +319,9 @@ def _run(session, run_id, now, *, live=True, operation="consume", active=True):
         _deny()
     if live:
         policy.check_live_policy(session, stamp, operation)
+        from services.infra_automation_targets import check_run_targets
+
+        check_run_targets(session, row, document)
     return row, document
 
 

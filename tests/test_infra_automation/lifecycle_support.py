@@ -25,6 +25,44 @@ from services import project_service as auth
 
 
 class LifecycleCase(unittest.TestCase):
+    # Synthetic provider ledger: every replacement advances its source epoch,
+    # including revoke-and-restore ABA. Never infer epochs by occasional hashes.
+    def _store_material(self, name, value):
+        if not hasattr(self, "_material_values"):
+            self._material_values, self._material_epochs = {}, {}
+        self._material_values[name] = value
+        self._material_epochs[name] = self._material_epochs.get(name, 0) + 1
+
+    @property
+    def material(self):
+        return self._material_values["decision"]
+
+    @material.setter
+    def material(self, value):
+        self._store_material("decision", value)
+
+    @property
+    def ancestor_material(self):
+        return self._material_values["decision-a"]
+
+    @ancestor_material.setter
+    def ancestor_material(self, value):
+        self._store_material("decision-a", value)
+
+    def material_witness(self, session, scope):
+        from services.infra_automation_decisions import MaterialWitness
+
+        return MaterialWitness(
+            source_id="synthetic-material-ledger",
+            scope_digest=scope.digest,
+            # The base fixture shares selected material across steps; handoff
+            # fixtures install a separate ancestor source when needed.
+            generations=tuple(
+                self._material_epochs.get(step, self._material_epochs["decision"])
+                for _, step, _ in scope.receipts
+            ),
+        )
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)

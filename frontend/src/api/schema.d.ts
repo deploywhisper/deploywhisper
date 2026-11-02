@@ -1188,6 +1188,109 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/infra-automation/targets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Targets */
+        get: operations["list_targets_api_v1_infra_automation_targets_get"];
+        put?: never;
+        /** Register Target */
+        post: operations["register_target_api_v1_infra_automation_targets_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/infra-automation/targets/{target_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Target */
+        get: operations["get_target_api_v1_infra_automation_targets__target_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/infra-automation/targets/{target_id}/break-lock": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Break Target Lock */
+        post: operations["break_target_lock_api_v1_infra_automation_targets__target_id__break_lock_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/infra-automation/handoffs/prepare": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Prepare Handoff */
+        post: operations["prepare_handoff_api_v1_infra_automation_handoffs_prepare_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/infra-automation/handoffs/{operation_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Handoff */
+        get: operations["get_handoff_api_v1_infra_automation_handoffs__operation_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/infra-automation/handoffs/{operation_id}/dispatch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Dispatch Handoff */
+        post: operations["dispatch_handoff_api_v1_infra_automation_handoffs__operation_id__dispatch_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/scanner-imports/sarif": {
         parameters: {
             query?: never;
@@ -2762,6 +2865,63 @@ export interface components {
         AutomationErrorResponse: {
             error: components["schemas"]["AutomationError"];
         };
+        /** AutomationHandoffResponse */
+        AutomationHandoffResponse: {
+            data: components["schemas"]["AutomationHandoffView"];
+            meta: components["schemas"]["AutomationMeta"];
+        };
+        /** AutomationHandoffView */
+        AutomationHandoffView: {
+            /**
+             * Protocol Version
+             * @constant
+             */
+            protocol_version: 1;
+            /** Id */
+            id: string;
+            /** Version */
+            version: number;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "prepared" | "sending" | "delivery_unknown" | "consumed" | "accepted" | "running" | "succeeded" | "failed" | "cancelled";
+            /** Project Id */
+            project_id: number;
+            /** Workspace Id */
+            workspace_id: number;
+            /** Run Id */
+            run_id: string;
+            /** Handoff Step Id */
+            handoff_step_id: string;
+            /** Approval Id */
+            approval_id: string;
+            /** Target Id */
+            target_id: string;
+            /** Receiver Id */
+            receiver_id: string;
+            /**
+             * Authorization Kind
+             * @enum {string}
+             */
+            authorization_kind: "advisory_request" | "exact_plan";
+            /** Decision Binding Digest */
+            decision_binding_digest: string;
+            /** Receiver Binding Digest */
+            receiver_binding_digest: string;
+            /** Payload Digest */
+            payload_digest: string;
+            /** Deadline At */
+            deadline_at: string;
+            /** Created At */
+            created_at: string;
+            /** Broken */
+            broken: boolean;
+            /** Consumed At */
+            consumed_at: string | null;
+            receipt: components["schemas"]["ReceiverMessage"] | null;
+            outcome: components["schemas"]["ReceiverMessage"] | null;
+        };
         /** AutomationLogListResponse */
         AutomationLogListResponse: {
             data: components["schemas"]["LogPage"];
@@ -2925,6 +3085,41 @@ export interface components {
         /** AutomationStepListResponse */
         AutomationStepListResponse: {
             data: components["schemas"]["StepPage"];
+            meta: components["schemas"]["AutomationMeta"];
+        };
+        /** AutomationTargetListResponse */
+        AutomationTargetListResponse: {
+            data: components["schemas"]["TargetPage"];
+            meta: components["schemas"]["AutomationMeta"];
+        };
+        /** AutomationTargetLockResponse */
+        AutomationTargetLockResponse: {
+            data: components["schemas"]["AutomationTargetLockView"];
+            meta: components["schemas"]["AutomationMeta"];
+        };
+        /** AutomationTargetLockView */
+        AutomationTargetLockView: {
+            /** Id */
+            id: string;
+            /** Target Id */
+            target_id: string;
+            /** Run Id */
+            run_id: string;
+            /** Project Id */
+            project_id: number;
+            /** Workspace Id */
+            workspace_id: number;
+            /** Version */
+            version: number;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "held" | "resolved" | "broken";
+        };
+        /** AutomationTargetResponse */
+        AutomationTargetResponse: {
+            data: components["schemas"]["TargetView"];
             meta: components["schemas"]["AutomationMeta"];
         };
         /** AutomationValidation */
@@ -3125,6 +3320,26 @@ export interface components {
              */
             type: "boolean";
         };
+        /** BreakLockRequest */
+        BreakLockRequest: {
+            /** Reason */
+            reason: string;
+            /**
+             * Version
+             * @default 1
+             */
+            version: number;
+            /** Project Id */
+            project_id: number;
+            /** Workspace Id */
+            workspace_id: number;
+            /** Expected Lock Id */
+            expected_lock_id: string;
+            /** Expected Version */
+            expected_version: number;
+            /** Acknowledge Uncertainty */
+            acknowledge_uncertainty: boolean;
+        };
         /** CancelRunRequest */
         CancelRunRequest: {
             /** Reason */
@@ -3166,6 +3381,35 @@ export interface components {
             metadata?: {
                 [key: string]: unknown;
             };
+        };
+        /** Collected */
+        Collected: {
+            /**
+             * Version
+             * @default 1
+             */
+            version: number;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "collected";
+            /** Repository Id */
+            repository_id: string;
+            /** Commit Sha */
+            commit_sha: string;
+            /** Collector Id */
+            collector_id: string;
+            /** Profile Digest */
+            profile_digest: string;
+            /** Screened Transport Digest */
+            screened_transport_digest: string;
+            /** Redaction Version */
+            redaction_version: number;
+            /** Collected At */
+            collected_at: string;
+            /** Source Deadline */
+            source_deadline: string;
         };
         /** CollectionParameters */
         CollectionParameters: {
@@ -3785,6 +4029,22 @@ export interface components {
         DeploymentOutcomeResponse: {
             data: components["schemas"]["DeploymentOutcomeData"];
             meta: components["schemas"]["ResourceOnlyMetaPayload"];
+        };
+        /** DispatchHandoffRequest */
+        DispatchHandoffRequest: {
+            /** Reason */
+            reason: string;
+            /**
+             * Version
+             * @default 1
+             */
+            version: number;
+            /** Project Id */
+            project_id: number;
+            /** Workspace Id */
+            workspace_id: number;
+            /** Expected Version */
+            expected_version: number;
         };
         /** EligibilityResult */
         EligibilityResult: {
@@ -5549,6 +5809,26 @@ export interface components {
             /** Artifacts */
             artifacts: components["schemas"]["ArtifactUpload"][];
         };
+        /** PrepareHandoffRequest */
+        PrepareHandoffRequest: {
+            /** Reason */
+            reason: string;
+            /**
+             * Version
+             * @default 1
+             */
+            version: number;
+            /** Project Id */
+            project_id: number;
+            /** Workspace Id */
+            workspace_id: number;
+            /** Approval Id */
+            approval_id: string;
+            /** Handoff Step Id */
+            handoff_step_id: string;
+            /** Idempotency Key */
+            idempotency_key: string;
+        };
         /** PreviousScanDiffData */
         PreviousScanDiffData: {
             /**
@@ -5750,6 +6030,22 @@ export interface components {
             data: components["schemas"]["ProjectRoleData"][];
             meta: components["schemas"]["ListMetaPayload"];
         };
+        /** Provenance */
+        Provenance: {
+            /**
+             * Version
+             * @default 1
+             */
+            version: number;
+            /**
+             * Authorization Kind
+             * @enum {string}
+             */
+            authorization_kind: "advisory_request" | "exact_plan";
+            /** Source */
+            source: components["schemas"]["Uploaded"] | components["schemas"]["Collected"];
+            custody?: components["schemas"]["Custody"] | null;
+        };
         /** ProviderCapabilityData */
         ProviderCapabilityData: {
             /**
@@ -5923,6 +6219,123 @@ export interface components {
             expected_version: number;
             /** Idempotency Key */
             idempotency_key: string;
+        };
+        /** ReceiverBinding */
+        ReceiverBinding: {
+            /**
+             * Version
+             * @default 1
+             */
+            version: number;
+            /**
+             * Authorization Kind
+             * @enum {string}
+             */
+            authorization_kind: "advisory_request" | "exact_plan";
+            /** Workflow Id */
+            workflow_id: string;
+            /** Workflow Revision Digest */
+            workflow_revision_digest: string;
+            /** Input Digest */
+            input_digest: string;
+            provenance: components["schemas"]["Provenance"];
+            /** Project Id */
+            project_id: string;
+            /** Workspace Id */
+            workspace_id: string;
+            /** Environment */
+            environment: string;
+            /** Canonical Target */
+            canonical_target: string;
+            /** Receiver Id */
+            receiver_id: string;
+            /** Pipeline Repository Id */
+            pipeline_repository_id: string;
+            /** Pipeline Workflow Id */
+            pipeline_workflow_id: string;
+            /** Pipeline Workflow Revision */
+            pipeline_workflow_revision: string;
+            /** Report Id */
+            report_id: number;
+            /**
+             * Report Schema Version
+             * @constant
+             */
+            report_schema_version: "v2";
+            /** Report Bytes Digest */
+            report_bytes_digest: string;
+            /** Policy Version */
+            policy_version: number;
+            /**
+             * Policy Result
+             * @constant
+             */
+            policy_result: "passed";
+            /** Policy Digest */
+            policy_digest: string;
+            /** Unit Waves Digest */
+            unit_waves_digest: string;
+            /** Screened Artifact Digests */
+            screened_artifact_digests: string[];
+            /** Redaction Version */
+            redaction_version: number;
+            /** Payload Digest */
+            payload_digest: string;
+            /** Evidence Deadline */
+            evidence_deadline: string;
+            /** Approval Deadline */
+            approval_deadline: string;
+            /** Authorization Epoch */
+            authorization_epoch: number;
+            /** Restore Epoch */
+            restore_epoch: number;
+        };
+        /** ReceiverMessage */
+        ReceiverMessage: {
+            /**
+             * Version
+             * @default 1
+             */
+            version: number;
+            /**
+             * Operation
+             * @enum {string}
+             */
+            operation: "consume" | "receipt" | "status" | "outcome" | "reconcile";
+            /** Operation Id */
+            operation_id: string;
+            /**
+             * Audience
+             * @constant
+             */
+            audience: "receiver-operation-v1";
+            binding: components["schemas"]["ReceiverBinding"];
+            /** Binding Digest */
+            binding_digest: string;
+            /** Sequence */
+            sequence: number;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "consumed" | "accepted" | "running" | "succeeded" | "failed" | "delivery_unknown" | "cancel_requested";
+        };
+        /** RegisterTargetRequest */
+        RegisterTargetRequest: {
+            /** Reason */
+            reason: string;
+            /**
+             * Version
+             * @default 1
+             */
+            version: number;
+            /** Project Id */
+            project_id: number;
+            /** Workspace Id */
+            workspace_id: number;
+            /** Expected Version */
+            expected_version: number;
+            definition: components["schemas"]["TargetDefinition"];
         };
         /** RegisteredGithubHandoffStep */
         RegisteredGithubHandoffStep: {
@@ -7526,6 +7939,138 @@ export interface components {
                 [key: string]: unknown;
             };
         };
+        /** TargetDefinition */
+        TargetDefinition: {
+            /**
+             * Version
+             * @default 1
+             */
+            version: number;
+            /** Canonical Target */
+            canonical_target: string;
+            /**
+             * Aliases
+             * @default []
+             */
+            aliases: string[];
+            /** Allowed Scopes */
+            allowed_scopes: components["schemas"]["TargetScope"][];
+            /** Environment */
+            environment: string;
+            /** Receiver Id */
+            receiver_id: string;
+            /** Pipeline Repository Id */
+            pipeline_repository_id: string;
+            /** Pipeline Workflow Id */
+            pipeline_workflow_id: string;
+            /** Pipeline Workflow Revision */
+            pipeline_workflow_revision: string;
+            /** Github Owner */
+            github_owner: string;
+            /** Github Repository */
+            github_repository: string;
+            /** Github Workflow */
+            github_workflow: string;
+            /** Workflow Ref */
+            workflow_ref: string;
+            /**
+             * Api Origin
+             * @default https://api.github.com
+             */
+            api_origin: string;
+            /**
+             * Allowed Private Addresses
+             * @default []
+             */
+            allowed_private_addresses: string[];
+            /** Credential Ref */
+            credential_ref: string;
+            /** Receiver Credential Ref */
+            receiver_credential_ref: string;
+            /**
+             * Enabled
+             * @default true
+             */
+            enabled: boolean;
+        };
+        /** TargetLockView */
+        TargetLockView: {
+            /** Project Id */
+            project_id: number;
+            /** Workspace Id */
+            workspace_id: number;
+            /** Id */
+            id: string;
+            /** Target Id */
+            target_id: string;
+            /** Run Id */
+            run_id: string;
+            /** Version */
+            version: number;
+            /** Status */
+            status: string;
+            /** Created At */
+            created_at: string;
+            /** Updated At */
+            updated_at: string;
+        };
+        /** TargetPage */
+        TargetPage: {
+            /** Items */
+            items: components["schemas"]["TargetSummary"][];
+            cursor: components["schemas"]["CursorEnvelope"];
+        };
+        /** TargetScope */
+        TargetScope: {
+            /** Project Id */
+            project_id: number;
+            /** Workspace Id */
+            workspace_id: number;
+        };
+        /** TargetSummary */
+        TargetSummary: {
+            /** Project Id */
+            project_id: number;
+            /** Workspace Id */
+            workspace_id: number;
+            /** Id */
+            id: string;
+            /** Version */
+            version: number;
+            /** Epoch */
+            epoch: number;
+            /** Enabled */
+            enabled: boolean;
+            /** Environment */
+            environment: string;
+            /** Receiver Id */
+            receiver_id: string;
+            /** Created At */
+            created_at: string;
+        };
+        /** TargetView */
+        TargetView: {
+            /** Project Id */
+            project_id: number;
+            /** Workspace Id */
+            workspace_id: number;
+            /** Id */
+            id: string;
+            /** Version */
+            version: number;
+            /** Epoch */
+            epoch: number;
+            definition: components["schemas"]["TargetDefinition"];
+            /** Definition Digest */
+            definition_digest: string;
+            /** Receiver Principal Id */
+            receiver_principal_id: string;
+            /** Created At */
+            created_at: string;
+            /** Updated At */
+            updated_at: string;
+            lock?: components["schemas"]["TargetLockView"] | null;
+        };
         /** TopologyContextData */
         TopologyContextData: {
             /** @description Owning project/workspace */
@@ -7771,6 +8316,29 @@ export interface components {
             /** Expected Version */
             expected_version: number;
             settings: components["schemas"]["AutomationSettings"];
+        };
+        /** Uploaded */
+        Uploaded: {
+            /**
+             * Version
+             * @default 1
+             */
+            version: number;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "uploaded";
+            /**
+             * Repository Source
+             * @constant
+             */
+            repository_source: "unavailable";
+            /**
+             * Limitation
+             * @constant
+             */
+            limitation: "Repository and immutable commit were not verified for uploaded evidence.";
         };
         /** UploadedIntakeStep */
         UploadedIntakeStep: {
@@ -12934,6 +13502,559 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AutomationApprovalResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+        };
+    };
+    list_targets_api_v1_infra_automation_targets_get: {
+        parameters: {
+            query: {
+                project_id: number;
+                workspace_id: number;
+                limit?: number;
+                cursor?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationTargetListResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+        };
+    };
+    register_target_api_v1_infra_automation_targets_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RegisterTargetRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationTargetResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+        };
+    };
+    get_target_api_v1_infra_automation_targets__target_id__get: {
+        parameters: {
+            query: {
+                project_id: number;
+                workspace_id: number;
+            };
+            header?: never;
+            path: {
+                target_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationTargetResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+        };
+    };
+    break_target_lock_api_v1_infra_automation_targets__target_id__break_lock_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                target_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BreakLockRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationTargetLockResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+        };
+    };
+    prepare_handoff_api_v1_infra_automation_handoffs_prepare_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PrepareHandoffRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationHandoffResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+        };
+    };
+    get_handoff_api_v1_infra_automation_handoffs__operation_id__get: {
+        parameters: {
+            query: {
+                project_id: number;
+                workspace_id: number;
+            };
+            header?: never;
+            path: {
+                operation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationHandoffResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+        };
+    };
+    dispatch_handoff_api_v1_infra_automation_handoffs__operation_id__dispatch_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                operation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DispatchHandoffRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationHandoffResponse"];
                 };
             };
             /** @description Unauthorized */

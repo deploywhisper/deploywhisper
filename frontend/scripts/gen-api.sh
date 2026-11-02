@@ -8,4 +8,6 @@ OUTPUT_FILE="${FRONTEND_DIR}/src/api/schema.d.ts"
 
 mkdir -p "$(dirname "${OUTPUT_FILE}")"
 
-npx openapi-typescript "${OPENAPI_URL}" -o "${OUTPUT_FILE}"
+node --require "${SCRIPT_DIR}/redocly-minimatch-compat.cjs" \
+  "${FRONTEND_DIR}/node_modules/openapi-typescript/bin/cli.js" \
+  "${OPENAPI_URL}" -o "${OUTPUT_FILE}"

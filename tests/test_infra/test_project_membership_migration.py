@@ -17,7 +17,7 @@ from alembic.config import Config
 import config
 import models.database as database
 
-HEAD = "034_add_infra_decisions"
+HEAD = "035_add_infra_handoffs"
 PREVIOUS = "029_add_identity_lifecycle"
 
 

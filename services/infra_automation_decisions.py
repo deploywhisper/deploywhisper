@@ -23,6 +23,7 @@ from infra_automation.approval_eligibility import (
     evaluate_decision,
 )
 from infra_automation.contracts import ClosedModel, Digest, Identifier, RegistryContract
+from infra_automation.run_resolution import runtime_workflow
 from infra_automation.decisions import (
     DecisionBinding,
     binding_bytes,
@@ -177,6 +178,37 @@ class DecisionMaterial:
     registry_contract: RegistryContract
 
 
+class MaterialReadScope(ClosedModel):
+    """Exact server-selected graph whose source generations must stay stable."""
+
+    run_id: Identifier
+    project_id: Positive
+    workspace_id: Positive
+    # (approval identity, step identity, immutable binding digest), sorted by step.
+    receipts: Annotated[
+        tuple[tuple[Identifier, Identifier, Digest], ...],
+        Field(min_length=1, max_length=50),
+    ]
+
+    @property
+    def digest(self) -> str:
+        return support.digest(support.canonical(self.model_dump(mode="json")))
+
+
+class MaterialWitness(ClosedModel):
+    """Read-only provider-domain generations, never a reusable authorization.
+
+    The qualified provider atomically reads monotonic generations for every
+    scoped receipt, advances them on every material change (including ABA), and
+    changes source_id when its generation domain resets. No inferred hash/epoch
+    fallback is available. Production source qualification belongs to its owner.
+    """
+
+    source_id: Identifier
+    scope_digest: Digest
+    generations: Annotated[tuple[Positive, ...], Field(min_length=1, max_length=50)]
+
+
 def _run_time_reasons(run, now, receipt=None):
     floors = [runs.utc(run.last_observed_at)]
     if receipt is not None:
@@ -218,9 +250,14 @@ def _denied_run_state(reasons):
 
 class DecisionService:
     def __init__(
-        self, *, material_port=None, clock: Callable[[], datetime] | None = None
+        self,
+        *,
+        material_port=None,
+        material_witness_port=None,
+        clock: Callable[[], datetime] | None = None,
     ):
         self.material_port = material_port
+        self.material_witness_port = material_witness_port
         self.clock = clock or (lambda: datetime.now(timezone.utc))
 
     def _now(self):
@@ -251,21 +288,20 @@ class DecisionService:
         if type(material) is not DecisionMaterial:
             raise LifecycleError(503)
         binding = support.revalidate(material.binding, DecisionBinding)
-        step = next(
-            (step for step in document.definition.steps if step.id == step_id), None
-        )
+        runtime = runtime_workflow(document)
+        step = next((step for step in runtime.steps if step.id == step_id), None)
         if step is None or step.kind != "human_decision":
             raise LifecycleError(409)
         gate = next(
-            (
-                item
-                for item in document.definition.steps
-                if item.id == step.binding.step_id
-            ),
+            (item for item in runtime.steps if item.id == step.binding.step_id),
             None,
         )
         if gate is None or gate.kind != "policy_evaluation":
             raise LifecycleError(409)
+        from services.infra_automation_targets import resolved_target_pairs
+
+        target_pairs = resolved_target_pairs(session, run, document)
+        canonical_target = dict(target_pairs).get(gate.target_id, gate.target_id)
         if (
             binding.project_id,
             binding.workspace_id,
@@ -288,17 +324,26 @@ class DecisionService:
             document.environment,
             document.authority.authorization_epoch,
             document.authority.restore_epoch,
-            gate.target_id,
+            canonical_target,
             gate.authorization_kind,
         ):
             raise LifecycleError(409)
+        from services.infra_automation_targets import target_for_decision
+        from infra_automation.targets import semantic_payload
+
+        target_snapshot = target_for_decision(session, run, document, step_id)
+        if target_snapshot is not None:
+            try:
+                if (
+                    support.digest(semantic_payload(binding, target_snapshot))
+                    != binding.payload_digest
+                ):
+                    raise LifecycleError(409)
+            except (ValueError, TypeError):
+                raise LifecycleError(409) from None
         # Resolve the source of this gate's exact report, not another branch.
         analysis = next(
-            (
-                item
-                for item in document.definition.steps
-                if item.id == gate.report.step_id
-            ),
+            (item for item in runtime.steps if item.id == gate.report.step_id),
             None,
         )
         if analysis is None or analysis.kind != "shared_analysis":
@@ -535,6 +580,10 @@ class DecisionService:
         phase="decision",
         approval=None,
     ):
+        from services.infra_automation_targets import resolved_target_pairs
+
+        target_pairs = resolved_target_pairs(session, run, document)
+        runtime = runtime_workflow(document)
         matching = [
             step
             for step in document.definition.steps
@@ -574,10 +623,9 @@ class DecisionService:
         if phase == "decision" or not matching:
             results = [
                 evaluate_decision(
-                    definition_bytes=support.canonical(
-                        document.definition.model_dump(mode="json")
-                    ),
+                    definition_bytes=support.canonical(runtime.model_dump(mode="json")),
                     registry_contract=material.registry_contract,
+                    resolved_targets=target_pairs,
                     decision_step_id=step_id,
                     step_states=tuple(states.items()),
                     evidence=material.evidence,
@@ -594,10 +642,9 @@ class DecisionService:
         else:
             results = [
                 evaluate_handoff(
-                    definition_bytes=support.canonical(
-                        document.definition.model_dump(mode="json")
-                    ),
+                    definition_bytes=support.canonical(runtime.model_dump(mode="json")),
                     registry_contract=material.registry_contract,
+                    resolved_targets=target_pairs,
                     handoff_step_id=handoff.id,
                     step_states=tuple(states.items()),
                     evidence=material.evidence,
@@ -1117,6 +1164,61 @@ class DecisionService:
         except (ValueError, TypeError):
             return eligibility_from_reasons(("binding_changed",))
 
+    def _material_scope(self, session, run, approval):
+        document = _document(run)
+        nodes = {step.id: step for step in document.definition.steps}
+        pending = [
+            step.id
+            for step in document.definition.steps
+            if step.kind == "registered_github_handoff"
+            and step.decision.step_id == approval.step_id
+        ] or [approval.step_id]
+        required, visited = {approval.step_id}, set()
+        while pending:
+            name = pending.pop()
+            if name in visited:
+                continue
+            visited.add(name)
+            node = nodes[name]
+            if node.kind == "human_decision":
+                required.add(name)
+            pending.extend(node.depends_on)
+        receipts = {
+            row.step_id: row
+            for row in repository.list_latest_for_run(session, run.id)
+            if row.step_id in required
+        }
+        if required != receipts.keys():
+            raise LifecycleError(409)
+        return MaterialReadScope(
+            run_id=run.id,
+            project_id=run.project_id,
+            workspace_id=run.workspace_id,
+            receipts=tuple(
+                (receipts[name].id, name, receipts[name].binding_digest)
+                for name in sorted(required)
+            ),
+        )
+
+    def _material_witness(self, session, scope):
+        authorization._require_operation(session)
+        if self.material_witness_port is None:
+            raise LifecycleError(503)
+        try:
+            witness = self.material_witness_port(session, scope)
+            if type(witness) is not MaterialWitness:
+                raise ValueError
+            witness = support.revalidate(witness, MaterialWitness)
+            if witness.scope_digest != scope.digest or len(witness.generations) != len(
+                scope.receipts
+            ):
+                raise ValueError
+            return witness
+        except Exception:
+            # Witness failures/unchecked values are unavailable authority, never
+            # client validation errors or persisted material invalidations.
+            raise LifecycleError(503) from None
+
     def recheck_approved(self, session, approval_id, *, phase="dispatch"):
         """Require a ready run before a consumer rechecks its approved receipt."""
         from infra_automation.approval_eligibility import eligibility_from_reasons
@@ -1132,7 +1234,38 @@ class DecisionService:
             "external_running",
         }:
             return eligibility_from_reasons(("prerequisite_unsuccessful",))
-        return self._recheck_graph(session, approval_id, phase=phase)
+        try:
+            scope = self._material_scope(session, run, row)
+            before = self._material_witness(session, scope)
+            result = self._recheck_graph(session, approval_id, phase=phase)
+            if not result.eligible:
+                return result
+            after = self._material_witness(session, scope)
+            run = runs.get_run(session, run.id)
+            if run is None:
+                raise LifecycleError(503)
+            if after != before or self._material_scope(session, run, row) != scope:
+                return eligibility_from_reasons(("binding_changed",))
+            # The final read may consume time; no material callbacks follow it.
+            now = self._now()
+            reasons = list(result.reasons)
+            for receipt_id, _, _ in scope.receipts:
+                receipt = repository.get_request(session, receipt_id)
+                if receipt is None:
+                    return eligibility_from_reasons(("binding_changed",))
+                reasons.extend(_run_time_reasons(run, now, receipt))
+                reasons.extend(
+                    _expiry_reasons(
+                        DecisionBinding.model_validate_json(receipt.binding_bytes), now
+                    )
+                )
+            return eligibility_from_reasons(tuple(reasons))
+        except LifecycleError as error:
+            if error.status_code == 503:
+                raise
+            return eligibility_from_reasons(("binding_changed",))
+        except (ValueError, TypeError, KeyError):
+            return eligibility_from_reasons(("binding_changed",))
 
 
 def _view(row):

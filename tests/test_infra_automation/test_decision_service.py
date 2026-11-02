@@ -327,7 +327,9 @@ class DecisionServiceTests(LifecycleCase):
             registry_contract=self.registry,
         )
         self.service = DecisionService(
-            material_port=lambda *args: self.material, clock=lambda: self.now
+            material_port=lambda *args: self.material,
+            material_witness_port=self.material_witness,
+            clock=lambda: self.now,
         )
         with self.engine.begin() as db:
             for name, body in import_module(
@@ -412,7 +414,9 @@ class DecisionServiceTests(LifecycleCase):
         row = self.pending()
         self.assertEqual(row["status"], "pending")
         restarted = DecisionService(
-            material_port=lambda *args: self.material, clock=lambda: self.now
+            material_port=lambda *args: self.material,
+            material_witness_port=self.material_witness,
+            clock=lambda: self.now,
         )
         with self.credentials("reviewer"):
             result = restarted.decide(row["id"], self.request(row))

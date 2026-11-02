@@ -226,14 +226,57 @@ class EngineRecoveryClaimsTests(base.LifecycleCase):
         )
 
     def external_ready(self):
+        import json
+
         from infra_automation.contracts import STEP_CONTRACTS
+        from infra_automation.run_resolution import resolve_target_value
+        from infra_automation.targets import RegisterTargetRequest
+        from services import infra_automation_targets as targets
 
         definition = self.definition()
         snapshot = self.export(self.publish_fixture(definition), inputs={})
         self.request.update(snapshot=snapshot, key_digest=support.digest(b"external"))
-        run = self.admit()
+        # Registry administration requires authority over every project.
+        self.member("admin", project=200)
+        for step in snapshot.snapshot.definition.steps:
+            if step.kind != "registered_github_handoff":
+                continue
+            alias = resolve_target_value(snapshot.snapshot, step.target_id)
+            request = RegisterTargetRequest.model_validate_json(
+                json.dumps(
+                    dict(
+                        project_id=100,
+                        workspace_id=100,
+                        expected_version=0,
+                        definition=dict(
+                            canonical_target=alias.lower(),
+                            aliases=[],
+                            allowed_scopes=[dict(project_id=100, workspace_id=100)],
+                            environment=snapshot.snapshot.environment,
+                            receiver_id="fixture-receiver",
+                            pipeline_repository_id="fixture-pipeline",
+                            pipeline_workflow_id="fixture-workflow",
+                            pipeline_workflow_revision="a" * 40,
+                            github_owner="owner",
+                            github_repository="repository",
+                            github_workflow="workflow.yml",
+                            workflow_ref="main",
+                            credential_ref="fixture",
+                            receiver_credential_ref="fixture",
+                        ),
+                        reason="Register owned engine-double target",
+                    )
+                )
+            )
+            with self.credentials():
+                targets.register_target(request, now=self.now)
+        with self.credentials(), auth.authorized_session(self.factory) as db:
+            run = repo.create_run(db, **self.request)
+            targets.capture_run_targets(db, run, snapshot.snapshot, now=self.now)
         owner = self.acquire()
-        self.operation(claims.start_run, owner, run_id=run.id, expected_version=1)
+        self.operation(
+            claims.start_run, owner, run_id=run.id, expected_version=run.version
+        )
         for step in snapshot.snapshot.definition.steps:
             pending = self.operation(
                 claims.prepare_attempt,

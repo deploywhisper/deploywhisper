@@ -29,7 +29,8 @@ from services.policy_adapter_settings import PolicyAdapterSettings
 
 Positive = Annotated[StrictInt, Field(ge=1, le=SAFE_INTEGER)]
 Version = Annotated[StrictInt, Field(ge=0, le=SAFE_INTEGER)]
-Reason = Annotated[StrictStr, Field(min_length=1, max_length=256)]
+REASON_MAX_LENGTH = 256
+Reason = Annotated[StrictStr, Field(min_length=1, max_length=REASON_MAX_LENGTH)]
 
 
 def _definition_bytes(value: str) -> str:

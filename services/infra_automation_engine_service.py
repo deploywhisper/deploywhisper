@@ -218,6 +218,9 @@ def request_run(
             )
         except ValueError:
             raise LifecycleError(409) from None
+        from services.infra_automation_targets import capture_run_targets
+
+        capture_run_targets(session, row, document, now=timestamp, bounds=bounds)
         # Reuse the worker accounting check after insertion; overflow rolls back the
         # run, idempotency binding, snapshot audit and lazy actor in this transaction.
         claims._charge(session, row, 0, timestamp, bounds)

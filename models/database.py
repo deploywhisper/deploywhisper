@@ -65,6 +65,7 @@ _KNOWN_ALEMBIC_REVISIONS = {
     "032_add_infra_automation_engine",
     "033_add_infra_preflight",
     "034_add_infra_decisions",
+    "035_add_infra_handoffs",
 }
 _BASELINE_TABLES = {"analysis_reports", "app_settings"}
 _EVIDENCE_TABLES = {
@@ -1145,6 +1146,19 @@ def _infra_automation_schema_complete(
         )
         if "sequence" in actual and "autoincrement" not in table_sql.lower():
             incomplete()
+    if migration_name == "035_add_infra_handoffs":
+        indexes = inspector.get_indexes("infra_automation_target_locks")
+        held = next(
+            (item for item in indexes if item["name"] == "uq_infra_target_held"), None
+        )
+        if (
+            held is None
+            or not held["unique"]
+            or held["column_names"] != ["target_id"]
+            or normalized(str(held.get("dialect_options", {}).get("sqlite_where", "")))
+            != normalized("status = 'held'")
+        ):
+            incomplete()
     for name, body in migration.GUARDS.items():
         if normalized(actual_triggers.get(name, "")) != normalized(
             f"CREATE TRIGGER {name} {body}"
@@ -1165,6 +1179,9 @@ def _bootstrap_brownfield_revision() -> None:
         )
         has_complete_decisions = _infra_automation_schema_complete(
             connection, tables, "034_add_infra_decisions"
+        )
+        has_complete_handoffs = _infra_automation_schema_complete(
+            connection, tables, "035_add_infra_handoffs"
         )
         tables = _repair_partial_evidence_schema(connection, tables)
 
@@ -1203,6 +1220,7 @@ def _bootstrap_brownfield_revision() -> None:
                 "032_add_infra_automation_engine",
                 "033_add_infra_preflight",
                 "034_add_infra_decisions",
+                "035_add_infra_handoffs",
             } and not _identity_schema_complete(connection, tables):
                 raise RuntimeError(
                     "Detected a partial identity schema. Manual recovery is required."
@@ -1215,6 +1233,7 @@ def _bootstrap_brownfield_revision() -> None:
                     "032_add_infra_automation_engine",
                     "033_add_infra_preflight",
                     "034_add_infra_decisions",
+                    "035_add_infra_handoffs",
                 }
                 and not has_complete_authorization
             ):
@@ -1228,6 +1247,7 @@ def _bootstrap_brownfield_revision() -> None:
                     "032_add_infra_automation_engine",
                     "033_add_infra_preflight",
                     "034_add_infra_decisions",
+                    "035_add_infra_handoffs",
                 }
                 and not has_complete_automation
             ):
@@ -1239,6 +1259,7 @@ def _bootstrap_brownfield_revision() -> None:
                 "032_add_infra_automation_engine",
                 "033_add_infra_preflight",
                 "034_add_infra_decisions",
+                "035_add_infra_handoffs",
             }:
                 raise RuntimeError(
                     "Detected a partial infra automation migration history. Manual recovery is required."
@@ -1249,20 +1270,32 @@ def _bootstrap_brownfield_revision() -> None:
                     "032_add_infra_automation_engine",
                     "033_add_infra_preflight",
                     "034_add_infra_decisions",
+                    "035_add_infra_handoffs",
                 }
             ) != has_complete_engine:
                 raise RuntimeError(
                     "Detected a partial infra automation engine migration history. Manual recovery is required."
                 )
             if (
-                revision in {"033_add_infra_preflight", "034_add_infra_decisions"}
+                revision
+                in {
+                    "033_add_infra_preflight",
+                    "034_add_infra_decisions",
+                    "035_add_infra_handoffs",
+                }
             ) != has_complete_preflight:
                 raise RuntimeError(
                     "Detected a partial infra preflight migration history. Manual recovery is required."
                 )
-            if (revision == "034_add_infra_decisions") != has_complete_decisions:
+            if (
+                revision in {"034_add_infra_decisions", "035_add_infra_handoffs"}
+            ) != has_complete_decisions:
                 raise RuntimeError(
                     "Detected a partial infra decision migration history. Manual recovery is required."
+                )
+            if (revision == "035_add_infra_handoffs") != has_complete_handoffs:
+                raise RuntimeError(
+                    "Detected a partial infra handoff migration history. Manual recovery is required."
                 )
             return
 
@@ -1504,6 +1537,12 @@ def _bootstrap_brownfield_revision() -> None:
                         "Detected a partial infra decision schema. Manual recovery is required."
                     )
                 revision = "034_add_infra_decisions"
+            if has_complete_handoffs:
+                if not has_complete_decisions:
+                    raise RuntimeError(
+                        "Detected a partial infra handoff schema. Manual recovery is required."
+                    )
+                revision = "035_add_infra_handoffs"
             _write_alembic_revision(connection, revision)
             return
         if scoped_learning_columns_present and not has_complete_learning_context_scope:
