@@ -1,0 +1,60 @@
+name: Qualify Packet1 GitHub adapter
+on:
+  workflow_dispatch:
+    inputs:
+      app_commit:
+        description: Reviewed immutable DeployWhisper commit (40 lowercase hexadecimal characters)
+        required: true
+        type: string
+permissions:
+  contents: read
+  actions: write
+concurrency:
+  group: packet1-live-qualification
+  cancel-in-progress: false
+jobs:
+  qualify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      APP_COMMIT: ${{ inputs.app_commit }}
+    steps:
+      - name: Validate fixed sandbox, immutable app commit, and first attempt
+        env:
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+        run: |
+          python3 - <<'PY'
+          import os, re
+          if (os.environ['GITHUB_REPOSITORY'] != 'deploywhisper/receiver-smoke-consumer'
+              or os.environ['GITHUB_REF'] != 'refs/heads/main'
+              or os.environ['RUN_ATTEMPT'] != '1'
+              or not re.fullmatch(r'[0-9a-f]{40}', os.environ['APP_COMMIT'])):
+              raise SystemExit('Unqualified sandbox context; reruns cannot resend.')
+          PY
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: deploywhisper/deploywhisper
+          ref: ${{ env.APP_COMMIT }}
+          persist-credentials: false
+          path: app
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.11'
+      - name: Install only existing locked adapter dependencies
+        working-directory: app
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+          names = 'annotated-types|pydantic|pydantic-core|typing-extensions|typing-inspection'
+          blocks = re.findall(r'(?m)^(?:' + names + r')==[^\n]*(?:\n[ \t]+[^\n]*)*', Path('requirements.txt').read_text())
+          if len(blocks) != 5:
+              raise SystemExit('Locked dependency closure unavailable')
+          Path('../adapter-requirements.txt').write_text('\n'.join(blocks) + '\n')
+          PY
+          python -m pip install --require-hashes -r ../adapter-requirements.txt
+      - name: Invoke actual pinned transport and adapter once, then observe
+        working-directory: app
+        env:
+          SANDBOX_DISPATCH_TOKEN: ${{ github.token }}
+        run: python -m scripts.qualify_github_receiver
