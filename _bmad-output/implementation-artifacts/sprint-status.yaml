@@ -221,7 +221,7 @@ development_status:
   16-8-evidence-bound-decisions-and-freshness: done
   16-9-human-approval-inbox-and-decision-ux: done
   16-10-registered-targets-outbox-grants-and-locks: done
-  16-11-github-receiver-and-outcome-reconciliation: backlog
+  16-11-github-receiver-and-outcome-reconciliation: in-progress
   16-12-runner-enrollment-and-attempt-protocol: backlog
   16-13-isolated-runner-execution-profile: backlog
   16-14-opentofu-terraform-collection-and-provenance: backlog

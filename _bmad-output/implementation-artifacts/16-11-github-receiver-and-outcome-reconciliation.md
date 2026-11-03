@@ -1,6 +1,6 @@
 # Story 16.11: GitHub Receiver and Outcome Reconciliation
 
-Status: backlog
+Status: in-progress
 Preparation: refined
 Release: v1.5.0
 
@@ -61,6 +61,10 @@ Coverage intent: Delta over the v1.4.0 baseline. These exact mapped requirements
 
 Each packet is a bounded review unit under this stable story ID; split large packets after 16.0 estimation instead of silently broadening scope. One story branch follows Git Flow; coordinate shared-file edits and do not revert other work.
 
+### Review Findings — 2026-11-03 re-review
+
+- [x] [Review][Patch][P2] Aggregate effective tag protections across applicable rulesets — `integrations/github/infra_automation_adapter.py:192` requires update and deletion restrictions inside a single ruleset. Two active applicable no-bypass rulesets that separately prohibit updates and deletion protect the tag under GitHub's aggregated enforcement, but this adapter returns `github_target_unqualified`. Accumulate qualified rule types across rulesets and add a regression for split protection, retaining missing-rule/bypass/condition denial. AC1 protected-tag support. See `docs/verification/infra-automation/16-11/code-review-2026-11-03.md`. Resolved: union qualified applicable rule types, with red/green dispatch regression covering both ruleset orders and 18 pre-POST rejection cases. Independent scoped review found no issues; full verification is in `docs/verification/infra-automation/16-11/review-fixes-2026-11-03.md`.
+
 ## Dev Notes
 
 - This broad story has five bounded owned packets; each needs its own reviewable PR/output/proof. Freeze receiver_protocol_version 1, typed operation/consumption receipt, callback state/sequence and redacted error contract in 16.0 before coding.
@@ -98,20 +102,128 @@ Each packet is a bounded review unit under this stable story ID; split large pac
 
 ### Agent Model Used
 
-Documentation preparation only; implementation agent/version to be recorded when gates open.
+Codex — bmad-dev-story; ordered packet implementation with bounded native
+readiness, integration and independent review lanes.
+
+### Implementation Plan
+
+- Entry reassessment: clean develop0e197ce includes accepted/merged16.10 PR206;
+  accepted16.9 is501d789 and16.0 qualification/governance is done. Original
+  unresolved preparation prose is historical; owning interface refinement and
+  per-packet proof are being recorded before coding.
+- Freeze additive server HTTP/auth/observation contracts around unchanged
+  receiver-v1 wire, and preserve legacy GitHub2022 API calls. Implement packets
+  in story order; each gets separate reviewable output/proof. Isolate backend
+  and UI work so backend-for-UI behavior can ship in its own labeled PR.
+- Real GitHub sandbox identifiers/credential reference were requested. Continue
+  deterministic adapter/custody/receiver/recovery tests while waiting; do not
+  substitute doubles for live dispatch acceptance or expose bearer/secret values.
+
 
 ### Debug Log References
 
-Not executed: application, runner, receiver, Compose, browser, fault/load or production qualification. This preparation records obligations, not passing results.
+- Entry and packet-order assessment:
+  `docs/verification/infra-automation/16-11/entry-readiness.md`.
+- Packet 1 focused proof and independent review:
+  `docs/verification/infra-automation/16-11/packet-1-review.md`.
+- Adapter contract, operator configuration and explicit sandbox invocation:
+  `docs/infra-automation/github-adapter-v1.md`.
+- Local red/green scratch output:
+  `/tmp/story16-11-packet1-red.log`, `/tmp/story16-11-packet1-green.log`.
+- Broad regression output: `/tmp/story16-11-unittest.log` (1,484 tests, 2 skips),
+  `/tmp/story16-11-ci-shard.log` (709 passed, 1 skipped, 2,316 subtests), and
+  `/tmp/story16-11-ci-local.log` (exit 0; 2,931 tests in all 10 directories,
+  2 existing skips). Root/shard preceded the last internal strict-version fix;
+  final focused 46-test host/Linux runs and full CI include that fix.
+- Final scoped mypy and Bandit, repository Ruff lint/format (477 files), pip
+  consistency, compileall, skill matrix, prompt-injection and diff checks pass.
+  See the packet proof for exact commands, profile limits and review corrections.
 
 ### Completion Notes List
 
-- Preparation: refined. Status remains backlog. All implementation tasks unchecked; Story 16.0 and earlier dependency acceptance remain unresolved.
-- UI validation: Required at implementation; not executed.
-- Independent review, actual command results, residual risks and release qualification evidence must be recorded during implementation.
+- Dependencies 16.0/16.9/16.10 are accepted; story and sprint tracking are now
+  in progress on the Git Flow feature branch. Original preparation-only
+  dependency statements above are superseded by the entry assessment.
+- Packet 1 local implementation adds a version-isolated adapter, typed internal
+  acceptance/observation facts and bounded fixed-resource GET support. Reuses
+  existing credential/origin configuration and pinned transport. No dependency,
+  frozen receiver wire, legacy App client or production delivery-port change.
+- Focused red/green verification: final 46 tests passed, including the added
+  strict-integer DTO version regression. Independent local packet
+  review found no remaining actionable findings. Ruff, repository formatting
+  and focused Bandit checks passed; full command results are in the packet proof.
+- Full local CI passed all 10 test directories (2,931 tests; 2 existing skips).
+  All checks available for the current adapter-only diff are complete. These
+  results do not qualify live GitHub dispatch or the unimplemented packets.
+- Packet 1 remains unchecked: its required real sandbox proof has not run.
+  Operator-owned repository/workflow, protected reviewed ref/SHA and a dedicated
+  configured credential reference were requested; secret values were not.
+  General GitHub CLI authentication does not select this qualification target.
+- The dev-story workflow requires completion of the current task before the
+  next, and halts when required configuration is missing. Packets 2–5 remain
+  unimplemented and unchecked behind this gate. No receiver, custody, callback,
+  parent reconciliation or external action qualification is claimed.
+- UI validation not applicable to the current adapter-only changes. Whole-story
+  AC6 and required composed browser/UI validation remain outstanding; the story
+  is not ready for review or closure.
+
+### Review Fix Verification — 2026-11-03
+
+- Resolved the sole P2 finding by accumulating effective tag restrictions across
+  qualified applicable rulesets. Existing admission checks remain intact.
+- Regression reproduced the failure before the fix; final focused unittest and
+  pytest runs passed 47 tests (270 pytest subtests). Independent review: no findings.
+- Exact API/CLI/infra pytest shard: 709 passed, 1 skipped, 2,316 subtests.
+- Final root unittest: 1,486 tests, 2 skips. Full local CI: exit 0,
+  2,932 tests across all ten directories, 2 skips. Mypy, focused Bandit,
+  repository Ruff lint/format and diff checks passed.
+- Sandbox process inspection restrictions caused the first broad runs to fail
+  worker termination checks; a representative failure passed outside the
+  sandbox. Final broad runs used that access plus test-only
+  `LLM_API_BASE=http://127.0.0.1:1` to avoid live local inference. No configuration
+  files changed. Full command/results and limitations:
+  `docs/verification/infra-automation/16-11/review-fixes-2026-11-03.md`.
+- UI validation not applicable. Live sandbox dispatch and Packets 2–5 remain
+  outstanding; story stays in progress. No commit/push performed.
 
 ### File List
 
-This story specification only; planned ownership paths above are not implemented files.
+- `_bmad-output/implementation-artifacts/16-11-github-receiver-and-outcome-reconciliation.md`
+- `_bmad-output/implementation-artifacts/sprint-status.yaml`
+- `infra_automation/github_contracts.py`
+- `infra_automation/target_transport.py`
+- `integrations/github/infra_automation_adapter.py`
+- `tests/test_infra_automation/test_github_adapter.py`
+- `tests/test_infra_automation/test_target_transport.py`
+- `docs/infra-automation/github-adapter-v1.md`
+- `docs/verification/infra-automation/16-11/entry-readiness.md`
+- `docs/verification/infra-automation/16-11/packet-1-review.md`
+- `docs/verification/infra-automation/16-11/code-review-2026-11-03.md`
+- `docs/verification/infra-automation/16-11/review-fixes-2026-11-03.md`
 
 External contract: [GitHub REST workflow dispatch](https://docs.github.com/en/rest/actions/workflows#create-a-workflow-dispatch-event), checked 2026-10-07; reverify before implementation if the API contract changes.
+
+## Change Log
+
+- 2026-11-02: Reassessed merged dependencies; began ordered Packet 1 with local
+  adapter/transport regression proof and independent review. Live sandbox
+  configuration/evidence remains required before packet acceptance and Packet 2.
+
+- 2026-11-03: Re-ran bmad-code-review over the current Packet 1 diff with
+  blind, edge-case and acceptance review layers. One reproduced P2 tag-rule
+  aggregation defect recorded as an action item; no production edits applied.
+  Story remains in progress; live sandbox and Packets 2–5 remain outstanding.
+
+- 2026-11-03: Fixed the sole reviewer P2 tag-rule aggregation finding, added
+  red/green safety regressions and completed independent review plus full
+  validation. Review checkbox resolved; live qualification/later packets remain.
+
+### Git Flow Publication Scope — 2026-11-03
+
+The owner requested staging, commit, push and PR after the reviewer fixes.
+Publication covers only the locally verified Packet 1 adapter, regression tests,
+contracts and review evidence on `feature/16-11-github-receiver-reconciliation`,
+targeting `develop`. The PR is a draft because Packet 1 live sandbox proof and
+Packets 2–5 remain open. This publication does not close the story or qualify a
+production receiver. The branch matched fetched `origin/develop` at `0e197ce`
+before committing; final Ruff lint/format and diff checks passed.

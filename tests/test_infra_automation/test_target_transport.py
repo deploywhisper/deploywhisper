@@ -13,6 +13,7 @@ from infra_automation.target_transport import (
     TransportError,
     canonical_origin,
     github_dispatch_path,
+    github_registered_get_path,
     validate_addresses,
 )
 
@@ -246,6 +247,88 @@ class TargetTransportTests(unittest.TestCase):
         self.assertNotIn(SECRET, str(error))
         self.assertNotIn(SECRET, repr(error))
         return error
+
+    def test_registered_get_paths_are_closed_and_selector_encoded(self):
+        expected = {
+            ("repository", None): "/repos/example/repo",
+            (
+                "workflow",
+                "deploy.yml",
+            ): "/repos/example/repo/actions/workflows/deploy.yml",
+            (
+                "branch",
+                "release/stable",
+            ): "/repos/example/repo/branches/release%2Fstable",
+            ("tag_ref", "release/v1"): "/repos/example/repo/git/ref/tags/release%2Fv1",
+            ("tag_object", "a" * 40): "/repos/example/repo/git/tags/" + "a" * 40,
+            (
+                "rulesets",
+                None,
+            ): "/repos/example/repo/rulesets?includes_parents=true&per_page=100&page=1",
+            ("ruleset", "7"): "/repos/example/repo/rulesets/7",
+            ("run", "56"): "/repos/example/repo/actions/runs/56",
+        }
+        for (resource, selector), path in expected.items():
+            with self.subTest(resource=resource):
+                self.assertEqual(
+                    github_registered_get_path("example", "repo", resource, selector),
+                    path,
+                )
+        for resource, selector in (
+            ("https://evil.example", None),
+            ("run", "../1"),
+            ("run", "01"),
+            ("branch", "../main"),
+            ("branch", "main?x"),
+            ("repository", "unexpected"),
+        ):
+            with (
+                self.subTest(resource=resource, selector=selector),
+                self.assertRaises(ValueError),
+            ):
+                github_registered_get_path("example", "repo", resource, selector)
+
+    def test_registered_get_uses_same_pin_tls_and_isolated_api_version(self):
+        self.socket.response = b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\n{}"
+        result = self.transport().get_registered(
+            origin="https://api.github.com",
+            owner="example",
+            repository="repo",
+            resource="branch",
+            selector="release/stable",
+            token=SECRET,
+        )
+        self.assertEqual(result.status, 200)
+        sent = b"".join(self.socket.sent)
+        self.assertIn(
+            b"GET /repos/example/repo/branches/release%2Fstable HTTP/1.1", sent
+        )
+        self.assertIn(b"X-GitHub-Api-Version: 2026-03-10", sent)
+        self.assertEqual(self.socket.connected, (PUBLIC, 443))
+        self.assertEqual(self.context.minimum_version, ssl.TLSVersion.TLSv1_2)
+        self.assertNotIn(SECRET, repr(result))
+
+    def test_get_rejects_redirect_and_unsafe_selector_without_following(self):
+        fields = dict(
+            origin="https://api.github.com",
+            owner="example",
+            repository="repo",
+            resource="run",
+            selector="56",
+            token=SECRET,
+        )
+        transport = self.transport()
+        self.socket.response = b"HTTP/1.1 302 Redirect\r\nLocation: https://169.254.169.254/\r\nContent-Length: 0\r\n\r\n"
+        with self.assertRaises(TransportError) as caught:
+            transport.get_registered(**fields)
+        self.assertEqual(caught.exception.code, "redirect_denied")
+        self.assertEqual(self.socket_factory.call_count, 1)
+        self.resolver.reset_mock()
+        with self.assertRaises(TransportError) as caught:
+            transport.get_registered(**{**fields, "selector": "../secrets"})
+        self.assertEqual(caught.exception.code, "invalid_request")
+        self.assertFalse(caught.exception.may_have_sent)
+        self.resolver.assert_not_called()
 
     def test_numeric_tcp_pin_peer_verification_and_tls_hostname(self):
         with patch.dict("os.environ", {"HTTPS_PROXY": "http://127.0.0.1:8888"}):

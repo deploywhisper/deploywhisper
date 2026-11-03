@@ -18,7 +18,7 @@ import socket
 import ssl
 import threading
 import time
-from urllib.parse import urlsplit
+from urllib.parse import quote, urlsplit
 
 
 _DNS_LABEL = re.compile(r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\Z")
@@ -112,6 +112,46 @@ def github_dispatch_path(owner: str, repository: str, workflow: str) -> str:
         if not isinstance(value, str) or not pattern.fullmatch(value) or ".." in value:
             raise ValueError("invalid registered dispatch component")
     return f"/repos/{owner}/{repository}/actions/workflows/{workflow}/dispatches"
+
+
+def github_registered_get_path(
+    owner: str, repository: str, resource: str, selector: str | None = None
+) -> str:
+    """Build metadata routes from a closed resource set, never a supplied path."""
+    github_dispatch_path(owner, repository, "validate.yml")
+    root = f"/repos/{owner}/{repository}"
+    if resource in ("repository", "rulesets"):
+        if selector is not None:
+            raise ValueError("unexpected registered selector")
+        return (
+            root
+            if resource == "repository"
+            else root + "/rulesets?includes_parents=true&per_page=100&page=1"
+        )
+    if not isinstance(selector, str):
+        raise ValueError("missing registered selector")
+    if resource in ("run", "ruleset"):
+        if not re.fullmatch(r"[1-9][0-9]{0,15}", selector) or int(selector) > 2**53 - 1:
+            raise ValueError("invalid registered numeric selector")
+        suffix = "actions/runs" if resource == "run" else "rulesets"
+    elif resource == "workflow":
+        github_dispatch_path(owner, repository, selector)
+        suffix = "actions/workflows"
+    elif resource in ("branch", "tag_ref"):
+        if (
+            not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._/-]{0,127}", selector)
+            or any(part in selector for part in ("..", "//", "@{"))
+            or selector.endswith(("/", ".", ".lock"))
+        ):
+            raise ValueError("invalid registered ref selector")
+        suffix = "branches" if resource == "branch" else "git/ref/tags"
+    elif resource == "tag_object":
+        if not re.fullmatch(r"[0-9a-f]{40}", selector):
+            raise ValueError("invalid registered tag selector")
+        suffix = "git/tags"
+    else:
+        raise ValueError("unregistered resource")
+    return f"{root}/{suffix}/{quote(selector, safe='')}"
 
 
 def _address(value: str):
@@ -263,7 +303,7 @@ class _DeadlineSocket:
 
 
 class PinnedGithubTransport:
-    """Bounded HTTPS POST using only exact operator-allowlisted origins.
+    """Bounded HTTPS metadata/dispatch using exact operator-allowlisted origins.
 
     No proxies, redirects, retries, arbitrary paths or TLS-disable switches.
     Resolver/socket hooks are constructor-owned trusted qualification seams.
@@ -312,11 +352,46 @@ class PinnedGithubTransport:
     ) -> DispatchResponse:
         """POST registered bytes; classify pre-send failures versus uncertainty."""
         try:
-            origin = canonical_origin(origin)
             path = github_dispatch_path(owner, repository, workflow)
+        except (ValueError, TypeError):
+            raise TransportError("invalid_request", may_have_sent=False) from None
+        return self._request_registered(
+            "POST", origin, path, payload_bytes, token, allowed_private_addresses
+        )
+
+    def get_registered(
+        self,
+        origin: str,
+        owner: str,
+        repository: str,
+        resource: str,
+        selector: str | None,
+        token: str,
+        allowed_private_addresses=(),
+    ) -> DispatchResponse:
+        """GET fixed registered metadata with the identical pinned TLS boundary."""
+        try:
+            path = github_registered_get_path(owner, repository, resource, selector)
+        except (ValueError, TypeError):
+            raise TransportError("invalid_request", may_have_sent=False) from None
+        return self._request_registered(
+            "GET", origin, path, None, token, allowed_private_addresses
+        )
+
+    def _request_registered(
+        self, method, origin, path, payload_bytes, token, allowed_private_addresses
+    ):
+        try:
+            origin = canonical_origin(origin)
             if (
-                not isinstance(payload_bytes, bytes)
-                or len(payload_bytes) > self.max_body_bytes
+                (
+                    payload_bytes is not None
+                    and (
+                        not isinstance(payload_bytes, bytes)
+                        or len(payload_bytes) > self.max_body_bytes
+                    )
+                )
+                or (method == "POST" and payload_bytes is None)
                 or not isinstance(token, str)
                 or not 1 <= len(token) <= 8192
                 or not token.isascii()
@@ -389,7 +464,7 @@ class PinnedGithubTransport:
             connection.sock = _DeadlineSocket(tls, deadline)
             may_have_sent = True
             connection.request(
-                "POST",
+                method,
                 path,
                 body=payload_bytes,
                 headers={
