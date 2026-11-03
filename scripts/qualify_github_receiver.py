@@ -7,6 +7,7 @@ Credentials are explicitly passed to the adapter and never serialized.
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
+import argparse
 import hashlib
 import json
 import os
@@ -14,6 +15,8 @@ from pathlib import Path
 import re
 import sys
 import time
+
+from pydantic import ValidationError
 
 from infra_automation.contracts import SAFE_INTEGER
 from infra_automation.decisions import DecisionBinding
@@ -24,18 +27,129 @@ from infra_automation.receiver_protocol import (
     receiver_binding_from_decision,
     receiver_message_bytes,
 )
-from infra_automation.target_transport import PinnedGithubTransport
+from infra_automation.target_transport import PinnedGithubTransport, TransportError
 from infra_automation.targets import (
     TargetDefinition,
     TargetSnapshot,
     semantic_payload,
 )
-from integrations.github.infra_automation_adapter import GithubInfraAutomationAdapter
+from integrations.github.infra_automation_adapter import (
+    GithubAdapterError,
+    GithubInfraAutomationAdapter,
+)
 
 SANDBOX = "deploywhisper/receiver-smoke-consumer"
 WORKFLOW = "receiver.yml"
 REF = "main"
 CREDENTIAL_REF = "sandbox-ephemeral-dispatch"
+ERROR_CODES = frozenset(
+    (
+        "sandbox_context_unqualified",
+        "sandbox_credential_unavailable",
+        "sandbox_metadata_unavailable",
+        "sandbox_metadata_unqualified",
+        "sandbox_identity_unqualified",
+        "sandbox_observation_deadline",
+        "sandbox_preflight_flag_unqualified",
+        "github_target_unqualified",
+        "github_dispatch_unqualified",
+        "github_poll_unqualified",
+        "invalid_request",
+        "destination_denied",
+        "tls_unavailable",
+        "redirect_denied",
+        "response_too_large",
+        "delivery_unknown",
+        "connection_failed",
+    )
+)
+
+
+def failure_diagnostic(error, progress):
+    """Emit finite classifications only, never exception messages or input values."""
+    names = {
+        ValueError,
+        KeyError,
+        FileExistsError,
+        OSError,
+        TypeError,
+        ValidationError,
+        GithubAdapterError,
+        TransportError,
+    }
+    name = type(error).__name__ if type(error) in names else "OtherError"
+    code = "unclassified"
+    if isinstance(error, (GithubAdapterError, TransportError)):
+        code = error.code if error.code in ERROR_CODES else "unclassified"
+    elif type(error) is ValueError and str(error) in ERROR_CODES:
+        code = str(error)
+    diagnostic = dict(
+        stage=progress["stage"],
+        exception_class=name,
+        code=code,
+        dispatch_may_have_sent=progress["dispatch_attempted"]
+        and (error.may_have_sent if isinstance(error, GithubAdapterError) else True),
+        automatic_resend=False,
+    )
+    if "metadata_http_status" in progress:
+        diagnostic["metadata_http_status"] = progress["metadata_http_status"]
+    if isinstance(error, ValidationError):
+        allowed_fields = (
+            set(TargetDefinition.model_fields)
+            | set(TargetSnapshot.model_fields)
+            | set(DecisionBinding.model_fields)
+            | {
+                "source",
+                "custody",
+                "kind",
+                "repository_id",
+                "commit_sha",
+                "collector_id",
+                "profile_digest",
+                "screened_transport_digest",
+                "collected_at",
+                "source_deadline",
+                "handle",
+                "raw_local_digest",
+                "expires_at",
+                "operation",
+                "operation_id",
+                "audience",
+                "binding",
+                "binding_digest",
+                "sequence",
+                "state",
+            }
+        )
+        allowed_types = {
+            "missing",
+            "extra_forbidden",
+            "int_type",
+            "string_type",
+            "bool_type",
+            "value_error",
+            "literal_error",
+            "greater_than_equal",
+            "less_than_equal",
+            "string_pattern_mismatch",
+            "string_too_short",
+            "string_too_long",
+        }
+        diagnostic["validation_errors"] = [
+            dict(
+                path=[
+                    part if part in allowed_fields else "unknown_field"
+                    for part in item["loc"]
+                ],
+                type=item["type"]
+                if item["type"] in allowed_types
+                else "validation_error",
+            )
+            for item in error.errors(
+                include_input=False, include_context=False, include_url=False
+            )[:8]
+        ]
+    return {"qualification_failure": diagnostic}
 
 
 def validated_environment(env):
@@ -63,10 +177,12 @@ def validated_environment(env):
     return token
 
 
-def resolve_snapshot(transport, token, expected_sha, now):
+def resolve_snapshot(transport, token, expected_sha, now, progress=None):
     owner, repository = SANDBOX.split("/")
 
     def get(resource, selector=None):
+        if progress is not None:
+            progress["stage"] = "metadata_" + resource
         response = transport.get_registered(
             origin="https://api.github.com",
             owner=owner,
@@ -75,6 +191,8 @@ def resolve_snapshot(transport, token, expected_sha, now):
             selector=selector,
             token=token,
         )
+        if progress is not None:
+            progress["metadata_http_status"] = response.status
         if response.status != 200:
             raise ValueError("sandbox_metadata_unavailable")
         value = json.loads(response.body)
@@ -98,6 +216,8 @@ def resolve_snapshot(transport, token, expected_sha, now):
         )
     ):
         raise ValueError("sandbox_identity_unqualified")
+    if progress is not None:
+        progress["stage"] = "target_snapshot"
     definition = TargetDefinition.model_validate_json(
         json.dumps(
             dict(
@@ -211,33 +331,77 @@ def synthetic_envelope(snapshot, operation_id, now):
     )
 
 
-def qualify(env, *, transport=None, sleep=time.sleep, monotonic=time.monotonic):
+def qualify(
+    env,
+    *,
+    transport=None,
+    sleep=time.sleep,
+    monotonic=time.monotonic,
+    progress=None,
+    preflight_only=None,
+):
+    progress = progress if progress is not None else {}
+    progress.update(stage="environment", dispatch_attempted=False)
+    flag = env.get("SANDBOX_PREFLIGHT_ONLY", "true")
+    if flag not in ("true", "false") or (
+        preflight_only is not None and type(preflight_only) is not bool
+    ):
+        raise ValueError("sandbox_preflight_flag_unqualified")
+    if preflight_only is None:
+        preflight_only = flag == "true"
     token = validated_environment(env)
     transport = transport or PinnedGithubTransport(
         timeout=10, max_response_bytes=1048576
     )
     now = datetime.now(timezone.utc).replace(microsecond=0)
     snapshot = resolve_snapshot(
-        transport, token, env["GITHUB_SHA"], now.strftime("%Y-%m-%dT%H:%M:%SZ")
+        transport,
+        token,
+        env["GITHUB_SHA"],
+        now.strftime("%Y-%m-%dT%H:%M:%SZ"),
+        progress,
     )
     operation_id = "packet1-" + env["GITHUB_RUN_ID"]
+    progress["stage"] = "synthetic_binding"
     envelope = synthetic_envelope(snapshot, operation_id, now)
     adapter = GithubInfraAutomationAdapter(
         transport, target_resolver=lambda _: snapshot
     )
+    if preflight_only:
+        progress["stage"] = "protected_revision"
+        adapter.protected_revision(snapshot, token)
+        result = {
+            "qualification_preflight": "qualified",
+            "dispatch_attempted": False,
+            "validated_stages": [
+                "environment",
+                "metadata_repository",
+                "metadata_workflow",
+                "metadata_branch",
+                "target_snapshot",
+                "synthetic_binding",
+                "protected_revision",
+            ],
+        }
+        emit(result, env)
+        return result
     # Exclusive marker is retained even on failure: uncertainty cannot cause resend.
     marker = Path(env["RUNNER_TEMP"]) / (operation_id + ".dispatch-attempted")
+    progress["stage"] = "dispatch_marker"
     with marker.open("x", encoding="utf-8") as handle:
         handle.write("Dispatch may have been sent. Do not retry this operation.\n")
     credentials = {CREDENTIAL_REF: token}
+    progress.update(stage="dispatch", dispatch_attempted=True)
     accepted = adapter.dispatch(
         envelope, credentials[snapshot.definition.credential_ref]
     )
+    progress["stage"] = "acceptance_evidence"
     emit(
         {"acceptance": accepted.model_dump(mode="json"), "dispatch_http_status": 200},
         env,
     )
     deadline = monotonic() + 300
+    progress["stage"] = "observation"
     while monotonic() < deadline:
         observation = adapter.poll(snapshot, accepted, credentials[CREDENTIAL_REF])
         if observation.status == "completed":
@@ -266,10 +430,14 @@ def emit(value, env):
                 )
 
 
-def main():
+def main(*, preflight_only=None):
+    progress = dict(stage="startup", dispatch_attempted=False)
     try:
-        qualify(os.environ)
-    except Exception:
+        qualify(os.environ, progress=progress, preflight_only=preflight_only)
+    except Exception as error:
+        print(
+            json.dumps(failure_diagnostic(error, progress), sort_keys=True), flush=True
+        )
         # Transport/validation bodies, local envelopes and credential values stay private.
         print(
             "sandbox_qualification_failed; do not resend; inspect safe acceptance evidence if present",
@@ -280,4 +448,12 @@ def main():
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--preflight-only",
+        action="store_const",
+        const=True,
+        default=None,
+        help="Validate metadata and synthetic binding without dispatch or marker",
+    )
+    raise SystemExit(main(preflight_only=parser.parse_args().preflight_only))

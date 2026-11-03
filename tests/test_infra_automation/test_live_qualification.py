@@ -1,6 +1,6 @@
 """Live probe scope and nonsecret evidence checks without remote mutations."""
 
-from contextlib import redirect_stdout
+from contextlib import redirect_stderr, redirect_stdout
 from datetime import datetime, timezone
 import io
 import json
@@ -10,13 +10,18 @@ import subprocess
 import sys
 import tempfile
 import unittest
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 import yaml
+from pydantic import ValidationError
 
-from infra_automation.target_transport import DispatchResponse
+from infra_automation.target_transport import DispatchResponse, TransportError
+from infra_automation.targets import TargetDefinition
+from integrations.github.infra_automation_adapter import GithubAdapterError
 from scripts.qualify_github_receiver import (
     SANDBOX,
+    failure_diagnostic,
+    main,
     qualify,
     resolve_snapshot,
     synthetic_envelope,
@@ -40,6 +45,7 @@ class LiveQualificationTests(unittest.TestCase):
             GITHUB_SHA=SHA,
             APP_COMMIT="b" * 40,
             SANDBOX_DISPATCH_TOKEN=TOKEN,
+            SANDBOX_PREFLIGHT_ONLY="false",
             RUNNER_TEMP=self.directory.name,
             GITHUB_STEP_SUMMARY=str(Path(self.directory.name) / "summary"),
         )
@@ -127,6 +133,122 @@ class LiveQualificationTests(unittest.TestCase):
                 qualify({**self.env, field: value}, transport=self.transport)
         self.transport.get_registered.assert_not_called()
         self.transport.post_registered.assert_not_called()
+
+    def test_failure_diagnostics_screen_messages_inputs_and_unsafe_field_paths(self):
+        secret = TOKEN + "-raw-envelope-bytes"
+        try:
+            TargetDefinition.model_validate({secret: secret})
+        except ValidationError as validation_error:
+            errors = [validation_error]
+        errors.extend(
+            [
+                ValueError(secret),
+                RuntimeError(secret),
+                KeyError(secret),
+                TransportError("connection_failed", may_have_sent=True),
+                GithubAdapterError("github_dispatch_unqualified", may_have_sent=True),
+                GithubAdapterError(secret, may_have_sent=False),
+            ]
+        )
+        for error in errors:
+            for attempted in (False, True):
+                diagnostic = failure_diagnostic(
+                    error, dict(stage="dispatch", dispatch_attempted=attempted)
+                )
+                self.assertNotIn(secret, json.dumps(diagnostic))
+                self.assertNotIn(TOKEN, json.dumps(diagnostic))
+                if not attempted:
+                    self.assertFalse(
+                        diagnostic["qualification_failure"]["dispatch_may_have_sent"]
+                    )
+
+    def test_main_metadata_failure_reports_safe_stage_status_and_no_post(self):
+        self.transport.get_registered.return_value = DispatchResponse(
+            403, TOKEN.encode()
+        )
+        self.transport.get_registered.side_effect = None
+        stdout, stderr = io.StringIO(), io.StringIO()
+        with (
+            patch.dict(
+                "scripts.qualify_github_receiver.os.environ", self.env, clear=True
+            ),
+            patch(
+                "scripts.qualify_github_receiver.PinnedGithubTransport",
+                return_value=self.transport,
+            ),
+            redirect_stdout(stdout),
+            redirect_stderr(stderr),
+        ):
+            self.assertEqual(main(), 1)
+        diagnostic = json.loads(stdout.getvalue())["qualification_failure"]
+        self.assertEqual(diagnostic["stage"], "metadata_repository")
+        self.assertEqual(diagnostic["metadata_http_status"], 403)
+        self.assertFalse(diagnostic["dispatch_may_have_sent"])
+        self.assertNotIn(TOKEN, stdout.getvalue() + stderr.getvalue())
+        self.transport.post_registered.assert_not_called()
+
+    def test_read_only_preflight_checks_adapter_identity_without_marker_or_post(self):
+        with redirect_stdout(io.StringIO()):
+            result = qualify(self.env, transport=self.transport, preflight_only=True)
+        self.assertEqual(result["qualification_preflight"], "qualified")
+        self.assertFalse(result["dispatch_attempted"])
+        self.assertIn("protected_revision", result["validated_stages"])
+        self.transport.post_registered.assert_not_called()
+        self.assertFalse(
+            (Path(self.directory.name) / "packet1-123.dispatch-attempted").exists()
+        )
+
+    def test_preflight_defaults_to_read_only_and_malformed_flag_denies_network(self):
+        env = dict(self.env)
+        del env["SANDBOX_PREFLIGHT_ONLY"]
+        with redirect_stdout(io.StringIO()):
+            self.assertFalse(
+                qualify(env, transport=self.transport)["dispatch_attempted"]
+            )
+        self.transport.post_registered.assert_not_called()
+        self.transport.get_registered.reset_mock()
+        for value in ("", "False", "1", True, TOKEN):
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                qualify(
+                    {**self.env, "SANDBOX_PREFLIGHT_ONLY": value},
+                    transport=self.transport,
+                )
+        self.transport.get_registered.assert_not_called()
+        self.transport.post_registered.assert_not_called()
+
+    def test_preflight_error_never_creates_dispatch_marker_or_posts(self):
+        self.protected = False
+        with self.assertRaises(ValueError):
+            qualify(
+                {**self.env, "SANDBOX_PREFLIGHT_ONLY": "true"}, transport=self.transport
+            )
+        self.transport.post_registered.assert_not_called()
+        self.assertFalse(
+            (Path(self.directory.name) / "packet1-123.dispatch-attempted").exists()
+        )
+
+    def test_main_possible_dispatch_failure_stays_uncertain_without_leaking_body(self):
+        self.transport.post_registered.return_value = DispatchResponse(
+            204, TOKEN.encode()
+        )
+        stdout, stderr = io.StringIO(), io.StringIO()
+        with (
+            patch.dict(
+                "scripts.qualify_github_receiver.os.environ", self.env, clear=True
+            ),
+            patch(
+                "scripts.qualify_github_receiver.PinnedGithubTransport",
+                return_value=self.transport,
+            ),
+            redirect_stdout(stdout),
+            redirect_stderr(stderr),
+        ):
+            self.assertEqual(main(), 1)
+        diagnostic = json.loads(stdout.getvalue())["qualification_failure"]
+        self.assertEqual(diagnostic["stage"], "dispatch")
+        self.assertTrue(diagnostic["dispatch_may_have_sent"])
+        self.assertNotIn(TOKEN, stdout.getvalue() + stderr.getvalue())
+        self.transport.post_registered.assert_called_once()
 
     def test_unprotected_or_moved_main_denies_before_dispatch(self):
         self.protected = False

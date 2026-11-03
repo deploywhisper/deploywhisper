@@ -6,6 +6,11 @@ on:
         description: Reviewed immutable DeployWhisper commit (40 lowercase hexadecimal characters)
         required: true
         type: string
+      preflight_only:
+        description: Read-only validation; false explicitly authorizes one synthetic dispatch
+        required: true
+        type: boolean
+        default: true
 permissions:
   contents: read
   actions: write
@@ -18,6 +23,7 @@ jobs:
     timeout-minutes: 10
     env:
       APP_COMMIT: ${{ inputs.app_commit }}
+      SANDBOX_PREFLIGHT_ONLY: ${{ inputs.preflight_only }}
     steps:
       - name: Validate fixed sandbox, immutable app commit, and first attempt
         env:
