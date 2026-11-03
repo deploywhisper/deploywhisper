@@ -1291,6 +1291,125 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/infra-automation/runs/{run_id}/handoffs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Run Handoffs */
+        get: operations["list_run_handoffs_api_v1_infra_automation_runs__run_id__handoffs_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/infra-automation/handoffs/{operation_id}/reconcile": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reconcile Handoff */
+        post: operations["reconcile_handoff_api_v1_infra_automation_handoffs__operation_id__reconcile_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/infra-automation/handoffs/{operation_id}/receipt": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Bootstrap */
+        post: operations["bootstrap_api_v1_infra_automation_handoffs__operation_id__receipt_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/infra-automation/handoffs/{operation_id}/consume": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Consume */
+        post: operations["consume_api_v1_infra_automation_handoffs__operation_id__consume_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/infra-automation/handoffs/{operation_id}/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Status */
+        get: operations["status_api_v1_infra_automation_handoffs__operation_id__status_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/infra-automation/handoffs/{operation_id}/authorize-action": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Authorize */
+        post: operations["authorize_api_v1_infra_automation_handoffs__operation_id__authorize_action_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/infra-automation/handoffs/{operation_id}/outcome": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Outcome */
+        post: operations["outcome_api_v1_infra_automation_handoffs__operation_id__outcome_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/scanner-imports/sarif": {
         parameters: {
             query?: never;
@@ -2865,6 +2984,56 @@ export interface components {
         AutomationErrorResponse: {
             error: components["schemas"]["AutomationError"];
         };
+        /** AutomationExternalHandoffList */
+        AutomationExternalHandoffList: {
+            /**
+             * Version
+             * @constant
+             */
+            version: 1;
+            /** Run Id */
+            run_id: string;
+            /** Project Id */
+            project_id: number;
+            /** Workspace Id */
+            workspace_id: number;
+            /** Items */
+            items: components["schemas"]["AutomationExternalHandoffView"][];
+        };
+        /** AutomationExternalHandoffListResponse */
+        AutomationExternalHandoffListResponse: {
+            data: components["schemas"]["AutomationExternalHandoffList"];
+            meta: components["schemas"]["AutomationMeta"];
+        };
+        /** AutomationExternalHandoffResponse */
+        AutomationExternalHandoffResponse: {
+            data: components["schemas"]["AutomationExternalHandoffView"];
+            meta: components["schemas"]["AutomationMeta"];
+        };
+        /** AutomationExternalHandoffView */
+        AutomationExternalHandoffView: {
+            /** Id */
+            id: string;
+            /** Version */
+            version: number;
+            /** State */
+            state: string;
+            acceptance: components["schemas"]["DispatchAcceptance"] | null;
+            observation: components["schemas"]["GithubRunObservation"] | null;
+            /** Receiver State */
+            receiver_state: string | null;
+            /**
+             * Lock Status
+             * @enum {string}
+             */
+            lock_status: "held" | "resolved" | "broken";
+            /** Cancel Requested */
+            cancel_requested: boolean;
+            /** Verified Outcome */
+            verified_outcome: ("succeeded" | "failed") | null;
+            /** Reconciliation Available */
+            reconciliation_available: boolean;
+        };
         /** AutomationHandoffResponse */
         AutomationHandoffResponse: {
             data: components["schemas"]["AutomationHandoffView"];
@@ -3320,6 +3489,16 @@ export interface components {
              */
             type: "boolean";
         };
+        /** BootstrapRequest */
+        BootstrapRequest: {
+            /**
+             * Version
+             * @default 1
+             */
+            version: number;
+            /** Binding Digest */
+            binding_digest: string;
+        };
         /** BreakLockRequest */
         BreakLockRequest: {
             /** Reason */
@@ -3339,6 +3518,29 @@ export interface components {
             expected_version: number;
             /** Acknowledge Uncertainty */
             acknowledge_uncertainty: boolean;
+        };
+        /** CallbackEnvelope */
+        CallbackEnvelope: {
+            /**
+             * Version
+             * @default 1
+             */
+            version: number;
+            /** Operation Id */
+            operation_id: string;
+            /** Run Id */
+            run_id: string;
+            /** Binding Digest */
+            binding_digest: string;
+            /** Source Identity Digest */
+            source_identity_digest: string;
+            /** Nonce */
+            nonce: string;
+            /** Sequence */
+            sequence: number;
+            message: components["schemas"]["ReceiverMessage"];
+            /** Signature */
+            signature: string;
         };
         /** CancelRunRequest */
         CancelRunRequest: {
@@ -3475,6 +3677,17 @@ export interface components {
             approve_phrase?: string | null;
             /** Reject Phrase */
             reject_phrase?: string | null;
+        };
+        /** ConsumeRequest */
+        ConsumeRequest: {
+            /**
+             * Version
+             * @default 1
+             */
+            version: number;
+            message: components["schemas"]["ReceiverMessage"];
+            /** Grant Token */
+            grant_token: string;
         };
         /** ContextCompletenessData */
         ContextCompletenessData: {
@@ -4029,6 +4242,47 @@ export interface components {
         DeploymentOutcomeResponse: {
             data: components["schemas"]["DeploymentOutcomeData"];
             meta: components["schemas"]["ResourceOnlyMetaPayload"];
+        };
+        /**
+         * DispatchAcceptance
+         * @description A correlated run exists; no counted action or completion is implied.
+         */
+        DispatchAcceptance: {
+            /**
+             * Version
+             * @default 1
+             */
+            version: number;
+            /**
+             * Api Version
+             * @default 2026-03-10
+             * @constant
+             */
+            api_version: "2026-03-10";
+            /**
+             * State
+             * @default accepted
+             * @constant
+             */
+            state: "accepted";
+            /** Operation Id */
+            operation_id: string;
+            /** Binding Digest */
+            binding_digest: string;
+            /** Repository Id */
+            repository_id: string;
+            /** Workflow Id */
+            workflow_id: string;
+            /** Workflow Revision */
+            workflow_revision: string;
+            /** Workflow Ref */
+            workflow_ref: string;
+            /** Run Id */
+            run_id: number;
+            /** Run Url */
+            run_url: string;
+            /** Html Url */
+            html_url: string;
         };
         /** DispatchHandoffRequest */
         DispatchHandoffRequest: {
@@ -4726,6 +4980,44 @@ export interface components {
              * @description Reviewer action for resolving the conflict
              */
             recommended_verification: string;
+        };
+        /**
+         * GithubRunObservation
+         * @description Bounded polled facts, separate from authenticated receiver outcomes.
+         */
+        GithubRunObservation: {
+            /**
+             * Version
+             * @default 1
+             */
+            version: number;
+            /**
+             * Api Version
+             * @default 2026-03-10
+             * @constant
+             */
+            api_version: "2026-03-10";
+            /** Run Id */
+            run_id: number;
+            /** Repository Id */
+            repository_id: string;
+            /** Workflow Id */
+            workflow_id: string;
+            /** Workflow Revision */
+            workflow_revision: string;
+            /** Workflow Ref */
+            workflow_ref: string;
+            /** Run Url */
+            run_url: string;
+            /** Html Url */
+            html_url: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "queued" | "in_progress" | "completed" | "waiting" | "pending" | "requested";
+            /** Conclusion */
+            conclusion: ("success" | "failure" | "neutral" | "cancelled" | "skipped" | "timed_out" | "action_required" | "stale" | "startup_failure") | null;
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -6319,6 +6611,30 @@ export interface components {
              * @enum {string}
              */
             state: "consumed" | "accepted" | "running" | "succeeded" | "failed" | "delivery_unknown" | "cancel_requested";
+        };
+        /** ReceiverRequest */
+        ReceiverRequest: {
+            /**
+             * Version
+             * @default 1
+             */
+            version: number;
+        };
+        /** ReconcileRequest */
+        ReconcileRequest: {
+            /** Reason */
+            reason: string;
+            /**
+             * Version
+             * @default 1
+             */
+            version: number;
+            /** Project Id */
+            project_id: number;
+            /** Workspace Id */
+            workspace_id: number;
+            /** Expected Version */
+            expected_version: number;
         };
         /** RegisterTargetRequest */
         RegisterTargetRequest: {
@@ -14109,6 +14425,336 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+        };
+    };
+    list_run_handoffs_api_v1_infra_automation_runs__run_id__handoffs_get: {
+        parameters: {
+            query: {
+                project_id: number;
+                workspace_id: number;
+            };
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationExternalHandoffListResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+        };
+    };
+    reconcile_handoff_api_v1_infra_automation_handoffs__operation_id__reconcile_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                operation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReconcileRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationExternalHandoffResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+        };
+    };
+    bootstrap_api_v1_infra_automation_handoffs__operation_id__receipt_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                operation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BootstrapRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    consume_api_v1_infra_automation_handoffs__operation_id__consume_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                operation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConsumeRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    status_api_v1_infra_automation_handoffs__operation_id__status_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                operation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    authorize_api_v1_infra_automation_handoffs__operation_id__authorize_action_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                operation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReceiverRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    outcome_api_v1_infra_automation_handoffs__operation_id__outcome_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                operation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CallbackEnvelope"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

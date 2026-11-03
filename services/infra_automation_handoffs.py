@@ -10,6 +10,7 @@ from contextlib import nullcontext
 from datetime import datetime, timezone
 import hashlib
 import hmac
+import json
 from uuid import uuid4
 
 from sqlalchemy import func, select
@@ -181,10 +182,12 @@ class HandoffService:
         ref_port=None,
         clock=None,
         session_factory=None,
+        observation_port=None,
     ):
         self.decision_service = decision_service or DecisionService()
         self.delivery_port = delivery_port
         self.ref_port = ref_port
+        self.observation_port = observation_port
         self.clock = clock or (lambda: datetime.now(timezone.utc))
         self.session_factory = session_factory
 
@@ -892,16 +895,34 @@ class HandoffService:
                 human=human,
                 before_digest=before_digest,
             )
+        acceptance = None
         try:
-            self.delivery_port(envelope, credential)
+            acceptance = self.delivery_port(envelope, credential)
         except Exception:
             # Even a purported definite failure cannot undo possible delivery.
             pass
         with authorization.authorized_session(
             session_factory=self.session_factory
         ) as session:
-            row, grant, _, _ = self._load(session, operation_id)
+            row, grant, _, snapshot = self._load(session, operation_id)
             now = self._now(row.last_observed_at)
+            if acceptance is not None:
+                from infra_automation.github_contracts import DispatchAcceptance
+                from infra_automation import reconciliation
+
+                try:
+                    accepted = checked(acceptance, DispatchAcceptance)
+                    self._check_carrier(row, snapshot, accepted)
+                except (ValueError, TypeError):
+                    accepted = None
+                if accepted is not None:
+                    reconciliation.retain(
+                        session,
+                        row,
+                        "acceptance",
+                        accepted.model_dump(mode="json"),
+                        now,
+                    )
             before_digest = self._state_digest(session, row)
             changed = False
             if row.state == "sending" and not row.broken:
@@ -1044,7 +1065,18 @@ class HandoffService:
                 != row.receiver_binding_bytes
             ):
                 raise LifecycleError(409)
-            return _view(row, grant)
+            view = _view(row, grant)
+            from infra_automation.reconciliation import facts
+
+            callbacks = facts(session, row.id, "callback")
+            if callbacks:
+                latest = callbacks[-1]
+                view["callback_ack"] = {
+                    "sequence": latest.sequence,
+                    "nonce": latest.nonce,
+                    "envelope_digest": support.digest(latest.payload_bytes),
+                }
+            return view
 
     def authorize_action(self, operation_id, credential: ReceiverCredential) -> dict:
         """Repeatable online deny check; receiver-owned durable action fencing is separate.
@@ -1058,7 +1090,17 @@ class HandoffService:
         ) as session:
             row, grant, _, snapshot = self._load(session, operation_id)
             self._receiver(session, row, snapshot, credential)
-            if row.state != "consumed" or grant.status != "consumed":
+            from infra_automation.reconciliation import callback_states
+
+            if callback_states(session, row.id) & {
+                "running",
+                "delivery_unknown",
+                "cancel_requested",
+                "succeeded",
+                "failed",
+            }:
+                raise LifecycleError(409)
+            if row.state not in {"consumed", "accepted"} or grant.status != "consumed":
                 raise LifecycleError(409)
             now = self._live(session, row, credential=credential)
             if now > runs.utc(row.last_observed_at):
@@ -1093,7 +1135,8 @@ class HandoffService:
             if (
                 row.broken
                 or grant.status != "consumed"
-                or row.state != "consumed"
+                or row.state
+                not in {"consumed", "accepted", "running", "delivery_unknown"}
                 or receiver_message_bytes(message)
                 != receiver_message_bytes(
                     _message(row, operation="outcome", state=message.state, sequence=2)
@@ -1106,7 +1149,15 @@ class HandoffService:
             lock = target_repository.get_lock(session, capture.lock_id)
             if lock is None or lock.status != "held" or lock.run_id != row.run_id:
                 raise LifecycleError(409)
-            now = self._now(row.last_observed_at, grant.consumed_at, lock.updated_at)
+            parent = runs.get_run(session, row.run_id)
+            if parent is None:
+                raise LifecycleError(503)
+            now = self._now(
+                row.last_observed_at,
+                grant.consumed_at,
+                lock.updated_at,
+                parent.last_observed_at,
+            )
             before_digest = self._state_digest(session, row)
             row = repository.transition(session, row, state=message.state, now=now)
             outbox = repository.get_outbox(session, row.id)
@@ -1137,6 +1188,9 @@ class HandoffService:
                     is None
                 ):
                     raise LifecycleError(409)
+            from infra_automation.reconciliation import reconcile_parent
+
+            reconcile_parent(session, row, now)
             self._audit(
                 session,
                 row,
@@ -1145,6 +1199,259 @@ class HandoffService:
                 before_digest=before_digest,
             )
             return _view(row, grant)
+
+    @staticmethod
+    def _check_carrier(row, snapshot, fact):
+        definition = snapshot.definition
+        if (
+            fact.repository_id,
+            fact.workflow_id,
+            fact.workflow_revision,
+            fact.workflow_ref,
+        ) != (
+            definition.pipeline_repository_id,
+            definition.pipeline_workflow_id,
+            definition.pipeline_workflow_revision,
+            definition.workflow_ref,
+        ):
+            raise ValueError("Carrier identity mismatch")
+        if hasattr(fact, "operation_id") and (
+            fact.operation_id != row.id
+            or fact.binding_digest != row.receiver_binding_digest
+        ):
+            raise ValueError("Carrier binding mismatch")
+
+    def bootstrap(self, operation_id, binding_digest, credential):
+        with authorization.authorized_session(
+            session_factory=self.session_factory
+        ) as session:
+            row, grant, _, snapshot = self._load(session, operation_id)
+            self._receiver(session, row, snapshot, credential)
+            if (
+                row.receiver_binding_digest != binding_digest
+                or grant.status != "available"
+                or row.state not in {"sending", "delivery_unknown"}
+            ):
+                raise LifecycleError(409)
+            self._live(session, row, credential=credential)
+            token = _grant_token(row, grant.key_ref)
+            if not hmac.compare_digest(
+                support.digest(token.encode()), grant.verifier_digest
+            ):
+                raise LifecycleError(503)
+            return {
+                "message": _message(row).model_dump(mode="json"),
+                "payload": json.loads(row.payload_bytes),
+                "grant_token": token,
+                "run_id": row.run_id,
+            }
+
+    def callback(self, envelope, credential):
+        from infra_automation.receiver_http_contracts import (
+            CallbackEnvelope,
+            callback_signing_bytes,
+            source_identity_digest,
+        )
+        from infra_automation import reconciliation
+
+        envelope = checked(envelope, CallbackEnvelope)
+        with authorization.authorized_session(
+            session_factory=self.session_factory
+        ) as session:
+            row, grant, _, snapshot = self._load(session, envelope.operation_id)
+            self._receiver(session, row, snapshot, credential)
+            expected = (
+                "sha256:"
+                + hmac.new(
+                    credential.secret.encode(),
+                    callback_signing_bytes(envelope),
+                    hashlib.sha256,
+                ).hexdigest()
+            )
+            message = envelope.message
+            if not hmac.compare_digest(expected, envelope.signature):
+                raise authorization.TrustedAuthorizationError()
+            if (
+                envelope.run_id != row.run_id
+                or envelope.binding_digest != row.receiver_binding_digest
+                or envelope.source_identity_digest
+                != source_identity_digest(message.binding)
+                or message.operation_id != row.id
+                or receiver_binding_bytes(message.binding) != row.receiver_binding_bytes
+                or grant.status != "consumed"
+                or row.broken
+            ):
+                raise LifecycleError(409)
+            if row.state in {"succeeded", "failed", "cancelled"}:
+                raise LifecycleError(409)
+            parent = runs.get_run(session, row.run_id)
+            if parent is None:
+                raise LifecycleError(503)
+            now = self._now(
+                row.last_observed_at, grant.consumed_at, parent.last_observed_at
+            )
+            prior_states = reconciliation.callback_states(session, row.id)
+            if message.state in {"accepted", "running"} and prior_states & {
+                "delivery_unknown",
+                "cancel_requested",
+            }:
+                raise LifecycleError(409)
+            if message.state == "accepted" and "running" in prior_states:
+                raise LifecycleError(409)
+            reconciliation.retain(
+                session,
+                row,
+                "callback",
+                envelope.model_dump(mode="json"),
+                now,
+                sequence=envelope.sequence,
+                nonce=envelope.nonce,
+            )
+            if message.state in {"succeeded", "failed"}:
+                if message.operation != "outcome" or message.sequence != 2:
+                    raise LifecycleError(409)
+                return self.resolve_terminal(message, credential)
+            if message.operation not in {"status", "outcome"} or message.state not in {
+                "accepted",
+                "running",
+                "delivery_unknown",
+                "cancel_requested",
+            }:
+                raise LifecycleError(409)
+            if message.state == "accepted" and row.state not in {
+                "consumed",
+                "accepted",
+                "delivery_unknown",
+            }:
+                raise LifecycleError(409)
+            state = (
+                message.state if message.state in {"accepted", "running"} else row.state
+            )
+            before = self._state_digest(session, row)
+            row = repository.transition(session, row, state=state, now=now)
+            self._audit(
+                session,
+                row,
+                event="handoff_receiver_observed",
+                reason="Verified receiver progress; external outcome remains unconfirmed",
+                before_digest=before,
+            )
+            return _view(row, grant)
+
+    def _projection(self, session, row):
+        from infra_automation import reconciliation
+
+        capture, _ = targets.captured_target(
+            session, row.run_id, row.step_id, live=False
+        )
+        lock = target_repository.get_lock(session, capture.lock_id)
+        callback = reconciliation.latest(session, row.id, "callback")
+        run = runs.get_run(session, row.run_id)
+        return {
+            "id": row.id,
+            "version": row.version,
+            "state": "delivery_unknown" if row.state == "sending" else row.state,
+            "acceptance": reconciliation.latest(session, row.id, "acceptance"),
+            "observation": reconciliation.latest(session, row.id, "observation"),
+            "receiver_state": callback["message"]["state"] if callback else None,
+            "lock_status": lock.status,
+            "cancel_requested": run.cancel_requested,
+            "verified_outcome": row.state
+            if row.state in {"succeeded", "failed"}
+            and callback is not None
+            and callback["message"]["state"] == row.state
+            else None,
+            "reconciliation_available": self.observation_port is not None
+            and reconciliation.latest(session, row.id, "acceptance") is not None,
+        }
+
+    def list_for_run(self, run_id, project_id, workspace_id):
+        with authorization.authorized_session(
+            session_factory=self.session_factory
+        ) as session:
+            run = runs.get_run(session, support.identifier(run_id))
+            support.scope(
+                session, project_id, workspace_id, "automation.read", mutation=False
+            )
+            if run is None or (run.project_id, run.workspace_id) != (
+                project_id,
+                workspace_id,
+            ):
+                raise authorization.TrustedAuthorizationError()
+            items = []
+            for capture in target_repository.list_run_targets(session, run_id):
+                row = repository.by_run_step(session, run_id, capture.handoff_step_id)
+                if row is not None:
+                    self._scope(session, row, project_id, workspace_id, mutation=False)
+                    items.append(self._projection(session, row))
+            if len(items) > 50:
+                raise LifecycleError(503)
+            return dict(
+                version=1,
+                run_id=run_id,
+                project_id=project_id,
+                workspace_id=workspace_id,
+                items=items,
+            )
+
+    def reconcile(self, operation_id, request):
+        from infra_automation.receiver_http_contracts import ReconcileRequest
+        from infra_automation.github_contracts import (
+            GithubRunObservation,
+            DispatchAcceptance,
+        )
+        from infra_automation import reconciliation
+
+        request = checked(request, ReconcileRequest)
+        if authorization.has_authorized_session():
+            raise LifecycleError(503)
+        with authorization.authorized_session(
+            session_factory=self.session_factory
+        ) as session:
+            row, _, _, snapshot = self._load(session, operation_id)
+            self._scope(
+                session, row, request.project_id, request.workspace_id, mutation=True
+            )
+            support.screened_label(request.reason)
+            if row.version != request.expected_version:
+                raise LifecycleError(409)
+            acceptance = reconciliation.latest(session, row.id, "acceptance")
+            if self.observation_port is None or acceptance is None:
+                raise LifecycleError(503)
+            acceptance = DispatchAcceptance.model_validate(acceptance)
+        try:
+            observation = checked(
+                self.observation_port(acceptance, snapshot), GithubRunObservation
+            )
+            self._check_carrier(row, snapshot, observation)
+            if observation.run_id != acceptance.run_id:
+                raise ValueError
+        except Exception:
+            raise LifecycleError(503) from None
+        with authorization.authorized_session(
+            session_factory=self.session_factory
+        ) as session:
+            row, _, _, _ = self._load(session, operation_id)
+            human = self._scope(
+                session, row, request.project_id, request.workspace_id, mutation=True
+            )
+            if row.version != request.expected_version:
+                raise LifecycleError(409)
+            now = self._now(row.last_observed_at)
+            before = self._state_digest(session, row)
+            reconciliation.retain(
+                session, row, "observation", observation.model_dump(mode="json"), now
+            )
+            row = repository.transition(session, row, state=row.state, now=now)
+            self._audit(
+                session,
+                row,
+                event="handoff_carrier_observed",
+                reason=request.reason,
+                human=human,
+                before_digest=before,
+            )
+            return self._projection(session, row)
 
 
 _default_service = HandoffService()

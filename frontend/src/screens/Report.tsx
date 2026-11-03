@@ -148,6 +148,11 @@ function normalizeVerdict(value: string | null | undefined): Verdict {
   return "PROCEED";
 }
 
+function ReportSeverity({ value }: { value: string | null | undefined }) {
+  const level = normalizeSeverity(value);
+  return level === "LOW" ? <EvidenceTag>Low severity</EvidenceTag> : <SeverityBadge level={level} />;
+}
+
 function confidenceLevel(value: number | null | undefined): Confidence {
   return (value ?? 0) >= 0.65 ? "HIGH" : "LOW";
 }
@@ -378,7 +383,7 @@ function ReportHeader({
           <div className="dw-report-title-block">
             <div className="dw-report-badges">
               <VerdictChip verdict={normalizeVerdict(report.verdict)} />
-              <SeverityBadge level={normalizeSeverity(report.severity)} />
+              <ReportSeverity value={report.severity} />
               <ConfidenceBadge level={confidenceLevel(report.confidence)} />
               <EvidenceTag>{evidenceSummary}</EvidenceTag>
             </div>
@@ -516,7 +521,7 @@ function OverviewTab({ report, goFindings }: { report: ReportDetail; goFindings:
                 const evidenceLabel = findingEvidenceLabel(finding, evidence);
                 return (
                   <li key={finding.finding_id}>
-                    <SeverityBadge level={normalizeSeverity(finding.severity)} />
+                    <ReportSeverity value={finding.severity} />
                     <span>{finding.title}</span>
                     <span className="dw-finding-tag-group">
                       {evidenceLabel && <EvidenceTag>{evidenceLabel}</EvidenceTag>}
@@ -602,7 +607,7 @@ function FindingsTab({
               <span className="dw-finding-main">
                 <span className="dw-finding-title-row">
                   <strong>{finding.title}</strong>
-                  <SeverityBadge level={normalizeSeverity(finding.severity)} />
+                  <ReportSeverity value={finding.severity} />
                   {evidenceLabel && <EvidenceTag>{evidenceLabel}</EvidenceTag>}
                   {finding.skill_id && <span className="dw-cross-tool"><Layers size={10} /> Cross-tool</span>}
                 </span>
@@ -1011,7 +1016,7 @@ function ReportBody({
   return (
     <div className={`dw-report-page dw-ui${publicView ? "" : " dw-report-page-shell"}`}>
       <ReportHeader activeTab={active} copyBriefing={copyBriefing} publicView={publicView} report={report} setActiveTab={setActiveTab} />
-      <main className="dw-report-content">
+      <div className="dw-report-content">
         <ReportAutomationContext reportId={report.id} projectId={report.project.id} publicView={publicView} />
         {tabs.filter((tab) => tab.id !== active).map((tab) => <section aria-labelledby={`report-tab-${tab.id}`} hidden id={`report-panel-${tab.id}`} key={tab.id} role="tabpanel" />)}
         <section aria-labelledby={`report-tab-${active}`} id={`report-panel-${active}`} role="tabpanel" tabIndex={0}>
@@ -1022,7 +1027,7 @@ function ReportBody({
           {active === "rollback" && <RollbackTab report={report} setToast={setToast} />}
           {active === "audit" && <AuditTab report={report} />}
         </section>
-      </main>
+      </div>
       <Toast message={toast} />
     </div>
   );

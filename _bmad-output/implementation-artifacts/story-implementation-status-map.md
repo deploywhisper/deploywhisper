@@ -158,7 +158,7 @@ Story 16.0's four follow-up review findings were resolved and requalified on 202
 | 16.8 | `backlog` | [16-8-evidence-bound-decisions-and-freshness.md](16-8-evidence-bound-decisions-and-freshness.md) |
 | 16.9 | `backlog` | [16-9-human-approval-inbox-and-decision-ux.md](16-9-human-approval-inbox-and-decision-ux.md) |
 | 16.10 | `backlog` | [16-10-registered-targets-outbox-grants-and-locks.md](16-10-registered-targets-outbox-grants-and-locks.md) |
-| 16.11 | `backlog` | [16-11-github-receiver-and-outcome-reconciliation.md](16-11-github-receiver-and-outcome-reconciliation.md) |
+| 16.11 | `done` | [16-11-github-receiver-and-outcome-reconciliation.md](16-11-github-receiver-and-outcome-reconciliation.md) |
 | 16.12 | `backlog` | [16-12-runner-enrollment-and-attempt-protocol.md](16-12-runner-enrollment-and-attempt-protocol.md) |
 | 16.13 | `backlog` | [16-13-isolated-runner-execution-profile.md](16-13-isolated-runner-execution-profile.md) |
 | 16.14 | `backlog` | [16-14-opentofu-terraform-collection-and-provenance.md](16-14-opentofu-terraform-collection-and-provenance.md) |

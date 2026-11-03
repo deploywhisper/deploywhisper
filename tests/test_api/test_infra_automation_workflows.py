@@ -694,11 +694,26 @@ class InfraAutomationWorkflowApiTests(unittest.TestCase):
             "/api/v1/infra-automation/handoffs/prepare",
             "/api/v1/infra-automation/handoffs/{operation_id}",
             "/api/v1/infra-automation/handoffs/{operation_id}/dispatch",
+            "/api/v1/infra-automation/handoffs/{operation_id}/reconcile",
+            "/api/v1/infra-automation/runs/{run_id}/handoffs",
         }
         self.assertEqual(
             {path for path in schema["paths"] if "/handoffs" in path},
             handoff_paths,
         )
+        receiver_paths = {
+            f"/api/v1/infra-automation/handoffs/{{operation_id}}/{suffix}"
+            for suffix in (
+                "receipt",
+                "consume",
+                "status",
+                "authorize-action",
+                "outcome",
+            )
+        }
+        self.assertTrue(receiver_paths.issubset(production_paths))
+        self.assertTrue(receiver_paths.isdisjoint(schema["paths"]))
+        self.assertFalse(any("/runners" in path for path in production_paths))
         for path, methods in schema["paths"].items():
             self.assertNotIn("/runners", path)
             self.assertNotIn("/consume", path)

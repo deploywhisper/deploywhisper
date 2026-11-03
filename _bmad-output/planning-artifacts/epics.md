@@ -2483,9 +2483,9 @@ As a operator,
 I want to hand an approved plan to the qualified GitHub receiver and reconcile its outcome,
 So that remote acceptance is not mistaken for a completed deployment or blindly retried.
 
-**Status:** backlog (refined context; execution gates unmet).
+**Status:** done (scoped synthetic receiver/custody/recovery and live harmless transport qualification; see completion evidence).
 
-**Dedicated context:** [16-11-github-receiver-and-outcome-reconciliation.md](../implementation-artifacts/16-11-github-receiver-and-outcome-reconciliation.md). This prepared file owns specific GWT cases, bounded packets, actual reuse paths, migration limits and required verification; no task is reported complete.
+**Dedicated context:** [16-11-github-receiver-and-outcome-reconciliation.md](../implementation-artifacts/16-11-github-receiver-and-outcome-reconciliation.md). This story records completed GWT cases, bounded packet proof, migration/recovery checks and composed browser verification. See [completion evidence](../../docs/verification/infra-automation/16-11/completion-evidence.md) for the qualified profile and limits.
 
 **Dependencies:** 16.9, 16.10. Dependencies refer to earlier accepted capabilities or earlier Epic 16 stories; downstream release integration is not an acceptance prerequisite for this slice.
 

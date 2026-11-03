@@ -172,6 +172,62 @@ describe("immutable automation run details", () => {
     expect(html).toContain("Mandatory evidence is missing");
     expect(html).toContain("Collect fresh evidence");
     expect(html).toContain("No permanent briefing");
-    expect(html).toContain("not eligible for approval");
+    expect(html).toContain("Approval eligibility depends on retained source evidence and current server checks");
+    expect(html).not.toContain("Uploaded evidence is advisory");
+    expect(html).not.toContain("Repository identity and immutable commit are unverified");
+  });
+});
+
+import { HandoffFacts, HandoffOutcomes, reconciliationFailure } from "./InfraAutomationRun";
+const externalFixture: import("../api/infraAutomation").ExternalHandoff = {
+  id: "handoff-one", version: 3, state: "running", receiver_state: "running", lock_status: "held", cancel_requested: false,
+  verified_outcome: null, reconciliation_available: true,
+  acceptance: { version: 1, api_version: "2026-03-10", state: "accepted", operation_id: "handoff-one", binding_digest: `sha256:${"a".repeat(64)}`, repository_id: "repo-one", workflow_id: "workflow-one", workflow_revision: "b".repeat(40), workflow_ref: "main", run_id: 56, run_url: "https://api.github.com/repos/owner/repo/actions/runs/56", html_url: "https://github.com/owner/repo/actions/runs/56" },
+  observation: null,
+};
+
+describe("external handoff evidence", () => {
+  it("separates accepted dispatch, GitHub conclusion and verified receiver completion", () => {
+    const { state: _state, operation_id: _operation, binding_digest: _binding, ...common } = externalFixture.acceptance!;
+    const html = render(<HandoffFacts operation={{ ...externalFixture, observation: { ...common, status: "completed", conclusion: "success" } }} />);
+    expect(html).toContain("Dispatch accepted");
+    expect(html).toContain("completed · success — observation only");
+    expect(html).toContain("Unknown — no verified terminal receiver proof");
+    expect(html).toContain("do not resend");
+    expect(html).toContain("does not identify the infrastructure source commit");
+  });
+  it("never claims a cancellation request stopped the external work", () => {
+    const html = render(<HandoffFacts operation={{ ...externalFixture, cancel_requested: true, lock_status: "broken" }} />);
+    expect(html).toContain("does not confirm that external work has stopped");
+    expect(html).toContain("does not prove external completion");
+  });
+  it("clears protected handoff facts when handoff reads are revoked", () => {
+    const client = new QueryClient();
+    const key = ["automation", 1, 1, 2, "run", "run-one"];
+    client.setQueryData(key, runFixture);
+    const childKey = [...key, "handoffs", 3];
+    client.setQueryData(childKey, { version: 1, run_id: "run-one", project_id: 1, workspace_id: 2, items: [externalFixture] });
+    client.getQueryCache().find({ queryKey: childKey })?.setState({ error: new ApiClientError("denied", 403), status: "error" });
+    const context = { scope: { projectId: 1, workspaceId: 2 }, identity: { epoch: 1 }, fresh: true } as AutomationContext;
+    const html = render(<QueryClientProvider client={client}><RunContent context={context} runId="run-one" /></QueryClientProvider>);
+    expect(html).toContain("Run access unavailable");
+    expect(html).not.toContain("handoff-one");
+    expect(html).not.toContain(runFixture.snapshot_digest);
+  });
+  it("blocks ambiguous manual reconciliation through equal-version reads and permits advancing evidence", () => {
+    const context = { scope: { projectId: 1, workspaceId: 2 }, identity: { epoch: 1, csrfToken: "synthetic-csrf" }, fresh: true } as AutomationContext;
+    const pendingRequests = new Map([[externalFixture.id, externalFixture.version]]);
+    const handoffs = { version: 1 as const, run_id: "run-one", project_id: 1, workspace_id: 2, items: [externalFixture] };
+    const draw = (version: number) => render(<HandoffOutcomes handoffs={{ ...handoffs, items: [{ ...externalFixture, version }] }} context={context} pendingRequests={pendingRequests} refresh={async () => {}} onDenied={() => {}} />);
+    expect(draw(externalFixture.version)).toContain("previous request remains unconfirmed");
+    expect(draw(externalFixture.version)).toContain('disabled=""');
+    expect(draw(externalFixture.version + 1)).not.toContain("previous request remains unconfirmed");
+    // Recreating a child after a read failure does not discard the scoped marker.
+    expect(draw(externalFixture.version)).toContain("previous request remains unconfirmed");
+  });
+  it("distinguishes correctable manual rejection from ambiguous submission and revoked access", () => {
+    for (const code of [400, 404, 409, 422, 429]) expect(reconciliationFailure(new ApiClientError("rejected", code, { code: "request_validation_failed" }))).toBe("correctable");
+    for (const code of [401, 403]) expect(reconciliationFailure(new ApiClientError("denied", code))).toBe("denied");
+    for (const error of [new Error("network"), new ApiClientError("malformed successful response", 422), new ApiClientError("unavailable", 503)]) expect(reconciliationFailure(error)).toBe("ambiguous");
   });
 });

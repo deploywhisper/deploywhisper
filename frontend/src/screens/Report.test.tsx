@@ -258,6 +258,25 @@ function renderReport(path = "/reports/77?private=1", detail: ReportDetail = rep
 }
 
 describe("ReportScreen", () => {
+  it("keeps a single shell main landmark on private and public permanent report routes", () => {
+    for (const path of ["/reports/77?private=1", "/reports/77"]) {
+      const markup = renderReport(path);
+      expect(markup.match(/<main(?:\s|>)/g)).toHaveLength(1);
+      expect(markup).toContain('<div class="dw-report-content">');
+      expect(markup).not.toContain('<main class="dw-report-content">');
+    }
+  });
+
+  it("renders low severity using the existing neutral evidence tag across overview and findings", () => {
+    const lowReport: ReportDetail = { ...report, severity: "LOW", findings: report.findings.map((finding) => ({ ...finding, severity: "low" })) };
+    for (const path of ["/reports/77?private=1", "/reports/77?private=1&tab=findings"]) {
+      const markup = renderReport(path, lowReport);
+      expect(markup.match(/Low severity/g)).toHaveLength(2);
+      expect(markup).not.toContain("#079455");
+      expect(markup).toContain("Ingress exposes checkout service");
+    }
+  });
+
   it("shows content redaction status in the existing audit metadata card", () => {
     const markup = renderReport("/reports/77?private=1&tab=audit", {
       ...report,

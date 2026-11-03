@@ -1,0 +1,44 @@
+{
+  "version": 1,
+  "scope": "Harmless live GitHub dispatch acceptance and bounded correlated observation; not receiver action or deployment proof",
+  "qualification_run": "https://github.com/deploywhisper/receiver-smoke-consumer/actions/runs/41668709128",
+  "preflight_run": "https://github.com/deploywhisper/receiver-smoke-consumer/actions/runs/41668218369",
+  "app_commit": "75324acfc8a6c1e7aa5116ae908539ea4299b780",
+  "credentials": "ephemeral repository-scoped Actions GITHUB_TOKEN passed explicitly through dedicated sandbox reference; no token retained",
+  "events": [
+    {
+      "acceptance": {
+        "api_version": "2026-03-10",
+        "binding_digest": "sha256:5e41bf01ee8782d45f1a59bb996af54279a4e46ef1805c339499206d0f5e904b",
+        "html_url": "https://github.com/deploywhisper/receiver-smoke-consumer/actions/runs/41668758592",
+        "operation_id": "packet1-41668709128",
+        "repository_id": "1444474458",
+        "run_id": 41668758592,
+        "run_url": "https://api.github.com/repos/deploywhisper/receiver-smoke-consumer/actions/runs/41668758592",
+        "state": "accepted",
+        "version": 1,
+        "workflow_id": "405886686",
+        "workflow_ref": "main",
+        "workflow_revision": "c490f8549d567ddde5598cd71bba87bc3d912579"
+      },
+      "dispatch_http_status": 200
+    },
+    {
+      "deployment_evidence": "not_established",
+      "observation": {
+        "api_version": "2026-03-10",
+        "conclusion": "success",
+        "html_url": "https://github.com/deploywhisper/receiver-smoke-consumer/actions/runs/41668758592",
+        "repository_id": "1444474458",
+        "run_id": 41668758592,
+        "run_url": "https://api.github.com/repos/deploywhisper/receiver-smoke-consumer/actions/runs/41668758592",
+        "status": "completed",
+        "version": 1,
+        "workflow_id": "405886686",
+        "workflow_ref": "main",
+        "workflow_revision": "c490f8549d567ddde5598cd71bba87bc3d912579"
+      },
+      "receiver_evidence": "not_established"
+    }
+  ]
+}

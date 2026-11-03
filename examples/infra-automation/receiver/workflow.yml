@@ -1,0 +1,28 @@
+# Example only: install the receiver and its local configuration on an isolated
+# owner-restricted host. Do not run untrusted pull requests on this runner.
+name: Protected synthetic receiver
+on:
+  workflow_dispatch:
+    inputs:
+      operation_id:
+        required: true
+        type: string
+      binding_digest:
+        required: true
+        type: string
+permissions: {}
+concurrency:
+  group: protected-synthetic-receiver
+  cancel-in-progress: false
+jobs:
+  receive:
+    runs-on: [self-hosted, deploywhisper-receiver]
+    environment: deploywhisper-receiver
+    steps:
+      - name: Execute installed synthetic receiver
+        # Immutable receiver code and credentials are provisioned by the host
+        # operator; this job deliberately does not check out dispatched code.
+        env:
+          OPERATION_ID: ${{ inputs.operation_id }}
+          BINDING_DIGEST: ${{ inputs.binding_digest }}
+        run: /opt/deploywhisper/receiver/bin/run --operation-id "$OPERATION_ID" --binding-digest "$BINDING_DIGEST"

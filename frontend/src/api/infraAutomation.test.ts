@@ -304,3 +304,54 @@ describe("approval packet adapters", () => {
     await expect(api.getAutomationAudit(scope)).rejects.toMatchObject({ status: 422 });
   });
 });
+
+export const externalFixture: api.ExternalHandoff = {
+  id: "handoff-one", version: 3, state: "running", receiver_state: "running", lock_status: "held", cancel_requested: false,
+  verified_outcome: null, reconciliation_available: true,
+  acceptance: { version: 1, api_version: "2026-03-10", state: "accepted", operation_id: "handoff-one", binding_digest: `sha256:${"a".repeat(64)}`, repository_id: "repo-one", workflow_id: "workflow-one", workflow_revision: "b".repeat(40), workflow_ref: "main", run_id: 56, run_url: "https://api.github.com/repos/owner/repo/actions/runs/56", html_url: "https://github.com/owner/repo/actions/runs/56" },
+  observation: null,
+};
+describe("external outcome contracts", () => {
+  const relation = { version: 1, run_id: "run-one", project_id: 7, workspace_id: 9, items: [externalFixture] };
+  it("binds bounded no-store reads to the exact run, project and workspace", async () => {
+    const fetcher = response(relation);
+    await expect(api.getRunHandoffs("run-one", scope)).resolves.toEqual(relation);
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    expect(fetcher.mock.calls[0][0]).toBe("/api/v1/infra-automation/runs/run-one/handoffs?project_id=7&workspace_id=9");
+    for (const bad of [{ ...relation, project_id: 8 }, { ...relation, workspace_id: null }, { ...relation, run_id: "other" }, { ...relation, version: 2 }, { ...relation, items: Array(101).fill(externalFixture) }, { ...relation, items: [externalFixture, externalFixture] }]) {
+      expect(() => api.parseRunHandoffs(bad, "run-one", scope)).toThrow();
+    }
+  });
+  it("accepts GitHub success with unknown receiver completion but never turns it into success", () => {
+    const { state: _state, operation_id: _operation, binding_digest: _binding, ...common } = externalFixture.acceptance!;
+    const observation = { ...common, status: "completed", conclusion: "success" };
+    expect(api.parseExternalHandoff({ ...externalFixture, observation }).verified_outcome).toBeNull();
+    for (const bad of [{ ...observation, run_id: 57 }, { ...observation, workflow_revision: "c".repeat(40) }, { ...observation, status: "running" }, { ...observation, status: "queued" }]) {
+      expect(() => api.parseExternalHandoff({ ...externalFixture, observation: bad })).toThrow();
+    }
+    expect(() => api.parseExternalHandoff({ ...externalFixture, verified_outcome: "succeeded" })).toThrow();
+  });
+  it("rejects unsafe external links and unsupported operation fields", () => {
+    for (const html_url of ["javascript:alert(1)", "https://evil.invalid/run", "https://github.com.evil.invalid/run", "https://user@github.com/run", "https://github.com:123/run", "https://github.com/\\evil"]) {
+      expect(() => api.parseExternalHandoff({ ...externalFixture, acceptance: { ...externalFixture.acceptance, html_url } })).toThrow();
+    }
+    expect(() => api.parseExternalHandoff({ ...externalFixture, secret: "untrusted" })).toThrow();
+  });
+  it("rejects a malformed reason before sending without creating response ambiguity", async () => {
+    const fetcher = response(externalFixture);
+    await expect(api.reconcileHandoff(externalFixture, scope, "bad\treason", "synthetic-csrf")).rejects.toMatchObject({ status: 422, code: "request_validation_failed" });
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+  it("sends one explicit scoped CAS reconciliation, no dispatch or automatic retries", async () => {
+    const fetcher = response({ ...externalFixture, version: 4 });
+    await api.reconcileHandoff(externalFixture, scope, "Review registered external evidence", "synthetic-csrf");
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    const [path, init] = fetcher.mock.calls[0];
+    expect(path).toBe("/api/v1/infra-automation/handoffs/handoff-one/reconcile");
+    expect(JSON.parse(init.body)).toEqual({ version: 1, expected_version: 3, project_id: 7, workspace_id: 9, reason: "Review registered external evidence" });
+    expect(new Headers(init.headers).get("X-CSRF-Token")).toBe("synthetic-csrf");
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("connection lost")));
+    await expect(api.reconcileHandoff(externalFixture, scope, "Review evidence", "synthetic-csrf")).rejects.toThrow();
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+});

@@ -312,3 +312,68 @@ export async function getAutomationAudit(scope: AutomationScope, cursor?: string
   }
   return page;
 }
+
+// GitHub facts are observations, never receiver completion authority.
+export interface GithubObservation {
+  version: 1; api_version: "2026-03-10"; run_id: number; repository_id: string; workflow_id: string;
+  workflow_revision: string; workflow_ref: string; run_url: string; html_url: string;
+  status: string; conclusion: string | null;
+}
+export interface DispatchAcceptance extends Omit<GithubObservation, "status" | "conclusion"> {
+  state: "accepted"; operation_id: string; binding_digest: string;
+}
+export interface ExternalHandoff {
+  id: string; version: number; state: string; acceptance: DispatchAcceptance | null;
+  observation: GithubObservation | null; receiver_state: string | null;
+  lock_status: "held" | "resolved" | "broken"; cancel_requested: boolean;
+  verified_outcome: "succeeded" | "failed" | null; reconciliation_available: boolean;
+}
+export interface RunHandoffs {
+  version: 1; run_id: string; project_id: number; workspace_id: number | null; items: ExternalHandoff[];
+}
+export function safeGithubLink(value: unknown): value is string {
+  if (typeof value !== "string" || value.length > 1024 || /[\s\\]/.test(value)) return false;
+  try { const url = new URL(value); return url.protocol === "https:" && ["github.com", "api.github.com"].includes(url.hostname) && !url.username && !url.password && !url.port && !url.hash; }
+  catch { return false; }
+}
+function checkGithubFact(value: unknown, acceptance: boolean): void {
+  const common = ["version", "api_version", "run_id", "repository_id", "workflow_id", "workflow_revision", "workflow_ref", "run_url", "html_url"];
+  if (!record(value) || !onlyKeys(value, [...common, ...(acceptance ? ["state", "operation_id", "binding_digest"] : ["status", "conclusion"])]) ||
+    value.version !== 1 || value.api_version !== "2026-03-10" || !positive(value.run_id) || !identifier(value.repository_id) || !identifier(value.workflow_id) ||
+    !commitValue(value.workflow_revision) || !singleLineText(value.workflow_ref, 128) || !value.workflow_ref || !safeGithubLink(value.run_url) || !safeGithubLink(value.html_url)) invalid();
+  if (acceptance) { if (value.state !== "accepted" || !identifier(value.operation_id) || !digestValue(value.binding_digest)) invalid(); }
+  else if (!member(value.status, ["queued", "in_progress", "completed", "waiting", "pending", "requested"]) ||
+    !(value.conclusion === null || member(value.conclusion, ["success", "failure", "neutral", "cancelled", "skipped", "timed_out", "action_required", "stale", "startup_failure"])) ||
+    (value.status === "completed") !== (value.conclusion !== null)) invalid();
+}
+export function parseExternalHandoff(value: unknown): ExternalHandoff {
+  if (!record(value) || !onlyKeys(value, ["id", "version", "state", "acceptance", "observation", "receiver_state", "lock_status", "cancel_requested", "verified_outcome", "reconciliation_available"]) ||
+    !identifier(value.id) || !positive(value.version) || !member(value.state, ["prepared", "sending", "delivery_unknown", "consumed", "accepted", "running", "succeeded", "failed", "cancelled"]) ||
+    !(value.receiver_state === null || member(value.receiver_state, ["accepted", "running", "succeeded", "failed", "delivery_unknown", "cancel_requested"])) ||
+    !member(value.lock_status, ["held", "resolved", "broken"]) || typeof value.cancel_requested !== "boolean" || typeof value.reconciliation_available !== "boolean" ||
+    !(value.verified_outcome === null || member(value.verified_outcome, ["succeeded", "failed"]))) invalid();
+  if (value.acceptance !== null) { checkGithubFact(value.acceptance, true); if ((value.acceptance as DispatchAcceptance).operation_id !== value.id) invalid(); }
+  if (value.observation !== null) {
+    checkGithubFact(value.observation, false);
+    if (!record(value.acceptance) || !record(value.observation) || !["run_id", "repository_id", "workflow_id", "workflow_revision", "workflow_ref", "run_url", "html_url"].every((key) => (value.acceptance as Record<string, unknown>)[key] === (value.observation as Record<string, unknown>)[key])) invalid();
+  }
+  if (value.verified_outcome !== null && (value.receiver_state !== value.verified_outcome || value.state !== value.verified_outcome)) invalid();
+  return value as unknown as ExternalHandoff;
+}
+export function parseRunHandoffs(value: unknown, runId: string, scope: AutomationScope): RunHandoffs {
+  if (!record(value) || !onlyKeys(value, ["version", "run_id", "project_id", "workspace_id", "items"]) || value.version !== 1 || value.run_id !== runId || value.project_id !== scope.projectId || value.workspace_id !== scope.workspaceId || !Array.isArray(value.items) || value.items.length > 100) invalid();
+  const items = value.items.map(parseExternalHandoff);
+  if (new Set(items.map((item) => item.id)).size !== items.length) invalid();
+  return { ...value, items } as RunHandoffs;
+}
+export async function getRunHandoffs(runId: string, scope: AutomationScope, signal?: AbortSignal): Promise<RunHandoffs> {
+  return parseRunHandoffs(await read(`${base}/runs/${id(runId)}/handoffs?${scopedParams(scope)}`, signal), runId, scope);
+}
+export async function reconcileHandoff(operation: ExternalHandoff, scope: AutomationScope, reason: string, csrf: string): Promise<ExternalHandoff> {
+  scopedParams(scope);
+  if (!positive(operation.version)) invalid();
+  if (!singleLineText(reason, 1024) || !reason.trim()) throw new ApiClientError("Provide a bounded single-line reconciliation reason.", 422, { code: "request_validation_failed" });
+  const result = parseExternalHandoff(await mutate(`/handoffs/${id(operation.id)}/reconcile`, { version: 1, project_id: scope.projectId, workspace_id: scope.workspaceId, expected_version: operation.version, reason: reason.trim() }, csrf));
+  if (result.id !== operation.id || result.version < operation.version) invalid();
+  return result;
+}

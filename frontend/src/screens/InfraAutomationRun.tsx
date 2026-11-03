@@ -2,7 +2,7 @@ import { Fragment, useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { ApiClientError } from "../api/client";
-import { getRun, getRunSteps, getRunLogs, getRunReports, type AutomationScope, type Run, type Step, type StepPage, type RunReports, type LogPage } from "../api/infraAutomation";
+import { getRunHandoffs, reconcileHandoff, type ExternalHandoff, type RunHandoffs, getRun, getRunSteps, getRunLogs, getRunReports, type AutomationScope, type Run, type Step, type StepPage, type RunReports, type LogPage } from "../api/infraAutomation";
 import { Button } from "../components/ui/Button";
 import { Card } from "../components/ui/Card";
 import { AutomationFrame, scopeQuery, type AutomationContext } from "./InfraAutomationShared";
@@ -115,7 +115,7 @@ export function ScreenedLogContent({ page }: { page: LogPage }) {
 export function EvidenceSummary({ reports, runId }: { reports: RunReports; runId: string }) {
   const evidence = reports.evidence_status;
   return <Card eyebrow="Evidence and uncertainty" title={`Evidence ${evidence.status}`}>
-    <p>Uploaded evidence is advisory and not eligible for approval. Repository identity and immutable commit are unverified.</p>
+    <p>Briefings remain advisory. Approval eligibility depends on retained source evidence and current server checks.</p>
     <dl className="dw-automation-facts"><dt>Evaluated at</dt><dd>{evidence.evaluated_at}</dd><dt>Evidence deadline</dt><dd>{evidence.evidence_deadline}</dd>
       <dt>Manifest present</dt><dd>{evidence.manifest_present ? "Yes" : "No"}</dd><dt>Evidence basis</dt><dd>Run {evidence.run_state}, version {evidence.run_version}; attempt {evidence.attempt_id ?? "unavailable"}, {evidence.attempt_state ?? "unavailable"}</dd>
     </dl>
@@ -145,11 +145,86 @@ export function AttemptLogs({ runId, attemptId, context, onDenied }: { runId: st
   </Card>;
 }
 
+export function reconciliationFailure(error: unknown): "denied" | "correctable" | "ambiguous" {
+  if (protectedError(error)) return "denied";
+  return error instanceof ApiClientError && [400, 404, 409, 422, 429].includes(error.status) && ["binding_conflict", "request_validation_failed", "quota_exceeded"].includes(error.code ?? "") ? "correctable" : "ambiguous";
+}
+
+export function HandoffFacts({ operation }: { operation: ExternalHandoff }) {
+  return <section aria-label={`External handoff ${operation.id}`}>
+    <h3>Handoff {operation.id}</h3>
+    <dl className="dw-automation-facts">
+      <dt>Operation state / version</dt><dd>{operation.state} / {operation.version}</dd>
+      <dt>Dispatch acceptance</dt><dd>{operation.acceptance ? "Dispatch accepted — acceptance alone does not verify completion" : "No correlated dispatch acceptance recorded"}</dd>
+      <dt>GitHub observation</dt><dd>{operation.observation ? `${operation.observation.status}${operation.observation.conclusion ? ` · ${operation.observation.conclusion}` : ""} — observation only` : "Not observed"}</dd>
+      <dt>Verified receiver completion</dt><dd>{operation.verified_outcome ?? "Unknown — no verified terminal receiver proof"}</dd>
+      <dt>Receiver state</dt><dd>{operation.receiver_state ?? "Not reported"}</dd>
+      <dt>Target lock</dt><dd>{operation.lock_status}</dd>
+      {operation.acceptance && <><dt>Pipeline workflow revision</dt><dd><code>{operation.acceptance.workflow_revision}</code></dd><dt>GitHub run</dt><dd><a href={operation.acceptance.html_url} target="_blank" rel="noopener noreferrer">Open GitHub run {operation.acceptance.run_id}</a></dd></>}
+    </dl>
+    {operation.cancel_requested && <p role="status">Cancellation requested. This does not confirm that external work has stopped.</p>}
+    {operation.verified_outcome === null && <p>Review the registered GitHub run and receiver evidence. Unknown delivery retains its target lock; do not resend the dispatch. Pipeline workflow revision does not identify the infrastructure source commit.</p>}
+    {operation.lock_status === "broken" && <p role="status">The target lock was broken by an operator; this does not prove external completion.</p>}
+  </section>;
+}
+
+function HandoffControl({ operation, context, refresh, onDenied, pendingRequests }: { operation: ExternalHandoff; context: AutomationContext; refresh: () => Promise<unknown>; onDenied: () => void; pendingRequests: Map<string, number> }) {
+  const [reason, setReason] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState("");
+  const unknownVersion = pendingRequests.get(operation.id) ?? null;
+  const setUnknownVersion = (version: number) => pendingRequests.set(operation.id, version);
+  const blocked = unknownVersion !== null && operation.version <= unknownVersion;
+  const mounted = useRef(true);
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
+  async function reconcile() {
+    if (busy || blocked || !context.fresh || !context.identity.csrfToken || !reason.trim()) return;
+    setBusy(true); setMessage("");
+    let submitted = false;
+    try {
+      await context.ensureFresh();
+      if (!mounted.current) return;
+      submitted = true;
+      setUnknownVersion(operation.version);
+      await reconcileHandoff(operation, context.scope, reason, context.identity.csrfToken);
+      if (!mounted.current) return;
+      setMessage("Reconciliation recorded. Refresh current outcome evidence.");
+      setUnknownVersion(operation.version);
+      await refresh();
+    } catch (error) {
+      if (!mounted.current) return;
+      const kind = reconciliationFailure(error);
+      if (kind === "denied") onDenied();
+      else if (!submitted) setMessage("Current access could not be verified. Refresh access before a manual reconciliation request.");
+      else if (kind === "correctable") {
+        if (pendingRequests.get(operation.id) === operation.version) pendingRequests.delete(operation.id);
+        setMessage("Reconciliation was rejected. Refresh current evidence, correct the reason if needed, then submit a manual request.");
+      }
+      else { setUnknownVersion(operation.version); setMessage("Reconciliation was not confirmed. Read current evidence before continuing; the request will not be resent automatically."); }
+    } finally { if (mounted.current) setBusy(false); }
+  }
+  return <><HandoffFacts operation={operation} />{message && <p role="status">{message}</p>}
+    {blocked && <p role="status">A previous request remains unconfirmed at this operation version. Refresh outcome evidence to resolve it.</p>}
+    {operation.reconciliation_available && <div className="dw-automation-stack"><label>Reconciliation reason for {operation.id}<input value={reason} maxLength={1024} onChange={(event) => setReason(event.target.value)} disabled={busy || blocked} /></label>
+      <Button aria-label={`Reconcile handoff ${operation.id}`} disabled={busy || blocked || !context.fresh || !context.identity.csrfToken || !reason.trim()} onClick={() => void reconcile()}>{busy ? "Reconciling…" : "Reconcile handoff"}</Button>
+      <p className="dw-muted">Reads registered external outcome evidence. This does not dispatch again or manually declare success.</p>
+    </div>}</>;
+}
+
+export function HandoffOutcomes({ handoffs, context, refresh, onDenied, pendingRequests }: { handoffs: RunHandoffs; context: AutomationContext; refresh: () => Promise<unknown>; onDenied: () => void; pendingRequests: Map<string, number> }) {
+  return <Card eyebrow="External outcome evidence" title="External handoffs">
+    {handoffs.items.length ? handoffs.items.map((operation) => <HandoffControl key={operation.id} operation={operation} context={context} refresh={refresh} onDenied={onDenied} pendingRequests={pendingRequests} />) : <p>No external handoffs recorded for this run.</p>}
+    <Button onClick={() => void refresh()}>Refresh outcome evidence</Button>
+  </Card>;
+}
+
 export function RunContent({ context, runId }: { context: AutomationContext; runId: string }) {
   const [cursor, setCursor] = useState<string>();
   const [attempt, setAttempt] = useState<string | null>(null);
   const [denied, setDenied] = useState(false);
   const [recovering, setRecovering] = useState(false);
+  // Keep ambiguous writes blocked across child read errors and run-version changes.
+  const pendingHandoffRequests = useRef(new Map<string, number>());
   const runHeading = useRef<HTMLHeadingElement>(null);
   const focusedRun = useRef<string | null>(null);
   const key = ["automation", context.identity.epoch, context.scope.projectId, context.scope.workspaceId, "run", runId];
@@ -161,8 +236,9 @@ export function RunContent({ context, runId }: { context: AutomationContext; run
   const stepKey = [...key, "steps", readPolicy.version, cursor];
   const steps = useQuery<StepPage>({ queryKey: stepKey, placeholderData: (previous, previousQuery) => retainAttemptPage(previous, previousQuery?.queryKey, stepKey, previousQuery?.state.error), queryFn: ({ signal }) => getRunSteps(runId, cursor, signal), enabled, retry: false, gcTime: 0, refetchInterval: enabled ? readPolicy.interval : false, refetchOnWindowFocus: false });
   const reports = useQuery({ queryKey: [...key, "reports", readPolicy.version], queryFn: ({ signal }) => getRunReports(runId, signal), enabled, retry: false, gcTime: 0, refetchInterval: enabled ? readPolicy.interval : false, refetchOnWindowFocus: false });
+  const handoffs = useQuery({ queryKey: [...key, "handoffs", readPolicy.version], queryFn: ({ signal }) => getRunHandoffs(runId, context.scope, signal), enabled, retry: false, gcTime: 0, refetchInterval: (query) => enabled && !query.state.error ? readPolicy.interval : false, refetchOnWindowFocus: false });
   useEvidenceDeadlineRefresh(enabled && !reports.error ? reports.data?.evidence_status : undefined, reports.refetch);
-  const accessDenied = denied || [run.error, steps.error, reports.error].some(protectedError);
+  const accessDenied = denied || [run.error, steps.error, reports.error, handoffs.error].some(protectedError);
   useEffect(() => {
     if (matching && !accessDenied && !run.error && runHeading.current && focusedRun.current !== runId) {
       focusedRun.current = runId;
@@ -177,6 +253,7 @@ export function RunContent({ context, runId }: { context: AutomationContext; run
         () => run.refetch({ throwOnError: true }),
         () => steps.refetch({ throwOnError: true }),
         () => reports.refetch({ throwOnError: true }),
+        () => handoffs.refetch({ throwOnError: true }),
       ]);
       setDenied(false);
     } catch {
@@ -192,9 +269,11 @@ export function RunContent({ context, runId }: { context: AutomationContext; run
   if (!matching) return <Card title="Run belongs to another scope"><p>Select the run’s project and workspace to read its details.</p>
     {run.data.project_id !== context.scope.projectId ? <Button onClick={() => context.selectProject(run.data.project_id)}>Use run project</Button> : <Button onClick={() => context.selectWorkspace(run.data.workspace_id)}>Use run workspace</Button>}
   </Card>;
-  return <div className="dw-automation-stack"><Link to={`/infra-automation${scopeQuery(context.scope)}&view=runs`}>← Run history</Link><h2 ref={runHeading} tabIndex={-1}>Preflight run</h2>
+  return <div className="dw-automation-stack dw-automation-run"><Link to={`/infra-automation${scopeQuery(context.scope)}&view=runs`}>← Run history</Link><h2 ref={runHeading} tabIndex={-1}>Preflight run</h2>
     {!context.fresh && <p role="status">Access is being refreshed. Current historical run data is read-only.</p>}
     <RunSummary run={run.data} />
+    {handoffs.isPending && <p role="status">Loading external outcome evidence…</p>}
+    {handoffs.error ? <p role="alert">External outcome evidence unavailable. <Button onClick={() => void handoffs.refetch()}>Retry outcome evidence</Button></p> : handoffs.data && <HandoffOutcomes handoffs={handoffs.data} context={context} refresh={handoffs.refetch} onDenied={() => setDenied(true)} pendingRequests={pendingHandoffRequests.current} />}
     {steps.isPending && <p role="status">Loading step attempts…</p>}
     {steps.isPlaceholderData && <p role="status">Refreshing step attempts…</p>}
     {steps.error ? <p role="alert">Step attempts unavailable. <Button onClick={() => void steps.refetch()}>Retry attempts</Button>{cursor && <Button onClick={() => setCursor(undefined)}>Reload current attempts</Button>}</p> : steps.data && <>

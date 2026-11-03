@@ -1818,3 +1818,29 @@ if "InfraAutomationGrant" not in globals():
         )
         receipt_bytes: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
         receipt_digest: Mapped[str | None] = mapped_column(String(71), nullable=True)
+
+
+if "InfraAutomationExternalFact" not in globals():
+
+    class InfraAutomationExternalFact(Base):
+        __tablename__ = "infra_automation_external_facts"
+        __table_args__ = (
+            ForeignKeyConstraint(
+                ["operation_id"], ["infra_automation_handoffs.id"], ondelete="RESTRICT"
+            ),
+            UniqueConstraint("operation_id", "kind", "sequence"),
+            UniqueConstraint("operation_id", "nonce"),
+            CheckConstraint(
+                "kind IN ('acceptance','observation','callback') AND sequence > 0 AND length(payload_bytes) BETWEEN 1 AND 131072",
+                name="ck_external_fact_bounds",
+            ),
+        )
+        id: Mapped[str] = mapped_column(String(64), primary_key=True)
+        operation_id: Mapped[str] = mapped_column(String(64), nullable=False)
+        kind: Mapped[str] = mapped_column(String(32), nullable=False)
+        sequence: Mapped[int] = mapped_column(Integer, nullable=False)
+        nonce: Mapped[str] = mapped_column(String(128), nullable=False)
+        payload_bytes: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+        created_at: Mapped[datetime] = mapped_column(
+            DateTime(timezone=True), nullable=False
+        )

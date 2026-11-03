@@ -611,7 +611,12 @@ operator-owned origins and environment-backed credential references using the
 [registered targets and handoff guide](docs/infra-automation/handoff-contract-v1.md#operator-configuration-and-limits).
 Default execution ports remain unavailable; handoff admission also requires a
 qualified server-owned material-generation witness covering the complete decision
-graph. This slice does not qualify a live GitHub receiver or collector.
+graph. The [reference receiver and custody guide](docs/infra-automation/receiver-v1.md)
+provides durable synthetic receiver recovery; the [online receiver contract](docs/infra-automation/receiver-online-v1.md)
+covers authenticated bootstrap, callback replay fences and scoped outcome
+reconciliation. The run screen separates dispatch acceptance, observed GitHub
+status and verified receiver completion. Real collector admission and provider
+actions remain separate qualification work.
 
 ### Core Runtime Variables
 
@@ -702,6 +707,8 @@ Project documentation currently lives in a few places:
 - [Evidence-bound Decisions and Freshness](./docs/infra-automation/decisions.md)
 - [Approval Review Packet and Confirmation](./docs/infra-automation/approval-review.md)
 - [Registered Targets, Durable Handoffs, and Operator Configuration](./docs/infra-automation/handoff-contract-v1.md)
+- [Protected Synthetic Receiver and Custody](./docs/infra-automation/receiver-v1.md)
+- [Online Receiver and Outcome Reconciliation](./docs/infra-automation/receiver-online-v1.md)
 - [Workflow Editor, Account Access, and Run History](./docs/infra-automation/browser-ui.md)
 - [CI Guide](./docs/ci.md)
 - [CI Secrets Checklist](./docs/ci-secrets-checklist.md)
