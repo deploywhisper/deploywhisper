@@ -270,9 +270,10 @@ def _resolve(resolver, host, port, deadline):
 
 
 class _DeadlineReader(io.RawIOBase):
-    def __init__(self, sock, deadline):
+    def __init__(self, sock, deadline, release):
         self.sock = sock
         self.deadline = deadline
+        self.release = release
 
     def readable(self):
         return True
@@ -281,6 +282,13 @@ class _DeadlineReader(io.RawIOBase):
         self.sock.settimeout(_remaining(self.deadline))
         return self.sock.recv_into(buffer)
 
+    def close(self):
+        if not self.closed:
+            try:
+                super().close()
+            finally:
+                self.release()
+
 
 class _DeadlineSocket:
     """Apply one deadline to every read, including response headers/chunks."""
@@ -288,18 +296,33 @@ class _DeadlineSocket:
     def __init__(self, sock, deadline):
         self.sock = sock
         self.deadline = deadline
+        self.readers = 0
+        self.close_requested = False
 
     def sendall(self, data):
         self.sock.settimeout(_remaining(self.deadline))
         self.sock.sendall(data)
 
     def makefile(self, mode):
-        if mode != "rb":
+        if mode != "rb" or self.close_requested:
             raise ValueError("invalid socket file mode")
-        return io.BufferedReader(_DeadlineReader(self.sock, self.deadline))
+        self.readers += 1
+        return io.BufferedReader(
+            _DeadlineReader(self.sock, self.deadline, self.release_reader)
+        )
+
+    def release_reader(self):
+        self.readers -= 1
+        if self.close_requested and self.readers == 0:
+            self.sock.close()
 
     def close(self):
-        self.sock.close()
+        # HTTPConnection closes its socket before returning a Connection: close
+        # response. Like socket.makefile(), keep the reader alive until its
+        # bounded body read finishes; never rely on buffered headers/body size.
+        self.close_requested = True
+        if self.readers == 0:
+            self.sock.close()
 
 
 class PinnedGithubTransport:

@@ -308,6 +308,31 @@ class TargetTransportTests(unittest.TestCase):
         self.assertEqual(self.context.minimum_version, ssl.TLSVersion.TLSv1_2)
         self.assertNotIn(SECRET, repr(result))
 
+    def test_connection_close_preserves_large_response_until_file_reader_closes(self):
+        body = b"x" * 262144
+        self.socket.response = (
+            b"HTTP/1.1 200 OK\r\nConnection: close\r\nContent-Length: 262144\r\n\r\n"
+            + body
+        )
+        recv_into = self.socket.recv_into
+
+        def live_recv(buffer):
+            if self.socket.closed:
+                raise OSError("Socket descriptor closed before body read")
+            return recv_into(buffer)
+
+        self.socket.recv_into = live_recv
+        response = self.transport(max_response_bytes=len(body)).get_registered(
+            origin="https://api.github.com",
+            owner="example",
+            repository="repo",
+            resource="repository",
+            selector=None,
+            token=SECRET,
+        )
+        self.assertEqual(response.body, body)
+        self.assertTrue(self.socket.closed)
+
     def test_get_rejects_redirect_and_unsafe_selector_without_following(self):
         fields = dict(
             origin="https://api.github.com",
