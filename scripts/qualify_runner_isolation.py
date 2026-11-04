@@ -29,6 +29,16 @@ FIXTURE = ROOT / "tests/fixtures/infra_automation/qualification/16_13"
 IMAGE = "dw16-13-qualification:1"
 
 
+def emit_status(qualified: bool) -> None:
+    """Keep report contents out of logs, including failure-path metadata."""
+    if type(qualified) is not bool:
+        raise ValueError("Qualification outcome must be a boolean.")
+    if qualified:
+        print('{"qualified": true}')
+    else:
+        print('{"qualified": false}')
+
+
 def digest(raw):
     return "sha256:" + hashlib.sha256(raw).hexdigest()
 
@@ -1361,17 +1371,7 @@ def run(args):
         (output / "results.json").write_text(
             json.dumps(report, indent=2, default=str) + "\n"
         )
-        print(
-            json.dumps(
-                {
-                    "image_id": image["Id"],
-                    "cases": len(results),
-                    "qualified": report["qualified"],
-                    "failed_checks": report["failed_checks"],
-                    "source_hashes_unchanged": report["source_hashes_unchanged"],
-                }
-            )
-        )
+        emit_status(report["qualified"])
     return 0 if report["qualified"] else 1
 
 

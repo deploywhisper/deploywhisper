@@ -70,3 +70,7 @@ The ambiguous-create repair (R4) is verified with controlled transport/fault-dou
 The stricter watchdog can expire before the host issues a kill. For that path, the corpus requires actual exit124, the original-deadline bound, durable timeout/cancellation before host removal and no finalizable output. Explicit cancellation and authority-loss cases still require durable intent before the host kill. A first revised attempt failed the old kill-only observation; the observer was corrected to distinguish these real stop paths, without weakening timeout or cleanup requirements.
 
 Subsequent actual runs exposed two runtime edges that were repaired and reverified: a natural exit racing Docker kill left cleanup incomplete, and a post-exit callback check mislabeled an execution timeout as lease loss. Their failed observations were preserved in separate session artifacts and supplied to the story owner; the final artifact has no failed assertions and no remaining owned containers. The original review deadline failure artifact is preserved separately and has not been rewritten.
+
+## Console output
+
+The harness emits only a fixed JSON qualification status (`{"qualified": true}` or `{"qualified": false}`). Image identity, case counts, failures and detailed evidence remain in `results.json`; report-derived values are not serialized to console logs. This keeps the console boundary independent of credential-related evidence fields.

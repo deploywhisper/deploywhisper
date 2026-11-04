@@ -100,6 +100,8 @@ Codex with native implementation and independent verification subagents; 2026-11
 
 ### Debug Log References
 
+- CI follow-up for CodeQL alert121: console logging now emits only fixed boolean JSON through a strict emitter; detailed report fields are not logged. New console/evidence tests: 9 passed, 33 subtests. Root regression, actual harness rerun and GitHub verification are in progress; no alert dismissal or suppression was used.
+
 - Latest review repair verification: real qualification passed **172 assertions** (19 task, 3 controller-death, 17 admission cases); delayed setup stopped at 6.092s against original 6s budget plus 0.75s tolerance. Current source/image pins match; no owned containers remain. Independent focused repair suite: **68 tests, 135 subtests**, no residual actionable findings.
 - Latest root unittest: **1,701 tests, 3 skips**, OK in 831.172s. Exact API/CLI/infra pytest shard: **734 passed, 1 skipped, 2,353 subtests**, 523.49s. Full `bash scripts/ci-local.sh`: **exit 0, no retries**, all ten directories (3,151 test executions) passed. Final Ruff check/format (532 files), scoped six-module mypy, configured Bandit medium/high gate and diff check passed. Full commands/results and preserved failure history: [review repair record](../../docs/verification/infra-automation/16-13/review-fixes.md).
 
@@ -129,6 +131,8 @@ Codex with native implementation and independent verification subagents; 2026-11
 - Development verification is complete; story and sprint status are review. All packet/verification checkboxes are complete. BMad help routes the next major workflow to bmad-code-review; no commit, push or PR is claimed by this development pass.
 
 ### File List
+
+- `tests/test_infra_automation/test_runner_qualification_console.py`
 
 - `README.md`
 - `_bmad-output/implementation-artifacts/16-12-runner-enrollment-and-attempt-protocol.md`
@@ -171,3 +175,5 @@ Codex with native implementation and independent verification subagents; 2026-11
 - 2026-11-04: Layered BMad code review recorded five patch findings, including two real Linux counterexamples; returned story/sprint status to in-progress. No runtime edits or publication.
 
 - 2026-11-04: Resolved all five review findings and adjacent real qualification cleanup/timeout races; refreshed pinned-image evidence and completed clean full CI. Ready for re-review.
+
+- 2026-11-04: Addressed CodeQL clear-text logging dataflow in qualification console output; remote validation pending.
