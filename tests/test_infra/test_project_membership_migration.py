@@ -17,7 +17,7 @@ from alembic.config import Config
 import config
 import models.database as database
 
-HEAD = "036_add_receiver_reconciliation"
+HEAD = "037_add_runner_enrollment"
 PREVIOUS = "029_add_identity_lifecycle"
 
 

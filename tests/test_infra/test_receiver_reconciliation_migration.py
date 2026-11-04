@@ -17,6 +17,7 @@ import config
 import models.database as database
 
 HEAD = "036_add_receiver_reconciliation"
+CURRENT_HEAD = "037_add_runner_enrollment"
 PREVIOUS = "035_add_infra_handoffs"
 
 
@@ -48,7 +49,7 @@ class ReceiverReconciliationMigrationTests(unittest.TestCase):
         with closing(sqlite3.connect(self.path)) as db:
             self.assertEqual(
                 db.execute("SELECT version_num FROM alembic_version").fetchone()[0],
-                HEAD,
+                CURRENT_HEAD,
             )
             self.assertEqual(db.execute("PRAGMA foreign_key_check").fetchall(), [])
 
@@ -63,7 +64,7 @@ class ReceiverReconciliationMigrationTests(unittest.TestCase):
         with closing(sqlite3.connect(self.path)) as db:
             self.assertEqual(
                 db.execute("SELECT version_num FROM alembic_version").fetchone()[0],
-                HEAD,
+                CURRENT_HEAD,
             )
             self.assertEqual(
                 db.execute(

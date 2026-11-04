@@ -33,6 +33,10 @@ from api.routes.deployments import router as deployments_router
 from api.routes.github_app import router as github_app_router
 from api.routes.health import router as health_router
 from api.routes.incidents import router as incidents_router
+from api.routes.infra_automation_runner import router as infra_automation_runner_router
+from api.routes.infra_automation_runner_admin import (
+    router as infra_automation_runner_admin_router,
+)
 from api.routes.infra_automation_receiver import (
     router as infra_automation_receiver_router,
 )
@@ -181,6 +185,8 @@ fastapi_app.include_router(stats_router)
 fastapi_app.include_router(incidents_router)
 fastapi_app.include_router(infra_automation_router)
 fastapi_app.include_router(infra_automation_receiver_router)
+fastapi_app.include_router(infra_automation_runner_router)
+fastapi_app.include_router(infra_automation_runner_admin_router)
 fastapi_app.include_router(scanner_imports_router)
 
 

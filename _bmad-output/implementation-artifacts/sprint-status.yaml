@@ -1,5 +1,5 @@
 # generated: 2026-05-01
-# last_updated: 2026-11-03
+# last_updated: 2026-11-04
 # project: deploywhisper
 # project_key: NOKEY
 # tracking_system: file-system
@@ -28,7 +28,7 @@
 #   - done: Retrospective has been completed
 #
 # RECONCILIATION BASELINE: v1.4.0 published 2026-10-07; accepted through 12.4, plus 12.6 and 13.8
-# NEXT IMPLEMENTATION: Story16.11 scoped receiver qualification complete; assess16.12 runner enrollment readiness
+# NEXT WORKFLOW: Story16.12 all four review findings repaired and full CI passed; ready for re-review
 # RELEASE ENABLER: 12-5-sbom-and-release-checksums (SBOM remains unshipped)
 # EVIDENCE: story-implementation-status-map.md and planning-artifacts/sprint-change-proposal-2026-10-07-v1.4.0-status-reconciliation.md
 # WORKFLOW NOTES:
@@ -39,7 +39,7 @@
 # - Dev moves story to review, then runs code-review
 
 generated: 2026-05-01
-last_updated: 2026-11-03
+last_updated: 2026-11-04
 project: deploywhisper
 project_key: NOKEY
 tracking_system: file-system
@@ -222,7 +222,7 @@ development_status:
   16-9-human-approval-inbox-and-decision-ux: done
   16-10-registered-targets-outbox-grants-and-locks: done
   16-11-github-receiver-and-outcome-reconciliation: done
-  16-12-runner-enrollment-and-attempt-protocol: backlog
+  16-12-runner-enrollment-and-attempt-protocol: review
   16-13-isolated-runner-execution-profile: backlog
   16-14-opentofu-terraform-collection-and-provenance: backlog
   16-15-runner-health-and-collection-ux: backlog
