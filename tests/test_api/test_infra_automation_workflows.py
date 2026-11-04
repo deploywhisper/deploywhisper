@@ -673,7 +673,7 @@ class InfraAutomationWorkflowApiTests(unittest.TestCase):
             self.assert_error(response, 503)
             self.assertNotIn("secret-value", response.text)
 
-    def test_openapi_has_closed_authoring_and_engine_contract_without_runner_transport(
+    def test_openapi_keeps_authoring_separate_from_machine_transports(
         self,
     ):
         from app import create_app
@@ -713,7 +713,26 @@ class InfraAutomationWorkflowApiTests(unittest.TestCase):
         }
         self.assertTrue(receiver_paths.issubset(production_paths))
         self.assertTrue(receiver_paths.isdisjoint(schema["paths"]))
-        self.assertFalse(any("/runners" in path for path in production_paths))
+        runner_paths = {
+            "/api/v1/infra-automation/runners" + suffix
+            for suffix in (
+                "",
+                "/enrollments",
+                "/enrollments/{enrollment_id}/redeem",
+                "/{runner_id}/tasks",
+                "/{runner_id}/rotate",
+                "/{runner_id}/revoke",
+                "/claim",
+                "/heartbeat",
+                "/logs",
+                "/uploads",
+                "/complete",
+            )
+        }
+        self.assertEqual(
+            {path for path in production_paths if "/runners" in path}, runner_paths
+        )
+        self.assertTrue(runner_paths.isdisjoint(schema["paths"]))
         for path, methods in schema["paths"].items():
             self.assertNotIn("/runners", path)
             self.assertNotIn("/consume", path)

@@ -612,7 +612,9 @@ operator-owned origins and environment-backed credential references using the
 [registered targets and handoff guide](docs/infra-automation/handoff-contract-v1.md#operator-configuration-and-limits).
 Default execution ports remain unavailable; handoff admission also requires a
 qualified server-owned material-generation witness covering the complete decision
-graph. The [reference receiver and custody guide](docs/infra-automation/receiver-v1.md)
+graph. Runner enrollment, credential rotation/revocation, and the outbound attempt protocol are documented in the [runner protocol guide](docs/infra-automation/runner-protocol-v1.md). Production collection remains unavailable pending isolation/collector qualification.
+
+The [reference receiver and custody guide](docs/infra-automation/receiver-v1.md)
 provides durable synthetic receiver recovery; the [online receiver contract](docs/infra-automation/receiver-online-v1.md)
 covers authenticated bootstrap, callback replay fences and scoped outcome
 reconciliation. The run screen separates dispatch acceptance, observed GitHub

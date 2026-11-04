@@ -52,6 +52,7 @@ class Coordinator:
         registry=DEFAULT_REGISTRY,
         bounds=None,
         clock=None,
+        runner_requirements=None,
     ):
         self.factory = session_factory
         self.workers = workers
@@ -60,6 +61,7 @@ class Coordinator:
 
             registry = default_registry()
         self.registry = registry
+        self.runner_requirements = dict(runner_requirements or {})
         self.bounds = EngineBounds.model_validate(
             (config.engine_bounds() if bounds is None else bounds).model_dump()
         )
@@ -545,6 +547,7 @@ class Coordinator:
 
     def _schedule(self, run_id, now):
         submission = None
+        remote_submission = None
         with authorization.authorized_session(self.factory) as session:
             now = self.clock()
             run = repository.get_run(session, run_id)
@@ -629,6 +632,13 @@ class Coordinator:
                         )
                         return
                     if attempt.state in ("claimed", "running"):
+                        if step.kind == "admitted_collection":
+                            from services.infra_automation_runner_tasks import (
+                                live_remote_attempt,
+                            )
+
+                            if live_remote_attempt(session, attempt, self._owner, now):
+                                continue
                         if any(
                             handle.attempt_id == attempt.id
                             for handle in self.workers.handles
@@ -678,6 +688,23 @@ class Coordinator:
                     )
                     if attempt is None:
                         continue
+                if step.kind == "admitted_collection":
+                    requirements = self.runner_requirements.get(
+                        step.source.profile_digest
+                    )
+                    if requirements is None:
+                        run = repository.get_run(session, run.id)
+                        claims.stop_run(
+                            session,
+                            self._owner,
+                            run_id=run.id,
+                            expected_version=run.version,
+                            state="failed",
+                            now=now,
+                        )
+                        return
+                    remote_submission = (attempt.id, requirements)
+                    break
                 ensure_capacity(session, bounds=self.bounds)
                 handle = claims.claim_attempt(
                     session,
@@ -705,6 +732,20 @@ class Coordinator:
                     WorkerInput(bytes(run.snapshot_bytes), step.id, prerequisites),
                 )
                 break
+        # Commit pending work before publishing a transient remote grant.
+        if remote_submission is not None:
+            from services.infra_automation_runner_tasks import queue_assignment
+
+            try:
+                queue_assignment(
+                    self._owner,
+                    *remote_submission,
+                    clock=self.clock,
+                    session_factory=self.factory,
+                )
+            except Exception:
+                self._stop(run_id, "failed", now)
+                logger.warning("Remote runner assignment unavailable.")
         # Commit the private capability and its immutable binding before spawning.
         if submission is not None:
             try:

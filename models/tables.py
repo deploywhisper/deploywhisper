@@ -1844,3 +1844,104 @@ if "InfraAutomationExternalFact" not in globals():
         created_at: Mapped[datetime] = mapped_column(
             DateTime(timezone=True), nullable=False
         )
+
+
+if "InfraAutomationRunner" not in globals():
+
+    class InfraAutomationRunner(Base):
+        __tablename__ = "infra_automation_runners"
+        __table_args__ = (
+            ForeignKeyConstraint(
+                ["project_id", "workspace_id"],
+                ["project_workspaces.project_id", "project_workspaces.id"],
+                ondelete="RESTRICT",
+            ),
+            CheckConstraint(
+                "generation > 0 AND protocol_version = 1 AND status IN ('pending','active','revoked')",
+                name="ck_runner_state",
+            ),
+        )
+        id: Mapped[str] = mapped_column(String(64), primary_key=True)
+        project_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+        workspace_id: Mapped[int] = mapped_column(Integer, nullable=False)
+        tags_json: Mapped[str] = mapped_column(Text, nullable=False)
+        tool: Mapped[str] = mapped_column(String(128), nullable=False)
+        profile_digest: Mapped[str] = mapped_column(String(71), nullable=False)
+        runner_version: Mapped[str] = mapped_column(String(128), nullable=False)
+        protocol_version: Mapped[int] = mapped_column(Integer, nullable=False)
+        generation: Mapped[int] = mapped_column(Integer, nullable=False)
+        credential_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+        credential_expires_at: Mapped[datetime | None] = mapped_column(
+            DateTime(timezone=True), nullable=True
+        )
+        status: Mapped[str] = mapped_column(String(16), nullable=False)
+        last_seen_at: Mapped[datetime | None] = mapped_column(
+            DateTime(timezone=True), nullable=True
+        )
+        created_at: Mapped[datetime] = mapped_column(
+            DateTime(timezone=True), nullable=False
+        )
+        last_observed_at: Mapped[datetime] = mapped_column(
+            DateTime(timezone=True), nullable=False
+        )
+        issuer_principal_id: Mapped[str] = mapped_column(
+            ForeignKey("identity_accounts.id", ondelete="RESTRICT"), nullable=False
+        )
+        issuer_authentication_version: Mapped[int] = mapped_column(
+            Integer, nullable=False
+        )
+        issuer_membership_version: Mapped[int] = mapped_column(Integer, nullable=False)
+        authorization_epoch: Mapped[int] = mapped_column(Integer, nullable=False)
+        restore_epoch: Mapped[int] = mapped_column(Integer, nullable=False)
+
+
+if "InfraAutomationRunnerEnrollment" not in globals():
+
+    class InfraAutomationRunnerEnrollment(Base):
+        __tablename__ = "infra_automation_runner_enrollments"
+        id: Mapped[str] = mapped_column(String(64), primary_key=True)
+        runner_id: Mapped[str] = mapped_column(
+            ForeignKey("infra_automation_runners.id", ondelete="RESTRICT"),
+            nullable=False,
+            unique=True,
+        )
+        token_hash: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
+        created_at: Mapped[datetime] = mapped_column(
+            DateTime(timezone=True), nullable=False
+        )
+        expires_at: Mapped[datetime] = mapped_column(
+            DateTime(timezone=True), nullable=False
+        )
+        consumed_at: Mapped[datetime | None] = mapped_column(
+            DateTime(timezone=True), nullable=True
+        )
+
+
+if "InfraAutomationRunnerTask" not in globals():
+
+    class InfraAutomationRunnerTask(Base):
+        __tablename__ = "infra_automation_runner_tasks"
+        __table_args__ = (
+            CheckConstraint(
+                "credential_generation > 0 AND sequence >= 0",
+                name="ck_runner_task_sequence",
+            ),
+        )
+        attempt_id: Mapped[str] = mapped_column(
+            ForeignKey("infra_automation_attempts.id", ondelete="RESTRICT"),
+            primary_key=True,
+        )
+        runner_id: Mapped[str] = mapped_column(
+            ForeignKey("infra_automation_runners.id", ondelete="RESTRICT"),
+            nullable=False,
+            index=True,
+        )
+        credential_generation: Mapped[int] = mapped_column(Integer, nullable=False)
+        profile_digest: Mapped[str] = mapped_column(String(71), nullable=False)
+        sequence: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+        created_at: Mapped[datetime] = mapped_column(
+            DateTime(timezone=True), nullable=False
+        )
+        upload_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+        upload_digest: Mapped[str | None] = mapped_column(String(71), nullable=True)
+        upload_bytes: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)

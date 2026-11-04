@@ -1,6 +1,6 @@
 # Story 16.12: Runner Enrollment and Attempt Protocol
 
-Status: backlog
+Status: review
 Preparation: refined
 Release: v1.5.0
 
@@ -39,18 +39,27 @@ Coverage intent: Delta over the v1.4.0 baseline. These exact mapped requirements
 
 ## Tasks / Subtasks and bounded ownership
 
-- [ ] **Packet 1 — Identity/API owner: enrollment lifecycle (AC 1,4).** Owned output: `infra_automation/runner/protocol.py, runner routes and scoped credential repositories (planned)`.
-  - [ ] One-use enrollment, audience/version negotiation, hashes/expiry/rotate/revoke, HTTPS validation and secret-free error/audit corpus.
-  - [ ] Attach focused proof for the referenced ACs, implementation docs and reviewer findings before packet acceptance.
-- [ ] **Packet 2 — Domain owner: fenced attempt operations (AC 2,4).** Owned output: `infra_automation/runner/claims.py (planned), earlier coordinator/repositories`.
-  - [ ] Bind all five task operations to runner/project/run/step/attempt/fence/live lease and epoch in short transactions; replay and overlapping-owner matrix.
-  - [ ] Attach focused proof for the referenced ACs, implementation docs and reviewer findings before packet acceptance.
-- [ ] **Packet 3 — Runner/service owner: outbound agent and routing (AC 3,5).** Owned output: `infra_automation/runner/client.py and CLI entrypoint (planned), config.py`.
-  - [ ] Bound HTTPS polling/backoff; enforce tags/tool/profile/version, finite no-runner wait and failure; scoped health endpoint without commands or credentials.
-  - [ ] Attach focused proof for the referenced ACs, implementation docs and reviewer findings before packet acceptance.
-- [ ] **Packet 4 — Test/documentation owner: authorization and benchmark (AC 1–6).** Owned output: `tests/test_infra_automation, tests/test_api/test_cli/test_infra, docs/infra-automation`.
-  - [ ] Publish full principal×role×scope×action matrix, stale attempt races and reproducible 1,000-claim timing workload with versions/hardware and results.
-  - [ ] Attach focused proof for the referenced ACs, implementation docs and reviewer findings before packet acceptance.
+- [x] **Packet 1 — Identity/API owner: enrollment lifecycle (AC 1,4).** Owned output: `infra_automation/runner/protocol.py, runner routes and scoped credential repositories (planned)`.
+  - [x] One-use enrollment, audience/version negotiation, hashes/expiry/rotate/revoke, HTTPS validation and secret-free error/audit corpus.
+  - [x] Attach focused proof for the referenced ACs, implementation docs and reviewer findings before packet acceptance.
+- [x] **Packet 2 — Domain owner: fenced attempt operations (AC 2,4).** Owned output: `infra_automation/runner/claims.py (planned), earlier coordinator/repositories`.
+  - [x] Bind all five task operations to runner/project/run/step/attempt/fence/live lease and epoch in short transactions; replay and overlapping-owner matrix.
+  - [x] Attach focused proof for the referenced ACs, implementation docs and reviewer findings before packet acceptance.
+- [x] **Packet 3 — Runner/service owner: outbound agent and routing (AC 3,5).** Owned output: `infra_automation/runner/client.py and CLI entrypoint (planned), config.py`.
+  - [x] Bound HTTPS polling/backoff; enforce tags/tool/profile/version, finite no-runner wait and failure; scoped health endpoint without commands or credentials.
+  - [x] Attach focused proof for the referenced ACs, implementation docs and reviewer findings before packet acceptance.
+- [x] **Packet 4 — Test/documentation owner: authorization and benchmark (AC 1–6).** Owned output: `tests/test_infra_automation, tests/test_api/test_cli/test_infra, docs/infra-automation`.
+  - [x] Publish full principal×role×scope×action matrix, stale attempt races and reproducible 1,000-claim timing workload with versions/hardware and results.
+  - [x] Attach focused proof for the referenced ACs, implementation docs and reviewer findings before packet acceptance.
+
+### Review Findings
+
+- [x] [Review][Patch][P1][R1] Reject encoded live task/runner credentials before log/upload retention [`infra_automation/runner/claims.py:191`] — percent-encoded current task token was persisted; reuse existing sensitive-value encoding handling and add regression coverage.
+- [x] [Review][Patch][P1][R2] Refresh authority after parsing/screening for every operation [`infra_automation/runner/claims.py:211`] — production-path heartbeat advanced durable sequence after a controlled parsing delay crossed lease expiry.
+- [x] [Review][Patch][P2][R3] Separate live enrollment capacity from retained history [`services/infra_automation_runners.py:212`] — 100 revoked enrollments block all future enrollment with zero active runners.
+- [x] [Review][Patch][P2][R4] Implement frozen runner-health list pagination [`api/routes/infra_automation_runner_admin.py:61`] — default25/max100 scoped snapshot cursors are absent; 26 rows returned and pagination parameters reject422.
+
+Full findings, reproductions and verification: [BMad code review](../../docs/verification/infra-automation/16-12/code-review.md). The formal review superseded the earlier development-only clean conclusion. R1–R4 are now resolved by the verified [repair follow-up](../../docs/verification/infra-automation/16-12/review-fixes.md); the original findings are retained above for traceability.
 
 Each packet is a bounded review unit under this stable story ID; split large packets after 16.0 estimation instead of silently broadening scope. One story branch follows Git Flow; coordinate shared-file edits and do not revert other work.
 
@@ -70,11 +79,11 @@ Each packet is a bounded review unit under this stable story ID; split large pac
 
 ## Required implementation verification
 
-- [ ] Register new `tests/test_infra_automation` directories in `scripts/ci-local.sh` and affected GitHub discovery/shards; root discovery alone skips non-package test directories.
-- [ ] For every Pydantic/schema/dataclass/constructor change, use repository-wide `rg` searches for direct instantiations/fixtures and update all consumers, including CLI/agent/action/report compatibility where affected.
-- [ ] Run `./.venv/bin/python -m unittest discover -q`, story-focused tests and exactly `./.venv/bin/python -m pytest tests/test_api tests/test_cli tests/test_infra -v --tb=short` for affected API/CLI/infra contracts.
-- [ ] Run `./.venv/bin/ruff check .`, **`./.venv/bin/ruff format --check .` repo-wide**, `bash scripts/ci-local.sh` and `git diff --check`; add applicable static/security/type checks. Record commands and actual results rather than assumed passes.
-- [ ] UI validation not applicable only if no rendered surface changes; if a UI surface is touched, use the complete composed-app Playwright/keyboard/axe/screenshot loop required by project context before review.
+- [x] Register new `tests/test_infra_automation` directories in `scripts/ci-local.sh` and affected GitHub discovery/shards; root discovery alone skips non-package test directories.
+- [x] For every Pydantic/schema/dataclass/constructor change, use repository-wide `rg` searches for direct instantiations/fixtures and update all consumers, including CLI/agent/action/report compatibility where affected.
+- [x] Run `./.venv/bin/python -m unittest discover -q`, story-focused tests and exactly `./.venv/bin/python -m pytest tests/test_api tests/test_cli tests/test_infra -v --tb=short` for affected API/CLI/infra contracts.
+- [x] Run `./.venv/bin/ruff check .`, **`./.venv/bin/ruff format --check .` repo-wide**, `bash scripts/ci-local.sh` and `git diff --check`; add applicable static/security/type checks. Record commands and actual results rather than assumed passes.
+- [x] UI validation not applicable only if no rendered surface changes; if a UI surface is touched, use the complete composed-app Playwright/keyboard/axe/screenshot loop required by project context before review.
 
 ## References
 
@@ -87,18 +96,92 @@ Each packet is a bounded review unit under this stable story ID; split large pac
 
 ### Agent Model Used
 
-Documentation preparation only; implementation agent/version to be recorded when gates open.
+Codex primary agent with native implementation and independent review subagents; session 2026-11-04.
 
 ### Debug Log References
 
-Not executed: application, runner, receiver, Compose, browser, fault/load or production qualification. This preparation records obligations, not passing results.
+- Review repair validation (latest): root unittest — 1,636 tests, 3 skipped, OK; exact API/CLI/infra pytest shard — 734 passed, 1 skipped, 2,353 subtests; full `bash scripts/ci-local.sh` — exit0 with all ten directories passing (3,083 test executions) and no retries. Focused final suite — 82 passed, 617 subtests; independent repair review — 38 passed, 188 subtests. Final Ruff check/format (517 files), touched-code Bandit and diff check passed. Commands, regression coverage and limits are in the [repair record](../../docs/verification/infra-automation/16-12/review-fixes.md).
+
+- Focused runner/API/migration command: `./.venv/bin/python -m pytest tests/test_infra_automation/test_runner_protocol.py tests/test_infra_automation/test_runner_client.py tests/test_infra_automation/test_runner_enrollment.py tests/test_infra_automation/test_runner_attempts.py tests/test_infra_automation/test_runner_authorization_matrix.py tests/test_infra_automation/test_runner_sensitive_defaults.py tests/test_api/test_infra_automation_runner.py tests/test_infra/test_runner_enrollment_migration.py -q` — 57 passed, 192 subtests.
+- Final full principal × role × scope × administration-action matrix: `./.venv/bin/python -m pytest tests/test_infra_automation/test_runner_authorization_matrix.py -q` — 2 passed, 300 subtests; extends earlier focused-run coverage without runtime changes.
+- Final wire-expiry repair: whole-second advertised deadlines are exclusive even when stored deadlines retain fractions; task/coordinator 42 tests / 141 subtests and enrollment/API 18 tests / 4 subtests passed.
+- Final coordinator/callable-clock regression: 39 passed, 136 subtests. OpenAPI workflow regression: 15 passed, 16 subtests.
+- `./.venv/bin/ruff check .`, `./.venv/bin/ruff format --check .` (515 files), touched-code Bandit, compileall and `git diff --check` passed during integration; final repo-wide formatting and diff checks also passed after CI.
+- Fresh isolated `python app.py` smoke: health HTTP200 and plaintext runner operation HTTP403; temporary database only.
+- Exact `./.venv/bin/python -m pytest tests/test_api tests/test_cli tests/test_infra -v --tb=short` — 732 passed, 1 skipped, 2,353 subtests in 481.94s. `./.venv/bin/python -m unittest discover -q` — 1,612 tests passed, 3 skipped in 782.518s. `bash scripts/ci-local.sh`: lint/format/dependency/Bandit/compile/skill checks and analysis/API/CLI/docs/infra targets passed; automation target hit one receiver temporary lock-file failure. Its isolated 11-test runtime suite passed; full automation rerun passed 837 tests, 1 skipped in 404.785s. All 10 local CI test directories completed successfully across the original run and explicit continuation (3,063 test executions, with existing skips); the original script failure remains recorded. Remaining CI targets (`PYTHON_BIN=./.venv/bin/python bash scripts/run-test-targets.sh tests/test_llm tests/test_models tests/test_parsers tests/test_services`) passed 76/22/43/1,232 tests respectively. Initial runs exposed stale migration036 and no-runner OpenAPI assumptions; repaired and subsequently rerun. No initial failing run is counted as passing evidence.
+- [Independent review and repairs](../../docs/verification/infra-automation/16-12/review.md), [authorization matrix](../../docs/verification/infra-automation/16-12/authorization-matrix.md), [benchmark qualification](../../docs/verification/infra-automation/16-12/qualification.md).
 
 ### Completion Notes List
 
-- Preparation: refined. Status remains backlog. All implementation tasks unchecked; Story 16.0 and earlier dependency acceptance remain unresolved.
-- UI validation: Not executed; applicability to be recorded against the actual change.
-- Independent review, actual command results, residual risks and release qualification evidence must be recorded during implementation.
+- Latest review repair: R1–R4 resolved, all four action items checked, story returned to review. Reused the shared credential redactor, engine transaction boundaries and cursor infrastructure; no dependency or migration added. New tests reproduce the original failures before fixes and cover encoded audit reasons, fractional expiry during final checks, concurrent enrollment/rotation and snapshot pagination. UI validation not applicable. Fresh full local CI completed cleanly; previous development/review records below remain historical evidence.
+
+- 2026-11-04 formal BMad code review: changes requested (two P1 and two P2 findings); status returned to in-progress. Prior completion claims below describe development verification, not current approval. Four patch follow-ups were left unchecked at that review and are now resolved.
+
+- 2026-11-04 readiness reconciliation: independent review verified 16.0 accepted qualification/freeze, 16.2 final approval and 16.5 final 2026-10-27 approval. Earlier backlog dependency statements above are historical preparation notes, superseded by this evidence. Four bounded packets assigned and implemented on `feature/16-12-runner-enrollment-attempt-protocol`.
+- Implemented one-use scoped enrollment, expiring hashed credentials, rotation/revocation, HTTPS machine routes, transient credential reveal, protected-file enrollment CLI and screened health. Machine credentials cannot become human sessions.
+- Reused durable engine attempts, fencing, leases, live policy and quotas through runner bindings; no parallel engine. Added explicit no-eligible-runner failure, bounded transient assignment mailbox and remote coordinator ownership. Production profile mapping and collection handler remain unavailable by default.
+- Preserved frozen enrollment/runner v1; strict scope/profile/capability/sequence checks, atomic screened digest-bound uploads, runner-attributed audit, stale owner/replay rejection, and generic errors. Finalization requires current upload reference even for failed completion under the frozen contract; failure before upload uses bounded cleanup/recovery.
+- Independent review repairs cover post-lock clock freshness, credential leakage across accumulated log chunks/upload metadata, contextual HCL secrets, CLI consumed-grant loss, coordinator ownership and migration037 recognition. No unresolved actionable high-priority findings in final independent review.
+- AC6 follows its explicit failure-reporting alternative: initial development Linux diagnostic completed 100 warmups / 1,000 claims / 20 processes with zero failures and p95 = 46.33 ms, stable source hashes, 4 CPU / 7 GiB. **Named reference capacity qualification failed/unqualified** (required 8 GiB / local SSD proof/HTTPS concurrent workload absent). No capacity or production isolation claim. Real isolation/collection and release qualification remain 16.13 / 16.14 / 16.19; 30-minute saturation remains later capacity qualification.
+- Test discovery: `tests/test_infra_automation` was already registered in local CI and GitHub CI; no new test directory required registration. Repository-wide constructor/fixture searches updated current migration-head expectations and preserved historical migration references.
+- UI validation not applicable: no rendered surface, browser interaction or accessibility semantics changed.
+- Development verification complete; status is review. BMad help identifies `[CR] bmad-code-review` as the next workflow after development verification; this development pass does not claim Git Flow review/commit/push closure.
 
 ### File List
 
-This story specification only; planned ownership paths above are not implemented files.
+- `README.md`
+- `_bmad-output/implementation-artifacts/16-12-runner-enrollment-and-attempt-protocol.md`
+- `_bmad-output/implementation-artifacts/sprint-status.yaml`
+- `_bmad-output/project-context.md`
+- `api/routes/infra_automation_runner.py`
+- `api/routes/infra_automation_runner_admin.py`
+- `app.py`
+- `cli/runner.py`
+- `docs/infra-automation/runner-protocol-v1.md`
+- `docs/verification/infra-automation/16-12/authorization-matrix.md`
+- `docs/verification/infra-automation/16-12/benchmark-linux.json`
+- `docs/verification/infra-automation/16-12/benchmark-local.json`
+- `docs/verification/infra-automation/16-12/code-review.md`
+- `docs/verification/infra-automation/16-12/qualification.md`
+- `docs/verification/infra-automation/16-12/review-fixes.md`
+- `docs/verification/infra-automation/16-12/review.md`
+- `infra_automation/coordinator.py`
+- `infra_automation/runner/__init__.py`
+- `infra_automation/runner/claims.py`
+- `infra_automation/runner/client.py`
+- `infra_automation/runner/protocol.py`
+- `migrations/versions/037_add_runner_enrollment.py`
+- `models/database.py`
+- `models/repositories/infra_automation_runners.py`
+- `models/tables.py`
+- `scripts/benchmark_runner_protocol.py`
+- `services/infra_automation_runner_tasks.py`
+- `services/infra_automation_runners.py`
+- `tests/test_api/test_infra_automation_runner.py`
+- `tests/test_api/test_infra_automation_workflows.py`
+- `tests/test_infra/test_container_contract.py`
+- `tests/test_infra/test_identity_migration.py`
+- `tests/test_infra/test_infra_automation_engine_migration.py`
+- `tests/test_infra/test_infra_automation_handoff_migration.py`
+- `tests/test_infra/test_infra_automation_workflow_migration.py`
+- `tests/test_infra/test_migrations.py`
+- `tests/test_infra/test_project_membership_migration.py`
+- `tests/test_infra/test_receiver_reconciliation_migration.py`
+- `tests/test_infra/test_runner_enrollment_migration.py`
+- `tests/test_infra_automation/test_preflight_repository.py`
+- `tests/test_infra_automation/test_runner_attempts.py`
+- `tests/test_infra_automation/test_runner_authorization_matrix.py`
+- `tests/test_infra_automation/test_runner_client.py`
+- `tests/test_infra_automation/test_runner_enrollment.py`
+- `tests/test_infra_automation/test_runner_health.py`
+- `tests/test_infra_automation/test_runner_protocol.py`
+- `tests/test_infra_automation/test_runner_review_security.py`
+- `tests/test_infra_automation/test_runner_sensitive_defaults.py`
+
+## Change Log
+
+- 2026-11-04: Implemented runner enrollment/attempt protocol and independent review repairs; verification complete; ready for BMad code review.
+
+- 2026-11-04: BMad layered code review reproduced four defects, added patch action items and returned story/sprint status to in-progress; no runtime edits or remote push.
+
+- 2026-11-04: Resolved all four reviewer findings, added security/quota/pagination regressions and completed fresh full CI with exit0; story ready for re-review.
