@@ -1,7 +1,7 @@
-# Scoped automation capabilities for the React UI
+# Scoped InfraFlow capabilities for the React UI
 
 This read-only backend-for-UI prerequisite supports Story 16.7. It adds permission
-and feature-state discovery to the existing automation APIs; it does not implement
+and feature-state discovery to the existing InfraFlow APIs; it does not implement
 the workflow editor or grant authority to execute a workflow.
 
 ## Request and response

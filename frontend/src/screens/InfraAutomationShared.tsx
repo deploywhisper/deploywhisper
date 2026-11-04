@@ -115,7 +115,7 @@ function ScopeWorkspace({ shell, project, children }: { shell: ShellProjectConte
     selectWorkspace: (id) => { if (id === null ? projectCapabilities.isSuccess : workspaces.data?.some((workspace) => workspace.id === id)) setChosen(id); },
   } : undefined;
   return <div className="dw-automation">
-    <div className="dw-automation-heading"><div><p className="dw-automation-eyebrow">Project workspace</p><h1>Infrastructure Automation</h1><p>Review published workflows, preflight evidence and human decisions.</p></div><Link to="/settings/account">{identity.principal?.username} · Account</Link></div>
+    <div className="dw-automation-heading"><div><p className="dw-automation-eyebrow">Project workspace</p><h1>InfraFlow</h1><p>Infrastructure workflows with evidence and approvals.</p></div><Link to="/settings/account">{identity.principal?.username} · Account</Link></div>
     <div className="dw-automation-scope">
       <label className="dw-field" htmlFor="automation-workspace"><span>Workspace</span><select id="automation-workspace" disabled={!workspaces.isSuccess} value={workspaceId ?? "project"} onChange={(event) => setChosen(event.target.value === "project" ? null : Number(event.target.value))}>
         {projectCapabilities.isSuccess && <option value="project">Project-wide authoring and history</option>}
@@ -128,9 +128,9 @@ function ScopeWorkspace({ shell, project, children }: { shell: ShellProjectConte
     {workspaces.isError || capabilities.isError ? <div className="dw-automation-notice" role="alert">{automationError(workspaces.error ?? capabilities.error)} <AccountLink /></div> : null}
     {!online && <p className="dw-automation-notice" role="alert">Connection lost. Same-scope edits stay in this page; consequential controls are disabled until access is refreshed.</p>}
     {identity.status === "unavailable" && identity.principal && <p className="dw-automation-notice" role="alert">Current account access could not be verified. Your same-scope edits are retained; refresh access before making changes.</p>}
-    {context && !context.capabilities.execution_enabled && <p className="dw-automation-notice" role="status">Automation execution is disabled for this project. Authorized workflow and run history remain available; new runs cannot start. Contact your project administrator about enablement.</p>}
+    {context && !context.capabilities.execution_enabled && <p className="dw-automation-notice" role="status">InfraFlow execution is disabled for this project. Authorized workflow and run history remain available; new runs cannot start. Contact your project administrator about enablement.</p>}
     {context && !identity.csrfToken && <p className="dw-automation-notice">This restored session permits reading. <AccountLink /> before making changes or submitting a decision.</p>}
-    {context && <nav className="dw-automation-actions dw-automation-nav" aria-label="Automation sections">
+    {context && <nav className="dw-automation-actions dw-automation-nav" aria-label="InfraFlow sections">
       <Link to={`/infra-automation${scopeQuery(scope)}`} aria-current={location.pathname === "/infra-automation/approvals" || params.has("approval_id") ? undefined : "page"}>Workflows and runs</Link>
       <Link to={`/infra-automation/approvals${scopeQuery(scope)}`} aria-current={location.pathname === "/infra-automation/approvals" || params.has("approval_id") ? "page" : undefined}>Approvals</Link>
     </nav>}
@@ -153,7 +153,7 @@ function ProjectScope({ shell, children }: { shell: ShellProjectContext; childre
   if (shell.projectsQuery.isLoading || (routeChanged && requested && requested.id !== shell.selectedProject?.id)) return <p role="status">Loading authorized project…</p>;
   if (shell.projectsQuery.isError) return <p role="alert">Project access could not be verified.</p>;
   if (routeProject !== null && !requested) return <div role="alert"><p>This project or operation is unavailable for your account.</p><Link to="/infra-automation">Open an authorized project workspace</Link></div>;
-  if (!shell.selectedProject) return <div className="dw-automation"><h1>No permitted projects</h1><p>Ask your project administrator for project membership.</p></div>;
+  if (!shell.selectedProject) return <div className="dw-automation"><h1>InfraFlow</h1><h2>No permitted projects</h2><p>Ask your project administrator for project membership.</p></div>;
   return <ScopeWorkspace key={shell.selectedProject.id} shell={shell} project={shell.selectedProject}>{children}</ScopeWorkspace>;
 }
 
@@ -161,7 +161,7 @@ export function AutomationFrame({ children }: { children: (context: AutomationCo
   const identity = useIdentity();
   return <Phase6Shell key={identity.epoch} active="automation">{(shell) => {
     if (identity.loading) return <div className="dw-automation" role="status">Checking your verified account…</div>;
-    if (!identity.principal) return <div className="dw-automation"><h1>Account access required</h1><p>{identity.error || "Sign in with your named local account to open permitted project workflows."}</p><p>Your application operator must configure named accounts and grant project access before you can use automation.</p><AccountLink>Sign in</AccountLink></div>;
+    if (!identity.principal) return <div className="dw-automation"><h1>InfraFlow</h1><h2>Account access required</h2><p>{identity.error || "Sign in with your named local account to open permitted project workflows."}</p><p>Your application operator must configure named accounts and grant project access before you can use InfraFlow.</p><AccountLink>Sign in</AccountLink></div>;
     return <ProjectScope shell={shell}>{children}</ProjectScope>;
   }}</Phase6Shell>;
 }

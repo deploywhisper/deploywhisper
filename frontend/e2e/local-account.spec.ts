@@ -13,7 +13,7 @@ test("normal Settings exposes local account configuration and consistent navigat
   for (const path of ["/", "/history", "/settings"]) {
     await page.goto(path);
     const links = page.getByRole("navigation", { name: "Primary" }).getByRole("link");
-    await expect(links).toHaveText(["Dashboard", "Skills", /Incidents/, "History", "Automation", "Settings"]);
+    await expect(links).toHaveText(["Dashboard", "Skills", /Incidents/, "History", "InfraFlow", "Settings"]);
   }
   const section = page.locator(".dw-settings-account");
   await expect(section.getByRole("heading", { name: "Local account", exact: true })).toBeVisible();

@@ -35,7 +35,7 @@ describe("local account settings", () => {
     expect(html).not.toContain("DEPLOYWHISPER_AUTHORIZATION_PROFILE:");
     expect(html).toContain("Keep your current project authorization profile until the required project memberships are configured.");
     expect(html).toContain("python -m cli.identity bootstrap");
-    expect(html).toContain("do not grant project membership or enable automation execution");
+    expect(html).toContain("do not grant project membership or enable InfraFlow execution");
     expect(html).not.toContain("/auth/bootstrap");
   });
   it("uses fixed unavailable copy without inferring configuration", () => {
@@ -43,11 +43,11 @@ describe("local account settings", () => {
     expect(html).toContain("Local account configuration is unavailable or invalid");
     expect(html).toContain("unavailable");
   });
-  it.each([<DashboardScreen />, <HistoryScreen />, <Phase6Shell active="settings">{() => <p>Settings</p>}</Phase6Shell>])("places Automation immediately before Settings after History", (screen) => {
+  it.each([<DashboardScreen />, <HistoryScreen />, <Phase6Shell active="settings">{() => <p>Settings</p>}</Phase6Shell>])("places InfraFlow immediately before Settings after History", (screen) => {
     const html = render(screen);
     const nav = html.match(/<nav[^>]*aria-label="Primary"[\s\S]*?<\/nav>/)![0];
     expect(nav.indexOf('href="/history"')).toBeLessThan(nav.indexOf('href="/infra-automation'));
     expect(nav.indexOf('href="/infra-automation')).toBeLessThan(nav.indexOf('href="/settings"'));
-    expect(nav).toMatch(/Automation<\/span><\/a><a[^>]*href="\/settings"/);
+    expect(nav).toMatch(/InfraFlow<\/span><\/a><a[^>]*href="\/settings"/);
   });
 });

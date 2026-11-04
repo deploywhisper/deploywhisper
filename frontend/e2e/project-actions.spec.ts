@@ -66,10 +66,10 @@ test("creates a real project, selects it, rejects duplicate safely and links set
   expect(posts).toBe(1);
   await page.keyboard.press("Escape");
   await expect(page.locator(".dw-project-trigger")).toBeFocused();
-  await page.getByRole("link", { name: "Automation", exact: true }).click();
+  await page.getByRole("link", { name: "InfraFlow", exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`/infra-automation\\?project_id=${project.id}$`));
   await expect(page.getByText(/Sign in.*|Account access/i).first()).toBeVisible();
-  await expect(page.getByText("Your application operator must configure named accounts and grant project access before you can use automation.")).toBeVisible();
+  await expect(page.getByText("Your application operator must configure named accounts and grant project access before you can use InfraFlow.")).toBeVisible();
   const setupAxe = await new AxeBuilder({ page }).include("main").analyze();
   expect(setupAxe.violations).toEqual([]);
   await capture(page, "automation-account-setup");

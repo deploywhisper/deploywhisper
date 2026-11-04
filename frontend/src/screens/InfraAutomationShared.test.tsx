@@ -15,8 +15,8 @@ describe("explicit scope survives navigation", () => {
   });
 });
 
-it("explains named accounts and project access before opening protected automation", () => {
+it("explains named accounts and project access before opening protected InfraFlow", () => {
   const html = renderToStaticMarkup(<QueryClientProvider client={new QueryClient()}><MemoryRouter><AutomationFrame>{() => <p>Protected workflow details</p>}</AutomationFrame></MemoryRouter></QueryClientProvider>);
-  expect(html).toContain("Your application operator must configure named accounts and grant project access before you can use automation.");
+  expect(html).toContain("Your application operator must configure named accounts and grant project access before you can use InfraFlow.");
   expect(html).not.toContain("Protected workflow details");
 });

@@ -5,7 +5,7 @@
 - Dashboard, History and shared-shell project menus now open one real native
   creation dialog. The existing project API owns validation and authorization.
   A confirmed refreshed project is selected and persists across reload/routes.
-- Automation is always discoverable immediately **before Settings** on all three
+- InfraFlow is always discoverable immediately **before Settings** on all three
   sidebars. Existing account, scope, policy and execution checks remain enforced.
 - Settings includes Local account profile/origin/authorization/decision status,
   reused sign-in/sign-out and deliberate protected-host setup instructions.
@@ -98,3 +98,5 @@ The retained records and screenshots above are portable proof; scratch paths are
 local only. No operator account or project was created during the final normal-app check.
 
 Completion and normal-app restoration recorded on2026-11-04 (Asia/Kolkata).
+
+InfraFlow branding follow-up on2026-11-04 updates the current labels and Workflow icon; see [branding proof](../infraflow-branding/results.md).

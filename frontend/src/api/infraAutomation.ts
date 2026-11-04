@@ -32,7 +32,7 @@ const nonnegative = (value: unknown): value is number => typeof value === "numbe
 const record = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null && !Array.isArray(value);
 
 function invalid(): never {
-  throw new ApiClientError("Automation response or request is unsupported. Refresh current state.", 422);
+  throw new ApiClientError("InfraFlow response or request is unsupported. Refresh current state.", 422);
 }
 
 function id(value: string): string {

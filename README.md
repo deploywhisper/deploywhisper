@@ -155,6 +155,7 @@ Why this gives users value:
 
 What is still evolving:
 
+- **InfraFlow**: infrastructure workflows with evidence and approvals, plus tracked handoff outcomes (available on the current development branch; [workflow UI guide](docs/infra-automation/browser-ui.md)).
 - Production-grade authn/authz for shared deployments
 - Lightweight project/workspace scoping for cleaner multi-repository history isolation
 - Richer incident ingestion workflows
@@ -598,7 +599,7 @@ every protected project (every project in `verified` mode).
 self-approval; `single-operator` records acknowledgement only. These backend
 contracts do not enable machine credentials or workflow execution.
 
-The project-scoped **Infra Automation → Approvals** inbox presents immutable
+The project-scoped **InfraFlow → Approvals** inbox presents immutable
 evidence, current eligibility and deliberate reason/confirmation controls.
 Receipts recover decisions after response loss; single-operator mode labels
 acknowledgement explicitly. See the [approval review guide](docs/infra-automation/approval-review.md)
@@ -631,7 +632,7 @@ Dashboard, History and Settings. It uses the existing project API, then refreshe
 and selects the confirmed project. A project does not automatically create a
 workspace or grant access.
 
-**Automation** links to the implemented workflow/history screens even before
+**InfraFlow** links to the implemented workflow/history screens even before
 configuration. It does not enable execution. The normal Compose defaults keep
 named identity disabled and advisory evaluation available. To opt in to local
 named accounts, explicitly set these nonsecret values before recreating:

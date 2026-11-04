@@ -1,0 +1,19 @@
+{
+  "score": 95,
+  "verdict": "pass",
+  "category_match": true,
+  "differences": [],
+  "suggestions": [],
+  "reasoning": "InfraFlow and its Workflow icon use the existing sidebar typography, dimensions and active colors. The branded page heading and account gate preserve the approved hierarchy at1440/760.",
+  "threshold": 90,
+  "threshold_pass": true,
+  "next_actions": [],
+  "reference_images": [
+    "docs/verification/infra-automation/16-9/screenshots/acknowledgement-review-1440.png",
+    "docs/verification/infra-automation/16-9/screenshots/acknowledgement-review-760.png"
+  ],
+  "generated_screenshots": [
+    "docs/verification/infraflow-branding/screenshots/infraflow-1440.png",
+    "docs/verification/infraflow-branding/screenshots/infraflow-760.png"
+  ]
+}

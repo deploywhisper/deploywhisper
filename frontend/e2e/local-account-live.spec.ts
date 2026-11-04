@@ -34,7 +34,7 @@ test("real configured local account sign-in and sign-out", async ({ page, reques
   const section = page.locator(".dw-settings-account");
   await expect(section.getByText("local-development", { exact: true })).toBeVisible();
   await expect(section.getByText("http://localhost:8080", { exact: true })).toBeVisible();
-  await expect(page.getByRole("navigation", { name: "Primary" }).getByRole("link")).toHaveText(["Dashboard", "Skills", /Incidents/, "History", "Automation", "Settings"]);
+  await expect(page.getByRole("navigation", { name: "Primary" }).getByRole("link")).toHaveText(["Dashboard", "Skills", /Incidents/, "History", "InfraFlow", "Settings"]);
   try {
     await section.getByLabel("Username", { exact: true }).focus();
     await page.keyboard.insertText(account.username);

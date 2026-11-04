@@ -25,7 +25,7 @@ describe("API transport", () => {
     expect(dispatchEvent).not.toHaveBeenCalled();
   });
 
-  it("dispatches one identity-expired event for a protected automation 401", async () => {
+  it("dispatches one identity-expired event for a protected InfraFlow 401", async () => {
     const dispatchEvent = vi.fn();
     vi.stubGlobal("window", { dispatchEvent });
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json({}, { status: 401 })));

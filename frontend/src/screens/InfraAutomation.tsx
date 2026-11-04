@@ -74,7 +74,7 @@ export function RunHistory({ context }: { context: AutomationContext }) {
 function IndexContent({ context }: { context: AutomationContext }) {
   const [params, setParams] = useSearchParams();
   const view = params.get("view") === "runs" ? "runs" : "workflows";
-  return <><SegmentedTabs activeId={view} idPrefix="automation-index" label="Automation sections" tabs={[{ id: "workflows", label: "Workflows" }, { id: "runs", label: "Runs" }]} onChange={(id) => { const next = new URLSearchParams(params); next.set("view", id); setParams(next, { replace: true }); }} />
+  return <><SegmentedTabs activeId={view} idPrefix="automation-index" label="InfraFlow sections" tabs={[{ id: "workflows", label: "Workflows" }, { id: "runs", label: "Runs" }]} onChange={(id) => { const next = new URLSearchParams(params); next.set("view", id); setParams(next, { replace: true }); }} />
     {view === "runs" ? <><RunHistory context={context} /><section hidden id="automation-index-panel-workflows" aria-labelledby="automation-index-tab-workflows" role="tabpanel" /></> : <><WorkflowList context={context} /><section hidden id="automation-index-panel-runs" aria-labelledby="automation-index-tab-runs" role="tabpanel" /></>}</>;
 }
 

@@ -46,7 +46,7 @@ export function LocalAccountConfiguration({ configuration, loading = false }: { 
       <p>After configuring the deployment, an operator creates the first administrator with the existing protected host CLI. The second command prompts securely for a password; keep credentials out of commands, environment variables and this page.</p>
       <pre><code>{setupCommands}</code></pre>
       <p>Setup evidence expires after five minutes. The setup command rejects existing accounts; use the protected host recovery procedure for an existing installation. Keep credential files in operator custody and remove consumed files under your retention policy.</p>
-      <p>Sign-in and account creation do not grant project membership or enable automation execution. A project administrator must grant the required project access separately.</p>
+      <p>Sign-in and account creation do not grant project membership or enable InfraFlow execution. A project administrator must grant the required project access separately.</p>
     </details>
   </div>;
 }

@@ -29,7 +29,7 @@ describe("shared project action", () => {
   it("exposes the existing setup route while signed out without protected fetches", () => {
     const html = renderToStaticMarkup(<MemoryRouter><AutomationNavItem projectId={7} /></MemoryRouter>);
     expect(html).toContain('href="/infra-automation?project_id=7"');
-    expect(html).toContain("Automation");
+    expect(html).toContain("InfraFlow");
     expect(renderToStaticMarkup(<MemoryRouter><AutomationNavItem /></MemoryRouter>)).toContain('href="/infra-automation"');
   });
 });

@@ -22,7 +22,7 @@ describe("automation resource adapters", () => {
 
   it.each([{ ...capabilities, version: 2 }, { ...capabilities, project_id: 8 }, { ...capabilities, workspace_id: null }, { ...capabilities, capabilities: ["automation.admin"] }, { ...capabilities, execution_enabled: "true" }, { ...capabilities, capabilities: ["automation.request", "automation.read"] }])("fails closed for invalid capability projections", async (data) => {
     response(data);
-    await expect(api.getCapabilities(scope)).rejects.toMatchObject({ name: "ApiClientError", status: 422, message: "Automation response or request is unsupported. Refresh current state." });
+    await expect(api.getCapabilities(scope)).rejects.toMatchObject({ name: "ApiClientError", status: 422, message: "InfraFlow response or request is unsupported. Refresh current state." });
   });
 
   it("fetches one bounded page and preserves gap/truncation without auto-draining", async () => {

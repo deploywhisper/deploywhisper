@@ -78,7 +78,7 @@ expansion is added. DB/host administrators remain trusted.
 
 ## Review and decide in the browser
 
-Open **Infra Automation → Approvals** in the selected project. The inbox at
+Open **InfraFlow → Approvals** in the selected project. The inbox at
 `/infra-automation/approvals` filters the records already loaded; recorded
 pending status does not establish current eligibility. Load older pages when
 needed. Each review link identifies the exact run and approval in that scope.
