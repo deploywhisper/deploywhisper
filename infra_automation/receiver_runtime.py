@@ -1,4 +1,4 @@
-"""Durable reference receiver for a harmless, counted synthetic action only.
+"""Durable reference receiver for harmless synthetic markers or saved-plan receipts.
 
 The server port is authenticated by its implementation. A durable action fence
 precedes the effect; a crash after that fence is reconciliation-only.
@@ -51,10 +51,22 @@ class ReceiverConflict(ValueError):
 
 class ReferenceReceiver:
     def __init__(
-        self, root, server: ReceiverServer, callback_secret: bytes, *, checkpoint=None
+        self,
+        root,
+        server: ReceiverServer,
+        callback_secret: bytes,
+        *,
+        checkpoint=None,
+        action_mode="synthetic",
     ):
         if type(callback_secret) is not bytes or len(callback_secret) < 32:
             raise ValueError("A receiver callback key of at least 32 bytes is required")
+        if type(action_mode) is not str or action_mode not in (
+            "synthetic",
+            "saved_plan_receipt",
+        ):
+            raise ValueError("Unsupported receiver action mode")
+        self.action_mode = action_mode
         self.root = Path(root)
         directory = private_directory(self.root)
         os.close(directory)
@@ -112,7 +124,15 @@ class ReferenceReceiver:
                 CREATE TABLE IF NOT EXISTS synthetic_markers (
                     operation_id TEXT PRIMARY KEY, artifact_digest TEXT NOT NULL
                 );
+                CREATE TABLE IF NOT EXISTS saved_plan_receipts (
+                    operation_id TEXT PRIMARY KEY, artifact_digest TEXT NOT NULL
+                );
             """)
+            columns = {row[1] for row in db.execute("PRAGMA table_info(operations)")}
+            if "action_mode" not in columns:
+                db.execute(
+                    "ALTER TABLE operations ADD COLUMN action_mode TEXT NOT NULL DEFAULT 'synthetic'"
+                )
             db.commit()
             os.fsync(root)
             yield db
@@ -206,6 +226,8 @@ class ReferenceReceiver:
         return canonical(envelope)
 
     def _deliver(self, db, row):
+        if row["action_mode"] != self.action_mode:
+            raise ReceiverConflict("Persisted receiver action mode changed")
         if row["callback"] is not None and not row["delivered"]:
             envelope = json.loads(row["callback"])
             try:
@@ -240,7 +262,7 @@ class ReferenceReceiver:
             "SELECT count(*) FROM synthetic_markers WHERE operation_id=?",
             (operation_id,),
         ).fetchone()[0]
-        return {
+        result = {
             "operation_id": operation_id,
             "phase": row["phase"],
             "counted_actions": count,
@@ -249,6 +271,70 @@ class ReferenceReceiver:
             if row["receipt"] is not None
             else None,
         }
+        if row["action_mode"] == "saved_plan_receipt":
+            verified = db.execute(
+                "SELECT artifact_digest FROM saved_plan_receipts WHERE operation_id=?",
+                (operation_id,),
+            ).fetchone()
+            result.update(
+                action_mode="saved_plan_receipt",
+                deployment_performed=False,
+                verified_plan_receipts=int(verified is not None),
+                verified_plan_digest=verified[0] if verified is not None else None,
+            )
+        return result
+
+    def _check_action_payload(self, payload, binding):
+        """Keep receipt mode local while validating the approved semantic action."""
+        if self.action_mode != "saved_plan_receipt":
+            return
+        try:
+            if (
+                type(payload) is not dict
+                or type(payload.get("version")) is not int
+                or payload["version"] != 1
+            ):
+                raise ValueError
+            # Retain the explicit receipt contract used by earlier local clients.
+            if set(payload) == {"version", "receiver_action"}:
+                if payload["receiver_action"] == "saved_plan_receipt":
+                    return
+                raise ValueError
+            if (
+                set(payload) != {"version", "kind", "decision", "destination"}
+                or payload["kind"] != "registered_github_handoff"
+                or type(payload["decision"]) is not dict
+                or type(payload["destination"]) is not dict
+                or "payload_digest" in payload["decision"]
+            ):
+                raise ValueError
+            from infra_automation.decisions import DecisionBinding
+            from infra_automation.receiver_protocol import (
+                receiver_binding_from_decision,
+            )
+
+            decision = DecisionBinding.model_validate_json(
+                canonical(
+                    {**payload["decision"], "payload_digest": binding.payload_digest}
+                )
+            )
+            if (
+                decision.authorization_kind != "exact_plan"
+                or receiver_binding_from_decision(decision) != binding
+            ):
+                raise ValueError
+        except (ValueError, TypeError, KeyError, RecursionError):
+            raise ReceiverConflict(
+                "Approved payload does not select the bound saved-plan receipt"
+            ) from None
+
+    def _check_action_bytes(self, artifact):
+        if self.action_mode == "synthetic" and not artifact.data.startswith(
+            SYNTHETIC_PREFIX
+        ):
+            raise ValueError(
+                "Reference receiver accepts only synthetic marker artifacts"
+            )
 
     def run(self, operation_id: str, binding_digest: str) -> dict:
         """Resume by identity; consume ambiguity never causes consume to be retried."""
@@ -276,14 +362,12 @@ class ReferenceReceiver:
                     raise ReceiverConflict("Bootstrap identity or payload changed")
                 if message.binding.authorization_kind != "exact_plan":
                     raise ValueError("Advisory evidence cannot authorize exact action")
+                self._check_action_payload(bootstrap["payload"], message.binding)
                 with self.custody.verify(message.binding) as artifact:
-                    if not artifact.data.startswith(SYNTHETIC_PREFIX):
-                        raise ValueError(
-                            "Reference receiver accepts only synthetic marker artifacts"
-                        )
+                    self._check_action_bytes(artifact)
                 token = self._grant_token(bootstrap.get("grant_token"))
                 db.execute(
-                    "INSERT INTO operations(id,binding_digest,message,payload,run_id,phase) VALUES(?,?,?,?,?,?)",
+                    "INSERT INTO operations(id,binding_digest,message,payload,run_id,phase,action_mode) VALUES(?,?,?,?,?,?,?)",
                     (
                         operation_id,
                         binding_digest,
@@ -291,6 +375,7 @@ class ReferenceReceiver:
                         payload,
                         bootstrap["run_id"],
                         "intent",
+                        self.action_mode,
                     ),
                 )
                 db.commit()
@@ -298,6 +383,8 @@ class ReferenceReceiver:
                 row = db.execute(
                     "SELECT * FROM operations WHERE id=?", (operation_id,)
                 ).fetchone()
+            if row["action_mode"] != self.action_mode:
+                raise ReceiverConflict("Persisted receiver action mode changed")
             if row["binding_digest"] != binding_digest:
                 raise ReceiverConflict("Operation already bound to different bytes")
             message = validate_receiver_message(row["message"])
@@ -310,6 +397,7 @@ class ReferenceReceiver:
                 or digest(row["payload"]) != message.binding.payload_digest
             ):
                 raise ReceiverConflict("Persisted operation identity changed")
+            self._check_action_payload(json.loads(row["payload"]), message.binding)
             if row["phase"] == "complete":
                 return self._deliver(db, row)
             if row["phase"] == "action_started":
@@ -349,8 +437,7 @@ class ReferenceReceiver:
                     "SELECT * FROM operations WHERE id=?", (operation_id,)
                 ).fetchone()
             with self.custody.verify(message.binding) as artifact:
-                if not artifact.data.startswith(SYNTHETIC_PREFIX):
-                    raise ValueError("Synthetic action bytes required")
+                self._check_action_bytes(artifact)
                 self._authorize(
                     self.server.authorize_action(operation_id), message, row["receipt"]
                 )
@@ -364,10 +451,18 @@ class ReferenceReceiver:
                 self._current_deadline(message)
                 # Consume the already verified immutable byte snapshot, never a
                 # reopened filename, generated plan, shell, or provider command.
-                db.execute(
-                    "INSERT INTO synthetic_markers VALUES(?,?)",
-                    (operation_id, digest(artifact.data)),
-                )
+                if self.action_mode == "saved_plan_receipt":
+                    # This is a receipt over the already verified saved bytes.
+                    # It invokes no tool and makes no deployment claim.
+                    db.execute(
+                        "INSERT INTO saved_plan_receipts VALUES(?,?)",
+                        (operation_id, digest(artifact.data)),
+                    )
+                else:
+                    db.execute(
+                        "INSERT INTO synthetic_markers VALUES(?,?)",
+                        (operation_id, digest(artifact.data)),
+                    )
                 db.commit()
                 self.checkpoint("effect")
                 envelope = self._envelope(message, row["run_id"], "succeeded")

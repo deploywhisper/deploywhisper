@@ -18,6 +18,7 @@ from models.tables import InfraAutomationAudit, InfraAutomationRunnerTask
 from services import infra_automation_runner_tasks as tasks
 from services.infra_automation_support import canonical, digest
 from tests.test_infra_automation import test_runner_attempts as attempts
+from tests.test_infra_automation.collection_support import collection_bytes
 
 
 class RunnerReviewSecurityTests(unittest.TestCase):
@@ -66,9 +67,7 @@ class RunnerReviewSecurityTests(unittest.TestCase):
         if operation != "claim":
             self.send(case.message("claim", sequence), now=case.now)
             sequence += 1
-        raw = canonical(
-            [{"name": "main.tf", "content": 'resource "null_resource" "fixture" {}'}]
-        )
+        raw = collection_bytes(case)
         if operation == "complete":
             self.send(
                 case.message(

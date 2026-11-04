@@ -1,0 +1,12 @@
+**
+!infra_automation
+!infra_automation/runner
+!infra_automation/runner/bootstrap.py
+!tests
+!tests/fixtures
+!tests/fixtures/infra_automation
+!tests/fixtures/infra_automation/qualification
+!tests/fixtures/infra_automation/qualification/16_13
+!tests/fixtures/infra_automation/qualification/16_13/**
+**/__pycache__
+**/*.pyc

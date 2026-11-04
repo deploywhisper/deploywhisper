@@ -79,7 +79,8 @@ def build_evidence_status(
         relevant = [
             attempt
             for attempt in attempts
-            if step_kinds.get(attempt.step_id) in {"uploaded_intake", "shared_analysis"}
+            if step_kinds.get(attempt.step_id)
+            in {"uploaded_intake", "admitted_collection", "shared_analysis"}
         ]
         if any(attempt.state not in get_args(AttemptState) for attempt in relevant):
             raise ValueError
@@ -98,11 +99,34 @@ def build_evidence_status(
         ).replace(tzinfo=timezone.utc)
         deadline = captured + timedelta(seconds=document.policy.evidence_ttl_seconds)
         timestamp = now.astimezone(timezone.utc)
+        collected = any(
+            step.kind == "admitted_collection" for step in document.definition.steps
+        )
         limitations = [
-            "Repository source and immutable commit remain unverified for uploaded evidence."
+            "Collected provenance does not establish completeness or authorize an action."
+            if collected
+            else "Repository source and immutable commit remain unverified for uploaded evidence."
         ]
-        todos = ["Verify source identity before any handoff decision."]
+        todos = [
+            "Recheck collection freshness and protected custody before any handoff decision."
+            if collected
+            else "Verify source identity before any handoff decision."
+        ]
         for link in links:
+            provenance = link.get("provenance", {})
+            if provenance.get("kind") == "collected":
+                from infra_automation.collection_contracts import CollectionProvenance
+
+                verified = CollectionProvenance.model_validate(provenance)
+                deadline = min(
+                    deadline,
+                    datetime.strptime(
+                        verified.source_deadline, "%Y-%m-%dT%H:%M:%SZ"
+                    ).replace(tzinfo=timezone.utc),
+                    datetime.strptime(
+                        verified.custody.expires_at, "%Y-%m-%dT%H:%M:%SZ"
+                    ).replace(tzinfo=timezone.utc),
+                )
             retained = {key: link[key] for key in ("limitations", "context_todos")}
             if any(
                 type(values) is not list
@@ -129,7 +153,11 @@ def build_evidence_status(
             if run.state in TERMINAL_STATES:
                 if not manifest_present:
                     status = "missing"
-                    limitations.append("Mandatory uploaded evidence is missing.")
+                    limitations.append(
+                        "Mandatory collected evidence is missing."
+                        if collected
+                        else "Mandatory uploaded evidence is missing."
+                    )
                     todos.append(
                         "Resubmit the mandatory supported artifacts in a new preflight."
                     )

@@ -26,7 +26,10 @@ def kill_process(process):
     if process.poll() is None:
         try:
             os.killpg(process.pid, signal.SIGKILL)
-        except ProcessLookupError:
+        except (ProcessLookupError, PermissionError):
+            # A macOS process group can disappear while its leader is exiting.
+            # Only the bounded wait/poll below can establish successful cleanup;
+            # a still-running or unkillable process remains a cleanup failure.
             pass
     try:
         process.wait(timeout=2)

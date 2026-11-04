@@ -20,7 +20,6 @@ import subprocess
 import sys
 import tempfile
 import time
-from typing import get_args
 from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -1305,6 +1304,19 @@ def run(args):
                 b"synthetic-receiver-sentinel",
             )
         )
+        advertised_commands = []
+        for candidate in (
+            CommandRequest(command="qualification_probe", mode="success"),
+            CommandRequest(command="tool_version"),
+            CommandRequest(command="collect_plan", tool="opentofu"),
+            CommandRequest(command="collect_plan", tool="terraform"),
+        ):
+            try:
+                build_argv(document, candidate)
+            except ValueError:
+                continue
+            if candidate.command not in advertised_commands:
+                advertised_commands.append(candidate.command)
         report = {
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "image_id": image["Id"],
@@ -1329,9 +1341,8 @@ def run(args):
             "cases": results,
             "admission": admission,
             "source_case_inputs": source_case_inputs,
-            "advertised_commands": list(
-                get_args(CommandRequest.model_fields["command"].annotation)
-            ),
+            "advertised_commands": advertised_commands,
+            "command_scope": "Commands admitted by this qualification catalog; collect_plan requires its separate pinned collector and tool-version manifest and is qualified by Story16.14.",
             "r4_ambiguous_creation": {
                 "evidence_level": "controlled transport/fault-double regression tests",
                 "real_late_daemon_commit_reproduced": False,

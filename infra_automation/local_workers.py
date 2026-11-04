@@ -120,7 +120,23 @@ def default_registry():
         return DEFAULT_REGISTRY
     from services.infra_automation_preflight import PREFLIGHT_REGISTRY
 
-    return PREFLIGHT_REGISTRY
+    from services.infra_automation_collection import configured_profiles, remote_only
+
+    if not configured_profiles():
+        return PREFLIGHT_REGISTRY
+    return HandlerRegistry(
+        PREFLIGHT_REGISTRY.registrations
+        + (
+            HandlerRegistration(
+                handler_id="collected-plan-v1",
+                handler_version="1",
+                step_kind="admitted_collection",
+                output_kind="screened_artifacts",
+                retry_safe=False,
+                handler=remote_only,
+            ),
+        )
+    )
 
 
 @dataclass(frozen=True)

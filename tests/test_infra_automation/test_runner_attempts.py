@@ -9,6 +9,7 @@ from datetime import datetime, timezone
 from infra_automation.lifecycle import LifecycleError
 from infra_automation.runner.claims import RunnerRequirements, eligible, screened_upload
 from services.infra_automation_support import canonical, digest
+from tests.test_infra_automation.collection_support import collection_bytes
 
 from datetime import timedelta
 from infra_automation import claims as engine_claims
@@ -247,9 +248,7 @@ class RunnerAttemptTests(LifecycleCase):
                     "complete", 2, atomic_upload_id="upload", state="succeeded"
                 )
             )
-        raw = canonical(
-            [{"name": "main.tf", "content": 'resource "null_resource" "example" {}'}]
-        )
+        raw = collection_bytes(self)
         self.act(
             self.message(
                 "upload", 2, atomic_upload_id="upload", upload_digest=digest(raw)
@@ -398,14 +397,7 @@ class RunnerAttemptTests(LifecycleCase):
                 self.message("claim", 1), self.assignment["task_token"]
             )
             self.assignment["scope"] = result["scope"]
-            raw = canonical(
-                [
-                    {
-                        "name": "main.tf",
-                        "content": 'resource "null_resource" "example" {}',
-                    }
-                ]
-            )
+            raw = collection_bytes(self)
             result = client.send(
                 self.message(
                     "upload",
@@ -510,9 +502,7 @@ class RunnerAttemptTests(LifecycleCase):
         from services import infra_automation_runner_tasks as tasks
 
         self.act(self.message("claim", 1))
-        raw = canonical(
-            [{"name": "main.tf", "content": 'resource "null_resource" "example" {}'}]
-        )
+        raw = collection_bytes(self)
         self.act(
             self.message(
                 "upload", 2, atomic_upload_id="first", upload_digest=digest(raw)
@@ -698,11 +688,11 @@ class RunnerAttemptTests(LifecycleCase):
         from services import infra_automation_runner_tasks as tasks
 
         self.act(self.message("claim", 1))
-        raw = canonical(
-            [{"name": "main.tf", "content": 'resource "null_resource" "example" {}'}]
-        )
+        raw = collection_bytes(self)
         observed = [self.now]
-        real_screen = claims.screened_upload
+        from services import infra_automation_collection as collection
+
+        real_screen = collection.parse_upload
 
         def slow_screen(raw, checksum):
             result = real_screen(raw, checksum)
@@ -715,7 +705,7 @@ class RunnerAttemptTests(LifecycleCase):
                 "_now",
                 side_effect=lambda value: observed[0] if value is None else value,
             ),
-            patch.object(claims, "screened_upload", side_effect=slow_screen),
+            patch.object(collection, "parse_upload", side_effect=slow_screen),
             self.assertRaises(LifecycleError),
         ):
             tasks.operate(
@@ -900,11 +890,11 @@ class RunnerAttemptTests(LifecycleCase):
         from services import infra_automation_runner_tasks as tasks
 
         self.act(self.message("claim", 1))
-        raw = canonical(
-            [{"name": "main.tf", "content": 'resource "null_resource" "example" {}'}]
-        )
+        raw = collection_bytes(self)
         observed = [self.now]
-        real_screen = claims.screened_upload
+        from services import infra_automation_collection as collection
+
+        real_screen = collection.parse_upload
 
         def slow_screen(raw, checksum):
             result = real_screen(raw, checksum)
@@ -917,7 +907,7 @@ class RunnerAttemptTests(LifecycleCase):
                 "_now",
                 side_effect=lambda value: observed[0] if value is None else value,
             ),
-            patch.object(claims, "screened_upload", side_effect=slow_screen),
+            patch.object(collection, "parse_upload", side_effect=slow_screen),
             self.assertRaises(LifecycleError),
         ):
             tasks.operate(

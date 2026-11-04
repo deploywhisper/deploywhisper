@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-11-04T10:11:21.728473+00:00",
+  "timestamp": "2026-11-04T15:30:24.171178+00:00",
   "image_id": "sha256:49a6523abb3867631692d3ac1ebf09cfe02a21c0725ae2039859703289988875",
   "image_architecture": "arm64",
   "image_source_pin_checks": {
@@ -150,21 +150,25 @@
         "sha256": "sha256:d5c690023baebe8bf2cfb2062e292186f4797a173db22c973bd9de45cb68a62f",
         "kind": "tool"
       }
-    ]
+    ],
+    "tool_versions": []
   },
-  "catalog_digest": "sha256:e76db2a6ff049a3c66d2e29922da0cbb42090a5407af3d80508fc0da785c251b",
+  "catalog_digest": "sha256:bfe87ec0126558fc0e1473cccb7d4543d939f9b34631c4a1251032ec133628c6",
   "source_hashes": {
-    "infra_automation/runner/catalog.py": "sha256:1fca851bc84702a71aed959ae0d8987c863f91b77fe6dc51d8ab1e1d8e195876",
+    "infra_automation/runner/catalog.py": "sha256:6ac7999df14df6cd154922d3471796e705a3b05d5af2db0eeab15d0f476e32d0",
     "infra_automation/runner/bootstrap.py": "sha256:68fa8b5f6be256ff083a6536954b14c4013d91679788d14de1b58ef7aea53c50",
-    "infra_automation/runner/execution.py": "sha256:2ad99dae3cb0b21c4fc65eca2c28950ef8382de4f1969f4b30e8b00c29f9a118",
-    "infra_automation/runner/protocol.py": "sha256:f314a58c611e48952fc45dfa88a1bd64cd0b93c8dd530b55c6992db58fd07023",
+    "infra_automation/runner/execution.py": "sha256:e93f6b2831e28afdfc7acaf8eb4d02f69bf01c01ea08afb99b904dcbf0e6b7d2",
+    "infra_automation/runner/collection_output.py": "sha256:e85f5a8fb6f6de1b2f3abaf3ebd5af7eae913e7c11ce2a5e5ca9c35249b8010b",
+    "infra_automation/runner/protocol.py": "sha256:fdc1365097e394570f215edb2a8f0e412745a2ce45820f163d07513219719b68",
     "infra_automation/runner/client.py": "sha256:f5da0b3c8f3f56d9982345c3df4a6df9a8ad17ce96d49ed21c4c1943eba7ef11",
-    "infra_automation/runner/claims.py": "sha256:7c5d3b2072261990f815475c14ef884d4bcb06f2db07aa440da05e64350c1d08",
+    "infra_automation/runner/collector.py": "sha256:05d35ba13cd699e50227c65e26699f54b2412db0d07b4326c528beba2a6fcfb2",
+    "infra_automation/runner/claims.py": "sha256:1828639d1c35a90dc7b48c683f2fafb774bfb0f65bbdaef2989acf0e6f1b3731",
     "infra_automation/runner/__init__.py": "sha256:d86185aafd32b31c003eb44a210e3e1885d156ede80963a2912a4d2ddb6cc68e",
     "infra_automation/runner/execution_profile.py": "sha256:55f61d74527fbcf7827bb352bfc4f6a0f78b8565b17400a0c4c3a0fa474bc872",
-    "infra_automation/runner/sandbox.py": "sha256:731f108570073ca6fd0c36d7ecda7a687153d718e74d36da22a98e585d10a52f",
+    "infra_automation/runner/sandbox.py": "sha256:e4b37d0118d57167cf8dd8a0c92fa6e6974f5b4d599a9696ef216cb347687b0d",
+    "infra_automation/runner/collection_client.py": "sha256:24b71d20012b2a91265116b5b7dced794c338f683dc9375a44b1a599b8591fa6",
     "infra_automation/runner/source.py": "sha256:e4bf635846eef26f3c287a354808c79f514a401a741f9a827fedafc375e2bc13",
-    "scripts/qualify_runner_isolation.py": "sha256:b444ad5239ece4bc318f65b0b252ff47563d5282c75d3a4c51bbabd4bf3bd5e8",
+    "scripts/qualify_runner_isolation.py": "sha256:a1bcba1d46ccd4f0470a301f9c3d30b280a2a5b9308ed572fe4118807706f80d",
     "tests/fixtures/infra_automation/qualification/16_13/Dockerfile.dockerignore": "sha256:6cf228f394c2f13457f701a7455e6e2d6442e695e08c83f68045f160a11c2b03",
     "tests/fixtures/infra_automation/qualification/16_13/tofurc": "sha256:6ca5b0f7e983ec1862a5779209b6477ba1e7431d9f3a57cdfc23e4e720287dcb",
     "tests/fixtures/infra_automation/qualification/16_13/Dockerfile": "sha256:acf02a49364cfcf53087b0ee2748f63ea150c7d46abfe1b1d23999107d98b41f",
@@ -185,14 +189,15 @@
         "state": "unsupported_profile",
         "exit_code": null,
         "output_digest": null,
-        "container_id": "dw-isolated-f503c796b7b44f7d9520cadcdba447ce",
+        "container_id": "dw-isolated-b51d601b69894470adea772bee572f4c",
         "cleanup_complete": true,
-        "profile_digest": "sha256:c94efca878d145c672e4ab6edf1b4108bc8a83b1d04bf72073349bf0676b5348",
+        "profile_digest": "sha256:23d498228a78be1459e0026e63e8f9d5ebd9931f305cd19afb00ea00f2db0faf",
+        "collection": null,
         "finalizable": false
       },
       "evidence": null,
       "output_size": 0,
-      "elapsed_seconds": 0.8635792919958476,
+      "elapsed_seconds": 0.7617131250008242,
       "resolver_calls": 0,
       "controls": {
         "ReadonlyRootfs": true,
@@ -242,8 +247,8 @@
         "Pid": 0,
         "ExitCode": 122,
         "Error": "",
-        "StartedAt": "2026-11-04T10:10:30.05234726Z",
-        "FinishedAt": "2026-11-04T10:10:30.27814876Z"
+        "StartedAt": "2026-11-04T15:29:33.328952875Z",
+        "FinishedAt": "2026-11-04T15:29:33.468229917Z"
       },
       "process_tree": null,
       "cancel_persisted_before_kill": null,
@@ -292,14 +297,15 @@
         "state": "credential_denied",
         "exit_code": null,
         "output_digest": null,
-        "container_id": "dw-isolated-40e040ad784843ab8e25948afdff993b",
+        "container_id": "dw-isolated-2cba18a791d84cc9a564d7fcad20586a",
         "cleanup_complete": true,
-        "profile_digest": "sha256:4f1350149f425b9f1259f4fd46f796a7f1f3e6246482eb7cd6689948733dff51",
+        "profile_digest": "sha256:c7bc6344d718256431ac9c79df03d582e9e0b29b44a905e0bdc3a1ee1970a7eb",
+        "collection": null,
         "finalizable": false
       },
       "evidence": null,
       "output_size": 0,
-      "elapsed_seconds": 1.1116608750016894,
+      "elapsed_seconds": 0.9661653750081314,
       "resolver_calls": 1,
       "controls": {
         "ReadonlyRootfs": true,
@@ -349,8 +355,8 @@
         "Pid": 0,
         "ExitCode": 137,
         "Error": "",
-        "StartedAt": "2026-11-04T10:10:30.847315219Z",
-        "FinishedAt": "2026-11-04T10:10:31.388698719Z"
+        "StartedAt": "2026-11-04T15:29:34.055952584Z",
+        "FinishedAt": "2026-11-04T15:29:34.437666584Z"
       },
       "process_tree": null,
       "cancel_persisted_before_kill": false,
@@ -388,14 +394,15 @@
         "state": "credential_denied",
         "exit_code": null,
         "output_digest": null,
-        "container_id": "dw-isolated-3977726abde84526b21dcd27495aeaa0",
+        "container_id": "dw-isolated-30a4bcff872f475eb2de4b3c63c04f24",
         "cleanup_complete": true,
-        "profile_digest": "sha256:4f1350149f425b9f1259f4fd46f796a7f1f3e6246482eb7cd6689948733dff51",
+        "profile_digest": "sha256:c7bc6344d718256431ac9c79df03d582e9e0b29b44a905e0bdc3a1ee1970a7eb",
+        "collection": null,
         "finalizable": false
       },
       "evidence": null,
       "output_size": 0,
-      "elapsed_seconds": 1.0574284169997554,
+      "elapsed_seconds": 0.9679139579966431,
       "resolver_calls": 1,
       "controls": {
         "ReadonlyRootfs": true,
@@ -445,8 +452,8 @@
         "Pid": 0,
         "ExitCode": 137,
         "Error": "",
-        "StartedAt": "2026-11-04T10:10:31.961147928Z",
-        "FinishedAt": "2026-11-04T10:10:32.419297928Z"
+        "StartedAt": "2026-11-04T15:29:35.016376918Z",
+        "FinishedAt": "2026-11-04T15:29:35.398491793Z"
       },
       "process_tree": null,
       "cancel_persisted_before_kill": false,
@@ -483,10 +490,11 @@
       "result": {
         "state": "succeeded",
         "exit_code": 0,
-        "output_digest": "sha256:9254ab8e43d1f1b73b3b971c4f13f776b757487c377bf67f14510941c2686650",
-        "container_id": "dw-isolated-84a6211e256043cf92f5d73a39aeabb9",
+        "output_digest": "sha256:1b5d03fda9e1ec478b441160b0d292d4e7a8cec4d8ef928cf4cabf991b3ab0c8",
+        "container_id": "dw-isolated-6a045ee546944eaf9ca9de313b9f4d62",
         "cleanup_complete": true,
-        "profile_digest": "sha256:4f1350149f425b9f1259f4fd46f796a7f1f3e6246482eb7cd6689948733dff51",
+        "profile_digest": "sha256:c7bc6344d718256431ac9c79df03d582e9e0b29b44a905e0bdc3a1ee1970a7eb",
+        "collection": null,
         "finalizable": true
       },
       "evidence": {
@@ -519,11 +527,11 @@
           "uid": "10001"
         },
         "python_version": "3.11.17",
-        "raw_digest": "e67555b4d0d96b54522ad259885ab11b7cc8474e35c129d75e26fafc7cf51631",
+        "raw_digest": "ba5c04568890fd24711944164a7cc325db44c5d501db3f7805e93d84e882df9b",
         "tool_version": "1.13.1"
       },
       "output_size": 1147,
-      "elapsed_seconds": 1.6131482920027338,
+      "elapsed_seconds": 1.552296292007668,
       "resolver_calls": 1,
       "controls": {
         "ReadonlyRootfs": true,
@@ -573,8 +581,8 @@
         "Pid": 0,
         "ExitCode": 0,
         "Error": "",
-        "StartedAt": "2026-11-04T10:10:33.053596637Z",
-        "FinishedAt": "2026-11-04T10:10:33.975321512Z"
+        "StartedAt": "2026-11-04T15:29:35.99200946Z",
+        "FinishedAt": "2026-11-04T15:29:36.89847696Z"
       },
       "process_tree": null,
       "cancel_persisted_before_kill": null,
@@ -611,10 +619,11 @@
       "result": {
         "state": "succeeded",
         "exit_code": 0,
-        "output_digest": "sha256:f0888564bcdfc373b111539c6f50e02b0214c43b3f63cb422fd5b6b5c99bcc92",
-        "container_id": "dw-isolated-ff92723aaf3c492093324afee09d789b",
+        "output_digest": "sha256:f4c5699a3198acc11a409d64797234aa43bf39b57d6627fa790cc2480d60cf79",
+        "container_id": "dw-isolated-f3a41ce16605438fa1bfa785aee129af",
         "cleanup_complete": true,
-        "profile_digest": "sha256:4f1350149f425b9f1259f4fd46f796a7f1f3e6246482eb7cd6689948733dff51",
+        "profile_digest": "sha256:c7bc6344d718256431ac9c79df03d582e9e0b29b44a905e0bdc3a1ee1970a7eb",
+        "collection": null,
         "finalizable": true
       },
       "evidence": {
@@ -649,11 +658,11 @@
           "uid": "10001"
         },
         "python_version": "3.11.17",
-        "raw_digest": "d622ecb7f7d092d58a22571ac76d65e457283781ba03a7b1159b43c8669b2531",
+        "raw_digest": "949115c99c5166fd366071f1e6083d76fa152424151fab6521462c145b4c6887",
         "tool_version": "1.13.1"
       },
       "output_size": 1185,
-      "elapsed_seconds": 1.587913583003683,
+      "elapsed_seconds": 1.6307077499950537,
       "resolver_calls": 1,
       "controls": {
         "ReadonlyRootfs": true,
@@ -703,8 +712,8 @@
         "Pid": 0,
         "ExitCode": 0,
         "Error": "",
-        "StartedAt": "2026-11-04T10:10:34.675225096Z",
-        "FinishedAt": "2026-11-04T10:10:35.583308346Z"
+        "StartedAt": "2026-11-04T15:29:37.549904294Z",
+        "FinishedAt": "2026-11-04T15:29:38.505045253Z"
       },
       "process_tree": null,
       "cancel_persisted_before_kill": null,
@@ -742,9 +751,10 @@
         "state": "succeeded",
         "exit_code": 0,
         "output_digest": "sha256:7d173417e29f2167df0acde0e3b4062aa4a6214822549cd936d34eb3273d11a9",
-        "container_id": "dw-isolated-d720c13e3b5f4996bde85798586bbe8e",
+        "container_id": "dw-isolated-6d1f64fc163942af87d1895d8db1a0cd",
         "cleanup_complete": true,
-        "profile_digest": "sha256:4f1350149f425b9f1259f4fd46f796a7f1f3e6246482eb7cd6689948733dff51",
+        "profile_digest": "sha256:c7bc6344d718256431ac9c79df03d582e9e0b29b44a905e0bdc3a1ee1970a7eb",
+        "collection": null,
         "finalizable": true
       },
       "evidence": {
@@ -753,7 +763,7 @@
         "provider_selections": {}
       },
       "output_size": 94,
-      "elapsed_seconds": 1.0534731669904431,
+      "elapsed_seconds": 1.0180580000014743,
       "resolver_calls": 1,
       "controls": {
         "ReadonlyRootfs": true,
@@ -803,8 +813,8 @@
         "Pid": 0,
         "ExitCode": 0,
         "Error": "",
-        "StartedAt": "2026-11-04T10:10:36.264241597Z",
-        "FinishedAt": "2026-11-04T10:10:36.662501555Z"
+        "StartedAt": "2026-11-04T15:29:39.187327003Z",
+        "FinishedAt": "2026-11-04T15:29:39.562766587Z"
       },
       "process_tree": null,
       "cancel_persisted_before_kill": null,
@@ -842,9 +852,10 @@
         "state": "succeeded",
         "exit_code": 0,
         "output_digest": "sha256:cbd4d976abfa4b27b21a91e1f0e5cb8d9fcfaa5a8a6b06d6ee4e4a4c67c43a38",
-        "container_id": "dw-isolated-382d2ef1b63543c8abca5d26c460951f",
+        "container_id": "dw-isolated-926b564a41304998ac0befce90112d37",
         "cleanup_complete": true,
-        "profile_digest": "sha256:4f1350149f425b9f1259f4fd46f796a7f1f3e6246482eb7cd6689948733dff51",
+        "profile_digest": "sha256:c7bc6344d718256431ac9c79df03d582e9e0b29b44a905e0bdc3a1ee1970a7eb",
+        "collection": null,
         "finalizable": true
       },
       "evidence": {
@@ -896,7 +907,7 @@
         "uid": 10001
       },
       "output_size": 896,
-      "elapsed_seconds": 1.2298814169917023,
+      "elapsed_seconds": 1.0641802919999463,
       "resolver_calls": 1,
       "controls": {
         "ReadonlyRootfs": true,
@@ -946,8 +957,8 @@
         "Pid": 0,
         "ExitCode": 0,
         "Error": "",
-        "StartedAt": "2026-11-04T10:10:37.28622093Z",
-        "FinishedAt": "2026-11-04T10:10:37.8518495Z"
+        "StartedAt": "2026-11-04T15:29:40.176218254Z",
+        "FinishedAt": "2026-11-04T15:29:40.616344962Z"
       },
       "process_tree": null,
       "cancel_persisted_before_kill": null,
@@ -985,9 +996,10 @@
         "state": "succeeded",
         "exit_code": 0,
         "output_digest": "sha256:c0487c966508a126a4ac69e09bd032ab2cb26688a2b63dbf6adaf0f6fbe63f73",
-        "container_id": "dw-isolated-d5f61f69aef64d15a5850a1a7606f0c2",
+        "container_id": "dw-isolated-56d1e6d87f3d433ca9f6c7a70b72929e",
         "cleanup_complete": true,
-        "profile_digest": "sha256:4f1350149f425b9f1259f4fd46f796a7f1f3e6246482eb7cd6689948733dff51",
+        "profile_digest": "sha256:c7bc6344d718256431ac9c79df03d582e9e0b29b44a905e0bdc3a1ee1970a7eb",
+        "collection": null,
         "finalizable": true
       },
       "evidence": {
@@ -1004,7 +1016,7 @@
         "watchdog_not_stopped": true
       },
       "output_size": 285,
-      "elapsed_seconds": 1.1675124159955885,
+      "elapsed_seconds": 1.1290178329945775,
       "resolver_calls": 1,
       "controls": {
         "ReadonlyRootfs": true,
@@ -1054,8 +1066,8 @@
         "Pid": 0,
         "ExitCode": 0,
         "Error": "",
-        "StartedAt": "2026-11-04T10:10:38.518193875Z",
-        "FinishedAt": "2026-11-04T10:10:39.047141667Z"
+        "StartedAt": "2026-11-04T15:29:41.259695921Z",
+        "FinishedAt": "2026-11-04T15:29:41.752251546Z"
       },
       "process_tree": null,
       "cancel_persisted_before_kill": null,
@@ -1093,14 +1105,15 @@
         "state": "cancelled",
         "exit_code": 0,
         "output_digest": null,
-        "container_id": "dw-isolated-98225efe97c04e65a11568eb2fbebbae",
+        "container_id": "dw-isolated-72716ca2c9a34178bd14fa6e6d155aee",
         "cleanup_complete": true,
-        "profile_digest": "sha256:4f1350149f425b9f1259f4fd46f796a7f1f3e6246482eb7cd6689948733dff51",
+        "profile_digest": "sha256:c7bc6344d718256431ac9c79df03d582e9e0b29b44a905e0bdc3a1ee1970a7eb",
+        "collection": null,
         "finalizable": false
       },
       "evidence": null,
       "output_size": 0,
-      "elapsed_seconds": 1.122708250011783,
+      "elapsed_seconds": 0.9917225829995004,
       "resolver_calls": 1,
       "controls": {
         "ReadonlyRootfs": true,
@@ -1150,8 +1163,8 @@
         "Pid": 0,
         "ExitCode": 0,
         "Error": "",
-        "StartedAt": "2026-11-04T10:10:39.69870425Z",
-        "FinishedAt": "2026-11-04T10:10:40.141008626Z"
+        "StartedAt": "2026-11-04T15:29:42.37097263Z",
+        "FinishedAt": "2026-11-04T15:29:42.766408546Z"
       },
       "process_tree": null,
       "cancel_persisted_before_kill": null,
@@ -1188,18 +1201,19 @@
       "result": {
         "state": "succeeded",
         "exit_code": 0,
-        "output_digest": "sha256:c87eff42603bcc47fab65b85911f287abda483ca2a2a1fee331f5f6f746d2c52",
-        "container_id": "dw-isolated-2b0adb499c114cc1b13195a3062f85b1",
+        "output_digest": "sha256:6b633d62fadfc89b007c5753a5c8a7758ca00352c81aa92868fc3fc377c8beda",
+        "container_id": "dw-isolated-4b497bf75b664e9eac76401a0041d6f0",
         "cleanup_complete": true,
-        "profile_digest": "sha256:4f1350149f425b9f1259f4fd46f796a7f1f3e6246482eb7cd6689948733dff51",
+        "profile_digest": "sha256:c7bc6344d718256431ac9c79df03d582e9e0b29b44a905e0bdc3a1ee1970a7eb",
+        "collection": null,
         "finalizable": true
       },
       "evidence": {
         "cpu_max": "50000 100000",
-        "cpu_stat": "usage_usec 1700819\nuser_usec 1660718\nsystem_usec 40100\nnice_usec 0\nnr_periods 34\nnr_throttled 33\nthrottled_usec 1665010\nnr_bursts 0\nburst_usec 0\n"
+        "cpu_stat": "usage_usec 1704839\nuser_usec 1668036\nsystem_usec 36802\nnice_usec 0\nnr_periods 34\nnr_throttled 34\nthrottled_usec 1661786\nnr_bursts 0\nburst_usec 0\n"
       },
       "output_size": 198,
-      "elapsed_seconds": 4.085486083000433,
+      "elapsed_seconds": 4.082962540996959,
       "resolver_calls": 1,
       "controls": {
         "ReadonlyRootfs": true,
@@ -1249,8 +1263,8 @@
         "Pid": 0,
         "ExitCode": 0,
         "Error": "",
-        "StartedAt": "2026-11-04T10:10:40.797592126Z",
-        "FinishedAt": "2026-11-04T10:10:44.252467336Z"
+        "StartedAt": "2026-11-04T15:29:43.379730713Z",
+        "FinishedAt": "2026-11-04T15:29:46.801709507Z"
       },
       "process_tree": null,
       "cancel_persisted_before_kill": null,
@@ -1288,14 +1302,15 @@
         "state": "memory_limit",
         "exit_code": 125,
         "output_digest": null,
-        "container_id": "dw-isolated-67587d5aefb74e17bf955d87a53dc61c",
+        "container_id": "dw-isolated-e7b9baf393c2489b9d2518ac30c6b5b1",
         "cleanup_complete": true,
-        "profile_digest": "sha256:5f04b5fd5b3ad949c46b6a6e3ee4731e7d07c8b9065dd7159f65b0c1b5ee3095",
+        "profile_digest": "sha256:03ee4985b0148247a91faadbffe3707ab63f0e7fd94320964e4dfc1817287220",
+        "collection": null,
         "finalizable": false
       },
       "evidence": null,
       "output_size": 0,
-      "elapsed_seconds": 1.1561705420026556,
+      "elapsed_seconds": 1.0471555420081131,
       "resolver_calls": 1,
       "controls": {
         "ReadonlyRootfs": true,
@@ -1345,8 +1360,8 @@
         "Pid": 0,
         "ExitCode": 125,
         "Error": "",
-        "StartedAt": "2026-11-04T10:10:44.92618192Z",
-        "FinishedAt": "2026-11-04T10:10:45.398861753Z"
+        "StartedAt": "2026-11-04T15:29:47.514495799Z",
+        "FinishedAt": "2026-11-04T15:29:47.899911799Z"
       },
       "process_tree": null,
       "cancel_persisted_before_kill": null,
@@ -1384,9 +1399,10 @@
         "state": "succeeded",
         "exit_code": 0,
         "output_digest": "sha256:a7dcf5f176a72719aa7bd1d8a5f7f39cf1431eff3f74aaf253f51e9fd129edae",
-        "container_id": "dw-isolated-a39598af90984d13b063903bc830b7bd",
+        "container_id": "dw-isolated-1803e6c8ea744e519ec29fc348900364",
         "cleanup_complete": true,
-        "profile_digest": "sha256:5b195c64f4d5a403588045f23864c9976b52c8339a58ccaad86e351e06f95ecd",
+        "profile_digest": "sha256:a63d6f1769d506232975d693de0ad597fea7caeb027f34e999be01b177d718e1",
+        "collection": null,
         "finalizable": true
       },
       "evidence": {
@@ -1395,7 +1411,7 @@
         "pids_max": "16"
       },
       "output_size": 64,
-      "elapsed_seconds": 1.119684833989595,
+      "elapsed_seconds": 1.122008125006687,
       "resolver_calls": 1,
       "controls": {
         "ReadonlyRootfs": true,
@@ -1445,8 +1461,8 @@
         "Pid": 0,
         "ExitCode": 0,
         "Error": "",
-        "StartedAt": "2026-11-04T10:10:46.057386129Z",
-        "FinishedAt": "2026-11-04T10:10:46.539779837Z"
+        "StartedAt": "2026-11-04T15:29:48.528283133Z",
+        "FinishedAt": "2026-11-04T15:29:49.000686508Z"
       },
       "process_tree": null,
       "cancel_persisted_before_kill": null,
@@ -1484,9 +1500,10 @@
         "state": "succeeded",
         "exit_code": 0,
         "output_digest": "sha256:375744af6850e2110596576dfdd871a63f7a2ddc6874c09ea03689dbc557e7be",
-        "container_id": "dw-isolated-700587202f13457093bd25f005e738b3",
+        "container_id": "dw-isolated-1549df70ff3049068b56204f69e66f67",
         "cleanup_complete": true,
-        "profile_digest": "sha256:da4f997470cc3bae6a0e912764cdf643c8b49e4f09b1f329842a62065bbc7582",
+        "profile_digest": "sha256:3bce61b2d7cb100fcf8e88565143370cb44d541bc888b5b7dce7d3b375f7263c",
+        "collection": null,
         "finalizable": true
       },
       "evidence": {
@@ -1495,7 +1512,7 @@
         "partial_removed": true
       },
       "output_size": 68,
-      "elapsed_seconds": 1.13546462499653,
+      "elapsed_seconds": 1.0473365420039045,
       "resolver_calls": 1,
       "controls": {
         "ReadonlyRootfs": true,
@@ -1545,8 +1562,8 @@
         "Pid": 0,
         "ExitCode": 0,
         "Error": "",
-        "StartedAt": "2026-11-04T10:10:47.189685171Z",
-        "FinishedAt": "2026-11-04T10:10:47.654246504Z"
+        "StartedAt": "2026-11-04T15:29:49.647221216Z",
+        "FinishedAt": "2026-11-04T15:29:50.061270342Z"
       },
       "process_tree": null,
       "cancel_persisted_before_kill": null,
@@ -1584,14 +1601,15 @@
         "state": "output_limit",
         "exit_code": 126,
         "output_digest": null,
-        "container_id": "dw-isolated-9cc7315f036f4c49af9c9492ffddc9de",
+        "container_id": "dw-isolated-a0d4ea0926764964855ed2df84105f7d",
         "cleanup_complete": true,
-        "profile_digest": "sha256:25cffb393e385457514dd4f47ca0eb42af936fe669c1475212810338b41991d1",
+        "profile_digest": "sha256:c3bd5644b97499aa23e8c3103b6141aa82642b59f40d061b71e8219bcb8126f2",
+        "collection": null,
         "finalizable": false
       },
       "evidence": null,
       "output_size": 0,
-      "elapsed_seconds": 1.0960842500062427,
+      "elapsed_seconds": 1.0286032910080394,
       "resolver_calls": 1,
       "controls": {
         "ReadonlyRootfs": true,
@@ -1641,8 +1659,8 @@
         "Pid": 0,
         "ExitCode": 126,
         "Error": "",
-        "StartedAt": "2026-11-04T10:10:48.31026188Z",
-        "FinishedAt": "2026-11-04T10:10:48.739349755Z"
+        "StartedAt": "2026-11-04T15:29:50.671993675Z",
+        "FinishedAt": "2026-11-04T15:29:51.0878363Z"
       },
       "process_tree": null,
       "cancel_persisted_before_kill": null,
@@ -1680,14 +1698,15 @@
         "state": "failed",
         "exit_code": 2,
         "output_digest": null,
-        "container_id": "dw-isolated-02dcc89a311f4c03aaa6189be158c007",
+        "container_id": "dw-isolated-cec0566ebc974ad8b47b8eca224d8a5f",
         "cleanup_complete": true,
-        "profile_digest": "sha256:4f1350149f425b9f1259f4fd46f796a7f1f3e6246482eb7cd6689948733dff51",
+        "profile_digest": "sha256:c7bc6344d718256431ac9c79df03d582e9e0b29b44a905e0bdc3a1ee1970a7eb",
+        "collection": null,
         "finalizable": false
       },
       "evidence": null,
       "output_size": 0,
-      "elapsed_seconds": 1.0957442090002587,
+      "elapsed_seconds": 1.0195968329935567,
       "resolver_calls": 1,
       "controls": {
         "ReadonlyRootfs": true,
@@ -1737,8 +1756,8 @@
         "Pid": 0,
         "ExitCode": 2,
         "Error": "",
-        "StartedAt": "2026-11-04T10:10:49.425512963Z",
-        "FinishedAt": "2026-11-04T10:10:49.846866505Z"
+        "StartedAt": "2026-11-04T15:29:51.768421051Z",
+        "FinishedAt": "2026-11-04T15:29:52.132300718Z"
       },
       "process_tree": null,
       "cancel_persisted_before_kill": null,
@@ -1776,14 +1795,15 @@
         "state": "cancelled",
         "exit_code": null,
         "output_digest": null,
-        "container_id": "dw-isolated-c3580002f12e427a9a04b6388f05d775",
+        "container_id": "dw-isolated-84d9a26ff82447a4999c400f660633d9",
         "cleanup_complete": true,
-        "profile_digest": "sha256:4f1350149f425b9f1259f4fd46f796a7f1f3e6246482eb7cd6689948733dff51",
+        "profile_digest": "sha256:c7bc6344d718256431ac9c79df03d582e9e0b29b44a905e0bdc3a1ee1970a7eb",
+        "collection": null,
         "finalizable": false
       },
       "evidence": null,
       "output_size": 0,
-      "elapsed_seconds": 2.8385621670022374,
+      "elapsed_seconds": 2.8273167090083007,
       "resolver_calls": 1,
       "controls": {
         "ReadonlyRootfs": true,
@@ -1833,10 +1853,10 @@
         "Pid": 0,
         "ExitCode": 137,
         "Error": "",
-        "StartedAt": "2026-11-04T10:10:50.547598297Z",
-        "FinishedAt": "2026-11-04T10:10:52.72101859Z"
+        "StartedAt": "2026-11-04T15:29:52.727677635Z",
+        "FinishedAt": "2026-11-04T15:29:54.935223052Z"
       },
-      "process_tree": "PID                 PPID                SID                 COMMAND\n62608               62585               62608               python\n62621               62608               62621               python\n62622               62621               62622               python\n62623               62622               62622               python\n",
+      "process_tree": "PID                 PPID                SID                 COMMAND\n42609               42585               42609               python\n42622               42609               42622               python\n42623               42622               42623               python\n42624               42623               42623               python\n",
       "cancel_persisted_before_kill": true,
       "cancel_persisted_before_removal": true,
       "metadata_secret_free": true,
@@ -1872,14 +1892,15 @@
         "state": "lease_lost",
         "exit_code": null,
         "output_digest": null,
-        "container_id": "dw-isolated-e70e39558137440590033dc6685ba56f",
+        "container_id": "dw-isolated-21c0a388a50942c5b9cfd06422c90085",
         "cleanup_complete": true,
-        "profile_digest": "sha256:4f1350149f425b9f1259f4fd46f796a7f1f3e6246482eb7cd6689948733dff51",
+        "profile_digest": "sha256:c7bc6344d718256431ac9c79df03d582e9e0b29b44a905e0bdc3a1ee1970a7eb",
+        "collection": null,
         "finalizable": false
       },
       "evidence": null,
       "output_size": 0,
-      "elapsed_seconds": 2.8748884170054225,
+      "elapsed_seconds": 2.7564550419920124,
       "resolver_calls": 1,
       "controls": {
         "ReadonlyRootfs": true,
@@ -1929,10 +1950,10 @@
         "Pid": 0,
         "ExitCode": 137,
         "Error": "",
-        "StartedAt": "2026-11-04T10:10:53.378525257Z",
-        "FinishedAt": "2026-11-04T10:10:55.589263341Z"
+        "StartedAt": "2026-11-04T15:29:55.597403219Z",
+        "FinishedAt": "2026-11-04T15:29:57.741721304Z"
       },
-      "process_tree": "PID                 PPID                SID                 COMMAND\n62770               62747               62770               python\n62784               62770               62784               python\n62785               62784               62785               python\n62786               62785               62785               python\n",
+      "process_tree": "PID                 PPID                SID                 COMMAND\n42750               42728               42750               python\n42764               42750               42764               python\n42765               42764               42765               python\n42766               42765               42765               python\n",
       "cancel_persisted_before_kill": true,
       "cancel_persisted_before_removal": true,
       "metadata_secret_free": true,
@@ -1968,14 +1989,15 @@
         "state": "timed_out",
         "exit_code": null,
         "output_digest": null,
-        "container_id": "dw-isolated-4b0243cfe33745f586b9ff62d724408f",
+        "container_id": "dw-isolated-d0d1a65808a3453281c5f7cf2f9ec0df",
         "cleanup_complete": true,
-        "profile_digest": "sha256:3693080637bd089bc12a0433e806254b1b12413aa0e502707cac7f3c75cd6920",
+        "profile_digest": "sha256:7565c9e82e2ee922fd5aa6b0f913d6b85cfcadd2a996fce0ff21e3d1368fa4e6",
+        "collection": null,
         "finalizable": false
       },
       "evidence": null,
       "output_size": 0,
-      "elapsed_seconds": 3.2376192079973407,
+      "elapsed_seconds": 3.302686916998937,
       "resolver_calls": 1,
       "controls": {
         "ReadonlyRootfs": true,
@@ -2025,10 +2047,10 @@
         "Pid": 0,
         "ExitCode": 124,
         "Error": "",
-        "StartedAt": "2026-11-04T10:10:56.279265633Z",
-        "FinishedAt": "2026-11-04T10:10:58.877434135Z"
+        "StartedAt": "2026-11-04T15:29:58.308237804Z",
+        "FinishedAt": "2026-11-04T15:30:00.993648472Z"
       },
-      "process_tree": "PID                 PPID                SID                 COMMAND\n62928               62905               62928               python\n62940               62928               62940               python\n62941               62940               62941               python\n62942               62941               62941               python\n",
+      "process_tree": "PID                 PPID                SID                 COMMAND\n42908               42886               42908               python\n42923               42908               42923               python\n42924               42923               42924               python\n42925               42924               42924               python\n",
       "cancel_persisted_before_kill": null,
       "cancel_persisted_before_removal": true,
       "metadata_secret_free": true,
@@ -2252,6 +2274,7 @@
     "qualification_probe",
     "tool_version"
   ],
+  "command_scope": "Commands admitted by this qualification catalog; collect_plan requires its separate pinned collector and tool-version manifest and is qualified by Story16.14.",
   "r4_ambiguous_creation": {
     "evidence_level": "controlled transport/fault-double regression tests",
     "real_late_daemon_commit_reproduced": false,
@@ -2263,18 +2286,18 @@
     "create_delay_seconds": 0,
     "lease_seconds": 25,
     "timings": {
-      "create_entered_monotonic": 67733.995425125,
+      "create_entered_monotonic": 81845.125521458,
       "credential_resolver_calls": 1,
-      "execute_entered_monotonic": 67733.920601208
+      "execute_entered_monotonic": 81845.039731333
     },
     "original_deadline_anchor": "Host execute call entry, conservatively before runtime preflight and setup",
-    "original_deadline_monotonic": 67739.920601208,
+    "original_deadline_monotonic": 81851.039731333,
     "observation_tolerance_seconds": 0.75,
-    "stop_observed_monotonic": 67739.970274333,
+    "stop_observed_monotonic": 81851.101073291,
     "stopped_within_original_deadline": true,
     "running_beyond_original_bound": false,
     "credential_resolver_calls": 1,
-    "controller_killed_seconds_after_original_start": 0.7528937080060132,
+    "controller_killed_seconds_after_original_start": 0.8206680000002962,
     "controller_exit": -9,
     "controller_error": null,
     "container_state_before_recovery": {
@@ -2287,13 +2310,13 @@
       "Pid": 0,
       "ExitCode": 124,
       "Error": "",
-      "StartedAt": "2026-11-04T10:11:00.616266302Z",
-      "FinishedAt": "2026-11-04T10:11:06.311542263Z"
+      "StartedAt": "2026-11-04T15:30:02.978213583Z",
+      "FinishedAt": "2026-11-04T15:30:08.643286253Z"
     },
-    "process_tree_before_controller_kill": "PID                 PPID                SID                 COMMAND\n63070               63046               63070               python\n63083               63070               63083               python\n63091               63083               63091               python\n63092               63091               63091               python\n",
+    "process_tree_before_controller_kill": "PID                 PPID                SID                 COMMAND\n43059               43036               43059               python\n43072               43059               43072               python\n43080               43072               43080               python\n43081               43080               43080               python\n",
     "expired_without_host": true,
-    "elapsed_seconds": 7.485628292008187,
-    "seconds_after_controller_death": 5.52888549999625,
+    "elapsed_seconds": 7.64365195800201,
+    "seconds_after_controller_death": 5.480878874994232,
     "recovery": [
       {
         "task_digest": "9eba5e3e79853f7918e6e486077513ddcdf2879a75182ef0d7eb98787c5e7ff2",
@@ -2335,18 +2358,18 @@
     "create_delay_seconds": 0,
     "lease_seconds": 25,
     "timings": {
-      "create_entered_monotonic": 67741.581091791,
+      "create_entered_monotonic": 81852.707107958,
       "credential_resolver_calls": 1,
-      "execute_entered_monotonic": 67741.497823625
+      "execute_entered_monotonic": 81852.620245625
     },
     "original_deadline_anchor": "Host execute call entry, conservatively before runtime preflight and setup",
-    "original_deadline_monotonic": 67747.497823625,
+    "original_deadline_monotonic": 81858.620245625,
     "observation_tolerance_seconds": 0.75,
-    "stop_observed_monotonic": 67747.589081666,
+    "stop_observed_monotonic": 81858.705831291,
     "stopped_within_original_deadline": true,
     "running_beyond_original_bound": false,
     "credential_resolver_calls": 1,
-    "controller_killed_seconds_after_original_start": 1.0125951249938225,
+    "controller_killed_seconds_after_original_start": 0.9463332079903921,
     "controller_exit": -9,
     "controller_error": null,
     "container_state_before_recovery": {
@@ -2359,13 +2382,13 @@
       "Pid": 0,
       "ExitCode": 124,
       "Error": "",
-      "StartedAt": "2026-11-04T10:11:08.255107Z",
-      "FinishedAt": "2026-11-04T10:11:13.899013086Z"
+      "StartedAt": "2026-11-04T15:30:10.567256712Z",
+      "FinishedAt": "2026-11-04T15:30:16.228535506Z"
     },
-    "process_tree_before_controller_kill": "PID                 PPID                SID                 COMMAND\n63187               63164               63187               python\n63201               63187               63201               python\n63216               63201               63216               python\n63217               63201               63217               python\n63218               63201               63218               python\n63219               63201               63219               python\n63220               63201               63220               python\n63221               63201               63221               python\n",
+    "process_tree_before_controller_kill": "PID                 PPID                SID                 COMMAND\n43216               43193               43216               python\n43230               43216               43230               python\n43245               43230               43245               python\n43246               43230               43246               python\n43247               43230               43247               python\n43248               43230               43248               python\n43249               43230               43249               python\n43250               43230               43250               python\n",
     "expired_without_host": true,
-    "elapsed_seconds": 7.592595583992079,
-    "seconds_after_controller_death": 5.289261625002837,
+    "elapsed_seconds": 7.612970957998186,
+    "seconds_after_controller_death": 5.393512542010285,
     "recovery": [
       {
         "task_digest": "7a5024b1c3c7da2657c9726e16e7f2784edf3af908ec2069fffe426a836653d1",
@@ -2407,18 +2430,18 @@
     "create_delay_seconds": 3,
     "lease_seconds": 60,
     "timings": {
-      "create_entered_monotonic": 67749.149065125,
+      "create_entered_monotonic": 81860.302462625,
       "credential_resolver_calls": 1,
-      "execute_entered_monotonic": 67749.068490458
+      "execute_entered_monotonic": 81860.221327833
     },
     "original_deadline_anchor": "Host execute call entry, conservatively before runtime preflight and setup",
-    "original_deadline_monotonic": 67755.068490458,
+    "original_deadline_monotonic": 81866.221327833,
     "observation_tolerance_seconds": 0.75,
-    "stop_observed_monotonic": 67755.1601625,
+    "stop_observed_monotonic": 81866.329025916,
     "stopped_within_original_deadline": true,
     "running_beyond_original_bound": false,
     "credential_resolver_calls": 1,
-    "controller_killed_seconds_after_original_start": 3.8059756250004284,
+    "controller_killed_seconds_after_original_start": 3.8690639580017887,
     "controller_exit": -9,
     "controller_error": null,
     "container_state_before_recovery": {
@@ -2431,13 +2454,13 @@
       "Pid": 0,
       "ExitCode": 124,
       "Error": "",
-      "StartedAt": "2026-11-04T10:11:18.77476638Z",
-      "FinishedAt": "2026-11-04T10:11:21.466158131Z"
+      "StartedAt": "2026-11-04T15:30:21.195223217Z",
+      "FinishedAt": "2026-11-04T15:30:23.831216635Z"
     },
-    "process_tree_before_controller_kill": "PID                 PPID                SID                 COMMAND\n63334               63312               63334               python\n63349               63334               63349               python\n63357               63349               63357               python\n63358               63357               63357               python\n",
+    "process_tree_before_controller_kill": "PID                 PPID                SID                 COMMAND\n43350               43327               43350               python\n43363               43350               43363               python\n43371               43363               43371               python\n43372               43371               43371               python\n",
     "expired_without_host": true,
-    "elapsed_seconds": 7.546296250002342,
-    "seconds_after_controller_death": 2.4756830830010585,
+    "elapsed_seconds": 7.617040707991691,
+    "seconds_after_controller_death": 2.4920164170034695,
     "recovery": [
       {
         "task_digest": "8d5ba523fe5e373dacb1bfa0cd7fe3ec5648cda1b313e1c08bb8afff52730bf5",

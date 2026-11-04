@@ -81,6 +81,10 @@ def export_run_snapshot(
         raw = revision.canonical_definition
         if type(raw) is not bytes or support.digest(raw) != revision.digest:
             raise LifecycleError(503)
+        if registry_contract is None:
+            from services.infra_automation_collection import configured_registry
+
+            registry_contract = configured_registry()
         result = support.validate_definition(
             raw,
             revision.project_id,

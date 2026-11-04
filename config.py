@@ -233,6 +233,12 @@ class Settings:
     automation_credential_ttl_seconds: int = int(
         os.getenv("DEPLOYWHISPER_AUTOMATION_CREDENTIAL_TTL_SECONDS", "900")
     )
+    collection_profiles_path: str = os.getenv(
+        "DEPLOYWHISPER_COLLECTION_PROFILES_PATH", ""
+    )
+    collection_profiles_sha256: str = os.getenv(
+        "DEPLOYWHISPER_COLLECTION_PROFILES_SHA256", ""
+    )
     identity_profile: str = os.getenv("DEPLOYWHISPER_IDENTITY_PROFILE", "disabled")
     identity_origin: str = os.getenv("DEPLOYWHISPER_IDENTITY_ORIGIN", "")
     authorization_profile: str = os.getenv(

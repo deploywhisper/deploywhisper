@@ -403,15 +403,40 @@ class DecisionService:
             raise LifecycleError(409)
         from infra_automation.preflight_contracts import SyntheticCollectionEnvelope
 
-        collection = SyntheticCollectionEnvelope.model_validate_json(
-            manifest.collection_bytes
-        )
+        from infra_automation.collection_contracts import CollectionProvenance
+
+        production = json.loads(manifest.collection_bytes).get("kind") == "collected"
+        if production:
+            collection = CollectionProvenance.model_validate_json(
+                manifest.collection_bytes
+            )
+            collection_run = collection.scope.run_id
+            collection_step = collection.scope.step_id
+            collector_id = collection.scope.runner_id
+            collection_fence = collection.scope.fence
+            if (
+                collection.scope.project_id != str(run.project_id)
+                or collection.scope.workspace_id != str(run.workspace_id)
+                or collection.scope.authorization_epoch
+                != document.authority.authorization_epoch
+                or collection.scope.restore_epoch != document.authority.restore_epoch
+                or binding.provenance.custody is None
+                or collection.custody.model_dump(exclude={"version"})
+                != binding.provenance.custody.model_dump(exclude={"version"})
+            ):
+                raise LifecycleError(409)
+        else:
+            collection = SyntheticCollectionEnvelope.model_validate_json(
+                manifest.collection_bytes
+            )
+            collection_run, collection_step = collection.run_id, collection.step_id
+            collector_id, collection_fence = collection.collector_id, collection.fence
         if (
-            collection.run_id,
-            collection.step_id,
+            collection_run,
+            collection_step,
             collection.repository_id,
             collection.commit_sha,
-            collection.collector_id,
+            collector_id,
             collection.profile_digest,
             collection.sanitized_digest,
             collection.collected_at,
@@ -440,8 +465,14 @@ class DecisionService:
             latest_source is None
             or latest_source.state != "succeeded"
             or (
-                collection.attempt_id != latest_source.id
-                or collection.fence != latest_source.fence
+                (
+                    collection.scope.attempt != latest_source.attempt_number
+                    or collection.scope.coordinator_generation
+                    != latest_source.coordinator_generation
+                    if production
+                    else collection.attempt_id != latest_source.id
+                )
+                or collection_fence != latest_source.fence
                 or json.loads(latest_source.output_json or "null")
                 != {
                     "kind": "screened_artifacts",

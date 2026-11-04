@@ -9,7 +9,7 @@ from pathlib import Path, PurePosixPath
 import stat
 from typing import Annotated, Literal
 
-from pydantic import Field, StrictInt, field_validator, model_validator
+from pydantic import Field, StrictInt, StrictStr, field_validator, model_validator
 from infra_automation.contracts import ClosedModel, Digest
 
 
@@ -35,12 +35,19 @@ class ArtifactPin(ClosedModel):
         return value
 
 
+class ToolVersion(ClosedModel):
+    tool: Literal["opentofu", "terraform"]
+    version: Annotated[StrictStr, Field(pattern=r"^[0-9]+\.[0-9]+\.[0-9]+$")]
+
+
 class CatalogDocument(ClosedModel):
     version: Annotated[StrictInt, Field(ge=1, le=1)] = 1
     image_id: Digest
     files: Annotated[tuple[ArtifactPin, ...], Field(min_length=1, max_length=256)]
 
-    @field_validator("files", mode="before")
+    tool_versions: Annotated[tuple[ToolVersion, ...], Field(max_length=2)] = ()
+
+    @field_validator("files", "tool_versions", mode="before")
     @classmethod
     def json_array(cls, value):
         return tuple(value) if type(value) is list else value
@@ -49,6 +56,8 @@ class CatalogDocument(ClosedModel):
     def unique_paths(self):
         if len({item.path for item in self.files}) != len(self.files):
             raise ValueError("Duplicate catalog path.")
+        if len({item.tool for item in self.tool_versions}) != len(self.tool_versions):
+            raise ValueError("Duplicate tool version.")
         return self
 
 
@@ -71,11 +80,14 @@ ProbeMode = Literal[
 
 
 class CommandRequest(ClosedModel):
-    command: Literal["qualification_probe", "tool_version"]
+    command: Literal["qualification_probe", "tool_version", "collect_plan"]
     mode: ProbeMode | None = None
+    tool: Literal["opentofu", "terraform"] | None = None
 
     @model_validator(mode="after")
     def closed_modes(self):
+        if (self.command == "collect_plan") != (self.tool is not None):
+            raise ValueError("Invalid collection parameters.")
         if (self.command == "qualification_probe") != (self.mode is not None):
             raise ValueError("Invalid catalog parameters.")
         return self
@@ -185,11 +197,32 @@ def build_argv(catalog: CatalogDocument, request: CommandRequest) -> tuple[str, 
             "/opt/deploywhisper/probe.py",
             request.mode,
         )
+    elif request.command == "collect_plan":
+        versions = {item.tool: item.version for item in catalog.tool_versions}
+        if request.tool not in versions:
+            raise ValueError("Pinned tool version unavailable.")
+        argv = (
+            "/usr/local/bin/python",
+            "-I",
+            "/opt/deploywhisper/collector.py",
+            request.tool,
+            versions[request.tool],
+        )
     else:
         argv = ("/usr/local/bin/tofu", "version", "-json")
     required = {"/opt/deploywhisper/bootstrap.py", argv[0]}
     if request.command != "tool_version":
         required.add(argv[2])
+    if request.command == "collect_plan":
+        required.add(
+            "/usr/local/bin/" + ("tofu" if request.tool == "opentofu" else "terraform")
+        )
+        required.add(
+            "/opt/deploywhisper/"
+            + ("tofurc" if request.tool == "opentofu" else "terraformrc")
+        )
+        if "lock" not in {pin.kind for pin in catalog.files}:
+            raise ValueError("Dependency lock identity unavailable.")
     if request.mode == "plan":
         required.add("/usr/local/bin/tofu")
         required.add("/opt/deploywhisper/tofurc")

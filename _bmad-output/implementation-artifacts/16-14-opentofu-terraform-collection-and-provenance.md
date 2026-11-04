@@ -1,6 +1,6 @@
 # Story 16.14: OpenTofu/Terraform Collection and Provenance
 
-Status: backlog
+Status: review
 Preparation: refined
 Release: v1.5.0 | Priority: P0, highest-priority feature
 
@@ -45,22 +45,40 @@ Coverage intent: Delta against released v1.4.0; full canonical mappings below ar
 
 Execute one bounded packet at a time on the story feature branch. Each packet owns the named paths; coordinate shared paths and do not revert other edits. Re-estimate after 16.0 spikes; split packets into reviewable PRs without renumbering the canonical story.
 
-- [ ] Packet 14.1: Collector argv and tool qualification — owner: Runner implementer.
+- [x] Packet 14.1: Collector argv and tool qualification — owner: Runner implementer.
   - Owned write paths: `infra_automation/runner/ collector catalog and tests/test_infra_automation/ real-tool smoke`.
   - Output: pinned operator-installed tool manifests; fixed argv; exit-code classification.
   - Acceptance proof: AC1,6: real no-change/change/error smoke, option injection and source-admission tests.
-- [ ] Packet 14.2: Custody integration — owner: Runner/receiver implementer.
+- [x] Packet 14.2: Custody integration — owner: Runner/receiver implementer.
   - Owned write paths: `infra_automation/runner/ local custody and examples/infra-automation/ receiver contract tests`.
   - Output: atomic finalize, no-follow descriptor reads, opaque handle/digest/TTL with separated identities.
   - Acceptance proof: AC2,3,6: real restart/access/overwrite/symlink/expiry/replan tests using 16.11 receiver.
-- [ ] Packet 14.3: Screened provenance intake — owner: Service implementer.
+- [x] Packet 14.3: Screened provenance intake — owner: Service implementer.
   - Owned write paths: `services/infra_automation_service.py; infra_automation/ typed provenance; tests/test_services/ and tests/test_infra_automation/`.
   - Output: authenticated runner/task/attempt, argv digest, commit SHA, exit/time/redaction metadata; server transport digest recomputation.
   - Acceptance proof: AC1,3,4: stale/tampered input denial, corpus scans and report parity.
-- [ ] Packet 14.4: Limits and operator guide — owner: Runner implementer/documenter.
+- [x] Packet 14.4: Limits and operator guide — owner: Runner implementer/documenter.
   - Owned write paths: `infra_automation/runner/; docs/infra-automation/collection.md; tests/test_infra_automation/`.
   - Output: bounded upload cleanup/cancellation and named compatibility/licensing/custody limits.
   - Acceptance proof: AC4–6: disk-full/egress/tree-kill proof plus repeatable real collection guide.
+
+
+### Review Findings
+
+- [x] [Review][Patch] Reject JSON-escaped known credential values before custody/output (`infra_automation/runner/collection_output.py`).
+- [x] [Review][Patch] Require typed provenance envelopes for every admitted collection upload/completion (`infra_automation/runner/claims.py`).
+- [x] [Review][Patch] Bind explicit workflow evidence TTL in local handler (`infra_automation/runner/collection_client.py`).
+- [x] [Review][Patch] Bound custody finalization and suppress late output (`infra_automation/runner/execution.py`).
+- [x] [Review][Patch] Clear abandoned upload staging on terminal recovery/revocation.
+- [x] [Review][Patch] Prove same-task real collector → authenticated intake → shared analysis → exact-byte receiver receipt and stable source hashes.
+
+
+### Formal Review Follow-ups (2026-11-04)
+
+- [x] [Review][Patch][R1][P1] Screen known credentials in decoded JSON keys before host output/custody (`infra_automation/runner/collection_output.py:104`).
+- [x] [Review][Patch][R2][P1] Reject escaped task/runner bearer values in decoded artifacts before authenticated persistence (`infra_automation/runner/claims.py:356`).
+- [x] [Review][Patch][R3][P1] Bind saved-plan receipt selection into the canonical production handoff payload (`infra_automation/receiver_runtime.py:322`).
+- [x] [Review][Patch][R4][P2] Bound failure completion when a heartbeat still holds the transport lock (`infra_automation/runner/collection_client.py:82`).
 
 ## Dev Notes
 
@@ -95,14 +113,104 @@ Execute one bounded packet at a time on the story feature branch. Each packet ow
 ## Dev Agent Record
 
 ### Agent Model Used
-Planning refinement only; implementation agent records its model at execution.
+Codex; native agents for independent readiness, collector, custody, intake and qualification.
 
 ### Debug Log References
-Not executed.
+2026-11-04: Independent readiness review confirms upstream foundations. PR210 merged as `4ff2c2d`; actual GitHub CI/security/CodeQL success supersedes stale Story16.13 tracker status. Packet contracts and estimates reviewed: fixed pinned argv (2 review units), protected local custody transfer (2–3), authenticated envelope-to-manifest/shared analysis (3), limits/real qualification (2). No new dependencies or runner distribution authorized. Real-tool acceptance remains pending.
 
 ### Completion Notes List
-- Story specification prepared; no feature implementation, qualification, public RFC acceptance, release publication or runtime tests performed.
-- Implementation and validation commands above are future obligations, not test results.
+- Formal review repairs: R1–R4 resolved and independently rechecked. Decoded keys/values are credential-screened at host and authenticated intake/completion; the receiver accepts the canonical approved production payload; bounded sends seal the channel after timeout/ambiguity and late responses cannot advance scope/sequence.
+- Fresh repair verification: root unittest1766 tests/3skips exit0; complete `bash scripts/ci-local.sh` exit0 (all10directories,3212 test executions/3skips); API/CLI/infra734 passed/1skip/2353subtests; real collection49 checks across8cases plus isolation172 checks; integrity9tests/66subtests. The first isolation observation miss and successful isolated rerun are disclosed. See `docs/verification/infra-automation/16-14/review-fixes.md`.
+- Reused existing redaction, authentication, custody and canonical payload mapping; no new dependency or application migration. Required host handler execution timeout is documented and all constructor call sites updated. UI validation not applicable.
+- The development-stage validation notes below are historical and superseded by these repair results.
+- Implemented fixed pinned collection, bounded private saved-plan extraction, protected custody and a locally installed exact-assignment handler. No new dependency, migration, apply/destroy command or public artifact upload.
+- Added protected server collection profile configuration, authenticated provenance admission, atomic manifests, existing shared-analysis linkage and compatible collected decision material. Missing profile configuration remains unavailable.
+- Added explicit saved-plan receipt mode to the reference receiver. It verifies exact protected bytes and records a durable digest receipt; it performs no infrastructure action and preserves synthetic mode by default.
+- Independent BMad review found and repaired TTL, bounded finalization, decoded credential and staging recovery defects; persisted legacy staging completion and process-group exit-race repairs also pass focused regressions. Final independent rechecks report no remaining findings.
+- API/CLI/infra shard passed734 tests,1skip,2353subtests. Focused suites and static checks passed; all10 localCI directories passed across initial/resumed exact targets (3201 test executions, three skips). Root1755-test run had one process-recovery timing failure under concurrent load; the full automation CI lane passed it, and isolated parent-recovery rerun passed3tests. Root exit0 is not claimed. Real collection44checks and refreshed isolation172checks pass with matching source hashes; integrity suite9tests/62subtests passed.
+- UI validation not applicable: no rendered surface or browser interaction changed.
+- Limits: qualified offline Linux ARM64/OpenTofu1.13.1 only; Terraform unqualified, cloud state/IAM unsupported, private frames capped128KiB. A late timed-out broker may leave an unreferenced local custody bundle with no authority.
+
+### Verification and handoff
+
+- Full command/results, AC proof map, initial failures and current limits: `docs/verification/infra-automation/16-14/verification.md`.
+- Independent review and repairs: `docs/verification/infra-automation/16-14/code-review.md`.
+- Ruff check and repo-wide formatting pass (546 files). Nonblocking repository mypy retains318 errors outside changed files; full Bandit reports one unchanged medium sample-IP finding, configured high gate passes.
+- No public push, PR, release or infrastructure deployment performed. Changes remain on the short-lived story feature branch. BMad Help routes the next workflow to `bmad-code-review` in fresh context.
 
 ### File List
-- `_bmad-output/implementation-artifacts/16-14-opentofu-terraform-collection-and-provenance.md` (story specification only).
+
+- `README.md`
+- `_bmad-output/implementation-artifacts/16-14-opentofu-terraform-collection-and-provenance.md`
+- `_bmad-output/implementation-artifacts/sprint-status.yaml`
+- `_bmad-output/project-context.md`
+- `app.py`
+- `config.py`
+- `docs/infra-automation/collection.md`
+- `docs/verification/infra-automation/16-13/README.md`
+- `docs/verification/infra-automation/16-13/results.json`
+- `docs/verification/infra-automation/16-14/README.md`
+- `docs/verification/infra-automation/16-14/code-review.md`
+- `docs/verification/infra-automation/16-14/formal-code-review.md`
+- `docs/verification/infra-automation/16-14/readiness.md`
+- `docs/verification/infra-automation/16-14/results.json`
+- `docs/verification/infra-automation/16-14/review-fixes.md`
+- `docs/verification/infra-automation/16-14/verification.md`
+- `infra_automation/artifact_intake.py`
+- `infra_automation/claims.py`
+- `infra_automation/collection_contracts.py`
+- `infra_automation/local_workers.py`
+- `infra_automation/preflight_contracts.py`
+- `infra_automation/preflight_evidence.py`
+- `infra_automation/receiver_custody.py`
+- `infra_automation/receiver_runtime.py`
+- `infra_automation/runner/catalog.py`
+- `infra_automation/runner/claims.py`
+- `infra_automation/runner/collection_client.py`
+- `infra_automation/runner/collection_output.py`
+- `infra_automation/runner/collector.py`
+- `infra_automation/runner/execution.py`
+- `infra_automation/runner/protocol.py`
+- `infra_automation/runner/sandbox.py`
+- `models/repositories/infra_automation_reports.py`
+- `models/repositories/infra_automation_runs.py`
+- `scripts/qualify_collection.py`
+- `scripts/qualify_runner_isolation.py`
+- `services/infra_automation_collection.py`
+- `services/infra_automation_decisions.py`
+- `services/infra_automation_preflight.py`
+- `services/infra_automation_runners.py`
+- `services/infra_automation_snapshots.py`
+- `services/infra_automation_support.py`
+- `tests/fixtures/infra_automation/qualification/16_14/Dockerfile`
+- `tests/fixtures/infra_automation/qualification/16_14/Dockerfile.dockerignore`
+- `tests/test_infra_automation/collection_support.py`
+- `tests/test_infra_automation/test_collection_client.py`
+- `tests/test_infra_automation/test_collection_custody.py`
+- `tests/test_infra_automation/test_collection_intake.py`
+- `tests/test_infra_automation/test_collection_qualification.py`
+- `tests/test_infra_automation/test_collection_receiver.py`
+- `tests/test_infra_automation/test_collector_runtime.py`
+- `tests/test_infra_automation/test_decision_service.py`
+- `tests/test_infra_automation/test_engine_app_lifespan.py`
+- `tests/test_infra_automation/test_receiver_reconciliation.py`
+- `tests/test_infra_automation/test_runner_attempts.py`
+- `tests/test_infra_automation/test_runner_review_security.py`
+
+## Change Log
+
+- 2026-11-04: Resolved formal R1–R4 findings with red→green regressions, independent verification, production-payload qualification and clean fullCI/root runs; returned to review.
+
+- 2026-11-04: Formal BMad code review found R1–R4; returned to in-progress with review follow-ups and detailed reproduced evidence.
+
+- 2026-11-04: Implemented Story16.14 collection/provenance/custody and named real qualification; repaired independent review findings and preserved advisory semantics. Final verification completed; ready for code review.
+
+## Senior Developer Review (AI) — 2026-11-04
+
+Outcome: **Changes requested**. Three independent BMad layers completed; four actionable findings (three P1, one P2) were reproduced or confirmed. Current formal findings supersede the development record's earlier no-remaining-findings assessment. Detailed triggers, impact, repair direction and evidence: [formal review](../../docs/verification/infra-automation/16-14/formal-code-review.md).
+
+Fresh focused verification: 51 tests and117 subtests passed. Passing qualification fixtures omit the new credential-key, escaped-task-bearer, canonical receiver-payload and stalled-heartbeat cases. Runtime source was not modified. At that review, story/sprint status returned to in-progress with R1–R4 open. Those findings are now resolved by the documented repair follow-up; current status is review.
+
+### Formal review repair resolution
+
+R1–R4 are resolved with no remaining actionable finding from independent repair verification. Detailed evidence and limits: [review-fixes.md](../../docs/verification/infra-automation/16-14/review-fixes.md). Qualified scope remains offline ARM64/OpenTofu1.13.1; Terraform/cloud/remote-state profiles remain unqualified. Existing nonblocking mypy diagnostics outside changed files remain disclosed. Next BMad workflow: fresh code review / Git Flow closeout; no public writes performed.

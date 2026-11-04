@@ -82,3 +82,23 @@ class EngineLifespanTests(unittest.IsolatedAsyncioTestCase):
             owned.stop.assert_awaited_once()
             await asyncio.sleep(0)
             self.assertTrue(stopped.is_set())
+
+    async def test_operator_collection_requirements_reach_coordinator(self):
+        owned = MagicMock(start=AsyncMock(), stop=AsyncMock())
+        requirements = {"qualified-profile": object()}
+        with (
+            patch("infra_automation.storage.configure_engine_sqlite"),
+            patch(
+                "infra_automation.local_workers.default_registry", return_value=object()
+            ),
+            patch("infra_automation.local_workers.SpawnProcessWorkers"),
+            patch(
+                "services.infra_automation_collection.configured_requirements",
+                return_value=requirements,
+            ),
+            patch(
+                "infra_automation.coordinator.Coordinator", return_value=owned
+            ) as factory,
+        ):
+            await app._start_engine_coordinator()
+        self.assertEqual(factory.call_args.kwargs["runner_requirements"], requirements)

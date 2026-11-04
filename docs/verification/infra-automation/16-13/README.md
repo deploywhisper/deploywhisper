@@ -2,13 +2,15 @@
 
 This corpus executes the production `SourceRegistration` loader, immutable source materializer, protected catalog, `DockerSandbox` and `ExecutionRunner`. Docker builds the pinned fixture image; no `docker run` or `docker exec` shortcut executes a task. Read-only Docker inspection observes controls and process trees.
 
-Final run after the review repairs: **passed at 2026-11-04T10:11:21.728473+00:00** — 19 real task cases, three abrupt-controller-death/recovery cases, 17 admission cases and all 172 assertions. Host source hashes remained unchanged; all seven built-image source-pin comparisons match the current bootstrap and fixture bytes. The qualified image is `sha256:49a6523abb3867631692d3ac1ebf09cfe02a21c0725ae2039859703289988875`, catalog `sha256:e76db2a6ff049a3c66d2e29922da0cbb42090a5407af3d80508fc0da785c251b`, synthetic source commit `4235ea38cc4ac4ceef4a3a8299d3144b62a407b1`. See [complete observed results](results.json) and [pinned build definition](../../../../tests/fixtures/infra_automation/qualification/16_13/Dockerfile).
+Historical run after the review repairs: **passed at 2026-11-04T10:11:21.728473+00:00** — 19 real task cases, three abrupt-controller-death/recovery cases, 17 admission cases and all 172 assertions. Host source hashes remained unchanged; all seven built-image source-pin comparisons match the current bootstrap and fixture bytes. The qualified image is `sha256:49a6523abb3867631692d3ac1ebf09cfe02a21c0725ae2039859703289988875`, catalog `sha256:e76db2a6ff049a3c66d2e29922da0cbb42090a5407af3d80508fc0da785c251b`, synthetic source commit `4235ea38cc4ac4ceef4a3a8299d3144b62a407b1`. See [complete observed results](results.json) and [pinned build definition](../../../../tests/fixtures/infra_automation/qualification/16_13/Dockerfile).
 
 The image runs Python 3.11.17, OpenTofu 1.13.1 and external provider 2.3.5. The exact qualified daemon is Docker 29.1.3 on Linux ARM64 kernel `6.12.54-linuxkit`; the host control process used Python 3.14.3. All three operator-death runs observed exit 124 without a live host supervisor and subsequent production journal recovery; all owned containers were removed.
 
 The delayed-setup case uses a 6-second timeout, a 3-second create delay and a 60-second lease. It resolved the synthetic credential once and observed actual descendants before killing the controller at t+3.806s. Container stop was observed at t+6.092s, inside the original 6-second budget plus the declared 0.75s observation tolerance. Time is anchored at host `execute` entry before setup, never restarted at controller death. The [original failed reproduction](review-deadline-repro.json), which ran until t+9.50s, remains unchanged historical evidence.
 
 Post-run integrity checks: `./.venv/bin/python -m pytest tests/test_infra_automation/test_runner_isolation_qualification.py -q --tb=short` → **6 passed, 26 subtests passed**. Scoped Ruff and repository-wide formatting passed (532 files); `git diff --check` passed. The strengthened integrity guard rejected the obsolete pre-review artifact before passing against this complete real qualification record. Full repository CI belongs to the parent story completion record.
+
+Story 16.14 refreshed the complete real isolation corpus after integrating collection. The current `results.json` passes all 172 assertions with unchanged source hashes, including 19 task cases, 3 controller-death cases and 17 admission cases. Its catalog advertises only commands actually admitted by its installed pins; production `collect_plan` requires the separate 16.14 collector image and tool-version manifest. See [collection qualification](../16-14/README.md) for that actual command and custody/analysis/receipt proof.
 
 ## Reproduce
 
@@ -74,3 +76,7 @@ Subsequent actual runs exposed two runtime edges that were repaired and reverifi
 ## Console output
 
 The harness emits only a fixed JSON qualification status (`{"qualified": true}` or `{"qualified": false}`). Image identity, case counts, failures and detailed evidence remain in `results.json`; report-derived values are not serialized to console logs. This keeps the console boundary independent of credential-related evidence fields.
+
+## Story16.14 formal repair requalification
+
+The unchanged real isolation corpus was rerun after the collector/client repairs and passes all **172 assertions** with current source hashes. One initial run missed observing descendants before the three-second timeout, while recording exit124 and completed cleanup; an isolated full rerun passed. This observation failure and retry are retained in [the repair record](../16-14/review-fixes.md). The current JSON record is authoritative for its timestamp and source identities.

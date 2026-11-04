@@ -126,7 +126,15 @@ async def _start_engine_coordinator():
         max_workers=bounds.analysis_workers,
         bounds=bounds,
     )
-    coordinator = Coordinator(SessionLocal, workers, registry=registry, bounds=bounds)
+    from services.infra_automation_collection import configured_requirements
+
+    coordinator = Coordinator(
+        SessionLocal,
+        workers,
+        registry=registry,
+        bounds=bounds,
+        runner_requirements=configured_requirements(),
+    )
     try:
         await coordinator.start()
     except BaseException:

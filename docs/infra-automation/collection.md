@@ -1,0 +1,41 @@
+# Local OpenTofu/Terraform collection
+
+Story 16.14 connects the protected source and isolated runner to immutable local saved-plan custody and authenticated shared analysis. Collection is advisory. It never executes apply, destroy or remediation, and a collected report is not authorization to act.
+
+## Qualification and limits
+
+Use the exact image, catalog, tool versions and host profile in [the collection qualification record](../verification/infra-automation/16-14/README.md). Until the corresponding real qualification passes, the implementation is not qualified support. The initial candidate is OpenTofu 1.13.1, offline Linux ARM64 on Docker 29.1.3/LinuxKit 6.12.54. Terraform has a closed command implementation but no qualified binary in the installed matrix. No host tool installation or proprietary binary redistribution is performed.
+
+The offline profile plans an admitted local configuration without initializing a remote backend. It does not represent current cloud state, prove cloud IAM permissions or support arbitrary providers/networks. Operators supply independently pinned tools/provider mirrors/lockfiles and retain their separate licenses. OpenTofu and Terraform are not relicensed by this repository's MIT license.
+
+`plan -detailed-exitcode` means zero for no changes, two for changes and every other exit for failure. The saved plan is followed by `show -json`; that JSON may contain plaintext sensitive values even when terminal output masks them. The collector rejects known secret patterns, known credential values and true sensitivity masks across the entire bounded output before upload. Rejection creates no partial report. This is a versioned measured corpus, not a universal redaction guarantee. See [OpenTofu plan](https://opentofu.org/docs/cli/commands/plan/) and [Terraform show](https://developer.hashicorp.com/terraform/cli/commands/show).
+
+The private plan/JSON frame is capped at 128 KiB including base64 expansion; the configured isolation output cap can be smaller. The authenticated JSON upload is also bounded, including its metadata and base64 HTTP encoding. Oversized plans fail without falling back to unbounded streaming or a public artifact store. The original task deadline includes setup, plan, extraction and finalization. Existing memory/CPU/PID/tmpfs/network limits and namespace watchdog remain mandatory.
+
+## Operator configuration
+
+1. Follow [runner isolation](runner-isolation-v1.md) to install a protected source registration and catalog, private staging, explicit local Docker endpoint and the exact qualified image. Add `collector.py` at `/opt/deploywhisper/collector.py` to the pinned image/catalog. Catalog `tool_versions` is a list such as `[{"tool":"opentofu","version":"1.13.1"}]`; executable, provider, lockfile and CLI-configuration hashes remain mandatory. No tool/provider fetch happens during a task.
+2. Under the trusted host broker/receiver identity, create a mode 0700 custody directory. It is never mounted into the collector. Saved files use mode 0400. The collector UID 10001 receives only its allowlisted credentials after actual sandbox controls and pins pass. Receiver credentials never enter that identity.
+3. Configure the app with `DEPLOYWHISPER_COLLECTION_PROFILES_PATH` and `DEPLOYWHISPER_COLLECTION_PROFILES_SHA256`. The path must be canonical, operator-owned and no-follow, with a mode 0400/0600 regular file. Its SHA256 covers exact file bytes including whitespace. The file is a JSON array of objects containing `profile_digest`, `tool`, `tool_version`, `runner_version` and `tags`. Copy the exact profile digest from the qualified `ExecutionRunner.profile_digest`, which binds limits/image and catalog digest; do not invent one. Missing configuration disables collection. Changed or unsafe configuration denies admission.
+4. Enroll the outbound runner for the same profile/version/tags and publish a workflow with an admitted immutable source and shared-analysis dependency. Restart the app after installing a changed routing profile; intake rechecks the protected profile manifest on each admission. The app has no Docker socket or infrastructure credentials.
+5. Install `infra_automation.runner.collection_client.CollectionHandler` in the operator process. Bind its exact `TaskScope`, repository ID, factory-created admitted `SourceSnapshot`, `ExecutionRunner`, `ProtectedCustody`, tool, exact workflow evidence TTL (`evidence_ttl_seconds`, 60–3600 seconds), the exact profile execution budget (`execution_timeout_seconds`, 1–600 seconds) and local credential resolver. Pass it to `RunnerClient.run(handler=...)`. This Python composition is deliberately operator-owned; server messages cannot choose filesystem paths or executable callbacks. The caller must close its snapshot after execution. A failed/ambiguous request is not automatically replayed.
+
+For a harmless saved-byte receipt, locally construct `ReferenceReceiver(..., action_mode="saved_plan_receipt")` with the canonical registered-target handoff payload. Its embedded exact-plan decision must match the approved receiver binding; the operator-local mode selects the harmless receipt without changing canonical payload bytes. The receipt reports `deployment_performed=False`; it does not invoke the tool. The default receiver continues accepting synthetic marker artifacts only, and changing mode cannot resume an existing operation.
+
+## Custody and provenance
+
+Only the bounded private supervisor pipe carries the saved plan to the host broker; Docker logging is disabled. Original bytes never appear in an execution result, app upload, public artifact, diagnostics or narrative. The broker generates an opaque random handle and atomically publishes an owner-restricted bundle. Raw-local digest and sanitized artifact digest are separate. Unpublished failed writes are removed; foreign/replaced paths are never deleted as cleanup.
+
+The envelope binds runner/task attempt/fence/epochs, immutable repository commit, profile/tool/version, fixed command and argv digests, tool exit, collection time, redaction version, both digests and custody expiry. The server authenticates the current runner/attempt, recomputes transport digests and validates against the retained source and operator profile. Completion commits an immutable manifest reference; shared analysis preserves its existing deterministic/inferred labels and `should_block=False`.
+
+The receiver reopens original bytes through no-follow descriptors, checks owner/mode/link count/inode/source/size/digest/expiry and consumes the verified descriptor. A new saved plan requires new evidence and approval. Symlink, overwrite, expired custody, changed source and stale runner attempts reject; they cannot mint replacement authority. A successful collection alone does not install decision material/witness ports or grant receiver action authority.
+
+## Failure and recovery
+
+Cancellation, lease loss, timeout, output overflow, disk-full, tool errors and unsupported profiles produce no finalizable result. The existing watchdog terminates all owned namespace descendants even after controller death. Failed collection can complete without an upload. Uncertain transport is never retried with a new upload ID; use fenced recovery and a fresh task. The server transaction admits all screened bytes or none.
+
+A custody bundle finalized just before cancellation or a lost upload may remain an unreferenced local bundle until operator retention cleanup. It supplies no approval authority. Do not delete custody backing a pending approved operation; expiry invalidates use. Keep backup/cleanup within the same protected local boundary and never upload the directory for troubleshooting.
+
+UI validation is not applicable to this collector/backend slice. Real-tool verification and deterministic contract tests must be recorded separately.
+
+Collector and server credential checks walk decoded JSON keys and values, including escaped keys and bearer values, before retaining evidence. If a heartbeat or upload times out, the local channel is sealed: late responses cannot advance scope/sequence, and completion is not sent behind an uncertain request. Network operations share the original captured lease/profile budget; reconnecting cannot renew that budget.

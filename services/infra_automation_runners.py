@@ -378,6 +378,7 @@ def rotate(runner_id, *, reason, now=None):
         before = _digest(row)
         row.generation += 1
         issued = _issue(row, settings, timestamp)
+        _clear_staging(session, row.id)
         _audit(
             session,
             row,
@@ -405,6 +406,7 @@ def revoke(runner_id, *, reason, now=None):
             row.generation += 1
             row.status = "revoked"
             row.credential_hash = None
+            _clear_staging(session, row.id)
             row.last_observed_at = timestamp
             _audit(
                 session,
@@ -511,3 +513,15 @@ def validate_runner(session, row, *, now=None):
         raise LifecycleError(401)
     _live(session, row, timestamp)
     return row
+
+
+def _clear_staging(session, runner_id):
+    from models.repositories.infra_automation_runs import clear_runner_staging
+
+    for attempt_id in session.scalars(
+        select(InfraAutomationRunnerTask.attempt_id).where(
+            InfraAutomationRunnerTask.runner_id == runner_id,
+            InfraAutomationRunnerTask.upload_bytes.is_not(None),
+        )
+    ):
+        clear_runner_staging(session, attempt_id)
