@@ -1,4 +1,6 @@
-import { useRef, useState } from "react";
+import { useIdentity } from "./IdentitySession";
+import { ProjectMenu } from "./ProjectMenu";
+import { Fragment, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "react-router-dom";
 import {
@@ -24,7 +26,6 @@ import {
   Card,
   EvidenceTag,
   MonoRef,
-  ProjectSwitcher,
   ScoreRing,
   SeverityBadge,
   SkeletonCard,
@@ -179,13 +180,15 @@ function Sidebar({ selectedProject }: { selectedProject: ProjectOption }) {
     <aside className="dw-sidebar">
       <AppBrand />
       <nav className="dw-sidebar-nav" aria-label="Primary">
-        <AutomationNavItem projectId={selectedProject.id} />
         {nav.map(({ label, icon: Icon, href, active, count }) => (
-          <Link key={label} className={`dw-nav-item${active ? " dw-nav-item-active" : ""}`} to={href}>
+          <Fragment key={label}>
+            {label === "Settings" && <AutomationNavItem projectId={selectedProject.id} />}
+            <Link className={`dw-nav-item${active ? " dw-nav-item-active" : ""}`} to={href}>
             <Icon color={active ? "var(--dw-brand)" : "var(--dw-faint)"} size={17} />
             <span>{label}</span>
             {typeof count === "number" && <span className="dw-nav-count">{count}</span>}
-          </Link>
+            </Link>
+          </Fragment>
         ))}
       </nav>
       <div className="dw-active-project-card">
@@ -227,7 +230,7 @@ function TopBar({
         <kbd>⌘K</kbd>
       </div>
       <div className="dw-topbar-spacer" />
-      <ProjectSwitcher openSignal={openSignal} projects={projects} selectedProject={selectedProject} onChange={onProjectChange} />
+      <ProjectMenu openSignal={openSignal} projects={projects} selectedProject={selectedProject} onChange={onProjectChange} />
       <span className="dw-topbar-divider" />
       <Button variant="primary-gradient" onClick={onRunAnalysis}>
         <Play fill="#fff" size={13} /> Run analysis
@@ -774,12 +777,13 @@ function VerdictHealthCard({
 }
 
 export function DashboardScreen() {
+  const { epoch } = useIdentity();
   const navigate = useNavigate();
   const [projectSwitcherOpenSignal, setProjectSwitcherOpenSignal] = useState(0);
   const uploadRef = useRef<HTMLDivElement>(null);
 
   const projectsQuery = useQuery({
-    queryKey: ["dashboard", "projects"],
+    queryKey: ["projects", epoch],
     queryFn: getProjects,
     retry: false,
   });

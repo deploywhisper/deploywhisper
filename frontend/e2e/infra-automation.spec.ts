@@ -183,7 +183,7 @@ test.describe("isolated authenticated infrastructure automation", () => {
     }
     await expect(page.getByRole("link", { name: /briefing/i })).toBeVisible({ timeout: 180_000 });
     await expect(page.getByText(run.snapshot_digest, { exact: true })).toBeVisible();
-    await expect(page.getByText(/not eligible for approval/i).first()).toBeVisible();
+    await expect(page.getByText("Briefings remain advisory. Approval eligibility depends on retained source evidence and current server checks.", { exact: true })).toBeVisible();
     await cleanAxe(page);
     await screenshot(page, "run");
     const linksResponse = await context.request.get(`/api/v1/infra-automation/runs/${run.id}/reports`);

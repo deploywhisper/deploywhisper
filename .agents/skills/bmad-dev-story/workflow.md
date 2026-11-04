@@ -8,7 +8,7 @@
 - Only modify the story file in these areas: Tasks/Subtasks checkboxes, Dev Agent Record (Debug Log, Completion Notes), File List, Change Log, and Status
 - Execute ALL steps in exact order; do NOT skip steps
 - Absolutely DO NOT stop because of "milestones", "significant progress", or "session boundaries". Continue in a single execution until the story is COMPLETE (all ACs satisfied and all tasks/subtasks checked) UNLESS a HALT condition is triggered or the USER gives other instruction.
-- Do NOT schedule a "next session" or request review pauses unless a HALT condition applies. Only Step 6 decides completion.
+- Do NOT schedule a "next session" or request review pauses unless a HALT condition applies. Only Step 9 decides completion.
 - User skill level ({user_skill_level}) affects conversation style ONLY, not code updates.
 - Follow best security practices while implementing. For Python changes, include repo-configured security validation such as Bandit when available.
 
@@ -48,7 +48,7 @@ Load config from `{project-root}/_bmad/bmm/config.yaml` and resolve:
   <critical>Absolutely DO NOT stop because of "milestones", "significant progress", or "session boundaries". Continue in a single execution
     until the story is COMPLETE (all ACs satisfied and all tasks/subtasks checked) UNLESS a HALT condition is triggered or the USER gives
     other instruction.</critical>
-  <critical>Do NOT schedule a "next session" or request review pauses unless a HALT condition applies. Only Step 6 decides completion.</critical>
+  <critical>Do NOT schedule a "next session" or request review pauses unless a HALT condition applies. Only Step 9 decides completion.</critical>
   <critical>User skill level ({user_skill_level}) affects conversation style ONLY, not code updates.</critical>
   <critical>Follow best security practices while implementing. For Python changes, include repo-configured security validation such as Bandit when available.</critical>
 
@@ -171,7 +171,7 @@ Load config from `{project-root}/_bmad/bmm/config.yaml` and resolve:
       <goto step="6">Completion sequence</goto>
     </action>
     <action if="story file inaccessible">HALT: "Cannot develop story without access to story file"</action>
-    <action if="incomplete task or subtask requirements ambiguous">ASK user to clarify or HALT</action>
+    <action if="incomplete task or subtask requirements ambiguous">Resolve ordinary implementation choices from the story, architecture and existing patterns; document the choice. Ask only when missing information changes product scope, authority or an irreversible effect.</action>
   </step>
 
   <step n="2" goal="Load project context and story information">
@@ -263,7 +263,7 @@ Load config from `{project-root}/_bmad/bmm/config.yaml` and resolve:
   </step>
 
   <step n="5" goal="Implement task following red-green-refactor cycle">
-    <critical>FOLLOW THE STORY FILE TASKS/SUBTASKS SEQUENCE EXACTLY AS WRITTEN - NO DEVIATION</critical>
+    <critical>Honor story task dependencies. Complete prerequisites before dependent effects; independent implementation and deterministic tests may proceed while an external qualification task is blocked.</critical>
 
     <action>Review the current task/subtask from the story file - this is your authoritative implementation guide</action>
     <action>Plan implementation following red-green-refactor cycle</action>
@@ -285,11 +285,11 @@ Load config from `{project-root}/_bmad/bmm/config.yaml` and resolve:
     <action>Document technical approach and decisions in Dev Agent Record → Implementation Plan</action>
 
     <action if="new dependencies required beyond story specifications">HALT: "Additional dependencies need user approval"</action>
-    <action if="3 consecutive implementation failures occur">HALT and request guidance</action>
-    <action if="required configuration is missing">HALT: "Cannot proceed without necessary configuration files"</action>
+    <action if="repeated implementation failures occur">Inspect the latest diagnostics, isolate the cause and try a materially different approach. Escalate only when no meaningful recovery path remains or required authority is missing.</action>
+    <action if="required configuration is missing">Determine which operations require it. Continue independent implementation and deterministic verification with explicit injected fixtures where appropriate. Keep the real integration default-deny and record live qualification as not run; never invent credentials, choose an unrelated live target or substitute mocked evidence for live proof. Request only the missing nonsecret operator configuration when the dependent external operation is ready.</action>
 
     <critical>NEVER implement anything not mapped to a specific task/subtask in the story file</critical>
-    <critical>NEVER proceed to next task until current task/subtask is complete AND tests pass</critical>
+    <critical>Do not advance dependent effects until their prerequisites are complete and tested. A blocked external verification task does not block independent code, tests, documentation or PR preparation. Keep its checkbox open and preserve all story acceptance and release gates.</critical>
     <critical>Execute continuously without pausing until all tasks/subtasks are complete or explicit HALT condition</critical>
     <critical>Do NOT propose to pause for review until Step 9 completion gates are satisfied</critical>
   </step>
@@ -348,7 +348,7 @@ Load config from `{project-root}/_bmad/bmm/config.yaml` and resolve:
 
     <check if="ANY validation fails">
       <action>DO NOT mark task complete - fix issues first</action>
-      <action>HALT if unable to fix validation failures</action>
+      <action>If validation cannot run or pass, block the affected operation and leave its checkbox open. Continue independent tasks where their prerequisites remain valid; halt only when no meaningful independent work remains or further work requires missing authority.</action>
     </check>
 
     <check if="review_continuation == true and {{resolved_review_items}} is not empty">
@@ -371,7 +371,7 @@ Load config from `{project-root}/_bmad/bmm/config.yaml` and resolve:
     <action>Run the full regression suite (do not skip)</action>
     <action>Confirm File List includes every changed file</action>
     <action>Execute enhanced definition-of-done validation</action>
-    <action>Update the story Status to: "review"</action>
+    <action>Update the story Status to "review" only after every completion gate below passes; otherwise retain "in-progress".</action>
 
     <!-- Enhanced Definition of Done Validation -->
     <action>Validate definition-of-done checklist with essential requirements:
@@ -391,7 +391,7 @@ Load config from `{project-root}/_bmad/bmm/config.yaml` and resolve:
     </action>
 
     <!-- Mark story ready for review - sprint status conditional -->
-    <check if="{sprint_status} file exists AND {{current_sprint_status}} != 'no-sprint-tracking'">
+    <check if="all completion gates pass AND {sprint_status} file exists AND {{current_sprint_status}} != 'no-sprint-tracking'">
       <action>Load the FULL file: {sprint_status}</action>
       <action>Find development_status key matching {{story_key}}</action>
       <action>Verify current status is "in-progress" (expected previous state)</action>
@@ -401,7 +401,7 @@ Load config from `{project-root}/_bmad/bmm/config.yaml` and resolve:
       <output>✅ Story status updated to "review" in sprint-status.yaml</output>
     </check>
 
-    <check if="{sprint_status} file does NOT exist OR {{current_sprint_status}} == 'no-sprint-tracking'">
+    <check if="all completion gates pass AND ({sprint_status} file does NOT exist OR {{current_sprint_status}} == 'no-sprint-tracking')">
       <output>ℹ️ Story status updated to "review" in story file (no sprint tracking configured)</output>
     </check>
 

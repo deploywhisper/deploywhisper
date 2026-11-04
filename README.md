@@ -155,6 +155,7 @@ Why this gives users value:
 
 What is still evolving:
 
+- **InfraFlow**: infrastructure workflows with evidence and approvals, plus tracked handoff outcomes (available on the current development branch; [workflow UI guide](docs/infra-automation/browser-ui.md)).
 - Production-grade authn/authz for shared deployments
 - Lightweight project/workspace scoping for cleaner multi-repository history isolation
 - Richer incident ingestion workflows
@@ -598,7 +599,7 @@ every protected project (every project in `verified` mode).
 self-approval; `single-operator` records acknowledgement only. These backend
 contracts do not enable machine credentials or workflow execution.
 
-The project-scoped **Infra Automation → Approvals** inbox presents immutable
+The project-scoped **InfraFlow → Approvals** inbox presents immutable
 evidence, current eligibility and deliberate reason/confirmation controls.
 Receipts recover decisions after response loss; single-operator mode labels
 acknowledgement explicitly. See the [approval review guide](docs/infra-automation/approval-review.md)
@@ -611,7 +612,45 @@ operator-owned origins and environment-backed credential references using the
 [registered targets and handoff guide](docs/infra-automation/handoff-contract-v1.md#operator-configuration-and-limits).
 Default execution ports remain unavailable; handoff admission also requires a
 qualified server-owned material-generation witness covering the complete decision
-graph. This slice does not qualify a live GitHub receiver or collector.
+graph. The [reference receiver and custody guide](docs/infra-automation/receiver-v1.md)
+provides durable synthetic receiver recovery; the [online receiver contract](docs/infra-automation/receiver-online-v1.md)
+covers authenticated bootstrap, callback replay fences and scoped outcome
+reconciliation. The run screen separates dispatch acceptance, observed GitHub
+status and verified receiver completion. Real collector admission and provider
+actions remain separate qualification work.
+
+### Normal Compose versus browser-test profiles
+
+`docker compose up -d --build --force-recreate` uses `docker-compose.yml` and your
+persistent application data. The separate `docker-compose.approval-ui.yml` is
+selected only with an explicit `-f` argument for the Story16.9 browser proof. It
+uses a disposable tmpfs database and synthetic accounts/projects; it is not loaded
+by the normal command and must not replace an operator deployment.
+
+The **New project** action in the project menu opens the same creation form on
+Dashboard, History and Settings. It uses the existing project API, then refreshes
+and selects the confirmed project. A project does not automatically create a
+workspace or grant access.
+
+**InfraFlow** links to the implemented workflow/history screens even before
+configuration. It does not enable execution. The normal Compose defaults keep
+named identity disabled and advisory evaluation available. To opt in to local
+named accounts, explicitly set these nonsecret values before recreating:
+
+```sh
+export DEPLOYWHISPER_IDENTITY_PROFILE=local-development
+export DEPLOYWHISPER_IDENTITY_ORIGIN=http://localhost:8080
+docker compose up -d --build --force-recreate
+```
+
+The runtime includes the protected local identity CLI. Create the first named
+account using [the Docker identity setup procedure](docs/infra-automation/identity.md#docker-compose-operator-setup),
+then explicitly grant [project membership](docs/infra-automation/permissions.md#operator-profiles-and-initial-membership)
+and configure the project's [automation policy](docs/infra-automation/workflows.md).
+A login alone grants neither project access nor execution. Do not switch all data
+to the `verified` authorization profile until the required memberships exist.
+The test screenshots show this setup with synthetic fixtures; rebuilding an
+ordinary image does not install accounts, memberships or enabled policies.
 
 ### Core Runtime Variables
 
@@ -702,6 +741,8 @@ Project documentation currently lives in a few places:
 - [Evidence-bound Decisions and Freshness](./docs/infra-automation/decisions.md)
 - [Approval Review Packet and Confirmation](./docs/infra-automation/approval-review.md)
 - [Registered Targets, Durable Handoffs, and Operator Configuration](./docs/infra-automation/handoff-contract-v1.md)
+- [Protected Synthetic Receiver and Custody](./docs/infra-automation/receiver-v1.md)
+- [Online Receiver and Outcome Reconciliation](./docs/infra-automation/receiver-online-v1.md)
 - [Workflow Editor, Account Access, and Run History](./docs/infra-automation/browser-ui.md)
 - [CI Guide](./docs/ci.md)
 - [CI Secrets Checklist](./docs/ci-secrets-checklist.md)

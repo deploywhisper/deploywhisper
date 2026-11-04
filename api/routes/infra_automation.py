@@ -53,6 +53,11 @@ from services import infra_automation_review as approval_review
 from services import infra_automation_decisions as decisions
 from services import infra_automation_targets as targets
 from services import infra_automation_handoffs as handoffs
+from infra_automation.receiver_http_contracts import ReconcileRequest
+from api.schemas import (
+    AutomationExternalHandoffResponse,
+    AutomationExternalHandoffListResponse,
+)
 from infra_automation.handoff import PrepareHandoffRequest, DispatchHandoffRequest
 from api.schemas import AutomationHandoffResponse
 from infra_automation.targets import RegisterTargetRequest, BreakLockRequest
@@ -489,3 +494,20 @@ def get_handoff(operation_id: ObjectId, project_id: ScopeId, workspace_id: Scope
 )
 def dispatch_handoff(operation_id: ObjectId, payload: DispatchHandoffRequest):
     return _response(handoffs.dispatch(operation_id, payload))
+
+
+@router.get(
+    "/runs/{run_id}/handoffs", response_model=AutomationExternalHandoffListResponse
+)
+def list_run_handoffs(run_id: ObjectId, project_id: ScopeId, workspace_id: ScopeId):
+    return _response(
+        handoffs._default_service.list_for_run(run_id, project_id, workspace_id)
+    )
+
+
+@router.post(
+    "/handoffs/{operation_id}/reconcile",
+    response_model=AutomationExternalHandoffResponse,
+)
+def reconcile_handoff(operation_id: ObjectId, payload: ReconcileRequest):
+    return _response(handoffs._default_service.reconcile(operation_id, payload))

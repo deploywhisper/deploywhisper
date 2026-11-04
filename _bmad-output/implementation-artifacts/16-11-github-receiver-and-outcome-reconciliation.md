@@ -1,6 +1,6 @@
 # Story 16.11: GitHub Receiver and Outcome Reconciliation
 
-Status: in-progress
+Status: done
 Preparation: refined
 Release: v1.5.0
 
@@ -10,9 +10,16 @@ As an operator, I want to hand approved evidence to a qualified GitHub receiver 
 
 ## Entry gates and slice boundary
 
-- Release priority: P0 feature work for v1.5.0. **Blocked for implementation** until Story 16.0 has recorded public RFC/CODEOWNERS acceptance, executable identity/fencing/isolation/custody/receiver qualification and final interface decisions; planning adoption alone is not authorization evidence.
-- Hard earlier dependencies: **16.9, 16.10**, accepted and verified before advancing this story. These dependency results are currently unresolved; refined preparation does not mean ready-for-dev. No prior implementation learning is available for the new Epic 16 story set.
-- Promote only after contract freeze, earlier dependency evidence, bounded task ownership/re-estimation and independent story review. Preserve IDs and backlog status; no feature/release implementation is claimed here.
+- Release priority: P0 feature work for v1.5.0. Earlier Story16.0 governance and
+  qualified disposable feasibility, Story16.9 and Story16.10 were accepted before
+  implementation; the original preparation-only dependency warnings are superseded.
+- PR207 delivered Packet1 locally. This follow-up completes all five owned packets,
+  independent review fixes, actual harmless GitHub dispatch proof, Linux protected
+  synthetic custody/recovery and composed browser qualification.
+- Completion is the architecture §25.12 seeded synthetic receiver profile, not
+  real collector/provider deployment or host-power-loss qualification. Later
+  Story16.14/16.19 release gates remain unchanged. See the
+  [completion evidence](../../docs/verification/infra-automation/16-11/completion-evidence.md).
 
 ## Acceptance Criteria
 
@@ -43,21 +50,21 @@ Coverage intent: Delta over the v1.4.0 baseline. These exact mapped requirements
 
 ## Tasks / Subtasks and bounded ownership
 
-- [ ] **Packet 1 — Integration owner: versioned GitHub adapter (AC 1,4).** Owned output: `integrations/github/infra_automation_adapter.py (planned), config.py`.
-  - [ ] Pin 2026-03-10 dispatch, parse 200 workflow_run_id/run_url/html_url, protect/resolve branch or tag and bind reviewed workflow identity; sandbox plus legacy-client isolation contract tests.
-  - [ ] Attach focused proof for the referenced ACs, implementation docs and reviewer findings before packet acceptance.
-- [ ] **Packet 2 — Receiver owner: durable online admission (AC 2,3,5).** Owned output: `examples/infra-automation/receiver/ and typed infra_automation receiver protocol (planned)`.
-  - [ ] Persist receiver operation before action, server one-use consumption receipt and binding; crash windows at consume/start/completion resume same operation; duplicate returns status, altered bindings conflict.
-  - [ ] Attach focused proof for the referenced ACs, implementation docs and reviewer findings before packet acceptance.
-- [ ] **Packet 3 — Custody/security owner: synthetic exact-byte fixture (AC 2,3,5).** Owned output: `protected temporary local custody fixture, receiver file-admission helper and docs/infra-automation`.
-  - [ ] Create owner-restricted immutable synthetic bytes, no-follow handle read, raw digest/expiry/source checks and restart recovery; reject overwrite/symlink/lost custody and no replan under old grant.
-  - [ ] Attach focused proof for the referenced ACs, implementation docs and reviewer findings before packet acceptance.
-- [ ] **Packet 4 — Service owner: receipt/callback reconciliation (AC 3–5).** Owned output: `infra_automation/reconciliation.py, services/infra_automation_service.py and typed route (planned)`.
-  - [ ] Verify callback signature/sequence/nonce, operation/run/source binding; bounded polling and delivery_unknown, cancellation request versus confirmed stop; persist outcomes retaining uncertain locks.
-  - [ ] Attach focused proof for the referenced ACs, implementation docs and reviewer findings before packet acceptance.
-- [ ] **Packet 5 — UI/test owner: external outcome UX (AC 1,4–6).** Owned output: `existing automation run screen, frontend/e2e, tests/test_api and tests/test_infra_automation`.
-  - [ ] Render acceptance/observed completion/unknown separately; test no resend and lock/cancellation messaging, fault matrix plus composed keyboard/axe/screenshots.
-  - [ ] Attach focused proof for the referenced ACs, implementation docs and reviewer findings before packet acceptance.
+- [x] **Packet 1 — Integration owner: versioned GitHub adapter (AC 1,4).** Owned output: `integrations/github/infra_automation_adapter.py` and reused existing credential configuration.
+  - [x] Pin 2026-03-10 dispatch, parse 200 workflow_run_id/run_url/html_url, protect/resolve branch or tag and bind reviewed workflow identity; sandbox plus legacy-client isolation contract tests.
+  - [x] Attach focused proof for the referenced ACs, implementation docs and reviewer findings before packet acceptance.
+- [x] **Packet 2 — Receiver owner: durable online admission (AC 2,3,5).** Owned output: `examples/infra-automation/receiver/`, `infra_automation/receiver_runtime.py` and typed receiver HTTP envelopes.
+  - [x] Persist receiver operation before action, server one-use consumption receipt and binding; crash windows at consume/start/completion resume same operation; duplicate returns status, altered bindings conflict.
+  - [x] Attach focused proof for the referenced ACs, implementation docs and reviewer findings before packet acceptance.
+- [x] **Packet 3 — Custody/security owner: synthetic exact-byte fixture (AC 2,3,5).** Owned output: `protected temporary local custody fixture, receiver file-admission helper and docs/infra-automation`.
+  - [x] Create owner-restricted immutable synthetic bytes, no-follow handle read, raw digest/expiry/source checks and restart recovery; reject overwrite/symlink/lost custody and no replan under old grant.
+  - [x] Attach focused proof for the referenced ACs, implementation docs and reviewer findings before packet acceptance.
+- [x] **Packet 4 — Service owner: receipt/callback reconciliation (AC 3–5).** Owned output: `infra_automation/reconciliation.py`, `services/infra_automation_handoffs.py` and separate receiver routes.
+  - [x] Verify callback signature/sequence/nonce, operation/run/source binding; bounded polling and delivery_unknown, cancellation request versus confirmed stop; persist outcomes retaining uncertain locks.
+  - [x] Attach focused proof for the referenced ACs, implementation docs and reviewer findings before packet acceptance.
+- [x] **Packet 5 — UI/test owner: external outcome UX (AC 1,4–6).** Owned output: `existing automation run screen, frontend/e2e, tests/test_api and tests/test_infra_automation`.
+  - [x] Render acceptance/observed completion/unknown separately; test no resend and lock/cancellation messaging, fault matrix plus composed keyboard/axe/screenshots.
+  - [x] Attach focused proof for the referenced ACs, implementation docs and reviewer findings before packet acceptance.
 
 Each packet is a bounded review unit under this stable story ID; split large packets after 16.0 estimation instead of silently broadening scope. One story branch follows Git Flow; coordinate shared-file edits and do not revert other work.
 
@@ -83,13 +90,13 @@ Each packet is a bounded review unit under this stable story ID; split large pac
 
 ## Required implementation verification
 
-- [ ] Register new `tests/test_infra_automation` directories in `scripts/ci-local.sh` and affected GitHub discovery/shards; root discovery alone skips non-package test directories.
-- [ ] For every Pydantic/schema/dataclass/constructor change, use repository-wide `rg` searches for direct instantiations/fixtures and update all consumers, including CLI/agent/action/report compatibility where affected.
-- [ ] Run `./.venv/bin/python -m unittest discover -q`, story-focused tests and exactly `./.venv/bin/python -m pytest tests/test_api tests/test_cli tests/test_infra -v --tb=short` for affected API/CLI/infra contracts.
-- [ ] Run `./.venv/bin/ruff check .`, **`./.venv/bin/ruff format --check .` repo-wide**, `bash scripts/ci-local.sh` and `git diff --check`; add applicable static/security/type checks. Record commands and actual results rather than assumed passes.
-- [ ] Run `npm run ui:typecheck`, `npm run ui:test`, `npm run ui:build`; then `docker compose up -d --build`, wait for `http://localhost:8080/api/v1/health`, seed synthetic authorized API data and run `BASE_URL=http://localhost:8080 npm run test:ui-review` with new journey coverage.
-- [ ] Run `BASE_URL=http://localhost:8080 RUN_UI_A11Y=1 bash scripts/ci-local.sh` for keyboard/axe critical/serious coverage; capture required 1440/760-width screenshots from root SPA routes and permanent `/reports/{id}` links, then `docker compose down`.
-- [ ] Record browser commands/results/screenshots before review. Vite dev server, legacy prefixed routes and existing report tests alone do not establish this story's browser acceptance. Backend-for-UI behavior requires a separate labeled PR.
+- [x] Register new `tests/test_infra_automation` directories in `scripts/ci-local.sh` and affected GitHub discovery/shards; root discovery alone skips non-package test directories.
+- [x] For every Pydantic/schema/dataclass/constructor change, use repository-wide `rg` searches for direct instantiations/fixtures and update all consumers, including CLI/agent/action/report compatibility where affected.
+- [x] Run `./.venv/bin/python -m unittest discover -q`, story-focused tests and exactly `./.venv/bin/python -m pytest tests/test_api tests/test_cli tests/test_infra -v --tb=short` for affected API/CLI/infra contracts.
+- [x] Run `./.venv/bin/ruff check .`, **`./.venv/bin/ruff format --check .` repo-wide**, `bash scripts/ci-local.sh` and `git diff --check`; add applicable static/security/type checks. Record commands and actual results rather than assumed passes.
+- [x] Run `npm run ui:typecheck`, `npm run ui:test`, `npm run ui:build`; then `docker compose -f scripts/compose-story16-11.yaml up -d --build`, wait for `http://localhost:8080/api/v1/health`, seed synthetic authorized API data and run `BASE_URL=http://localhost:8080 npm run test:ui-review` with new journey coverage.
+- [x] Run keyboard/axe critical/serious coverage against the authenticated composed fixture using `BASE_URL=http://localhost:8080 OUTCOME_UI_FIXTURE=/tmp/story16-11-outcome-ui-fixture.json npm run test:ui-review -- frontend/e2e/infra-automation-outcomes.spec.ts`; full Python local CI runs separately because generic anonymous/other-story browser fixtures are not interchangeable. Capture required1440/760 screenshots from root SPA routes and permanent `/reports/{id}` links, then bring down the isolated stack and restore the original app.
+- [x] Record browser commands/results/screenshots before review. Vite dev server, legacy prefixed routes and existing report tests alone do not establish this story's browser acceptance. Backend-for-UI behavior requires a separate labeled PR.
 
 ## References
 
@@ -106,6 +113,25 @@ Codex — bmad-dev-story; ordered packet implementation with bounded native
 readiness, integration and independent review lanes.
 
 ### Implementation Plan
+
+#### Owner-directed completion continuation — 2026-11-03
+
+- PR207 is merged at `d7d8fa1`; follow-up branch is
+  `feature/16-11-receiver-outcome-completion` from current develop.
+- The owner explicitly directed autonomous technical decisions, independent
+  implementation despite unavailable live sandbox configuration, and correction
+  of the dev-story skill that previously halted all work at that external gate.
+  This supersedes the earlier execution-order pause, not the acceptance criteria.
+- Chosen receiver channel: separate receiver-only authenticated HTTPS endpoints
+  retrieve exact operation material; GitHub inputs remain only operation ID and
+  binding digest. The existing operation and grant identity are preserved.
+- Complete local durable receiver/custody, signed replay-fenced outcome and
+  guarded parent reconciliation, then bind the existing run UI to scoped facts.
+  New actions recheck current authority and retained exact bytes. Unknown action
+  state is reconciled without resend or repeated execution.
+- Live qualification remains explicitly not run until the selected target and
+  dedicated credential configuration exist. Local proofs never substitute for
+  live evidence, and unfinished acceptance checkboxes remain open.
 
 - Entry reassessment: clean develop0e197ce includes accepted/merged16.10 PR206;
   accepted16.9 is501d789 and16.0 qualification/governance is done. Original
@@ -139,7 +165,7 @@ readiness, integration and independent review lanes.
   consistency, compileall, skill matrix, prompt-injection and diff checks pass.
   See the packet proof for exact commands, profile limits and review corrections.
 
-### Completion Notes List
+### Completion Notes List — initial Packet1 history (superseded below)
 
 - Dependencies 16.0/16.9/16.10 are accepted; story and sprint tracking are now
   in progress on the Git Flow feature branch. Original preparation-only
@@ -186,20 +212,130 @@ readiness, integration and independent review lanes.
 - UI validation not applicable. Live sandbox dispatch and Packets 2–5 remain
   outstanding; story stays in progress. No commit/push performed.
 
+### Completion Qualification — 2026-11-03
+
+- All five packets and AC1–6 are implemented and qualified in this story's bounded
+  synthetic receiver profile. The prior live-configuration pause is resolved by
+  an owner-authorized dedicated harmless sandbox with ephemeral Actions credentials.
+- Live qualification41668709128 and its receiver41668758592 passed; HTTP200 and
+  matching run/API/web URLs retained in `live-github-proof.json`. Distinct source
+  and workflow identity preserved; no live deployment inferred.
+- Real Linux Python3.11 ARM64 verification:65 tests, including UID10002 versus10003,
+  exact protected bytes and six process-death boundaries/concurrency. Actual
+  ReferenceReceiver→HTTPS→HandoffService integration verifies durable receipts,
+  one counted synthetic effect and callback-ack response-loss recovery.
+- Final root unittest:1,546 tests,3 expected skips. Exact API/CLI/infra shard:
+  716 passed,1 skipped,2,316 subtests. Full local CI:exit0,2,993 tests across10
+  directories,3 expected skips. Focused transport/adapter/qualification60 passed;
+  scoped mypy6 modules, Bandit, repository Ruff lint/format494 and diff checks pass.
+- UI typecheck/build and268 unit tests+2 adapter checks pass. Actual composed
+  Chromium:6 journeys passed1.1m, keyboard/axe zero violations in checked journeys,
+  15 screenshots at1440/760/390 and visual verdict95/pass. Report landmarks/Low
+  severity contrast corrected using existing components without token changes.
+- Three independent review layers found two issues (sticky uncertainty and
+  pre-POST ambiguity marker); both fixed and independently rechecked clean.
+  Additional integration/transport/migration failures were fixed and regressions
+  added. No unresolved introduced finding remains in the owning scope.
+- Updated dev-story skill per owner direction: missing external configuration
+  blocks dependent effects, not independent implementation; routine decisions
+  resolve autonomously; completion remains gated on actual proof. Skill validation
+  and independent forward-test passed.
+- Migration036 and brownfield restart/partial-schema guards verified. Frontend
+  generated API types refreshed. Constructor/consumer search and all CI discovery
+  checks recorded. README/project context/status artifacts aligned.
+- Isolated Compose stack removed; original local app restarted and health200;
+  private host fixture deleted. No operator data volume was changed.
+- Complete commands, profiles and limits: `docs/verification/infra-automation/16-11/completion-evidence.md`;
+  review: `docs/verification/infra-automation/16-11/completion-review.md`.
+
 ### File List
 
+- `.agents/skills/bmad-dev-story/SKILL.md`
+- `.agents/skills/bmad-dev-story/workflow.md`
+- `README.md`
 - `_bmad-output/implementation-artifacts/16-11-github-receiver-and-outcome-reconciliation.md`
 - `_bmad-output/implementation-artifacts/sprint-status.yaml`
+- `_bmad-output/implementation-artifacts/story-implementation-status-map.md`
+- `_bmad-output/planning-artifacts/epics.md`
+- `_bmad-output/project-context.md`
+- `api/routes/infra_automation.py`
+- `api/routes/infra_automation_receiver.py`
+- `api/schemas.py`
+- `app.py`
+- `docs/infra-automation/github-adapter-v1.md`
+- `docs/infra-automation/receiver-online-v1.md`
+- `docs/infra-automation/receiver-v1.md`
+- `docs/verification/infra-automation/16-11/code-review-2026-11-03.md`
+- `docs/verification/infra-automation/16-11/completion-evidence.md`
+- `docs/verification/infra-automation/16-11/completion-review.md`
+- `docs/verification/infra-automation/16-11/entry-readiness.md`
+- `docs/verification/infra-automation/16-11/live-github-proof.json`
+- `docs/verification/infra-automation/16-11/packet-1-review.md`
+- `docs/verification/infra-automation/16-11/review-fixes-2026-11-03.md`
+- `docs/verification/infra-automation/16-11/sandbox/README.md`
+- `docs/verification/infra-automation/16-11/sandbox/qualify.yml`
+- `docs/verification/infra-automation/16-11/sandbox/receiver.yml`
+- `docs/verification/infra-automation/16-11/screenshots/cancellation-1440.png`
+- `docs/verification/infra-automation/16-11/screenshots/cancellation-390.png`
+- `docs/verification/infra-automation/16-11/screenshots/cancellation-760.png`
+- `docs/verification/infra-automation/16-11/screenshots/permanent-report-1440.png`
+- `docs/verification/infra-automation/16-11/screenshots/permanent-report-390.png`
+- `docs/verification/infra-automation/16-11/screenshots/permanent-report-760.png`
+- `docs/verification/infra-automation/16-11/screenshots/reconciled-1440.png`
+- `docs/verification/infra-automation/16-11/screenshots/reconciled-390.png`
+- `docs/verification/infra-automation/16-11/screenshots/reconciled-760.png`
+- `docs/verification/infra-automation/16-11/screenshots/unknown-1440.png`
+- `docs/verification/infra-automation/16-11/screenshots/unknown-390.png`
+- `docs/verification/infra-automation/16-11/screenshots/unknown-760.png`
+- `docs/verification/infra-automation/16-11/screenshots/verified_success-1440.png`
+- `docs/verification/infra-automation/16-11/screenshots/verified_success-390.png`
+- `docs/verification/infra-automation/16-11/screenshots/verified_success-760.png`
+- `docs/verification/infra-automation/16-11/visual-verdict.json`
+- `examples/infra-automation/receiver/run.py`
+- `examples/infra-automation/receiver/workflow.yml`
+- `frontend/e2e/infra-automation-outcomes.spec.ts`
+- `frontend/e2e/infra-automation.spec.ts`
+- `frontend/src/api/infraAutomation.test.ts`
+- `frontend/src/api/infraAutomation.ts`
+- `frontend/src/api/schema.d.ts`
+- `frontend/src/screens/InfraAutomationRun.test.tsx`
+- `frontend/src/screens/InfraAutomationRun.tsx`
+- `frontend/src/screens/Report.test.tsx`
+- `frontend/src/screens/Report.tsx`
+- `frontend/src/screens/infra-automation.css`
 - `infra_automation/github_contracts.py`
+- `infra_automation/receiver_custody.py`
+- `infra_automation/receiver_http_contracts.py`
+- `infra_automation/receiver_runtime.py`
+- `infra_automation/reconciliation.py`
 - `infra_automation/target_transport.py`
 - `integrations/github/infra_automation_adapter.py`
+- `migrations/versions/036_add_receiver_reconciliation.py`
+- `models/database.py`
+- `models/tables.py`
+- `scripts/compose-story16-11.yaml`
+- `scripts/outcome_ui_fixture.py`
+- `scripts/qualify_github_receiver.py`
+- `services/infra_automation_handoffs.py`
+- `services/infra_automation_receiver_composition.py`
+- `tests/test_api/test_infra_automation_receiver.py`
+- `tests/test_api/test_infra_automation_workflows.py`
+- `tests/test_infra/test_container_contract.py`
+- `tests/test_infra/test_identity_migration.py`
+- `tests/test_infra/test_infra_automation_engine_migration.py`
+- `tests/test_infra/test_infra_automation_handoff_migration.py`
+- `tests/test_infra/test_infra_automation_workflow_migration.py`
+- `tests/test_infra/test_migrations.py`
+- `tests/test_infra/test_project_membership_migration.py`
+- `tests/test_infra/test_receiver_reconciliation_migration.py`
 - `tests/test_infra_automation/test_github_adapter.py`
+- `tests/test_infra_automation/test_live_qualification.py`
+- `tests/test_infra_automation/test_preflight_repository.py`
+- `tests/test_infra_automation/test_receiver_composition.py`
+- `tests/test_infra_automation/test_receiver_custody.py`
+- `tests/test_infra_automation/test_receiver_reconciliation.py`
+- `tests/test_infra_automation/test_receiver_runtime.py`
 - `tests/test_infra_automation/test_target_transport.py`
-- `docs/infra-automation/github-adapter-v1.md`
-- `docs/verification/infra-automation/16-11/entry-readiness.md`
-- `docs/verification/infra-automation/16-11/packet-1-review.md`
-- `docs/verification/infra-automation/16-11/code-review-2026-11-03.md`
-- `docs/verification/infra-automation/16-11/review-fixes-2026-11-03.md`
 
 External contract: [GitHub REST workflow dispatch](https://docs.github.com/en/rest/actions/workflows#create-a-workflow-dispatch-event), checked 2026-10-07; reverify before implementation if the API contract changes.
 
@@ -227,3 +363,10 @@ targeting `develop`. The PR is a draft because Packet 1 live sandbox proof and
 Packets 2–5 remain open. This publication does not close the story or qualify a
 production receiver. The branch matched fetched `origin/develop` at `0e197ce`
 before committing; final Ruff lint/format and diff checks passed.
+
+- 2026-11-03: Completed remaining receiver/custody/reconciliation/UI packets, fixed
+  all review and integration findings, corrected the workflow skill, recorded
+  live harmless GitHub proof, Linux UID/crash proof and six composed browser
+  journeys, and passed final CI. Story marked done after independent re-review;
+  follow-up Git Flow completion PR targets develop. Earlier in-progress notes
+  above are retained as historical evidence, not current blockers.

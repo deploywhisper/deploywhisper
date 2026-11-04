@@ -18,6 +18,7 @@ import config
 import models.database as database
 
 HEAD = "035_add_infra_handoffs"
+CURRENT_HEAD = "036_add_receiver_reconciliation"
 PREVIOUS = "034_add_infra_decisions"
 MIGRATION = import_module(f"migrations.versions.{HEAD}")
 
@@ -52,7 +53,7 @@ class InfraAutomationHandoffMigrationTests(unittest.TestCase):
         with closing(sqlite3.connect(self.path)) as db:
             self.assertEqual(
                 db.execute("SELECT version_num FROM alembic_version").fetchone()[0],
-                HEAD,
+                CURRENT_HEAD,
             )
             self.assertEqual(db.execute("PRAGMA foreign_key_check").fetchall(), [])
 
@@ -100,12 +101,15 @@ class InfraAutomationHandoffMigrationTests(unittest.TestCase):
         self.initialize()
         self.assert_head()
         with closing(sqlite3.connect(self.path)) as db:
-            self.assertEqual(
+            after = dict(
                 db.execute(
                     "SELECT name, sql FROM sqlite_master WHERE type='trigger' ORDER BY name"
-                ).fetchall(),
-                before,
+                ).fetchall()
             )
+            previous = dict(before)
+            self.assertEqual({name: after[name] for name in previous}, previous)
+            current = import_module(f"migrations.versions.{CURRENT_HEAD}")
+            self.assertEqual(set(after) - set(previous), set(current.GUARDS))
 
     def test_partial_handoff_tables_and_guards_fail_before_create_all(self):
         corruptions = [f"DROP TABLE {table}" for table in MIGRATION.TABLES] + [

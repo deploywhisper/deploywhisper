@@ -1,0 +1,23 @@
+{
+  "score": 95,
+  "verdict": "pass",
+  "category_match": true,
+  "differences": [],
+  "suggestions": [],
+  "reasoning": "The final shared project dialog and inline local-account Settings retain the existing shell, card, field and button hierarchy at1440/760. Both project actions remain visible on mobile; the sidebar order is Dashboard, Skills, Incidents, History, Automation, Settings.",
+  "threshold": 90,
+  "threshold_pass": true,
+  "next_actions": [],
+  "reference_images": [
+    "docs/verification/infra-automation/16-9/screenshots/acknowledgement-review-1440.png",
+    "docs/verification/infra-automation/16-9/screenshots/acknowledgement-review-760.png"
+  ],
+  "generated_screenshots": [
+    "docs/verification/ui-project-actions/screenshots/automation-account-setup-1440.png",
+    "docs/verification/ui-project-actions/screenshots/automation-account-setup-760.png",
+    "docs/verification/ui-project-actions/screenshots/new-project-dialog-1440.png",
+    "docs/verification/ui-project-actions/screenshots/new-project-dialog-760.png",
+    "docs/verification/ui-project-actions/screenshots/settings-local-account-1440.png",
+    "docs/verification/ui-project-actions/screenshots/settings-local-account-760.png"
+  ]
+}

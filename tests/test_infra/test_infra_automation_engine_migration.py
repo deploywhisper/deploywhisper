@@ -18,7 +18,7 @@ from alembic.config import Config
 import config
 import models.database as database
 
-HEAD = "035_add_infra_handoffs"
+HEAD = "036_add_receiver_reconciliation"
 PREVIOUS = "031_add_infra_workflows"
 TABLES = (
     "infra_automation_runs",

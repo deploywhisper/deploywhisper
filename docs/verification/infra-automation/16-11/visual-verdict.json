@@ -1,0 +1,32 @@
+{
+  "score": 95,
+  "verdict": "pass",
+  "category_match": true,
+  "differences": [],
+  "suggestions": [],
+  "reasoning": "The final Compose-built run and permanent report screenshots preserve the approved automation shell, cards, typography, spacing and existing tokens at1440,760and390px. Outcome facts remain distinct and legible, long identifiers/actions fit narrow cards, and the report reuses the existing accessible neutral severity tag.",
+  "threshold": 90,
+  "threshold_pass": true,
+  "next_actions": [],
+  "reference_images": [
+    "docs/verification/infra-automation/16-9/screenshots/acknowledgement-review-1440.png"
+  ],
+  "generated_screenshots": [
+    "docs/verification/infra-automation/16-11/screenshots/unknown-1440.png",
+    "docs/verification/infra-automation/16-11/screenshots/unknown-760.png",
+    "docs/verification/infra-automation/16-11/screenshots/unknown-390.png",
+    "docs/verification/infra-automation/16-11/screenshots/verified_success-760.png",
+    "docs/verification/infra-automation/16-11/screenshots/cancellation-390.png",
+    "docs/verification/infra-automation/16-11/screenshots/permanent-report-760.png",
+    "docs/verification/infra-automation/16-11/screenshots/reconciled-390.png"
+  ],
+  "browser_result": "6 passed (1.1m)",
+  "browser_command": "BASE_URL=http://localhost:8080 OUTCOME_UI_FIXTURE=/tmp/story16-11-outcome-ui-fixture.json npm run test:ui-review -- frontend/e2e/infra-automation-outcomes.spec.ts",
+  "browser_suite": {
+    "result": "6 passed",
+    "duration": "1.1m",
+    "url": "http://localhost:8080",
+    "axe": "zero violations in checked outcome/report journeys",
+    "screenshots": 15
+  }
+}

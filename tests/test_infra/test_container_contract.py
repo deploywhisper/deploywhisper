@@ -49,6 +49,7 @@ class ContainerContractTests(unittest.TestCase):
                 "033_add_infra_preflight.py",
                 "034_add_infra_decisions.py",
                 "035_add_infra_handoffs.py",
+                "036_add_receiver_reconciliation.py",
             ],
         )
         baseline_content = migrations[0].read_text(encoding="utf-8")

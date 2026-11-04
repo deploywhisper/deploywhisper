@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Eye, EyeOff, FileJson, Upload, Zap } from "lucide-react";
-import { Link } from "react-router-dom";
+import { LocalAccountSection } from "./LocalAccountSection";
 
 import {
   previewTopology,
@@ -369,11 +369,11 @@ export function SettingsScreen() {
               <div>
                 <p className="eyebrow">Workspace Settings</p>
                 <h1>Settings</h1>
-                <p><Link to="/settings/account">Named account access</Link></p>
                 <p className="lede">Provider, topology, reviewer feedback, and custom skill controls for {selectedOption?.name ?? "the active project"}.</p>
               </div>
               <EvidenceTag>Evidence Law enforced</EvidenceTag>
             </header>
+            <LocalAccountSection />
             {settingsQuery.isLoading && (
               <div className="dw-phase6-grid">
                 <SkeletonCard />

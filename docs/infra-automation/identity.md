@@ -78,6 +78,41 @@ consumed in the same transaction as first-account creation. Concurrent consumers
 cannot create two first administrators. Issuing new setup evidence supersedes
 earlier unused setup evidence; setup issuance is denied once an account exists.
 
+## Docker Compose operator setup
+
+The normal Compose file passes through the nonsecret identity profile/origin,
+authorization profile and decision mode variables. Defaults remain `disabled`,
+empty origin, `legacy-evaluation` and `shared`. A normal rebuild does not create
+accounts or enable automation. For localhost, opt in explicitly:
+
+```sh
+export DEPLOYWHISPER_IDENTITY_PROFILE=local-development
+export DEPLOYWHISPER_IDENTITY_ORIGIN=http://localhost:8080
+docker compose up -d --build --force-recreate
+docker compose exec deploywhisper python -m cli.identity --help
+```
+
+The image now packages the existing protected Python CLI. On a trusted host, use
+a private temporary directory inside the container and the interactive password
+prompt (never a password in the command or environment):
+
+```sh
+docker compose exec deploywhisper sh -c 'umask 077; mkdir -p /tmp/dw-identity; chmod 700 /tmp/dw-identity; python -m cli.identity setup --output /tmp/dw-identity/setup'
+docker compose exec deploywhisper python -m cli.identity bootstrap --username operator --credential-file /tmp/dw-identity/setup
+```
+
+These are deliberate account-creation operations, not commands run automatically
+by startup. The setup command rejects an existing account/store or reused output;
+use the secured recovery flow for an existing installation. Follow the protected
+credential retention policy after consumption. Account hashes live in the normal
+application database; temporary credential files do not belong in the repository.
+Then sign in at `/settings/account`, grant the intended project's initial scoped
+membership using the existing permissions contract, and configure its workflow
+policy. No step implicitly assigns project permissions or enables execution.
+For a production origin, use the supported HTTPS profile and transport boundary,
+not the localhost exception. See [permissions](permissions.md) and
+[workflow configuration](workflows.md).
+
 ## Secured recovery
 
 Only an operator with trusted host/database access may issue recovery evidence.

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from infra_automation.github_contracts import DispatchAcceptance, GithubRunObservation
 from infra_automation.review_contracts import (
     ApprovalReviewPacket as AutomationReviewPacket,
 )
@@ -104,6 +105,29 @@ class ProjectMembershipListResponse(BaseModel):
 
 class IdentityMetaPayload(MetaPayload):
     correlation_id: str
+
+
+class IdentityConfigurationData(BaseModel):
+    """Public, nonsecret runtime identity configuration."""
+
+    model_config = ConfigDict(extra="forbid", strict=True)
+    version: Annotated[int, Field(strict=True, ge=1, le=1)] = 1
+    profile: Literal["disabled", "local-development", "https", "unavailable"]
+    configured_origin: str | None
+    configuration_valid: bool
+    login_available: bool
+    authorization_profile: Literal["legacy-evaluation", "verified", "unavailable"]
+    decision_mode: Literal["shared", "single-operator", "unavailable"]
+
+
+class IdentityConfigurationMetaPayload(IdentityMetaPayload):
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+
+class IdentityConfigurationResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    data: IdentityConfigurationData
+    meta: IdentityConfigurationMetaPayload
 
 
 class HumanSessionData(BaseModel):
@@ -3168,4 +3192,35 @@ class AutomationHandoffView(AutomationClosedModel):
 
 class AutomationHandoffResponse(AutomationClosedModel):
     data: AutomationHandoffView
+    meta: AutomationMeta
+
+
+class AutomationExternalHandoffView(AutomationClosedModel):
+    id: str
+    version: int
+    state: str
+    acceptance: DispatchAcceptance | None
+    observation: GithubRunObservation | None
+    receiver_state: str | None
+    lock_status: Literal["held", "resolved", "broken"]
+    cancel_requested: bool
+    verified_outcome: Literal["succeeded", "failed"] | None
+    reconciliation_available: bool
+
+
+class AutomationExternalHandoffResponse(AutomationClosedModel):
+    data: AutomationExternalHandoffView
+    meta: AutomationMeta
+
+
+class AutomationExternalHandoffList(AutomationClosedModel):
+    version: Literal[1]
+    run_id: str
+    project_id: int
+    workspace_id: int
+    items: list[AutomationExternalHandoffView]
+
+
+class AutomationExternalHandoffListResponse(AutomationClosedModel):
+    data: AutomationExternalHandoffList
     meta: AutomationMeta

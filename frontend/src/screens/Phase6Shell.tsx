@@ -1,9 +1,10 @@
-import { useMemo, type ReactNode } from "react";
+import { ProjectMenu } from "./ProjectMenu";
+import { Fragment, useMemo, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { AlertTriangle, History, LayoutGrid, Search, Settings, ShieldCheck, Zap } from "lucide-react";
 
 import { getProjects } from "../api/dashboard";
-import { ProjectSwitcher, SkeletonLine, type ProjectOption } from "../components/ui";
+import { SkeletonLine, type ProjectOption } from "../components/ui";
 import { useQuery } from "@tanstack/react-query";
 import { AppBrand } from "./AppBrand";
 import { AutomationNavItem } from "./AutomationNavigation";
@@ -48,14 +49,16 @@ function Sidebar({ active, selectedProject }: { active: string; selectedProject?
     <aside className="dw-sidebar">
       <AppBrand />
       <nav className="dw-sidebar-nav" aria-label="Primary">
-        <AutomationNavItem projectId={selectedProject?.id} active={active === "automation"} />
         {nav.map(({ label, icon: Icon, href, key }) => {
           const isActive = active === key;
           return (
-            <Link key={key} className={`dw-nav-item${isActive ? " dw-nav-item-active" : ""}`} to={href}>
+            <Fragment key={key}>
+              {key === "settings" && <AutomationNavItem projectId={selectedProject?.id} active={active === "automation"} />}
+              <Link className={`dw-nav-item${isActive ? " dw-nav-item-active" : ""}`} to={href}>
               <Icon color={isActive ? "var(--dw-brand)" : "var(--dw-faint)"} size={17} />
               <span>{label}</span>
-            </Link>
+              </Link>
+            </Fragment>
           );
         })}
       </nav>
@@ -100,13 +103,11 @@ function TopBar({
         <kbd>⌘K</kbd>
       </div>
       <div className="dw-topbar-spacer" />
-      {selectedProject && (
-        <ProjectSwitcher
+      <ProjectMenu
           onChange={onProjectChange}
           projects={projects}
-          selectedProject={selectedProject}
+          selectedProject={selectedProject ?? { id: "", name: "Select project", env: "", description: "" }}
         />
-      )}
       <span className="dw-topbar-divider" />
       <Link className="dw-avatar" to="/settings/account" aria-label="Account access">DW</Link>
     </header>

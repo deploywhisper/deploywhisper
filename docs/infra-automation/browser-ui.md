@@ -1,8 +1,9 @@
-# Workflow editor and run history
+# InfraFlow: workflow editor and run history
 
 The React app offers a project and workspace scoped view for uploaded preflight
-workflows. Open **Automation** in the sidebar when execution is enabled, or visit
-`/infra-automation` directly to read permitted history when it is disabled. The
+workflows. Open **InfraFlow** in the sidebar, or visit `/infra-automation` directly.
+The entry stays visible before account setup and while execution is disabled;
+its presence never grants access or enables starts. The
 Dashboard's analysis flow and global search remain available.
 
 ## Account and project access
@@ -11,9 +12,9 @@ Use **Settings → Named account access** (`/settings/account`) to sign in with 
 local account. The operator must first enable a supported identity profile and
 create the account with the protected local bootstrap procedure in [Identity](identity.md).
 Project membership grants workflow permissions separately from account sign-in;
-see [Permissions](permissions.md). An operator configures project automation
+see [Permissions](permissions.md). An operator configures project InfraFlow
 enablement through the existing API described in [Workflows](workflows.md). The
-current Settings screen does not configure automation policy.
+current Settings screen does not configure InfraFlow policy.
 
 The browser keeps mutation protection in memory. After a full page reload, a
 restored session can read authorized history, but saving, publishing, starting or
@@ -62,8 +63,10 @@ remains on screen; changes are disabled until the account and scope are verified
 If a mutation response is uncertain, check durable workflow or run history before
 making another request. No browser action automatically retries a mutation.
 
-Approval inboxes, runner enrollment, collection and external handoff controls
-belong to later stories. The supported UI here makes no apply or deployment claim.
+The approval inbox and external handoff outcome views are implemented; see
+[approval review](approval-review.md) and [receiver outcomes](receiver-online-v1.md).
+Runner enrollment and real collection remain later-story work. The UI never
+interprets analysis or dispatch acceptance as verified deployment completion.
 
 [Implementation proof and screenshots](../verification/infra-automation/16-7/results.md)
 record the composed browser journeys at 1440px and 760px.

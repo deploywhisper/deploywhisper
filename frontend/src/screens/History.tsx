@@ -1,3 +1,5 @@
+import { useIdentity } from "./IdentitySession";
+import { ProjectMenu } from "./ProjectMenu";
 import { Fragment, useEffect, useMemo, useState, type Dispatch, type SetStateAction } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -40,7 +42,6 @@ import {
   ConfidenceBadge,
   EvidenceTag,
   MonoRef,
-  ProjectSwitcher,
   SegmentedTabs,
   SeverityBadge,
   SkeletonTable,
@@ -158,7 +159,6 @@ function HistorySidebar({ selectedProject }: { selectedProject: ProjectOption })
     <aside className="dw-sidebar">
       <AppBrand />
       <nav className="dw-sidebar-nav" aria-label="Primary">
-        <AutomationNavItem projectId={selectedProject.id} />
         <Link className="dw-nav-item" to="/">
           <LayoutGrid color="var(--dw-faint)" size={17} />
           <span>Dashboard</span>
@@ -176,6 +176,7 @@ function HistorySidebar({ selectedProject }: { selectedProject: ProjectOption })
           <HistoryIcon color="var(--dw-brand)" size={17} />
           <span>History</span>
         </Link>
+        <AutomationNavItem projectId={selectedProject.id} />
         <Link className="dw-nav-item" to="/settings">
           <Settings color="var(--dw-faint)" size={17} />
           <span>Settings</span>
@@ -215,7 +216,7 @@ function HistoryTopBar({
         <span>Search analyses, services...</span>
       </div>
       <div className="dw-topbar-spacer" />
-      <ProjectSwitcher projects={projects} selectedProject={selectedProject} onChange={onProjectChange} />
+      <ProjectMenu projects={projects} selectedProject={selectedProject} onChange={onProjectChange} />
       <span className="dw-topbar-divider" />
       <Link className="dw-history-top-link" to="/">
         <LayoutGrid size={14} />
@@ -576,6 +577,7 @@ function HistoryFiltersBar({
 }
 
 export function HistoryScreen() {
+  const { epoch } = useIdentity();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
@@ -588,7 +590,7 @@ export function HistoryScreen() {
   const [toast, setToast] = useState<string | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
-  const projectsQuery = useQuery({ queryKey: ["projects"], queryFn: getProjects });
+  const projectsQuery = useQuery({ queryKey: ["projects", epoch], queryFn: getProjects });
   const projects = projectsQuery.data ?? [];
   const projectOptions = projects.map(projectToOption);
   const { selectedProject: selectedProjectData, setSelectedProjectId } = usePersistentProjectSelection(projects);

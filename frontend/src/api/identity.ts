@@ -1,9 +1,28 @@
-import { requestData } from "./client";
+import { ApiClientError, requestData } from "./client";
 import type { components } from "./schema";
 
 export type IdentityPrincipal = components["schemas"]["VerifiedPrincipal"];
 export interface IdentitySession { principal: IdentityPrincipal; csrf_token: string }
 const authRequest = { credentials: "same-origin", cache: "no-store" } as const;
+
+export type IdentityConfiguration = Omit<components["schemas"]["IdentityConfigurationData"], "version"> & { version: 1 };
+export async function getIdentityConfiguration(signal?: AbortSignal): Promise<IdentityConfiguration> {
+  const data = await requestData<IdentityConfiguration>("/api/v1/auth/configuration", { ...authRequest, signal });
+  if (!data || data.version !== 1 || !["disabled", "local-development", "https", "unavailable"].includes(data.profile)
+    || typeof data.configuration_valid !== "boolean" || typeof data.login_available !== "boolean"
+    || !["legacy-evaluation", "verified", "unavailable"].includes(data.authorization_profile)
+    || !["shared", "single-operator", "unavailable"].includes(data.decision_mode)
+    || !(data.configured_origin === null || typeof data.configured_origin === "string")) {
+    throw new ApiClientError("Account configuration is unavailable.", 503);
+  }
+  if (data.configured_origin !== null) {
+    try {
+      const origin = new URL(data.configured_origin);
+      if (!["http:", "https:"].includes(origin.protocol) || !/^https?:\/\/[^/?#\\\s@]+$/i.test(data.configured_origin) || !origin.hostname || origin.username || origin.password) throw new Error();
+    } catch { throw new ApiClientError("Account configuration is unavailable.", 503); }
+  }
+  return data;
+}
 
 export function getIdentitySession(signal?: AbortSignal): Promise<IdentityPrincipal> {
   return requestData("/api/v1/auth/session", { ...authRequest, method: "GET", signal });
@@ -50,4 +69,10 @@ export function safeAccountReturnTo(value: string | null | undefined): string {
     })) return fallback;
   }
   return value;
+}
+
+export function localAccountReturnTo(value?: string | null): string {
+  if (!value) return "/settings";
+  const safe = safeAccountReturnTo(value);
+  return safe === value ? safe : "/settings";
 }

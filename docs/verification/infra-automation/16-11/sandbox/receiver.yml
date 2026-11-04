@@ -1,0 +1,21 @@
+name: Harmless Packet1 receiver
+run-name: Packet1 ${{ inputs.operation_id }}
+on:
+  workflow_dispatch:
+    inputs:
+      operation_id:
+        description: Nonsecret correlation identifier
+        required: true
+        type: string
+      binding_digest:
+        description: Nonsecret immutable binding digest
+        required: true
+        type: string
+permissions: {}
+jobs:
+  acknowledge:
+    runs-on: ubuntu-latest
+    timeout-minutes: 1
+    steps:
+      - name: Acknowledge harmless workflow dispatch
+        run: echo 'Harmless dispatch observed. No receiver consume or deployment was performed.'

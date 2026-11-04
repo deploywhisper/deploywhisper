@@ -1,3 +1,4 @@
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -9,7 +10,7 @@ vi.mock("./IdentitySession", () => ({ useIdentity: () => state.value }));
 beforeEach(() => {
   state.value = { principal: null, csrfToken: null, loading: false, epoch: 0, status: "signed-out", error: null, signIn: vi.fn(), signOut: vi.fn(), refresh: vi.fn(), expire: vi.fn() };
 });
-function render() { return renderToStaticMarkup(<MemoryRouter><AccountAccessContent /></MemoryRouter>); }
+function render() { return renderToStaticMarkup(<QueryClientProvider client={new QueryClient()}><MemoryRouter><AccountAccessContent /></MemoryRouter></QueryClientProvider>); }
 describe("account access", () => {
   it("provides labeled local credentials and operator-held recovery guidance", () => {
     const html = render();
