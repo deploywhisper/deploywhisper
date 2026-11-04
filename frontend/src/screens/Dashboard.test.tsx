@@ -146,7 +146,7 @@ function renderWithQuery(node: React.ReactElement, client?: QueryClient) {
 describe("DashboardScreen", () => {
   it("renders dashboard hook data from preloaded TanStack Query state", () => {
     const client = new QueryClient();
-    client.setQueryData(["dashboard", "projects"], [project]);
+    client.setQueryData(["projects", 0], [project]);
     client.setQueryData(["dashboard", "stats", 1], stats);
     client.setQueryData(["dashboard", "analyses", 1], [report]);
     client.setQueryData(["dashboard", "distribution", 1], distribution);

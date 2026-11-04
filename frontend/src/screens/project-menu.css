@@ -1,0 +1,13 @@
+.dw-project-menu { display: contents; }
+.dw-project-dialog { margin: auto; width: min(540px, calc(100vw - 36px)); max-height: calc(100svh - 48px); overflow-y: auto; border: 1px solid var(--dw-border); border-radius: 16px; padding: 28px; color: var(--dw-text); background: var(--dw-card); box-shadow: var(--dw-shadow-card); }
+.dw-project-dialog::backdrop { background: rgba(14,17,22,.48); }
+.dw-project-dialog form { display: grid; gap: 16px; }
+.dw-project-dialog h2, .dw-project-dialog p { margin: 0; }
+.dw-project-dialog h2 { font: 700 20px/1.4 var(--dw-font-display); color: var(--dw-ink); }
+.dw-project-dialog p { font: 400 12px/1.65 var(--dw-font-body); color: var(--dw-muted); }
+.dw-project-dialog label { display: grid; gap: 7px; font: 600 12px/1.65 var(--dw-font-body); }
+.dw-project-dialog input, .dw-project-dialog textarea { width: 100%; padding: 10px 12px; border: 1px solid var(--dw-border); border-radius: 10px; background: var(--dw-card); color: var(--dw-text); font: 400 13px/1.65 var(--dw-font-body); }
+.dw-project-dialog input:focus-visible, .dw-project-dialog textarea:focus-visible { outline: 2px solid var(--dw-brand); outline-offset: 2px; }
+.dw-project-dialog [role="alert"] { color: var(--dw-critical); }
+.dw-project-dialog-actions { display: flex; justify-content: flex-end; gap: 10px; flex-wrap: wrap; }
+@media (max-width: 760px) { .dw-project-dialog { padding: 20px; } }

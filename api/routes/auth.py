@@ -23,6 +23,8 @@ from api.schemas import (
     HumanAccountResponse,
     HumanLogoutResponse,
     ErrorResponse,
+    IdentityConfigurationData,
+    IdentityConfigurationResponse,
     build_meta,
 )
 
@@ -133,6 +135,47 @@ def _session_response(request: Request, issued) -> JSONResponse:
         path="/",
     )
     return response
+
+
+@router.get("/configuration", response_model=IdentityConfigurationResponse)
+def identity_configuration(request: Request):
+    """Describe configuration without inspecting accounts or issuing credentials."""
+    settings = config.settings
+    profile = settings.identity_profile
+    if profile not in {"disabled", "local-development", "https"}:
+        profile = "unavailable"
+    valid = False
+    try:
+        identity.identity_service()._profile()
+        # urlsplit reports empty userinfo/query/fragment as falsey. They still
+        # are not an origin, and must never be reflected by this public route.
+        valid = not any(char in settings.identity_origin for char in "@\\?#")
+    except IdentityError:
+        pass
+    login_available = False
+    if valid:
+        try:
+            identity.check_identity_transport(request)
+            login_available = True
+        except ApiError:
+            pass
+    authorization_profile = settings.authorization_profile
+    if authorization_profile not in {"legacy-evaluation", "verified"}:
+        authorization_profile = "unavailable"
+    decision_mode = settings.identity_decision_mode
+    if decision_mode not in {"shared", "single-operator"}:
+        decision_mode = "unavailable"
+    return _response(
+        request,
+        IdentityConfigurationData(
+            profile=profile,
+            configured_origin=settings.identity_origin if valid else None,
+            configuration_valid=valid,
+            login_available=login_available,
+            authorization_profile=authorization_profile,
+            decision_mode=decision_mode,
+        ),
+    )
 
 
 @router.post(

@@ -21,6 +21,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/auth/configuration": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Identity Configuration
+         * @description Describe configuration without inspecting accounts or issuing credentials.
+         */
+        get: operations["identity_configuration_api_v1_auth_configuration_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/login": {
         parameters: {
             query?: never;
@@ -5112,6 +5132,58 @@ export interface components {
              */
             type: "identifier";
         };
+        /**
+         * IdentityConfigurationData
+         * @description Public, nonsecret runtime identity configuration.
+         */
+        IdentityConfigurationData: {
+            /**
+             * Version
+             * @default 1
+             */
+            version: number;
+            /**
+             * Profile
+             * @enum {string}
+             */
+            profile: "disabled" | "local-development" | "https" | "unavailable";
+            /** Configured Origin */
+            configured_origin: string | null;
+            /** Configuration Valid */
+            configuration_valid: boolean;
+            /** Login Available */
+            login_available: boolean;
+            /**
+             * Authorization Profile
+             * @enum {string}
+             */
+            authorization_profile: "legacy-evaluation" | "verified" | "unavailable";
+            /**
+             * Decision Mode
+             * @enum {string}
+             */
+            decision_mode: "shared" | "single-operator" | "unavailable";
+        };
+        /** IdentityConfigurationMetaPayload */
+        IdentityConfigurationMetaPayload: {
+            /**
+             * App
+             * @description Application identifier
+             */
+            app: string;
+            /**
+             * Version
+             * @description Application version
+             */
+            version: string;
+            /** Correlation Id */
+            correlation_id: string;
+        };
+        /** IdentityConfigurationResponse */
+        IdentityConfigurationResponse: {
+            data: components["schemas"]["IdentityConfigurationData"];
+            meta: components["schemas"]["IdentityConfigurationMetaPayload"];
+        };
         /** IdentityMetaPayload */
         IdentityMetaPayload: {
             /**
@@ -8975,6 +9047,71 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HealthResponse"];
+                };
+            };
+        };
+    };
+    identity_configuration_api_v1_auth_configuration_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IdentityConfigurationResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
         };

@@ -264,7 +264,8 @@
   overflow-y: auto;
 }
 
-.dw-topbar > .dw-project-switcher {
+.dw-topbar > .dw-project-switcher,
+.dw-topbar > .dw-project-menu > .dw-project-switcher {
   flex: 0 1 236px;
   min-width: 170px;
   max-width: 236px;
@@ -944,7 +945,7 @@
 }
 
 @media (max-width: 760px) {
-  .dw-topbar .dw-button-primary-gradient {
+  .dw-topbar > .dw-button-primary-gradient {
     display: none;
   }
 

@@ -1,4 +1,5 @@
 # Disposable Story16.9 browser proof; requires exclusive localhost:8080.
+# Selected only with explicit -f; normal docker compose up does not load this file.
 # Never mount operator data. The guarded launcher requires nonroot tmpfs storage.
 # Shared lane is the default. Single-operator uses a fresh project/container/tmpfs:
 # APPROVAL_UI_DECISION_MODE=single-operator docker compose -f ... up -d --build

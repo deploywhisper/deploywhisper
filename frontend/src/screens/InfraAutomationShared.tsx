@@ -161,7 +161,7 @@ export function AutomationFrame({ children }: { children: (context: AutomationCo
   const identity = useIdentity();
   return <Phase6Shell key={identity.epoch} active="automation">{(shell) => {
     if (identity.loading) return <div className="dw-automation" role="status">Checking your verified account…</div>;
-    if (!identity.principal) return <div className="dw-automation"><h1>Account access required</h1><p>{identity.error || "Sign in with your named local account to open permitted project workflows."}</p><AccountLink>Sign in</AccountLink></div>;
+    if (!identity.principal) return <div className="dw-automation"><h1>Account access required</h1><p>{identity.error || "Sign in with your named local account to open permitted project workflows."}</p><p>Your application operator must configure named accounts and grant project access before you can use automation.</p><AccountLink>Sign in</AccountLink></div>;
     return <ProjectScope shell={shell}>{children}</ProjectScope>;
   }}</Phase6Shell>;
 }

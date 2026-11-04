@@ -618,6 +618,39 @@ reconciliation. The run screen separates dispatch acceptance, observed GitHub
 status and verified receiver completion. Real collector admission and provider
 actions remain separate qualification work.
 
+### Normal Compose versus browser-test profiles
+
+`docker compose up -d --build --force-recreate` uses `docker-compose.yml` and your
+persistent application data. The separate `docker-compose.approval-ui.yml` is
+selected only with an explicit `-f` argument for the Story16.9 browser proof. It
+uses a disposable tmpfs database and synthetic accounts/projects; it is not loaded
+by the normal command and must not replace an operator deployment.
+
+The **New project** action in the project menu opens the same creation form on
+Dashboard, History and Settings. It uses the existing project API, then refreshes
+and selects the confirmed project. A project does not automatically create a
+workspace or grant access.
+
+**Automation** links to the implemented workflow/history screens even before
+configuration. It does not enable execution. The normal Compose defaults keep
+named identity disabled and advisory evaluation available. To opt in to local
+named accounts, explicitly set these nonsecret values before recreating:
+
+```sh
+export DEPLOYWHISPER_IDENTITY_PROFILE=local-development
+export DEPLOYWHISPER_IDENTITY_ORIGIN=http://localhost:8080
+docker compose up -d --build --force-recreate
+```
+
+The runtime includes the protected local identity CLI. Create the first named
+account using [the Docker identity setup procedure](docs/infra-automation/identity.md#docker-compose-operator-setup),
+then explicitly grant [project membership](docs/infra-automation/permissions.md#operator-profiles-and-initial-membership)
+and configure the project's [automation policy](docs/infra-automation/workflows.md).
+A login alone grants neither project access nor execution. Do not switch all data
+to the `verified` authorization profile until the required memberships exist.
+The test screenshots show this setup with synthetic fixtures; rebuilding an
+ordinary image does not install accounts, memberships or enabled policies.
+
 ### Core Runtime Variables
 
 - `APP_NAME`

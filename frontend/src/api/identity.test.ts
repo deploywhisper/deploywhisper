@@ -63,3 +63,34 @@ it("uses same-origin no-store session and credential requests without caching pa
   expect(fetchMock.mock.calls[1][1]).toMatchObject({ method: "POST", body: JSON.stringify({ username: "operator", password: "private-password" }) });
   expect(new Headers(fetchMock.mock.calls[2][1].headers).get("X-CSRF-Token")).toBe("csrf-value");
 });
+
+describe("local account configuration", () => {
+  it("reads the public configuration without mutation credentials", async () => {
+    const { getIdentityConfiguration } = await import("./identity");
+    const data = { version: 1, profile: "disabled", configured_origin: null, configuration_valid: true, login_available: false, authorization_profile: "legacy-evaluation", decision_mode: "shared" };
+    const fetcher = vi.fn().mockResolvedValue(Response.json({ data, meta: {} }));
+    vi.stubGlobal("fetch", fetcher);
+    await expect(getIdentityConfiguration()).resolves.toEqual(data);
+    expect(fetcher.mock.calls[0][0]).toBe("/api/v1/auth/configuration");
+    expect(fetcher.mock.calls[0][1]).toMatchObject({ credentials: "same-origin", cache: "no-store" });
+    expect(new Headers(fetcher.mock.calls[0][1].headers).has("X-CSRF-Token")).toBe(false);
+  });
+  it.each(["https://name:secret@example.test", "https://example.test/path", "https://example.test?secret=value", "javascript:secret"]) ("rejects unsafe origin %s", async (configured_origin) => {
+    const { getIdentityConfiguration } = await import("./identity");
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json({ data: { version: 1, profile: "https", configured_origin, configuration_valid: true, login_available: true, authorization_profile: "verified", decision_mode: "shared" }, meta: {} })));
+    await expect(getIdentityConfiguration()).rejects.toMatchObject({ status: 503, message: "Account configuration is unavailable." });
+  });
+  it("keeps embedded sign-in on Settings unless an explicit known safe return is supplied", async () => {
+    const { localAccountReturnTo } = await import("./identity");
+    expect(localAccountReturnTo(null)).toBe("/settings");
+    expect(localAccountReturnTo("https://example.test")).toBe("/settings");
+    expect(localAccountReturnTo("/infra-automation?project_id=7")).toBe("/infra-automation?project_id=7");
+  });
+});
+
+it("preserves a safe configured origin without imposing browser URL normalization", async () => {
+  const { getIdentityConfiguration } = await import("./identity");
+  const configured_origin = "http://localhost:80";
+  vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json({ data: { version: 1, profile: "local-development", configured_origin, configuration_valid: true, login_available: false, authorization_profile: "verified", decision_mode: "shared" }, meta: {} })));
+  await expect(getIdentityConfiguration()).resolves.toMatchObject({ configured_origin });
+});

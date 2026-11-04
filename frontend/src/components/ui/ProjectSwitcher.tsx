@@ -142,7 +142,7 @@ export function ProjectSwitcher({
                 );
               })}
             </div>
-            <button className="dw-project-new" onClick={() => onNewProject?.(query)} type="button">
+            <button className="dw-project-new" onClick={() => { setOpen(false); onNewProject?.(query); }} type="button">
               <span className="dw-project-new-icon">
                 <Plus size={13} />
               </span>

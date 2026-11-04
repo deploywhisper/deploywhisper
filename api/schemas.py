@@ -107,6 +107,29 @@ class IdentityMetaPayload(MetaPayload):
     correlation_id: str
 
 
+class IdentityConfigurationData(BaseModel):
+    """Public, nonsecret runtime identity configuration."""
+
+    model_config = ConfigDict(extra="forbid", strict=True)
+    version: Annotated[int, Field(strict=True, ge=1, le=1)] = 1
+    profile: Literal["disabled", "local-development", "https", "unavailable"]
+    configured_origin: str | None
+    configuration_valid: bool
+    login_available: bool
+    authorization_profile: Literal["legacy-evaluation", "verified", "unavailable"]
+    decision_mode: Literal["shared", "single-operator", "unavailable"]
+
+
+class IdentityConfigurationMetaPayload(IdentityMetaPayload):
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+
+class IdentityConfigurationResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    data: IdentityConfigurationData
+    meta: IdentityConfigurationMetaPayload
+
+
 class HumanSessionData(BaseModel):
     principal: VerifiedPrincipal
     csrf_token: str

@@ -5,3 +5,10 @@
 .dw-account-access a { color: var(--dw-brand-dark); }
 .dw-account-access form { max-width: 480px; }
 .dw-account-access code { font-family: var(--dw-font-mono); overflow-wrap: anywhere; }
+.dw-settings-account { max-width: none; margin-bottom: 20px; }
+.dw-account-configuration { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin: 0; }
+.dw-account-configuration dt { color: var(--dw-muted); font-size: 12px; }
+.dw-account-configuration dd { margin: 6px 0 0; color: var(--dw-text); font-size: 13px; overflow-wrap: anywhere; }
+.dw-account-setup summary { cursor: pointer; color: var(--dw-text); font-weight: 600; }
+.dw-account-setup pre { overflow-x: auto; white-space: pre-wrap; overflow-wrap: anywhere; padding: 14px; border: 1px solid var(--dw-border); border-radius: 10px; background: var(--dw-bg); color: var(--dw-text); font-size: 12px; line-height: 1.65; }
+@media (max-width: 760px) { .dw-account-configuration { grid-template-columns: 1fr; } }
