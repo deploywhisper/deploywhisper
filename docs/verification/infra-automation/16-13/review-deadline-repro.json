@@ -1,0 +1,24 @@
+{
+  "create_entered_monotonic": 64370.647776625,
+  "host_deadline_upper_bound": 64376.647776625,
+  "controller_killed_seconds_after_create_entered": 3.858624290995067,
+  "process_tree": "PID                 PPID                SID                 COMMAND\n41278               41253               41278               python\n41302               41278               41302               python\n41310               41302               41310               python\n41311               41310               41310               python\n",
+  "checked_after_original_deadline_seconds": 6.309443291000207,
+  "running_after_original_deadline": true,
+  "exit_seconds_after_create_entered": 9.500383165999665,
+  "exit_code": 124,
+  "container_running_at_end": false,
+  "production_recovery": [
+    {
+      "task_digest": "8db9e40ac60eeb943c3b9f890a8dfdc4e6d1d543bf90751b2b1dafdff82e8638",
+      "cleanup_complete": true
+    }
+  ],
+  "container_absent": true,
+  "profile_timeout_seconds": 6,
+  "injected_create_delay_seconds": 3,
+  "lease_seconds": 60,
+  "image_id": "sha256:6a19e2ca78fd94aa2e6610ebe2229217f1a6836dd251ca910c811141cb06c4a2",
+  "reproduction_kind": "real Linux container and production launcher; bounded synthetic delay in host create adapter",
+  "runtime_source_modified": false
+}

@@ -612,7 +612,7 @@ operator-owned origins and environment-backed credential references using the
 [registered targets and handoff guide](docs/infra-automation/handoff-contract-v1.md#operator-configuration-and-limits).
 Default execution ports remain unavailable; handoff admission also requires a
 qualified server-owned material-generation witness covering the complete decision
-graph. Runner enrollment, credential rotation/revocation, and the outbound attempt protocol are documented in the [runner protocol guide](docs/infra-automation/runner-protocol-v1.md). Production collection remains unavailable pending isolation/collector qualification.
+graph. Runner enrollment, credential rotation/revocation, and the outbound attempt protocol are documented in the [runner protocol guide](docs/infra-automation/runner-protocol-v1.md). The [isolated execution profile](docs/infra-automation/runner-isolation-v1.md) adds a qualified operator-host boundary; production collector/custody integration remains unavailable pending its owning story.
 
 The [reference receiver and custody guide](docs/infra-automation/receiver-v1.md)
 provides durable synthetic receiver recovery; the [online receiver contract](docs/infra-automation/receiver-online-v1.md)
