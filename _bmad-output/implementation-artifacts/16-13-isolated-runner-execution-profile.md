@@ -1,6 +1,6 @@
 # Story 16.13: Isolated Runner Execution Profile
 
-Status: backlog
+Status: review
 Preparation: refined
 Release: v1.5.0
 
@@ -37,18 +37,28 @@ Coverage intent: Delta over the v1.4.0 baseline. These exact mapped requirements
 
 ## Tasks / Subtasks and bounded ownership
 
-- [ ] **Packet 1 — Runner/operator owner: launcher enforcement (AC 1,2,6).** Owned output: `infra_automation/runner/sandbox.py and protected reference host launcher (planned)`.
-  - [ ] Non-root Linux container, dropped privileges/capabilities, scoped mounts, no Docker socket in app/task and enforceable CPU/memory/disk/time/network controls; deny unsupported host.
-  - [ ] Attach focused proof for the referenced ACs, implementation docs and reviewer findings before packet acceptance.
-- [ ] **Packet 2 — Runner/security owner: checkout and catalog (AC 1–3).** Owned output: `infra_automation/runner/source.py and catalog.py (planned), operator-local protected tool configuration`.
-  - [ ] Admit immutable source/trust and pin checksummed tool/provider/module lockfiles; strip hooks/config/helpers, canonicalize paths/no-follow opens, typed allowlisted argv without shell.
-  - [ ] Attach focused proof for the referenced ACs, implementation docs and reviewer findings before packet acceptance.
-- [ ] **Packet 3 — Runner/security owner: environment and execution lifetime (AC 4,5).** Owned output: `runner execution/process module and config.py references (planned)`.
-  - [ ] Allowlisted task environment/credential identity, distinct receiver access, process-tree termination and cancellation ownership, bounded streaming output/upload and cleanup.
-  - [ ] Attach focused proof for the referenced ACs, implementation docs and reviewer findings before packet acceptance.
-- [ ] **Packet 4 — Test/documentation owner: real hostile qualification (AC 1–6).** Owned output: `tests/test_infra_automation runner corpus, isolated Linux harness and docs/infra-automation`.
-  - [ ] Run provider/external-data subprocess, hook/symlink/options, denied egress, quota/disk-full, child/grandchild cancellation and credential inheritance tests; record supported settings and misses.
-  - [ ] Attach focused proof for the referenced ACs, implementation docs and reviewer findings before packet acceptance.
+- [x] **Packet 1 — Runner/operator owner: launcher enforcement (AC 1,2,6).** Owned output: `infra_automation/runner/sandbox.py and protected reference host launcher (planned)`.
+  - [x] Non-root Linux container, dropped privileges/capabilities, scoped mounts, no Docker socket in app/task and enforceable CPU/memory/disk/time/network controls; deny unsupported host.
+  - [x] Attach focused proof for the referenced ACs, implementation docs and reviewer findings before packet acceptance.
+- [x] **Packet 2 — Runner/security owner: checkout and catalog (AC 1–3).** Owned output: `infra_automation/runner/source.py and catalog.py (planned), operator-local protected tool configuration`.
+  - [x] Admit immutable source/trust and pin checksummed tool/provider/module lockfiles; strip hooks/config/helpers, canonicalize paths/no-follow opens, typed allowlisted argv without shell.
+  - [x] Attach focused proof for the referenced ACs, implementation docs and reviewer findings before packet acceptance.
+- [x] **Packet 3 — Runner/security owner: environment and execution lifetime (AC 4,5).** Owned output: `runner execution/process module and config.py references (planned)`.
+  - [x] Allowlisted task environment/credential identity, distinct receiver access, process-tree termination and cancellation ownership, bounded streaming output/upload and cleanup.
+  - [x] Attach focused proof for the referenced ACs, implementation docs and reviewer findings before packet acceptance.
+- [x] **Packet 4 — Test/documentation owner: real hostile qualification (AC 1–6).** Owned output: `tests/test_infra_automation runner corpus, isolated Linux harness and docs/infra-automation`.
+  - [x] Run provider/external-data subprocess, hook/symlink/options, denied egress, quota/disk-full, child/grandchild cancellation and credential inheritance tests; record supported settings and misses.
+  - [x] Attach focused proof for the referenced ACs, implementation docs and reviewer findings before packet acceptance.
+
+### Review Findings
+
+- [x] [Review][Patch][P1][R1] Preserve the original execution deadline in the bootstrap [`infra_automation/runner/bootstrap.py:277`] — actual delayed-setup/controller-death reproduction exceeded a six-second budget and exited at 9.50s.
+- [x] [Review][Patch][P2][R2] Validate or reject OpenTofu .tofu/.tofu.json configuration [`infra_automation/runner/source.py:491`] — actual pinned-tool execution admitted an outside module and finalized evidence after resolving credentials.
+- [x] [Review][Patch][P2][R3] Require private staging before exposing read-only snapshot files [`infra_automation/runner/source.py:540`] — accepted 0755 staging exposes private repository copies as 0555/0444 to other host users.
+- [x] [Review][Patch][P2][R4] Retain ambiguous create outcomes until safely reconciled [`infra_automation/runner/sandbox.py:239`] — one empty lookup currently clears pending ownership before a potentially late daemon create.
+- [x] [Review][Patch][P2][R5] Repair or remove the nonfunctional standalone provider_probe command [`infra_automation/runner/catalog.py:184`] — it requires JSON stdin but the bootstrap supplies DEVNULL.
+
+[Formal BMad review and reproduction evidence](../../docs/verification/infra-automation/16-13/code-review.md). These findings superseded the development-only clean conclusion. They are now resolved with fresh [repair and qualification evidence](../../docs/verification/infra-automation/16-13/review-fixes.md); original counterexamples remain recorded.
 
 Each packet is a bounded review unit under this stable story ID; split large packets after 16.0 estimation instead of silently broadening scope. One story branch follows Git Flow; coordinate shared-file edits and do not revert other work.
 
@@ -69,11 +79,11 @@ Each packet is a bounded review unit under this stable story ID; split large pac
 
 ## Required implementation verification
 
-- [ ] Register new `tests/test_infra_automation` directories in `scripts/ci-local.sh` and affected GitHub discovery/shards; root discovery alone skips non-package test directories.
-- [ ] For every Pydantic/schema/dataclass/constructor change, use repository-wide `rg` searches for direct instantiations/fixtures and update all consumers, including CLI/agent/action/report compatibility where affected.
-- [ ] Run `./.venv/bin/python -m unittest discover -q`, story-focused tests and exactly `./.venv/bin/python -m pytest tests/test_api tests/test_cli tests/test_infra -v --tb=short` for affected API/CLI/infra contracts.
-- [ ] Run `./.venv/bin/ruff check .`, **`./.venv/bin/ruff format --check .` repo-wide**, `bash scripts/ci-local.sh` and `git diff --check`; add applicable static/security/type checks. Record commands and actual results rather than assumed passes.
-- [ ] UI validation not applicable only if no rendered surface changes; if a UI surface is touched, use the complete composed-app Playwright/keyboard/axe/screenshot loop required by project context before review.
+- [x] Register new `tests/test_infra_automation` directories in `scripts/ci-local.sh` and affected GitHub discovery/shards; root discovery alone skips non-package test directories.
+- [x] For every Pydantic/schema/dataclass/constructor change, use repository-wide `rg` searches for direct instantiations/fixtures and update all consumers, including CLI/agent/action/report compatibility where affected.
+- [x] Run `./.venv/bin/python -m unittest discover -q`, story-focused tests and exactly `./.venv/bin/python -m pytest tests/test_api tests/test_cli tests/test_infra -v --tb=short` for affected API/CLI/infra contracts.
+- [x] Run `./.venv/bin/ruff check .`, **`./.venv/bin/ruff format --check .` repo-wide**, `bash scripts/ci-local.sh` and `git diff --check`; add applicable static/security/type checks. Record commands and actual results rather than assumed passes.
+- [x] UI validation not applicable only if no rendered surface changes; if a UI surface is touched, use the complete composed-app Playwright/keyboard/axe/screenshot loop required by project context before review.
 
 ## References
 
@@ -86,18 +96,78 @@ Each packet is a bounded review unit under this stable story ID; split large pac
 
 ### Agent Model Used
 
-Documentation preparation only; implementation agent/version to be recorded when gates open.
+Codex with native implementation and independent verification subagents; 2026-11-04.
 
 ### Debug Log References
 
-Not executed: application, runner, receiver, Compose, browser, fault/load or production qualification. This preparation records obligations, not passing results.
+- Latest review repair verification: real qualification passed **172 assertions** (19 task, 3 controller-death, 17 admission cases); delayed setup stopped at 6.092s against original 6s budget plus 0.75s tolerance. Current source/image pins match; no owned containers remain. Independent focused repair suite: **68 tests, 135 subtests**, no residual actionable findings.
+- Latest root unittest: **1,701 tests, 3 skips**, OK in 831.172s. Exact API/CLI/infra pytest shard: **734 passed, 1 skipped, 2,353 subtests**, 523.49s. Full `bash scripts/ci-local.sh`: **exit 0, no retries**, all ten directories (3,151 test executions) passed. Final Ruff check/format (532 files), scoped six-module mypy, configured Bandit medium/high gate and diff check passed. Full commands/results and preserved failure history: [review repair record](../../docs/verification/infra-automation/16-13/review-fixes.md).
+
+- `./.venv/bin/python scripts/qualify_runner_isolation.py --build`: accepted actual Linux run at 2026-11-04T08:19:15Z, 17 task cases + two host-controller death/recovery cases + nine admission cases; all 130 assertions passed. An unchanged-source repeat passed the same corpus. Current image/source pins and runtime source hashes match; no owned containers remain. [Qualification evidence](../../docs/verification/infra-automation/16-13/README.md) and [results](../../docs/verification/infra-automation/16-13/results.json).
+- Final focused command: `./.venv/bin/python -m pytest tests/test_infra_automation/test_runner_source.py tests/test_infra_automation/test_runner_catalog.py tests/test_infra_automation/test_runner_sandbox.py tests/test_infra_automation/test_runner_execution.py tests/test_infra_automation/test_runner_execution_boundaries.py tests/test_infra_automation/test_runner_isolation_qualification.py -q` — 43 passed, 83 subtests, 14.01s.
+- `./.venv/bin/python -m unittest discover -q` — 1,677 tests, three skips, OK in 809.576s.
+- Exact `./.venv/bin/python -m pytest tests/test_api tests/test_cli tests/test_infra -v --tb=short` — 734 passed, one skipped, 2,353 subtests in 520.97s.
+- `bash scripts/ci-local.sh` — exit 0 with no retries; all ten directories passed (69 analysis, 343 API, 102 CLI, 51 docs, 290 infra, 897 automation, 76 LLM, 22 models, 43 parsers, 1,232 services; 3,125 test executions, three existing skips). Dependency checks, compilation, skill/prompt-injection checks and configured security gates also passed.
+- Repo-wide Ruff check and format check (532 files), scoped mypy for the six new runtime modules, configured Bandit medium/high gate and diff checks passed. A broader imported-module mypy run exposed pre-existing PyYAML-stub/content_security issues; no unrelated typing/dependency changes were made.
+- Independent lifecycle review and regression repairs: [development review](../../docs/verification/infra-automation/16-13/review.md). Unit subprocess tests are not misrepresented as live containment proof.
 
 ### Completion Notes List
 
-- Preparation: refined. Status remains backlog. All implementation tasks unchecked; Story 16.0 and earlier dependency acceptance remain unresolved.
-- UI validation: Not executed; applicability to be recorded against the actual change.
-- Independent review, actual command results, residual risks and release qualification evidence must be recorded during implementation.
+- Latest review repairs: R1–R5 resolved, all action items checked, story returned to review. Reused bounded source/command validators, ownership primitives and existing transaction boundaries. No new dependency or app database migration; the private operator journal adds a nullable immutable-container acknowledgement without discarding history. Original execution budgets now survive setup/controller death; all OpenTofu formats are admitted consistently; snapshots stay private; unknown creates remain pending; unsupported standalone provider command is removed. Current real qualification has 172 assertions; earlier 130-assertion development results below are historical.
+
+- 2026-11-04 formal BMad code review: changes requested (one P1, four P2); story returned to in-progress. Five patch actions were opened at that review and are now resolved. Earlier development verification below is historical and does not establish coverage of the new counterexamples.
+
+- Readiness: PR209 merged Story16.12 as e2690a7 after its findings were repaired and CI passed. The prior review tracker state is reconciled to done; no GitHub approval review is invented. Story16.0 accepted qualification/contracts remain unchanged. Historical unresolved-entry wording above is superseded by this evidence.
+- Implemented separate operator-owned catalog/source admission, Linux container launch, fixed in-container precredential verification and bounded execution lifetime. The application/default runner handler remains unable to launch production collection; no app route, app Docker socket, new dependency or app database migration was introduced.
+- Reuse: existing closed-model/task-scope contracts, content screening and private-file primitives; the same durable engine remains authoritative. Local SQLite stores only execution identity/status/ownership metadata. Source snapshots are explicit caller-owned immutable resources with bounded no-follow cleanup.
+- Source admission ignores original Git configuration/hooks/helpers and processes a bounded object snapshot with fixed commands; module checks run in bounded subprocesses. Only pinned, contained vendored modules are supported. Catalog/registration mutation, untrusted PR inputs, path/option injection and links deny before credential resolution.
+- The same task container proves real UID/capability/seccomp/cgroup/mount/network and file-pin controls before receiving collector-only values through stdin. A non-dumpable fixed PID1 and stacked scheduling/process-control filter enforce the original wall/lease bound even after controller death and under CPU load.
+- Repaired review findings: finalization cancellation/expiry, journal lock contention, mutable lease identity, container-name ownership and uncertain recovery. Final cancellation wins transactionally; unknown cleanup never produces finalizable evidence. Completed-writer overflow and raw/URL/split credential echoes are rejected without retained output or credential values.
+- Qualification applies only to the recorded offline Linux ARM64, Docker29.1.3, LinuxKit6.12.54 profile and image sha256:6a19e2ca78fd94aa2e6610ebe2229217f1a6836dd251ca910c811141cb06c4a2. Dormant kernel tunnels must be down/addressless/routeless. No native macOS sandbox, arbitrary network, production cloud credential/IAM, collector/custody integration or universal provider-safety claim is made. Story16.14 and release qualification own those remaining integrations.
+- New test files use the existing registered infra-automation directory; no CI discovery directory was omitted. Repository-wide searches covered new source/profile/execution/journal/credential constructors and fixtures. The evidence drift guard requires real requalification when isolation runtime or image-source pins change.
+- UI validation not applicable: no rendered surface or browser interaction changed. Documentation and schema/state compatibility remain aligned with the scoped operator profile.
+- Development verification is complete; story and sprint status are review. All packet/verification checkboxes are complete. BMad help routes the next major workflow to bmad-code-review; no commit, push or PR is claimed by this development pass.
 
 ### File List
 
-This story specification only; planned ownership paths above are not implemented files.
+- `README.md`
+- `_bmad-output/implementation-artifacts/16-12-runner-enrollment-and-attempt-protocol.md`
+- `_bmad-output/implementation-artifacts/16-13-isolated-runner-execution-profile.md`
+- `_bmad-output/implementation-artifacts/sprint-status.yaml`
+- `_bmad-output/project-context.md`
+- `docs/infra-automation/runner-isolation-v1.md`
+- `docs/verification/infra-automation/16-13/README.md`
+- `docs/verification/infra-automation/16-13/code-review.md`
+- `docs/verification/infra-automation/16-13/results.json`
+- `docs/verification/infra-automation/16-13/review-deadline-repro.json`
+- `docs/verification/infra-automation/16-13/review-fixes.md`
+- `docs/verification/infra-automation/16-13/review.md`
+- `infra_automation/runner/bootstrap.py`
+- `infra_automation/runner/catalog.py`
+- `infra_automation/runner/execution.py`
+- `infra_automation/runner/execution_profile.py`
+- `infra_automation/runner/sandbox.py`
+- `infra_automation/runner/source.py`
+- `scripts/qualify_runner_isolation.py`
+- `tests/fixtures/infra_automation/qualification/16_13/Dockerfile`
+- `tests/fixtures/infra_automation/qualification/16_13/Dockerfile.dockerignore`
+- `tests/fixtures/infra_automation/qualification/16_13/probe.py`
+- `tests/fixtures/infra_automation/qualification/16_13/provider_probe.py`
+- `tests/fixtures/infra_automation/qualification/16_13/source/.terraform.lock.hcl`
+- `tests/fixtures/infra_automation/qualification/16_13/source/main.tf`
+- `tests/fixtures/infra_automation/qualification/16_13/source/source.lock`
+- `tests/fixtures/infra_automation/qualification/16_13/tofurc`
+- `tests/test_infra_automation/test_runner_catalog.py`
+- `tests/test_infra_automation/test_runner_execution.py`
+- `tests/test_infra_automation/test_runner_execution_boundaries.py`
+- `tests/test_infra_automation/test_runner_isolation_qualification.py`
+- `tests/test_infra_automation/test_runner_sandbox.py`
+- `tests/test_infra_automation/test_runner_source.py`
+
+## Change Log
+
+- 2026-11-04: Implemented isolated operator profile and real hostile qualification; completed fresh focused/root/API/full-CI validation and real hostile qualification; ready for code review.
+
+- 2026-11-04: Layered BMad code review recorded five patch findings, including two real Linux counterexamples; returned story/sprint status to in-progress. No runtime edits or publication.
+
+- 2026-11-04: Resolved all five review findings and adjacent real qualification cleanup/timeout races; refreshed pinned-image evidence and completed clean full CI. Ready for re-review.

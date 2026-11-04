@@ -1,0 +1,1 @@
+{"modules":[],"provider":{"binary_sha256":"f9994ee228b86d34c289d858af46f758921f34393a27a1bb5677761c08228f50","name":"hashicorp/external","version":"2.3.5"},"tool":{"binary_sha256":"d5c690023baebe8bf2cfb2062e292186f4797a173db22c973bd9de45cb68a62f","name":"OpenTofu","version":"1.13.1"}}

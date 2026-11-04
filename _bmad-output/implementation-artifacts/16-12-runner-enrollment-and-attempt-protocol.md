@@ -1,6 +1,6 @@
 # Story 16.12: Runner Enrollment and Attempt Protocol
 
-Status: review
+Status: done
 Preparation: refined
 Release: v1.5.0
 
@@ -185,3 +185,5 @@ Codex primary agent with native implementation and independent review subagents;
 - 2026-11-04: BMad layered code review reproduced four defects, added patch action items and returned story/sprint status to in-progress; no runtime edits or remote push.
 
 - 2026-11-04: Resolved all four reviewer findings, added security/quota/pagination regressions and completed fresh full CI with exit0; story ready for re-review.
+
+- 2026-11-04: Tracking reconciled after PR209 merged as e2690a7 with successful CI, including the recovered services shard and CI Summary. No GitHub review approval is claimed; independent repair verification is retained above.
