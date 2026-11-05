@@ -12,6 +12,7 @@ from infra_automation import claims as engine
 from infra_automation.lifecycle import LifecycleError
 from infra_automation.runner import claims
 from models.repositories import infra_automation_runs as repo
+from models.repositories import infra_automation_runners as runner_repo
 from services import project_service as authorization
 from services import infra_automation_support as support
 
@@ -27,7 +28,6 @@ def queue_assignment(
 ):
     """Trusted coordinator port; no HTTP caller can enqueue or select task scope."""
     from models.tables import (
-        InfraAutomationRunner,
         InfraAutomationRunnerTask,
         InfraAutomationAttempt,
     )
@@ -56,16 +56,9 @@ def queue_assignment(
             attempt = repo.get_attempt(session, attempt_id)
             if attempt is None or attempt.state != "pending":
                 raise LifecycleError(409)
-            rows = session.scalars(
-                select(InfraAutomationRunner)
-                .where(
-                    InfraAutomationRunner.project_id == attempt.project_id,
-                    InfraAutomationRunner.workspace_id == attempt.workspace_id,
-                    InfraAutomationRunner.status == "active",
-                )
-                .order_by(InfraAutomationRunner.id)
-                .limit(1000)
-            ).all()
+            rows = runner_repo.routing_candidates(
+                session, attempt.project_id, attempt.workspace_id, now
+            )
             busy = set(
                 session.scalars(
                     select(InfraAutomationRunnerTask.runner_id)
