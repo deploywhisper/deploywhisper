@@ -6,6 +6,7 @@ from typing import Annotated, Literal
 
 from pydantic import Field, StrictBool, StrictInt, StrictStr
 
+from infra_automation.collection_contracts import CollectionProvenance
 from infra_automation.contracts import ClosedModel, CommitSha, Digest, Identifier
 from infra_automation.lifecycle import Positive
 from infra_automation.state import AttemptState, RunRequest, RunState, UTCText
@@ -37,7 +38,7 @@ class PreflightLinkView(ClosedModel):
     manifest_id: Identifier
     report_id: Positive
     report_url: StrictStr
-    provenance: UploadedProvenance
+    provenance: UploadedProvenance | CollectionProvenance
     limitations: Annotated[list[StrictStr], Field(max_length=50)]
     context_todos: Annotated[list[StrictStr], Field(max_length=50)]
     approval_eligible: Literal[False] = False

@@ -469,12 +469,20 @@ class ReceiverHttpRuntimeIntegrationTests(ReceiverReconciliationTests):
                 Path(directory) / "receiver", Port(), secret.encode()
             )
             custody = message.binding.provenance.custody
-            receiver.custody.publish(
-                custody.handle,
-                self.synthetic_raw,
-                message.binding.provenance.source.model_dump(mode="json"),
-                custody.expires_at,
-            )
+            from datetime import datetime
+
+            # The shared decision fixture deliberately advances its clock by one
+            # second. Custody must use that same clock, not depend on test speed.
+            with patch(
+                "infra_automation.receiver_custody.datetime", wraps=datetime
+            ) as clock:
+                clock.now.return_value = self.now
+                receiver.custody.publish(
+                    custody.handle,
+                    self.synthetic_raw,
+                    message.binding.provenance.source.model_dump(mode="json"),
+                    custody.expires_at,
+                )
             result = receiver.run(operation["id"], operation["receiver_binding_digest"])
             self.assertEqual(result["counted_actions"], 1)
             self.assertTrue(result["callback_delivered"])

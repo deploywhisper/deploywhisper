@@ -669,6 +669,8 @@ def _write(session, row, expected_version, values, event, now, bounds=None):
         )
         if result.rowcount != 1:
             _deny()
+        if values.get("state") in ("failed", "cancelled", "timed_out"):
+            repo.clear_runner_staging(session, row.id)
         if payload_delta:
             _charge(
                 session, repo.get_run(session, row.run_id), payload_delta, now, bounds

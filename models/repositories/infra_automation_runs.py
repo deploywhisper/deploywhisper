@@ -500,6 +500,8 @@ def transition_attempt(
         )
         if cast(CursorResult, result).rowcount != 1:
             return None
+        if state in ("failed", "cancelled", "timed_out", "succeeded"):
+            clear_runner_staging(session, attempt_id)
         _audit(
             session,
             row,
@@ -569,3 +571,19 @@ def commit_output(
             now=timestamp,
         )
     return get_attempt(session, attempt_id)
+
+
+def clear_runner_staging(session, attempt_id):
+    """Erase unfinished runner bytes within the caller's fenced transition."""
+    from models.tables import InfraAutomationRunnerTask
+
+    attempt = get_attempt(session, attempt_id)
+    if attempt is None or attempt.step_kind != "admitted_collection":
+        return
+    binding = session.get(InfraAutomationRunnerTask, attempt_id)
+    if binding is None:
+        return
+    binding.upload_bytes = None
+    if attempt is not None and attempt.output_json is None:
+        attempt.uploads_json = "[]"
+    session.flush()

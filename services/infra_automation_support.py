@@ -143,6 +143,10 @@ def validate_definition(
         limits = config.workflow_validation_limits()
     except ValueError:
         raise LifecycleError(503) from None
+    if registry is None:
+        from services.infra_automation_collection import configured_registry
+
+        registry = configured_registry()
     result = validate_workflow(raw, limits=limits, registry_contract=registry)
     if result.valid:
         definition = result.definition

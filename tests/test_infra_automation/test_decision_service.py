@@ -337,6 +337,61 @@ class DecisionServiceTests(LifecycleCase):
             ).GUARDS.items():
                 db.exec_driver_sql(f"CREATE TRIGGER {name} {body}")
 
+    def test_collected_runner_provenance_matches_decision_and_rejects_new_fence(self):
+        from infra_automation.collection_contracts import CollectionProvenance
+        from infra_automation.runner.protocol import TaskScope
+
+        with self.factory.begin() as db:
+            manifest = db.get(InfraAutomationArtifactManifest, "manifest")
+            old = SyntheticCollectionEnvelope.model_validate_json(
+                manifest.collection_bytes
+            )
+            provenance = CollectionProvenance(
+                scope=TaskScope(
+                    runner_id="collector",
+                    project_id="100",
+                    workspace_id="100",
+                    run_id=self.run.id,
+                    step_id="collect",
+                    attempt=1,
+                    fence=1,
+                    coordinator_generation=1,
+                    authorization_epoch=self.document.authority.authorization_epoch,
+                    restore_epoch=self.document.authority.restore_epoch,
+                    lease_deadline=support.utc(self.deadline),
+                    audience="runner-task-v1",
+                ),
+                repository_id=old.repository_id,
+                commit_sha=old.commit_sha,
+                profile_digest=old.profile_digest,
+                tool="opentofu",
+                tool_version="1.13.1",
+                command_digest=old.command_digest,
+                argv_digest=old.argv_digest,
+                raw_local_digest=old.raw_local_digest,
+                sanitized_digest=old.sanitized_digest,
+                exit_code=0,
+                collected_at=old.collected_at,
+                source_deadline=old.source_deadline,
+                custody=self.material.binding.provenance.custody.model_dump(
+                    mode="json"
+                ),
+            )
+            manifest.collection_bytes = support.canonical(
+                provenance.model_dump(mode="json")
+            )
+            manifest.collection_digest = support.digest(manifest.collection_bytes)
+        self.assertEqual(self.pending()["status"], "pending")
+        with self.factory.begin() as db:
+            db.scalar(
+                select(InfraAutomationAttempt).where(
+                    InfraAutomationAttempt.run_id == self.run.id,
+                    InfraAutomationAttempt.step_id == "collect",
+                )
+            ).fence = 2
+        with self.assertRaises(LifecycleError):
+            self.pending()
+
     def pending(self):
         with self.credentials():
             return self.service.request_decision(self.run.id, "decision")

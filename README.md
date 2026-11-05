@@ -745,6 +745,7 @@ Project documentation currently lives in a few places:
 - [Registered Targets, Durable Handoffs, and Operator Configuration](./docs/infra-automation/handoff-contract-v1.md)
 - [Protected Synthetic Receiver and Custody](./docs/infra-automation/receiver-v1.md)
 - [Online Receiver and Outcome Reconciliation](./docs/infra-automation/receiver-online-v1.md)
+- [Local Plan Collection, Provenance and Custody](./docs/infra-automation/collection.md)
 - [Workflow Editor, Account Access, and Run History](./docs/infra-automation/browser-ui.md)
 - [CI Guide](./docs/ci.md)
 - [CI Secrets Checklist](./docs/ci-secrets-checklist.md)

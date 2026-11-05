@@ -10,7 +10,10 @@ from pydantic import Field
 from sqlalchemy import select, update
 
 from infra_automation import claims as engine
-from infra_automation.artifact_intake import screen_artifacts
+from infra_automation.artifact_intake import (
+    screen_artifacts,
+    screen_decoded_credentials,
+)
 from infra_automation.contracts import ClosedModel
 from infra_automation.lifecycle import LifecycleError
 from infra_automation.runner.protocol import TaskScope, parse_message
@@ -201,6 +204,26 @@ def _secret_free(value, task_token, runner_token):
         raise LifecycleError(422)
 
 
+def _collection_secret_free(raw, collected, retained_logs, task_token, runner_token):
+    """Recheck both staged and fresh artifacts with the current bearer corpus."""
+    forbidden = tuple(
+        secret
+        for secret in ("enroll-v1-", "runner-v1-", task_token, runner_token)
+        if type(secret) is str and secret
+    )
+    _secret_free(raw.decode("utf-8"), task_token, runner_token)
+    screen_decoded_credentials(
+        collected.provenance.model_dump(mode="json"), sensitive_values=forbidden
+    )
+    for artifact in collected.artifacts:
+        _secret_free(
+            retained_logs + artifact.name + artifact.content, task_token, runner_token
+        )
+        screen_decoded_credentials(
+            json.loads(artifact.content), sensitive_values=forbidden
+        )
+
+
 def operate(
     session,
     message,
@@ -340,14 +363,22 @@ def operate(
         elif message.operation == "upload":
             if binding.upload_id is not None:
                 raise LifecycleError(409)
-            raw = screened_upload(upload_bytes, message.upload_digest)
-            _secret_free(raw.decode("utf-8"), task_token, runner_token)
-            for artifact in json.loads(raw):
-                _secret_free(
-                    retained_logs + artifact["name"] + artifact["content"],
-                    task_token,
-                    runner_token,
+            from services import infra_automation_collection as collection
+
+            collected = None
+            if type(upload_bytes) is bytes and upload_bytes.startswith(b"{"):
+                collected = collection.parse_upload(upload_bytes, message.upload_digest)
+                collection.validate_bound_upload(
+                    session, handle, scope, runner, collected, now=live_authority()
                 )
+                raw = upload_bytes
+            else:
+                # Collection attempts cannot manufacture success from an unbound
+                # legacy artifact list; every upload needs authenticated provenance.
+                raise LifecycleError(422)
+            _collection_secret_free(
+                raw, collected, retained_logs, task_token, runner_token
+            )
             # Screening/parsing can consume lease time. Recheck the current
             # credential, coordinator and attempt before retaining any bytes.
             now = live_authority()
@@ -373,33 +404,78 @@ def operate(
                 now=now,
             )
         elif message.operation == "complete":
-            if (
-                binding.upload_id is None
-                or binding.upload_id != message.atomic_upload_id
-                or binding.upload_bytes is None
-                or support.digest(binding.upload_bytes) != binding.upload_digest
-            ):
-                raise LifecycleError(409)
-            if message.state == "succeeded":
-                now = live_authority()
+            if message.state == "failed":
+                if (
+                    message.atomic_upload_id is not None
+                    and message.atomic_upload_id != binding.upload_id
+                ):
+                    raise LifecycleError(409)
+                binding.upload_bytes = None
+                row = engine._write(
+                    session,
+                    row,
+                    row.version,
+                    {"uploads_json": "[]"},
+                    "engine.attempt_upload_cleanup",
+                    live_authority(),
+                )
+            else:
+                if (
+                    binding.upload_id is None
+                    or binding.upload_id != message.atomic_upload_id
+                    or binding.upload_bytes is None
+                    or support.digest(binding.upload_bytes) != binding.upload_digest
+                ):
+                    raise LifecycleError(409)
+                output = OutputReference(
+                    kind="screened_artifacts",
+                    reference=binding.upload_id,
+                    digest=binding.upload_digest,
+                )
+                if not binding.upload_bytes.startswith(b"{"):
+                    raise LifecycleError(422)
+                if binding.upload_bytes.startswith(b"{"):
+                    from services import infra_automation_collection as collection
+
+                    collected = collection.parse_upload(
+                        binding.upload_bytes, binding.upload_digest
+                    )
+                    _collection_secret_free(
+                        binding.upload_bytes,
+                        collected,
+                        retained_logs,
+                        task_token,
+                        runner_token,
+                    )
+                    manifest = collection.finalize_upload(
+                        session, handle, scope, runner, collected, now=live_authority()
+                    )
+                    output = OutputReference(
+                        kind="screened_artifacts",
+                        reference=manifest.id,
+                        digest=manifest.digest,
+                    )
+                    row = engine.register_upload(
+                        session,
+                        handle,
+                        expected_version=row.version,
+                        reference=output,
+                        now=live_authority(),
+                    )
+                    binding.upload_bytes = None
                 row = engine.commit_output(
                     session,
                     handle,
                     expected_version=row.version,
-                    output=OutputReference(
-                        kind="screened_artifacts",
-                        reference=binding.upload_id,
-                        digest=binding.upload_digest,
-                    ),
-                    now=now,
+                    output=output,
+                    now=live_authority(),
                 )
-            now = live_authority()
             row = engine.complete_attempt(
                 session,
                 handle,
                 expected_version=row.version,
                 state=message.state,
-                now=now,
+                now=live_authority(),
             )
         now = live_authority()
         repo.append_audit(

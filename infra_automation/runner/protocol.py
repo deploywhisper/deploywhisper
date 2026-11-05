@@ -113,6 +113,12 @@ class RunnerMessage(RunnerClosed):
             "upload": {"upload_digest", "atomic_upload_id"},
             "complete": {"atomic_upload_id", "state"},
         }[self.operation]
+        if (
+            self.operation == "complete"
+            and self.state == "failed"
+            and self.atomic_upload_id is None
+        ):
+            expected = {"state"}
         present = {
             key
             for key in ("log", "upload_digest", "atomic_upload_id", "state")

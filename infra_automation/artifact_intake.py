@@ -37,6 +37,42 @@ def _has_nontext(value: str) -> bool:
     )
 
 
+def screen_decoded_credentials(value, *, sensitive_values=()):
+    """Reject known credentials in every decoded JSON key and string value.
+
+    This local boundary complements the general redactor without changing its
+    field-specific semantics. Callers keep raw-text and sensitive-mask checks.
+    Neither errors nor return values expose the rejected value.
+    """
+    try:
+        encoded = json.dumps(value, ensure_ascii=False, allow_nan=False).encode("utf-8")
+        if len(encoded) > 131072:
+            raise ValueError
+        sensitive = tuple(sensitive_values)
+        pending = [(value, 0)]
+        visited = 0
+        while pending:
+            item, depth = pending.pop()
+            visited += 1
+            if depth > 32 or visited > 65536:
+                raise ValueError
+            if type(item) is str:
+                if redact_text(item, sensitive_values=sensitive) != item:
+                    raise ValueError
+            elif type(item) is dict:
+                for key, child in item.items():
+                    if type(key) is not str:
+                        raise ValueError
+                    pending.append((key, depth + 1))
+                    pending.append((child, depth + 1))
+            elif type(item) is list:
+                pending.extend((child, depth + 1) for child in item)
+            elif item is not None and type(item) not in (int, float, bool):
+                raise ValueError
+    except (ValueError, TypeError, UnicodeError, RecursionError):
+        raise LifecycleError(422) from None
+
+
 def screen_metadata(value, *, max_bytes: int = 16384):
     """Reject known sensitive metadata atomically, without reflecting its contents.
 

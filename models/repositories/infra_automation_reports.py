@@ -8,6 +8,7 @@ from uuid import uuid4
 
 from sqlalchemy import select
 
+from infra_automation.collection_contracts import CollectionProvenance
 from infra_automation import claims
 from infra_automation.artifact_intake import screen_artifacts, screen_metadata
 from infra_automation.lifecycle import LifecycleError, SnapshotDocument
@@ -140,22 +141,43 @@ def manifest_files(row):
                 or support.digest(row.collection_bytes) != row.collection_digest
             ):
                 raise ValueError
-            envelope = SyntheticCollectionEnvelope.model_validate_json(
-                row.collection_bytes
-            )
-            if (
-                envelope.project_id,
-                envelope.workspace_id,
-                envelope.run_id,
-                envelope.step_id,
-                envelope.sanitized_digest,
-            ) != (
-                row.project_id,
-                row.workspace_id,
-                row.run_id,
-                row.step_id,
-                row.digest,
-            ):
+            if json.loads(row.collection_bytes).get("kind") == "collected":
+                envelope = CollectionProvenance.model_validate_json(
+                    row.collection_bytes
+                )
+                identity = (
+                    envelope.scope.project_id,
+                    envelope.scope.workspace_id,
+                    envelope.scope.run_id,
+                    envelope.scope.step_id,
+                    envelope.sanitized_digest,
+                )
+                expected = (
+                    str(row.project_id),
+                    str(row.workspace_id),
+                    row.run_id,
+                    row.step_id,
+                    row.digest,
+                )
+            else:
+                envelope = SyntheticCollectionEnvelope.model_validate_json(
+                    row.collection_bytes
+                )
+                identity = (
+                    envelope.project_id,
+                    envelope.workspace_id,
+                    envelope.run_id,
+                    envelope.step_id,
+                    envelope.sanitized_digest,
+                )
+                expected = (
+                    row.project_id,
+                    row.workspace_id,
+                    row.run_id,
+                    row.step_id,
+                    row.digest,
+                )
+            if identity != expected:
                 raise ValueError
             screen_metadata(envelope.model_dump(mode="json"))
         files = [(name, content.encode("utf-8")) for name, content in document]
@@ -194,7 +216,11 @@ def _bounded_link_summary(identity, provenance, limitations, context_todos):
         list(
             dict.fromkeys(
                 [
-                    "Verify repository source and collect current complete evidence before any handoff decision.",
+                    (
+                        "Recheck collection freshness and protected custody before any handoff decision."
+                        if isinstance(provenance, CollectionProvenance)
+                        else "Verify repository source and collect current complete evidence before any handoff decision."
+                    ),
                     *context_todos,
                 ]
             )
@@ -327,7 +353,14 @@ def create_link(
     )
     link_id = existing.id if existing is not None else uuid4().hex
     try:
-        typed = UploadedProvenance.model_validate(provenance)
+        if provenance.get("kind") == "collected":
+            typed = CollectionProvenance.model_validate(provenance)
+            if manifest.collection_bytes != support.canonical(
+                typed.model_dump(mode="json")
+            ):
+                raise LifecycleError(409)
+        else:
+            typed = UploadedProvenance.model_validate(provenance)
         value = _bounded_link_summary(
             dict(
                 id=link_id,

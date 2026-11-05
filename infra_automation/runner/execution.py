@@ -39,6 +39,7 @@ class ExecutionResult:
     container_id: str
     cleanup_complete: bool
     profile_digest: str
+    collection: dict | None = field(default=None, repr=False)
 
     @property
     def finalizable(self):
@@ -322,6 +323,7 @@ class ExecutionRunner:
         credential_resolver=lambda: CollectorCredentials("qualification-collector"),
         authority_check=lambda: False,
         cancellation_check=lambda: False,
+        custody_finalizer=None,
     ):
         from infra_automation.runner.catalog import (
             load_catalog,
@@ -357,6 +359,8 @@ class ExecutionRunner:
                 raise IsolationError()
             request = CommandRequest(command=command_id, **parameters)
             argv = build_argv(catalog, request)
+            if request.command == "collect_plan" and not callable(custody_finalizer):
+                raise IsolationError()
             source_snapshot.verify()
             self.sandbox.preflight()
             if (
@@ -391,6 +395,8 @@ class ExecutionRunner:
         secret_values = ()
         clean = False
         created = False
+        collected = None
+        collection = None
         try:
             if self._call(authority_check, deadline, lease) is not True:
                 raise _Stop("lease_lost")
@@ -536,7 +542,24 @@ class ExecutionRunner:
                 raise _Stop("timed_out")
             if exit_code != 0:
                 raise _Stop("failed")
-            text = bytes(output).decode("utf-8", errors="strict")
+            if request.command == "collect_plan":
+                from infra_automation.runner.collection_output import (
+                    parse_collection_output,
+                )
+
+                try:
+                    collected = parse_collection_output(
+                        bytes(output),
+                        tool=request.tool,
+                        version=argv[-1],
+                        sensitive_values=secret_values,
+                    )
+                except ValueError:
+                    raise _Stop("output_rejected") from None
+                text = collected.screened_json.decode("utf-8")
+                output.clear()
+            else:
+                text = bytes(output).decode("utf-8", errors="strict")
             if redact_text(text, sensitive_values=secret_values) != text:
                 raise _Stop("output_rejected")
             if (
@@ -601,6 +624,54 @@ class ExecutionRunner:
                     state = exc.state
                 except Exception:
                     state = "failed"
+            if state == "succeeded" and collected is not None:
+                try:
+                    source_snapshot.verify()
+                    load_catalog(self.catalog_path, self.catalog_digest)
+                    custody = self._call(
+                        lambda: custody_finalizer(
+                            collected.raw_plan,
+                            collected.screened_json,
+                            collected.exit_code,
+                            collected.argv_digest,
+                        ),
+                        deadline,
+                        lease,
+                    )
+                    from infra_automation.receiver_protocol import Custody
+
+                    custody = Custody.model_validate(custody).model_dump(mode="json")
+                    if (
+                        custody["raw_local_digest"]
+                        != "sha256:" + hashlib.sha256(collected.raw_plan).hexdigest()
+                    ):
+                        raise ValueError("Custody digest mismatch.")
+                    if datetime.strptime(
+                        custody["expires_at"], "%Y-%m-%dT%H:%M:%SZ"
+                    ).replace(tzinfo=timezone.utc) <= datetime.now(timezone.utc):
+                        raise ValueError("Expired custody.")
+                    custody_text = canonical(custody).decode("utf-8")
+                    if (
+                        redact_text(custody_text, sensitive_values=secret_values)
+                        != custody_text
+                    ):
+                        raise ValueError("Invalid custody metadata.")
+                    if self._call(authority_check, deadline, lease) is not True:
+                        raise _Stop("lease_lost")
+                    if self._call(cancellation_check, deadline, lease) is not False:
+                        raise _Stop("cancelled")
+                    collection = {
+                        "tool": collected.tool,
+                        "tool_version": collected.tool_version,
+                        "exit_code": collected.exit_code,
+                        "command_digest": collected.command_digest,
+                        "argv_digest": collected.argv_digest,
+                        "custody": custody,
+                    }
+                except _Stop as exc:
+                    state = exc.state
+                except Exception:
+                    state = "custody_failed"
             try:
                 state = self.journal.finish(
                     key, state, clean, deadline=deadline, lease=lease
@@ -610,6 +681,7 @@ class ExecutionRunner:
         if state != "succeeded" or not clean:
             text = ""
             checksum = None
+            collection = None
         return ExecutionResult(
-            state, exit_code, text, checksum, name, clean, profile_digest
+            state, exit_code, text, checksum, name, clean, profile_digest, collection
         )

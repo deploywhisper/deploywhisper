@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import json
 
 from sqlalchemy import select
 
@@ -67,7 +68,7 @@ def list_run_reports(run_id, *, now: datetime | None = None):
         intake_steps = {
             step.id
             for step in document.definition.steps
-            if step.kind == "uploaded_intake"
+            if step.kind in {"uploaded_intake", "admitted_collection"}
         }
         present = set(
             session.scalars(
@@ -136,6 +137,11 @@ def execute_preflight_step(value):
         ):
             raise LifecycleError(409)
         files = reports.manifest_files(manifest)
+        provenance = UploadedProvenance().model_dump()
+        if manifest.collection_bytes is not None:
+            retained = json.loads(manifest.collection_bytes)
+            if retained.get("kind") == "collected":
+                provenance = retained
         manifest_id = manifest.id
         project_id, workspace_id = run.project_id, run.workspace_id
     committed = []
@@ -156,7 +162,7 @@ def execute_preflight_step(value):
                 operation.handle,
                 manifest_id,
                 report["id"],
-                UploadedProvenance().model_dump(),
+                provenance,
                 limitations=limitations,
                 context_todos=context.get("context_todos") or (),
             )
