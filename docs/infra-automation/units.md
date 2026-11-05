@@ -48,6 +48,58 @@ and matching server-derived combined evidence. The earliest policy, source or
 custody deadline across the entire bundle bounds the decision. A fresh downstream
 report cannot extend a prerequisite's expired evidence.
 
+## Exact scope example
+
+This uploaded map declares `app` as affected and `network` as its prerequisite.
+Removing `network`, adding an unrelated unit, or referencing an undeclared ID
+rejects the map. Its waves are `[network]`, then `[app]`.
+
+```json
+{
+  "version": 1,
+  "affected": ["app"],
+  "units": [
+    {"id": "network", "source": {"kind": "uploaded", "path": "network"}, "environment": "dev", "target": "network-target", "prerequisites": []},
+    {"id": "app", "source": {"kind": "uploaded", "path": "app"}, "environment": "dev", "target": "app-target", "prerequisites": ["network"]}
+  ]
+}
+```
+
+The workflow must declare network intake → network analysis → app intake → app
+analysis. Admission rejects hidden additional cross-unit dependencies as well as
+missing ones, and rejects external handoff ancestors in this collection order.
+The service consumes supplied screened uploads through the existing shared
+analysis core. It does not generate or rewrite workflow dependencies.
+
+## API and browser use
+
+All routes below use the existing authenticated response/error envelopes and
+concrete project/workspace scope. Mutations require current human session and
+CSRF authority. Entire requests/responses remain bounded to 128 KiB, including
+uploaded content in a multi-unit start request.
+
+| Route under `/api/v1/infra-automation` | Purpose |
+| --- | --- |
+| `POST /units/validate` | Validate a declared map and return located diagnostics or canonical waves. |
+| `GET /units` | Read the latest scoped inventory revisions. |
+| `POST /units` | Save an immutable revision with expected-version checking. |
+| `GET /units/{inventory_id}/revisions/{revision_id}` | Read an exact authorized revision. |
+| `POST /units/runs` | Confirm `revision_id` and `confirmed_map_digest`, with the existing `run` request and exact `unit_id`/`intake_step_id`/`analysis_step_id` bindings. Uploaded bindings also supply `artifacts`. |
+| `GET /runs/{run_id}/units` | Read the retained snapshot, server-derived evidence status/digest and shared canonical lock observations. |
+
+The Inventory screen uses these APIs. Editing invalidates confirmation. A lost
+save response requires loading and explicitly adopting the exact verified
+revision; a lost start response retains the same request identity. A confirmed
+start offers a separate new-preflight action that requires fresh confirmation and
+files. Unit evidence refreshes independently of run status, because source expiry
+or inventory supersession may not change the run version.
+
+Local diagnostic measurement used a 25-unit/200-edge maximum-length ASCII corpus:
+59,416 input bytes, 62,951 planned-result bytes, and 1,000 validations with p50
+6.073 ms, p95 6.312 ms and p99 6.564 ms. Exact 128 KiB input and one-byte-over
+rejection are regression-tested. These figures are local diagnostics, not a
+production throughput qualification.
+
 Implementation and acceptance results are recorded in
 [Story 16.16](../../_bmad-output/implementation-artifacts/16-16-declared-multi-unit-preflight-planning.md).
 Unchecked story packets remain acceptance obligations.

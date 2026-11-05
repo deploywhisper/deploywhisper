@@ -1,11 +1,11 @@
 ---
 project_name: 'deploywhisper'
 user_name: 'psaho01'
-date: '2026-11-04'
+date: '2026-11-05'
 sections_completed:
   ['technology_stack', 'language_rules', 'framework_rules', 'testing_rules', 'quality_rules', 'workflow_rules', 'anti_patterns']
 status: 'complete'
-rule_count: 50
+rule_count: 51
 optimized_for_llm: true
 ---
 
@@ -125,6 +125,8 @@ The owner adopted the bounded preflight/handoff plan on 2026-10-07. This is futu
 - Collection is privileged execution requiring a qualified isolated trusted-source profile. Binary plans/state remain in protected operator-local custody; sanitized transport digests and collector trust are distinct. A cloud-hosted receiver cannot reconstruct approved plan bytes from a source SHA and redacted JSON.
 - Prove each slice's owned contract using earlier capabilities or scoped test doubles, with real integrated qualification in the later collector/release stories. No test double qualifies production support. Register new test directories in local/CI discovery and use composed root-SPA browser evidence for rendered flows.
 
+- Story 16.16 uses `infra_automation/unit_map.py` and `services/infra_automation_units.py` for declared inventories (25 units, 200 edges, 128 KiB), immutable revision/run associations in migration038, and exact intake/analysis coverage. Waves describe collection/review order only. Reuse the canonical target registry and locks. Associated decisions require all-unit admitted collected evidence, current revision and server-derived combined digest; the earliest source/custody/policy deadline bounds the whole bundle. Uploaded or mixed bundles remain advisory; collected bindings support repository root only. Inventory supersession/expiry may not change run version, so its UI evidence refreshes independently. See `docs/infra-automation/units.md`.
+
 ---
 
 ## Usage Guidelines
@@ -142,4 +144,4 @@ The owner adopted the bounded preflight/handoff plan on 2026-10-07. This is futu
 - Update it when tooling, validation commands, or architecture boundaries materially change.
 - Remove rules that become obsolete or are contradicted by the current codebase.
 
-Last Updated: 2026-11-04
+Last Updated: 2026-11-05

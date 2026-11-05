@@ -1,0 +1,40 @@
+
+> deploywhisper-ui-a11y@0.0.0 test:ui-review
+> npm --prefix frontend exec -- playwright test --config=frontend/playwright.config.ts infra-automation-units.spec.ts
+
+
+Running 1 test using 1 worker
+
+(node:35953) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✘  1 [chromium] › frontend/e2e/infra-automation-units.spec.ts:153:3 › declared units using real composed APIs › keyboard exact scope, located errors, confirmation and two-unit evidence (15.8s)
+
+
+  1) [chromium] › frontend/e2e/infra-automation-units.spec.ts:153:3 › declared units using real composed APIs › keyboard exact scope, located errors, confirmation and two-unit evidence
+
+    Error: expect(page).toHaveURL(expected) failed
+
+    Expected: "http://localhost:8080/infra-automation/inventory?project_id=2&workspace_id=1"
+    Received: "http://localhost:8080/settings"
+    Timeout:  15000ms
+
+    Call log:
+      - Expect "toHaveURL" with timeout 15000ms
+        34 × locator resolved to <html lang="en">…</html>
+           - unexpected value "http://localhost:8080/settings"
+
+
+      92 |   expect(response.status()).toBe(200);
+      93 |   const csrf = (await response.json()).data.csrf_token as string;
+    > 94 |   await expect(page).toHaveURL(new URL(route(scope), origin).href);
+         |                      ^
+      95 |   return csrf;
+      96 | }
+      97 |
+        at login (/private/tmp/deploywhisper-story16-16-ui/frontend/e2e/infra-automation-units.spec.ts:94:22)
+        at /private/tmp/deploywhisper-story16-16-ui/frontend/e2e/infra-automation-units.spec.ts:156:18
+
+    Error Context: frontend/test-results/infra-automation-units-dec-2246a-ation-and-two-unit-evidence-chromium/error-context.md
+
+  1 failed
+    [chromium] › frontend/e2e/infra-automation-units.spec.ts:153:3 › declared units using real composed APIs › keyboard exact scope, located errors, confirmation and two-unit evidence

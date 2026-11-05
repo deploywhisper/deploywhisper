@@ -1,0 +1,42 @@
+
+> deploywhisper-ui-a11y@0.0.0 test:ui-review
+> npm --prefix frontend exec -- playwright test --config=frontend/playwright.config.ts infra-automation-units.spec.ts
+
+
+Running 1 test using 1 worker
+
+(node:38224) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✘  1 [chromium] › frontend/e2e/infra-automation-units.spec.ts:153:3 › declared units using real composed APIs › keyboard exact scope, located errors, confirmation and two-unit evidence (15.8s)
+
+
+  1) [chromium] › frontend/e2e/infra-automation-units.spec.ts:153:3 › declared units using real composed APIs › keyboard exact scope, located errors, confirmation and two-unit evidence
+
+    Error: expect(locator).toHaveCount(expected) failed
+
+    Locator:  getByLabel('Unit 1 source kind', { exact: true }).locator('option[value="uploaded"]')
+    Expected: 1
+    Received: 0
+    Timeout:  15000ms
+
+    Call log:
+      - Expect "toHaveCount" getByLabel('Unit 1 source kind', { exact: true }).locator('option[value="uploaded"]') with timeout 15000ms
+      - waiting for getByLabel('Unit 1 source kind', { exact: true }).locator('option[value="uploaded"]')
+        34 × locator resolved to 0 elements
+           - unexpected value "0"
+
+
+      69 | async function keyboardSelect(page: Page, label: string, value: string) {
+      70 |   const control = page.getByLabel(label, { exact: true });
+    > 71 |   await expect(control.locator(`option[value="${value}"]`)).toHaveCount(1);
+         |                                                             ^
+      72 |   await tabTo(page, control);
+      73 |   const values = await control.locator("option").evaluateAll((options) => options.map((option) => (option as HTMLOptionElement).value));
+      74 |   const index = values.indexOf(value);
+        at keyboardSelect (/private/tmp/deploywhisper-story16-16-ui/frontend/e2e/infra-automation-units.spec.ts:71:61)
+        at /private/tmp/deploywhisper-story16-16-ui/frontend/e2e/infra-automation-units.spec.ts:160:11
+
+    Error Context: frontend/test-results/infra-automation-units-dec-2246a-ation-and-two-unit-evidence-chromium/error-context.md
+
+  1 failed
+    [chromium] › frontend/e2e/infra-automation-units.spec.ts:153:3 › declared units using real composed APIs › keyboard exact scope, located errors, confirmation and two-unit evidence

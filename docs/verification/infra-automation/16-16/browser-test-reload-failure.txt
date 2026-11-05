@@ -1,0 +1,43 @@
+
+> deploywhisper-ui-a11y@0.0.0 test:ui-review
+> npm --prefix frontend exec -- playwright test --config=frontend/playwright.config.ts infra-automation-units.spec.ts
+
+
+Running 1 test using 1 worker
+
+(node:37538) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✘  1 [chromium] › frontend/e2e/infra-automation-units.spec.ts:153:3 › declared units using real composed APIs › keyboard exact scope, located errors, confirmation and two-unit evidence (16.0s)
+
+
+  1) [chromium] › frontend/e2e/infra-automation-units.spec.ts:153:3 › declared units using real composed APIs › keyboard exact scope, located errors, confirmation and two-unit evidence
+
+    Error: expect(locator).toBeEnabled() failed
+
+    Locator:  getByLabel('Unit 1 ID', { exact: true })
+    Expected: enabled
+    Received: disabled
+    Timeout:  15000ms
+
+    Call log:
+      - Expect "toBeEnabled" getByLabel('Unit 1 ID', { exact: true }) with timeout 15000ms
+      - waiting for getByLabel('Unit 1 ID', { exact: true })
+        34 × locator resolved to <input disabled value="" maxlength="128" aria-invalid="false"/>
+           - unexpected value "disabled"
+
+
+      56 | async function tabTo(page: Page, control: Locator, reverse = false) {
+      57 |   await expect(control).toBeVisible();
+    > 58 |   await expect(control).toBeEnabled();
+         |                         ^
+      59 |   for (let count = 0; count < 160; count += 1) {
+      60 |     if (await control.evaluate((element) => element === document.activeElement)) return;
+      61 |     await page.keyboard.press(reverse ? "Shift+Tab" : "Tab");
+        at tabTo (/private/tmp/deploywhisper-story16-16-ui/frontend/e2e/infra-automation-units.spec.ts:58:25)
+        at keyboardText (/private/tmp/deploywhisper-story16-16-ui/frontend/e2e/infra-automation-units.spec.ts:100:3)
+        at /private/tmp/deploywhisper-story16-16-ui/frontend/e2e/infra-automation-units.spec.ts:159:5
+
+    Error Context: frontend/test-results/infra-automation-units-dec-2246a-ation-and-two-unit-evidence-chromium/error-context.md
+
+  1 failed
+    [chromium] › frontend/e2e/infra-automation-units.spec.ts:153:3 › declared units using real composed APIs › keyboard exact scope, located errors, confirmation and two-unit evidence
