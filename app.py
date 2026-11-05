@@ -41,6 +41,12 @@ from api.routes.infra_automation_receiver import (
     router as infra_automation_receiver_router,
 )
 from api.routes.infra_automation import router as infra_automation_router
+from api.routes.infra_automation_runner_views import (
+    router as infra_automation_runner_views_router,
+)
+from api.routes.infra_automation_collection_views import (
+    router as infra_automation_collection_views_router,
+)
 from api.routes.projects import router as projects_router
 from api.routes.scanner_imports import router as scanner_imports_router
 from api.routes.settings import router as context_router
@@ -195,6 +201,8 @@ fastapi_app.include_router(infra_automation_router)
 fastapi_app.include_router(infra_automation_receiver_router)
 fastapi_app.include_router(infra_automation_runner_router)
 fastapi_app.include_router(infra_automation_runner_admin_router)
+fastapi_app.include_router(infra_automation_runner_views_router)
+fastapi_app.include_router(infra_automation_collection_views_router)
 fastapi_app.include_router(scanner_imports_router)
 
 
