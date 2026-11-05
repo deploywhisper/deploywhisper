@@ -1,0 +1,170 @@
+5970d092f40105574b40ba43996b4af1b770a85697f085318d1fb4360c83b31f
+ Image deploywhisper-story16-16:ui-proof Building
+#1 [internal] load local bake definitions
+#1 reading from stdin 592B done
+#1 DONE 0.0s
+
+#2 [internal] load build definition from Dockerfile
+#2 transferring dockerfile: 3.50kB done
+#2 DONE 0.0s
+
+#3 [internal] load metadata for docker.io/library/python:3.11-slim@sha256:0dd364ba7e10242f07755449e3a3d0e35f9efd987952737b90def6709ab0c5ce
+#3 DONE 0.0s
+
+#4 [internal] load metadata for docker.io/library/node:26-alpine@sha256:143494b1da2945f061539253adc65e4f1569ddf07da2d384c022c791a9d90a4a
+#4 DONE 0.0s
+
+#5 [internal] load .dockerignore
+#5 transferring context: 376B done
+#5 DONE 0.0s
+
+#6 [builder 1/7] FROM docker.io/library/python:3.11-slim@sha256:0dd364ba7e10242f07755449e3a3d0e35f9efd987952737b90def6709ab0c5ce
+#6 DONE 0.0s
+
+#7 [frontend 1/6] FROM docker.io/library/node:26-alpine@sha256:143494b1da2945f061539253adc65e4f1569ddf07da2d384c022c791a9d90a4a
+#7 DONE 0.0s
+
+#8 [internal] load build context
+#8 transferring context: 40.77kB 0.0s done
+#8 DONE 0.0s
+
+#9 [builder 7/7] RUN find "/opt/venv" -type f ( -name '*.so' -o -name '*.so.*' ) -exec strip --strip-unneeded {} + 2>/dev/null || true
+#9 CACHED
+
+#10 [runtime  4/18] COPY --from=builder /opt/venv /opt/venv
+#10 CACHED
+
+#11 [runtime 10/18] COPY --chown=appuser:appuser evidence ./evidence
+#11 CACHED
+
+#12 [runtime 14/18] COPY --chown=appuser:appuser migrations ./migrations
+#12 CACHED
+
+#13 [frontend 5/6] COPY frontend/ .
+#13 CACHED
+
+#14 [runtime 11/18] COPY --chown=appuser:appuser integrations ./integrations
+#14 CACHED
+
+#15 [runtime  7/18] COPY --chown=appuser:appuser api ./api
+#15 CACHED
+
+#16 [runtime  5/18] COPY --from=frontend --chown=appuser:appuser /frontend/dist ./frontend/dist
+#16 CACHED
+
+#17 [runtime  2/18] WORKDIR /app
+#17 CACHED
+
+#18 [builder 6/7] RUN python -m pip install --require-hashes --only-binary=:all: --no-compile -r requirements.txt     && python -c "import pathlib, shutil, site; site_packages=[pathlib.Path(path) for path in site.getsitepackages()]; patterns=('pip','pip-*','wheel','wheel-*'); [shutil.rmtree(path, ignore_errors=True) if path.is_dir() else path.unlink(missing_ok=True) for base in site_packages for pattern in patterns for path in base.glob(pattern)]; [shutil.rmtree(path, ignore_errors=True) for base in site_packages for path in base.rglob('__pycache__')]; [shutil.rmtree(path, ignore_errors=True) for base in site_packages for name in ('tests','test','docs','examples') for path in base.rglob(name) if path.is_dir()]"     && rm -f "/opt/venv"/bin/pip "/opt/venv"/bin/pip3 "/opt/venv"/bin/pip3.11
+#18 CACHED
+
+#19 [builder 2/7] WORKDIR /build
+#19 CACHED
+
+#20 [runtime  6/18] COPY --chown=appuser:appuser app.py config.py logging_config.py alembic.ini ./
+#20 CACHED
+
+#21 [runtime  3/18] RUN groupadd --system appuser     && useradd --system --gid appuser --home-dir /app --shell /usr/sbin/nologin appuser     && mkdir -p /app/data /app/skills/custom     && chown -R appuser:appuser /app
+#21 CACHED
+
+#22 [runtime 12/18] COPY --chown=appuser:appuser infra_automation ./infra_automation
+#22 CACHED
+
+#23 [runtime 16/18] COPY --chown=appuser:appuser parsers ./parsers
+#23 CACHED
+
+#24 [frontend 6/6] RUN npm run build            # outputs /frontend/dist
+#24 CACHED
+
+#25 [builder 3/7] RUN apt-get update     && apt-get install -y --no-install-recommends binutils     && rm -rf /var/lib/apt/lists/*
+#25 CACHED
+
+#26 [builder 5/7] COPY requirements.txt .
+#26 CACHED
+
+#27 [runtime 15/18] COPY --chown=appuser:appuser models ./models
+#27 CACHED
+
+#28 [frontend 3/6] COPY frontend/package.json frontend/package-lock.json ./
+#28 CACHED
+
+#29 [frontend 4/6] RUN npm ci
+#29 CACHED
+
+#30 [builder 4/7] RUN python -m venv "/opt/venv"
+#30 CACHED
+
+#31 [runtime 13/18] COPY --chown=appuser:appuser llm ./llm
+#31 CACHED
+
+#32 [runtime  9/18] COPY --chown=appuser:appuser cli ./cli
+#32 CACHED
+
+#33 [frontend 2/6] WORKDIR /frontend
+#33 CACHED
+
+#34 [runtime  8/18] COPY --chown=appuser:appuser analysis ./analysis
+#34 CACHED
+
+#35 [runtime 17/18] COPY --chown=appuser:appuser services ./services
+#35 CACHED
+
+#36 [runtime 18/18] COPY --chown=appuser:appuser skills ./skills
+#36 CACHED
+
+#37 exporting to image
+#37 exporting layers done
+#37 writing image sha256:36a6d253b88e4d178b94d1b4818b87d0970cab2336735c99220ca6de4244cac3 done
+#37 naming to docker.io/library/deploywhisper-story16-16:ui-proof done
+#37 DONE 0.0s
+
+#38 resolving provenance for metadata file
+#38 DONE 0.0s
+ Image deploywhisper-story16-16:ui-proof Built
+ Network deploywhisper-story16-16_default Creating
+ Network deploywhisper-story16-16_default Created
+ Container deploywhisper-story16-16-deploywhisper-1 Creating
+ Container deploywhisper-story16-16-deploywhisper-1 Created
+ Container deploywhisper-story16-16-deploywhisper-1 Starting
+ Container deploywhisper-story16-16-deploywhisper-1 Started
+
+> deploywhisper-ui-a11y@0.0.0 test:ui-review
+> npm --prefix frontend exec -- playwright test --config=frontend/playwright.config.ts infra-automation-units.spec.ts
+
+
+Running 4 tests using 1 worker
+
+(node:31128) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  1 [chromium] › frontend/e2e/infra-automation-units.spec.ts:206:3 › declared units using real composed APIs › keyboard exact scope, located errors, confirmation and two-unit evidence (27.9s)
+  ✘  2 [chromium] › frontend/e2e/infra-automation-units.spec.ts:326:3 › declared units using real composed APIs › lost committed start replays one original run after inventory supersession (4.4m)
+
+
+  1) [chromium] › frontend/e2e/infra-automation-units.spec.ts:326:3 › declared units using real composed APIs › lost committed start replays one original run after inventory supersession
+
+    Test was interrupted.
+
+    Error: response.json: Test ended.
+
+      337 |     await keyboardActivate(page, page.getByRole("button", { name: "Start preflight run", exact: true }));
+      338 |     const admitted = await responsePromise; expect(admitted.status()).toBe(200);
+    > 339 |     const originalPayload = admitted.request().postDataJSON(), run = (await admitted.json()).data;
+          |                                                                                      ^
+      340 |     await expect(page.getByRole("button", { name: "Retry original run request", exact: true })).toBeEnabled();
+      341 |     await saveMap(context, csrf, scope, declaredMap("superseded"), saved);
+      342 |     const retryResponse = page.waitForResponse((r) => new URL(r.url()).pathname.endsWith("/units/runs") && r.request().method() === "POST");
+        at /Users/psaho01/deploywhisper/frontend/e2e/infra-automation-units.spec.ts:339:86
+
+    Error Context: frontend/test-results/infra-automation-units-dec-29c78-fter-inventory-supersession-chromium/error-context.md
+
+  1 interrupted
+    [chromium] › frontend/e2e/infra-automation-units.spec.ts:326:3 › declared units using real composed APIs › lost committed start replays one original run after inventory supersession
+  2 did not run
+  1 passed (4.9m)
+ Container deploywhisper-story16-16-deploywhisper-1 Stopping
+ Container deploywhisper-story16-16-deploywhisper-1 Stopped
+ Container deploywhisper-story16-16-deploywhisper-1 Removing
+ Container deploywhisper-story16-16-deploywhisper-1 Removed
+ Network deploywhisper-story16-16_default Removing
+ Network deploywhisper-story16-16_default Removed
+5970d092f40105574b40ba43996b4af1b770a85697f085318d1fb4360c83b31f

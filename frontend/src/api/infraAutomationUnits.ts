@@ -20,6 +20,7 @@ const digest = (v: unknown): v is string => typeof v === "string" && /^sha256:[a
 const positive = (v: unknown): v is number => typeof v === "number" && Number.isSafeInteger(v) && v > 0;
 const texts = (v: unknown, maximum = 25): v is string[] => Array.isArray(v) && v.length <= maximum && v.every(identifier);
 const text = (v: unknown, maximum = 1024): v is string => typeof v === "string" && v.length <= maximum && !/[\u0000-\u001f\u007f-\u009f]/.test(v);
+const sourcePath = (v: unknown): v is string => typeof v === "string" && [...v].length > 0 && [...v].length <= 512 && !/[\u0000-\u001f\u007f]/.test(v);
 function invalid(): never { throw new ApiClientError("Inventory response is unsupported. Refresh current state.", 422); }
 function id(v: string) { if (!identifier(v)) invalid(); return encodeURIComponent(v); }
 function scopeParams(scope: AutomationScope) { if (!positive(scope.projectId) || !positive(scope.workspaceId)) invalid(); return new URLSearchParams({ project_id: String(scope.projectId), workspace_id: String(scope.workspaceId) }); }
@@ -29,7 +30,7 @@ function checkPlan(v: unknown): v is UnitPlan {
   const map = v.inventory;
   if (map.version !== 1 || !Array.isArray(map.units) || !map.units.length || map.units.length > 25 || !texts(map.affected) || !map.affected.length || !Array.isArray(v.waves) || !v.waves.length || v.waves.length > 25 || !v.waves.every((w) => texts(w) && w.length > 0)) return false;
   for (const u of map.units) {
-    if (!record(u) || !identifier(u.id) || !identifier(u.environment) || !identifier(u.target) || !texts(u.prerequisites) || !record(u.source) || !text(u.source.path, 512) || !u.source.path.length) return false;
+    if (!record(u) || !identifier(u.id) || !identifier(u.environment) || !identifier(u.target) || !texts(u.prerequisites) || !record(u.source) || !sourcePath(u.source.path)) return false;
     if (u.source.kind === "uploaded") { if (u.source.repository_source !== "unavailable") return false; }
     else if (u.source.kind !== "declared_repository" || !identifier(u.source.repository_id) || typeof u.source.commit_sha !== "string" || !/^[a-f0-9]{40}$/.test(u.source.commit_sha)) return false;
   }
@@ -56,6 +57,13 @@ export async function getUnitInventories(scope: AutomationScope, signal?: AbortS
   const value = await requestData<unknown>(`${base}/units?${scopeParams(scope)}`, { credentials: "same-origin", cache: "no-store", signal });
   if (!record(value) || value.truncated !== false || !Array.isArray(value.items) || value.items.length > 25 || !value.items.every((x) => checkSummary(x, scope))) invalid();
   return value as { items: UnitRevisionSummary[]; truncated: false };
+}
+export async function getUnitRevisionHistory(inventoryId: string, scope: AutomationScope, signal?: AbortSignal): Promise<{ items: UnitRevisionSummary[]; truncated: false }> {
+  const value = await requestData<unknown>(`${base}/units/${id(inventoryId)}/revisions?${scopeParams(scope)}`, { credentials: "same-origin", cache: "no-store", signal });
+  if (!record(value) || value.truncated !== false || !Array.isArray(value.items) || value.items.length > 32 || !value.items.every((x) => checkSummary(x, scope) && x.inventory_id === inventoryId)) invalid();
+  const items = value.items as UnitRevisionSummary[];
+  if (new Set(items.map((x) => x.revision_id)).size !== items.length || items.some((x, i) => i > 0 && x.version >= items[i - 1].version)) invalid();
+  return { items, truncated: false };
 }
 export async function getUnitRevision(inventoryId: string, revisionId: string, scope: AutomationScope, signal?: AbortSignal): Promise<UnitRevision> {
   const value = revision(await requestData(`${base}/units/${id(inventoryId)}/revisions/${id(revisionId)}?${scopeParams(scope)}`, { credentials: "same-origin", cache: "no-store", signal }), scope);

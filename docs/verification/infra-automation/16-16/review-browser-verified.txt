@@ -1,0 +1,151 @@
+5970d092f40105574b40ba43996b4af1b770a85697f085318d1fb4360c83b31f
+ Image deploywhisper-story16-16:ui-proof Building
+#1 [internal] load local bake definitions
+#1 reading from stdin 592B done
+#1 DONE 0.0s
+
+#2 [internal] load build definition from Dockerfile
+#2 transferring dockerfile: 3.50kB done
+#2 DONE 0.0s
+
+#3 [internal] load metadata for docker.io/library/node:26-alpine@sha256:143494b1da2945f061539253adc65e4f1569ddf07da2d384c022c791a9d90a4a
+#3 DONE 0.0s
+
+#4 [internal] load metadata for docker.io/library/python:3.11-slim@sha256:0dd364ba7e10242f07755449e3a3d0e35f9efd987952737b90def6709ab0c5ce
+#4 DONE 0.0s
+
+#5 [internal] load .dockerignore
+#5 transferring context: 376B done
+#5 DONE 0.0s
+
+#6 [frontend 1/6] FROM docker.io/library/node:26-alpine@sha256:143494b1da2945f061539253adc65e4f1569ddf07da2d384c022c791a9d90a4a
+#6 DONE 0.0s
+
+#7 [builder 1/7] FROM docker.io/library/python:3.11-slim@sha256:0dd364ba7e10242f07755449e3a3d0e35f9efd987952737b90def6709ab0c5ce
+#7 DONE 0.0s
+
+#8 [internal] load build context
+#8 transferring context: 40.77kB 0.0s done
+#8 DONE 0.0s
+
+#9 [builder 3/7] RUN apt-get update     && apt-get install -y --no-install-recommends binutils     && rm -rf /var/lib/apt/lists/*
+#9 CACHED
+
+#10 [builder 7/7] RUN find "/opt/venv" -type f ( -name '*.so' -o -name '*.so.*' ) -exec strip --strip-unneeded {} + 2>/dev/null || true
+#10 CACHED
+
+#11 [runtime 13/18] COPY --chown=appuser:appuser llm ./llm
+#11 CACHED
+
+#12 [builder 6/7] RUN python -m pip install --require-hashes --only-binary=:all: --no-compile -r requirements.txt     && python -c "import pathlib, shutil, site; site_packages=[pathlib.Path(path) for path in site.getsitepackages()]; patterns=('pip','pip-*','wheel','wheel-*'); [shutil.rmtree(path, ignore_errors=True) if path.is_dir() else path.unlink(missing_ok=True) for base in site_packages for pattern in patterns for path in base.glob(pattern)]; [shutil.rmtree(path, ignore_errors=True) for base in site_packages for path in base.rglob('__pycache__')]; [shutil.rmtree(path, ignore_errors=True) for base in site_packages for name in ('tests','test','docs','examples') for path in base.rglob(name) if path.is_dir()]"     && rm -f "/opt/venv"/bin/pip "/opt/venv"/bin/pip3 "/opt/venv"/bin/pip3.11
+#12 CACHED
+
+#13 [runtime  9/18] COPY --chown=appuser:appuser cli ./cli
+#13 CACHED
+
+#14 [builder 4/7] RUN python -m venv "/opt/venv"
+#14 CACHED
+
+#15 [runtime 10/18] COPY --chown=appuser:appuser evidence ./evidence
+#15 CACHED
+
+#16 [runtime  3/18] RUN groupadd --system appuser     && useradd --system --gid appuser --home-dir /app --shell /usr/sbin/nologin appuser     && mkdir -p /app/data /app/skills/custom     && chown -R appuser:appuser /app
+#16 CACHED
+
+#17 [frontend 6/6] RUN npm run build            # outputs /frontend/dist
+#17 CACHED
+
+#18 [runtime  7/18] COPY --chown=appuser:appuser api ./api
+#18 CACHED
+
+#19 [runtime 17/18] COPY --chown=appuser:appuser services ./services
+#19 CACHED
+
+#20 [runtime 15/18] COPY --chown=appuser:appuser models ./models
+#20 CACHED
+
+#21 [frontend 5/6] COPY frontend/ .
+#21 CACHED
+
+#22 [runtime  6/18] COPY --chown=appuser:appuser app.py config.py logging_config.py alembic.ini ./
+#22 CACHED
+
+#23 [runtime 16/18] COPY --chown=appuser:appuser parsers ./parsers
+#23 CACHED
+
+#24 [runtime 14/18] COPY --chown=appuser:appuser migrations ./migrations
+#24 CACHED
+
+#25 [runtime  4/18] COPY --from=builder /opt/venv /opt/venv
+#25 CACHED
+
+#26 [runtime  5/18] COPY --from=frontend --chown=appuser:appuser /frontend/dist ./frontend/dist
+#26 CACHED
+
+#27 [runtime 12/18] COPY --chown=appuser:appuser infra_automation ./infra_automation
+#27 CACHED
+
+#28 [runtime 11/18] COPY --chown=appuser:appuser integrations ./integrations
+#28 CACHED
+
+#29 [frontend 4/6] RUN npm ci
+#29 CACHED
+
+#30 [builder 2/7] WORKDIR /build
+#30 CACHED
+
+#31 [builder 5/7] COPY requirements.txt .
+#31 CACHED
+
+#32 [frontend 2/6] WORKDIR /frontend
+#32 CACHED
+
+#33 [runtime  8/18] COPY --chown=appuser:appuser analysis ./analysis
+#33 CACHED
+
+#34 [runtime  2/18] WORKDIR /app
+#34 CACHED
+
+#35 [frontend 3/6] COPY frontend/package.json frontend/package-lock.json ./
+#35 CACHED
+
+#36 [runtime 18/18] COPY --chown=appuser:appuser skills ./skills
+#36 CACHED
+
+#37 exporting to image
+#37 exporting layers done
+#37 writing image sha256:07fba951586ccfd066764f4c453f4c009ea1b674af6953e8b32e704b6f1a7578 done
+#37 naming to docker.io/library/deploywhisper-story16-16:ui-proof done
+#37 DONE 0.0s
+
+#38 resolving provenance for metadata file
+#38 DONE 0.0s
+ Image deploywhisper-story16-16:ui-proof Built
+ Network deploywhisper-story16-16_default Creating
+ Network deploywhisper-story16-16_default Created
+ Container deploywhisper-story16-16-deploywhisper-1 Creating
+ Container deploywhisper-story16-16-deploywhisper-1 Created
+ Container deploywhisper-story16-16-deploywhisper-1 Starting
+ Container deploywhisper-story16-16-deploywhisper-1 Started
+
+> deploywhisper-ui-a11y@0.0.0 test:ui-review
+> npm --prefix frontend exec -- playwright test --config=frontend/playwright.config.ts infra-automation-units.spec.ts
+
+
+Running 4 tests using 1 worker
+
+(node:38566) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  1 [chromium] › frontend/e2e/infra-automation-units.spec.ts:209:3 › declared units using real composed APIs › keyboard exact scope, located errors, confirmation and two-unit evidence (32.2s)
+  ✓  2 [chromium] › frontend/e2e/infra-automation-units.spec.ts:329:3 › declared units using real composed APIs › lost committed start replays one original run after inventory supersession (3.8s)
+  ✓  3 [chromium] › frontend/e2e/infra-automation-units.spec.ts:387:3 › declared units using real composed APIs › lost save can adopt exact historical revision after a newer save (2.8s)
+  ✓  4 [chromium] › frontend/e2e/infra-automation-units.spec.ts:421:3 › declared units using real composed APIs › all pagination controls freeze during pending artifact reads (5.5s)
+
+  4 passed (45.4s)
+ Container deploywhisper-story16-16-deploywhisper-1 Stopping
+ Container deploywhisper-story16-16-deploywhisper-1 Stopped
+ Container deploywhisper-story16-16-deploywhisper-1 Removing
+ Container deploywhisper-story16-16-deploywhisper-1 Removed
+ Network deploywhisper-story16-16_default Removing
+ Network deploywhisper-story16-16_default Removed
+5970d092f40105574b40ba43996b4af1b770a85697f085318d1fb4360c83b31f

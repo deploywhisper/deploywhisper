@@ -53,3 +53,46 @@ it("recovers a persisted save through a verified GET after its POST response is 
   expect(saves.canRecover("scope", observed)).toBe(true); expect(saves.get("scope")?.kind).toBe("pending");
   expect(saves.recover("scope", observed)).toBe(true); expect(saves.get("scope")).toBeUndefined();
 });
+
+import { getUnitRevisionHistory } from "./infraAutomationUnits";
+it("reads bounded scoped history so a superseded saved effect remains discoverable", async () => {
+  const older = { ...revision, version: 2, revision_id: "version-two" };
+  const newer = { ...revision, version: 3, revision_id: "version-three" };
+  const fetcher = response({ items: [newer, older], truncated: false });
+  await expect(getUnitRevisionHistory("inventory", scope)).resolves.toMatchObject({ items: [newer, older] });
+  expect(fetcher.mock.calls[0][0]).toContain("/units/inventory/revisions?project_id=7&workspace_id=9");
+  response({ items: [{ ...older, inventory_id: "foreign" }], truncated: false });
+  await expect(getUnitRevisionHistory("inventory", scope)).rejects.toMatchObject({ status: 422 });
+});
+it("accepts backend-valid supplementary Unicode and C1 source paths without widening identifiers", async () => {
+  for (const path of ["😀".repeat(300), "a\u0085b"]) {
+    const value = { ...revision, plan: { ...plan, inventory: { ...map, units: [{ ...map.units[0], source: { ...map.units[0].source, path } }] } } };
+    response(value); await expect(getUnitRevision("inventory", "revision", scope)).resolves.toEqual(value);
+  }
+  response({ ...revision, plan: { ...plan, inventory: { ...map, units: [{ ...map.units[0], id: "😀" }] } } });
+  await expect(getUnitRevision("inventory", "revision", scope)).rejects.toMatchObject({ status: 422 });
+});
+
+import { UnitStartRequests } from "../screens/InfraAutomationInventory";
+it("retries an unresolved start with identical body and identity after remount", async () => {
+  const payload = { run: { workflow_id: "wf", revision_id: "wf-rev", workspace_id: 9, reason: "Review units", idempotency_key: "same-request", inputs: {}, total_timeout_seconds: 3600 }, revision_id: "revision", confirmed_map_digest: digest, bindings: [{ unit_id: "network", intake_step_id: "intake", analysis_step_id: "analysis", artifacts: [{ name: "plan.json", content: "original" }] }] };
+  const starts = new UnitStartRequests(); const fetcher = vi.fn().mockRejectedValueOnce(new TypeError("Response lost")).mockResolvedValueOnce(Response.json({ data: { id: "retained-run", version: 1, project_id: 7, workspace_id: 9, workflow_id: "wf", revision_id: "wf-rev", state: "queued" }, meta: {} }));
+  vi.stubGlobal("fetch", fetcher);
+  await expect(startUnitRun(payload, scope, "first-csrf", () => { starts.remember("scope", payload); })).rejects.toThrow();
+  const ticket = starts.get("scope")!; const retained = starts.pendingRequest("scope")!;
+  const run = await startUnitRun(retained, scope, "current-csrf"); starts.succeed("scope", ticket, run.id);
+  expect(fetcher.mock.calls[0][1].body).toBe(fetcher.mock.calls[1][1].body);
+  expect(new Headers(fetcher.mock.calls[1][1].headers).get("X-CSRF-Token")).toBe("current-csrf");
+  expect(starts.get("scope")).toMatchObject({ kind: "confirmed", requestId: "same-request", runId: "retained-run" });
+});
+it("recovers the exact lost saved version even when a newer version is current", async () => {
+  const saves = new InventorySaveRequests();
+  saves.begin("scope", { projectId: 7, workspaceId: 9, mapDigest: digest, creatorId: "admin", inventoryId: "inventory", expectedVersion: 2, knownInventoryIds: ["inventory"] });
+  const v2 = { ...revision, version: 2, revision_id: "v2" }, v3 = { ...revision, version: 3, revision_id: "v3" };
+  response({ items: [v3, v2, revision], truncated: false });
+  const history = await getUnitRevisionHistory("inventory", scope);
+  expect(saves.canRecover("scope", v3)).toBe(false);
+  const expected = history.items.find((item) => item.version === 2)!;
+  response(v2); const exact = await getUnitRevision(expected.inventory_id, expected.revision_id, scope);
+  expect(saves.recover("scope", exact)).toBe(true); expect(saves.get("scope")).toBeUndefined();
+});

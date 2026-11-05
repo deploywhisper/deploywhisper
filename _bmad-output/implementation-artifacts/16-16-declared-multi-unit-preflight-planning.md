@@ -1,6 +1,6 @@
 # Story 16.16: Declared Multi Unit Preflight Planning
 
-Status: review
+Status: done
 Preparation: refined
 Release: v1.5.0 | Priority: P0, highest-priority feature
 
@@ -65,6 +65,18 @@ Execute one bounded packet at a time on the story feature branch. Each packet ow
 - [x] [Review][Patch] Validate genuine keyboard navigation and allow the exact Inventory account return route.
 - [x] [Review][Patch] Update current migration-head expectations and isolate receiver contention proof from the existing macOS cold-file race.
 
+### Formal review follow-ups — 2026-11-05
+
+- [x] [Review][Patch][High] R1: Reject approval-before-collection dependency deadlocks at admission (`services/infra_automation_units.py`).
+- [x] [Review][Patch][Medium] R2: Return the original admitted run on exact idempotent replay after inventory supersession.
+- [x] [Review][Patch][Medium] R3: Recover lost start responses with an explicit same-identity retry; never strand the form or create a fresh request implicitly.
+- [x] [Review][Patch][Medium] R4: Freeze workflow/revision pagination while admission is pending.
+- [x] [Review][Patch][Medium] R5: Align browser source-path validation with backend Unicode character semantics.
+- [x] [Review][Patch][Medium] R6: Associate located errors with their actual controls and provide keyboard links from the summary.
+- [x] [Review][Patch][Medium] R7: Expose bounded revision history so a lost save can be recovered after a later revision supersedes it.
+
+- [x] [Review][Defer] D1: Existing medium brace-expansion advisory in unchanged root package-lock.json; see deferred-work.md.
+
 ## Dev Notes
 
 - Reuse: Reuse 16.3 validator/DAG/canonicalization ports and 16.10 target lock/binding service; frontend/src/components/ui primitives and API client. Do not duplicate dependency planning in frontend or reuse topology inference as declared authority.
@@ -102,12 +114,14 @@ Execute one bounded packet at a time on the story feature branch. Each packet ow
 Codex with bounded native domain, service, UI, browser and independent review lanes.
 
 ### Debug Log References
+- [Formal review and repairs](../../docs/verification/infra-automation/16-16/formal-code-review.md), [fresh validation](../../docs/verification/infra-automation/16-16/review-validation-summary.json), and [review browser proof](../../docs/verification/infra-automation/16-16/review-browser-proof.md).
 - [Full implementation and validation record](../../docs/verification/infra-automation/16-16/results.md).
 - [Layered review and resolved findings](../../docs/verification/infra-automation/16-16/code-review.md).
 - [Actual composed keyboard/axe/browser proof](../../docs/verification/infra-automation/16-16/browser-proof.md), [screenshots](../../docs/verification/infra-automation/16-16/screenshots.json) and [visual verdict](../../docs/verification/infra-automation/16-16/visual-verdict.json).
 - [Structured results and log hashes](../../docs/verification/infra-automation/16-16/validation-summary.json).
 
 ### Completion Notes List
+- Formal BMad review completed: seven findings repaired and independently verified; existing dependency alert D1 deferred outside the story diff. Fresh root1,866tests/3skips; API754passed/1skip/2,358subtests; automation1,063passed/1skip/3,081subtests; UI438tests+2compat/typecheck/build; actual Compose4passed45.4s,18screenshots,axe0,visual94. Current real collection49checks and integrity9tests73subtests pass. Separate backend/UI branches are prepared for required remote review closure.
 - Earlier dependency/interface review passed using actual16.0/16.3/16.10/16.14 proof. Current collection/isolation integrity:9tests73subtests pass; real collection49checks pass with unit integration added to source-hash coverage. Existing qualified offline ARM64/OpenTofu profile remains the support boundary.
 - AC1–3: closed25unit/200edge/128KiB declarations, exact affected/prerequisite closure, located rejection, canonical ordering and immutable revision/run snapshots. Permutations and complete two-unit shared analysis are exercised. Local maximum-length ASCII corpus59,416input/62,951result bytes;1000validations p50/p95/p99=6.073/6.312/6.564ms (diagnostic only).
 - AC3–5: existing canonical target locks, unknown-work retention and exact intake/analysis/source linkage; persisted server-derived combined evidence and current revision/whole-bundle deadlines checked at decision admission. Uploaded/mixed bundles remain advisory; collected association requires repository root and actual admitted provenance for every unit. External handoff ancestors cannot masquerade as collection order.
@@ -115,11 +129,12 @@ Codex with bounded native domain, service, UI, browser and independent review la
 - Validation: root1862tests/3skips; exact API/CLI/infra753passed/1skip/2358subtests; automation1060passed/1skip/3081subtests; all ten local-CI directory targets verified after stale migration-head assertions and an existing macOS test-fixture race were repaired. Full logs preserve initial failures rather than hiding them.
 - Frontend432tests plus2compatibilitychecks, typecheck and production build pass. Ruff lint and repo-wide formatting565files pass. Scoped Bandit/full-CI high gate pass. CI mypy retains318existing-code diagnostics, zero on changed lines.
 - Independent review repairs cover pre-serialization bounds, quotas, retry lineage, whole-bundle freshness, exact dependency order, live evidence refresh, exact response coverage, new-preflight recovery and verified lost-save reconciliation. Composed proof additionally repaired the Inventory account return-route allowlist. No unresolved introduced review findings remain.
-- BMad help handoff: code-review closure for separate local backend/UI branches. Public push/PR/release and later production qualification are not claimed. Planning scope, advisory reports and shared analysis remain unchanged.
+- Development handoff to formal code review is complete. Planning scope, advisory reports and shared analysis remain unchanged; release/pilot qualification remains owned by later stories.
 
 ### File List
 - `README.md`
 - `_bmad-output/implementation-artifacts/16-16-declared-multi-unit-preflight-planning.md`
+- `_bmad-output/implementation-artifacts/deferred-work.md`
 - `_bmad-output/implementation-artifacts/sprint-status.yaml`
 - `_bmad-output/project-context.md`
 - `api/routes/infra_automation_units.py`
@@ -134,7 +149,34 @@ Codex with bounded native domain, service, UI, browser and independent review la
 - `docs/verification/infra-automation/16-16/browser-test-reload-failure.txt`
 - `docs/verification/infra-automation/16-16/browser-verified.txt`
 - `docs/verification/infra-automation/16-16/code-review.md`
+- `docs/verification/infra-automation/16-16/formal-code-review.md`
 - `docs/verification/infra-automation/16-16/results.md`
+- `docs/verification/infra-automation/16-16/review-browser-before-retry-hardening.txt`
+- `docs/verification/infra-automation/16-16/review-browser-interrupted.txt`
+- `docs/verification/infra-automation/16-16/review-browser-proof.md`
+- `docs/verification/infra-automation/16-16/review-browser-source.json`
+- `docs/verification/infra-automation/16-16/review-browser-verified.txt`
+- `docs/verification/infra-automation/16-16/review-screenshots.json`
+- `docs/verification/infra-automation/16-16/review-screenshots/inventory-confirmation-1440.png`
+- `docs/verification/infra-automation/16-16/review-screenshots/inventory-confirmation-760.png`
+- `docs/verification/infra-automation/16-16/review-screenshots/inventory-editor-1440.png`
+- `docs/verification/infra-automation/16-16/review-screenshots/inventory-editor-760.png`
+- `docs/verification/infra-automation/16-16/review-screenshots/inventory-unknown-1440.png`
+- `docs/verification/infra-automation/16-16/review-screenshots/inventory-unknown-760.png`
+- `docs/verification/infra-automation/16-16/review-screenshots/review-historical-save-adoption-1440.png`
+- `docs/verification/infra-automation/16-16/review-screenshots/review-historical-save-adoption-760.png`
+- `docs/verification/infra-automation/16-16/review-screenshots/review-pending-pagination-1440.png`
+- `docs/verification/infra-automation/16-16/review-screenshots/review-pending-pagination-760.png`
+- `docs/verification/infra-automation/16-16/review-screenshots/review-replayed-superseded-run-1440.png`
+- `docs/verification/infra-automation/16-16/review-screenshots/review-replayed-superseded-run-760.png`
+- `docs/verification/infra-automation/16-16/review-screenshots/review-retry-rate-rejected-1440.png`
+- `docs/verification/infra-automation/16-16/review-screenshots/review-retry-rate-rejected-760.png`
+- `docs/verification/infra-automation/16-16/review-screenshots/run-review-required-1440.png`
+- `docs/verification/infra-automation/16-16/review-screenshots/run-review-required-760.png`
+- `docs/verification/infra-automation/16-16/review-screenshots/run-unit-evidence-1440.png`
+- `docs/verification/infra-automation/16-16/review-screenshots/run-unit-evidence-760.png`
+- `docs/verification/infra-automation/16-16/review-validation-summary.json`
+- `docs/verification/infra-automation/16-16/review-visual-verdict.json`
 - `docs/verification/infra-automation/16-16/screenshots.json`
 - `docs/verification/infra-automation/16-16/screenshots/inventory-confirmation-1440.png`
 - `docs/verification/infra-automation/16-16/screenshots/inventory-confirmation-760.png`
@@ -192,3 +234,4 @@ Codex with bounded native domain, service, UI, browser and independent review la
 
 ## Change Log
 - 2026-11-05: Implemented all four bounded packets, resolved independent and composed-browser findings, completed required verification, and advanced to review.
+- 2026-11-05: Formal review repaired R1–R7, recorded D1 separately, reran affected full suites and composed proof, and advanced to done.

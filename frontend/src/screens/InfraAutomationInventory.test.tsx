@@ -65,3 +65,25 @@ it("adopts only matching verified revision after a lost save response", () => {
   saves.begin("new", { ...saveIntent, knownInventoryIds: ["inv"] });
   expect(saves.recover("new", revision)).toBe(false);
 });
+
+import { UnitStartRequests, UnitErrorSummary, unitFieldErrors } from "./InfraAutomationInventory";
+import type { UnitRunRequest } from "../api/infraAutomationUnits";
+const startPayload: UnitRunRequest = { run: { workflow_id: "wf", revision_id: "wf-rev", workspace_id: 9, reason: "Review scope", idempotency_key: "fixed-key", total_timeout_seconds: 3600, inputs: {} }, revision_id: "rev", confirmed_map_digest: digest, bindings: [{ unit_id: "app", intake_step_id: "intake", analysis_step_id: "analysis", artifacts: [{ name: "plan.json", content: "original bytes" }] }] };
+it("retains exact request bytes and identity across an unresolved run and remount", () => {
+  const starts = new UnitStartRequests(); const ticket = starts.remember("scope", startPayload);
+  startPayload.bindings[0].artifacts[0].content = "later edited";
+  const retry = starts.pendingRequest("scope")!; expect(retry.run.idempotency_key).toBe("fixed-key"); expect(retry.bindings[0].artifacts[0].content).toBe("original bytes");
+  retry.bindings[0].artifacts[0].content = "mutated returned view";
+  expect(starts.pendingRequest("scope")!.bindings[0].artifacts[0].content).toBe("original bytes");
+  expect(() => starts.remember("scope", startPayload)).toThrow(); expect(starts.pendingRequest("different-scope")).toBeUndefined();
+  starts.succeed("scope", ticket, "run"); expect(starts.pendingRequest("scope")).toBeUndefined(); expect(starts.get("scope")).toMatchObject({ kind: "confirmed", runId: "run" });
+});
+it("links located prerequisite errors to their actual control, not a valid unit ID", () => {
+  const rows = [{ ...emptyUnit(), id: "app", prerequisites: "missing" }];
+  const errors = [{ code: "unknown_identity", message: "Prerequisite not declared", path: ["units", 0, "prerequisites", 0] }];
+  expect(unitFieldErrors(errors, rows, 0, "id")).toEqual([]);
+  expect(unitFieldErrors(errors, rows, 0, "prerequisites")).toEqual(errors);
+  const html = renderToStaticMarkup(<UnitErrorSummary errors={errors} rows={rows} />);
+  expect(html).toContain('href="#unit-0-prerequisites"');
+  expect(html).not.toContain('href="#unit-0-id"');
+});

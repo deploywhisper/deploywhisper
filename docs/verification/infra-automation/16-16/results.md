@@ -1,8 +1,9 @@
 # Story 16.16 implementation and verification
 
 Implementation, layered review repairs and required verification are complete.
-Story16.16 is ready for review. Backend and UI remain separate local Git Flow
-branches; publication and release are not claimed.
+Story16.16 is done after formal review repairs. The fresh review results are in
+[formal code review](formal-code-review.md); the tables below retain development
+evidence. Backend and UI remain separate Git Flow branches; release is not claimed.
 
 ## Delivered behavior
 

@@ -1,0 +1,13 @@
+{
+  "image": "sha256:07fba951586ccfd066764f4c453f4c009ea1b674af6953e8b32e704b6f1a7578",
+  "head_at_verification": "b5fec0e02d95eeffc6749325532bde29f6c14969",
+  "source_sha256": {
+    "services/infra_automation_units.py": "97b05fe833d15cdf24ea8c223ac86b0a3a938adf51c159a5de4e2a6d1f3a55c4",
+    "api/routes/infra_automation_units.py": "715696cbe128c3cea761c6e08acc8c292b8c3f89608cc776b0ec912f5eba1b14",
+    "infra_automation/unit_contracts.py": "cdea6771517cc83f9065b8c761b715dfeba290174e3b21a165a2b02847eeb422",
+    "models/repositories/infra_automation_units.py": "6bcf0f9f0a9426fa7f91cad0426a959c5e5d5a0853f3923d89a9e043d8fb2cac",
+    "frontend/src/screens/InfraAutomationInventory.tsx": "cd13044f6565e1e9ee5ad90e7f91f4ee055ab86eeab8a01ecbc034012662bd24",
+    "frontend/src/api/infraAutomationUnits.ts": "9ad113d022f5db2a9fee1ea0f369d9eb9d60dc48c1ea50a41fbe3083085e13e3",
+    "frontend/e2e/infra-automation-units.spec.ts": "65ce28040a0a9899c34864ba08f0cd8a057e9f124d8be3862d5e0663bfdfdcfc"
+  }
+}

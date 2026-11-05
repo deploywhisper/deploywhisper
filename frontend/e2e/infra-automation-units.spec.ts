@@ -108,7 +108,7 @@ async function cleanAxe(page: Page) {
   expect(result.violations.filter((item) => item.impact === "critical" || item.impact === "serious").map(({ id, nodes }) => ({ id, elements: nodes.map((node) => node.target) }))).toEqual([]);
 }
 async function capture(page: Page, name: string, anchor?: Locator) {
-  const directory = resolve("docs/verification/infra-automation/16-16/screenshots");
+  const directory = resolve("docs/verification/infra-automation/16-16/review-screenshots");
   mkdirSync(directory, { recursive: true });
   for (const width of [1440, 760]) {
     await page.setViewportSize({ width, height: 1000 });
@@ -154,6 +154,54 @@ async function validate(page: Page) {
   return (await response.json()).data;
 }
 
+
+function declaredMap(path = ".") {
+  return { version: 1, affected: ["app"], units: [
+    { id: "network", source: { kind: "uploaded", path }, environment: "test", target: "synthetic-network", prerequisites: [] as string[] },
+    { id: "app", source: { kind: "uploaded", path }, environment: "test", target: "synthetic-app", prerequisites: ["network"] },
+  ] };
+}
+async function saveMap(context: BrowserContext, csrf: string, scope: Scope, map = declaredMap(), current?: { inventory_id: string; version: number }) {
+  const response = await context.request.post("/api/v1/infra-automation/units", { headers: { Origin: origin, "X-CSRF-Token": csrf }, data: {
+    project_id: scope.projectId, workspace_id: scope.workspaceId, inventory_id: current?.inventory_id ?? null,
+    expected_version: current?.version ?? 0, reason: "Synthetic review recovery declaration", map,
+  } });
+  expect(response.status()).toBe(200); return (await response.json()).data;
+}
+async function openSaved(page: Page, saved: { inventory_id: string; version: number }) {
+  await keyboardActivate(page, page.getByRole("button", { name: "Refresh inventories", exact: true }));
+  await keyboardActivate(page, page.getByRole("button", { name: `Open inventory ${saved.inventory_id} · revision ${saved.version}`, exact: true }));
+  await expect(page.getByRole("heading", { name: `Run saved revision ${saved.version}`, exact: true })).toBeVisible();
+}
+async function fillRunBindings(page: Page) {
+  for (const unit of ["network", "app"]) {
+    await keyboardText(page, `${unit} intake step`, `${unit}-upload`);
+    await keyboardText(page, `${unit} analysis step`, `${unit}-analysis`);
+    const input = page.getByLabel(`${unit} artifacts`, { exact: true }); await tabTo(page, input);
+    await input.setInputFiles({ name: "main.tf", mimeType: "text/plain", buffer: Buffer.from(`resource "aws_s3_bucket" "${unit}" { bucket = "synthetic-review-${unit}" }\n`) });
+  }
+  await keyboardText(page, "Run reason", "Exercise exact review recovery");
+  await keyboardActivate(page, page.getByLabel("I confirm this saved revision and collection/review order", { exact: true }), "Space");
+}
+async function loseNextCommittedResponse(page: Page, pathname: string) {
+  await page.evaluate((path) => {
+    const original = window.fetch.bind(window);
+    window.fetch = async (input, options) => {
+      const url = new URL(input instanceof Request ? input.url : String(input), window.location.href);
+      const method = options?.method ?? (input instanceof Request ? input.method : "GET");
+      const response = await original(input, options);
+      if (url.pathname === path && method === "POST" && response.ok) {
+        // Fully receive the real server result before discarding it. This avoids
+        // leaving an unread browser stream while preserving client uncertainty.
+        await response.clone().arrayBuffer();
+        window.fetch = original;
+        throw new TypeError("Synthetic lost committed response");
+      }
+      return response;
+    };
+  }, pathname);
+}
+
 test.describe("declared units using real composed APIs", () => {
   test.skip(!fixturePath, "Requires the disposable unit Compose lane and protected fixture.");
   test.beforeEach(async ({ page }) => { page.setDefaultTimeout(15_000); });
@@ -182,7 +230,13 @@ test.describe("declared units using real composed APIs", () => {
     await keyboardText(page, "Unit 2 prerequisites", "missing");
     expect((await validate(page)).valid).toBe(false);
     await expect(page.getByRole("alert").first()).toBeFocused();
-    await capture(page, "inventory-unknown");
+    const invalidPrerequisite = page.getByLabel("Unit 2 prerequisites", { exact: true });
+    await expect(invalidPrerequisite).toHaveAttribute("aria-invalid", "true");
+    await expect(invalidPrerequisite).toHaveAttribute("aria-describedby", "unit-1-prerequisites-errors");
+    await expect(page.getByLabel("Unit 2 ID", { exact: true })).not.toHaveAttribute("aria-invalid", "true");
+    await keyboardActivate(page, page.getByRole("link", { name: /^units\.1\.prerequisites\.0:/ }));
+    await expect(invalidPrerequisite).toBeFocused();
+    await capture(page, "inventory-unknown", invalidPrerequisite);
     await keyboardText(page, "Unit 2 prerequisites", "network");
     await keyboardText(page, "Unit 1 prerequisites", "app", true);
     expect((await validate(page)).valid).toBe(false);
@@ -272,4 +326,142 @@ test.describe("declared units using real composed APIs", () => {
     await tabTo(page, page.getByRole("link", { name: `Report ${evidence.evidence.items[0].report_id}`, exact: true }));
     await capture(page, "run-review-required", page.getByRole("link", { name: `Report ${evidence.evidence.items[0].report_id}`, exact: true }));
   });
+  test("lost committed start replays one original run after inventory supersession", async ({ page, context }) => {
+    const { accounts, projects } = fixture(), scope = projects.enabled;
+    const csrf = await login(page, accounts.operator, scope);
+    const { workflow, revision } = await publishedWorkflow(context, csrf, scope);
+    const saved = await saveMap(context, csrf, scope);
+    await openSaved(page, saved);
+    await keyboardSelect(page, "Workflow", workflow.id);
+    await keyboardSelect(page, "Workflow revision", revision.id);
+    await fillRunBindings(page);
+    await loseNextCommittedResponse(page, "/api/v1/infra-automation/units/runs");
+    const responsePromise = page.waitForResponse((r) => new URL(r.url()).pathname.endsWith("/units/runs") && r.request().method() === "POST");
+    await keyboardActivate(page, page.getByRole("button", { name: "Start preflight run", exact: true }));
+    const admitted = await responsePromise; expect(admitted.status()).toBe(200);
+    const originalPayload = admitted.request().postDataJSON();
+    await expect(page.getByRole("button", { name: "Retry original run request", exact: true })).toBeEnabled();
+    const durableRuns = await context.request.get(`/api/v1/infra-automation/runs?project_id=${scope.projectId}&workspace_id=${scope.workspaceId}&limit=100`);
+    expect(durableRuns.status()).toBe(200);
+    const admittedRuns = (await durableRuns.json()).data.items.filter((item: { workflow_id: string }) => item.workflow_id === workflow.id);
+    expect(admittedRuns).toHaveLength(1); const run = admittedRuns[0];
+    await saveMap(context, csrf, scope, declaredMap("superseded"), saved);
+    // Explicit gateway/client fault model: one rejected retry never reaches the
+    // server. It cannot establish that the earlier successful request did not commit.
+    await page.evaluate(() => {
+      const original = window.fetch.bind(window);
+      const state = window as unknown as { retryFaultCount: number; rejectedRetryBody: unknown };
+      state.retryFaultCount = 0;
+      window.fetch = async (input, options) => {
+        const url = new URL(input instanceof Request ? input.url : String(input), window.location.href);
+        const method = options?.method ?? (input instanceof Request ? input.method : "GET");
+        if (url.pathname === "/api/v1/infra-automation/units/runs" && method === "POST") {
+          window.fetch = original; state.retryFaultCount += 1;
+          state.rejectedRetryBody = JSON.parse(String(options?.body));
+          return new Response(JSON.stringify({ error: { code: "quota_exceeded", message: "Synthetic gateway rejection", details: { retryable: true } } }), { status: 429, headers: { "Content-Type": "application/json" } });
+        }
+        return original(input, options);
+      };
+    });
+    await keyboardActivate(page, page.getByRole("button", { name: "Retry original run request", exact: true }));
+    await expect.poll(() => page.evaluate(() => (window as unknown as { retryFaultCount: number }).retryFaultCount)).toBe(1);
+    expect(await page.evaluate(() => (window as unknown as { rejectedRetryBody: unknown }).rejectedRetryBody)).toEqual(originalPayload);
+    await expect(page.getByRole("button", { name: "Retry original run request", exact: true })).toBeEnabled();
+    await expect(page.getByRole("button", { name: "Start preflight run", exact: true })).toBeDisabled();
+    await expect(page.getByRole("combobox", { name: "Workflow", exact: true })).toBeDisabled();
+    await expect(page.getByLabel("app artifacts", { exact: true })).toBeDisabled();
+    await capture(page, "review-retry-rate-rejected", page.getByRole("button", { name: "Retry original run request", exact: true }));
+    const retryResponse = page.waitForResponse((r) => new URL(r.url()).pathname.endsWith("/units/runs") && r.request().method() === "POST");
+    await keyboardActivate(page, page.getByRole("button", { name: "Retry original run request", exact: true }));
+    const replayed = await retryResponse; expect(replayed.status()).toBe(200);
+    expect(replayed.request().postDataJSON()).toEqual(originalPayload);
+    expect((await replayed.json()).data.id).toBe(run.id);
+    await expect(page).toHaveURL(new RegExp(`/infra-automation/runs/${run.id}`));
+    const response = await context.request.get(`/api/v1/infra-automation/runs?project_id=${scope.projectId}&workspace_id=${scope.workspaceId}&limit=100`);
+    expect(response.status()).toBe(200);
+    expect((await response.json()).data.items.filter((item: { workflow_id: string }) => item.workflow_id === workflow.id).map((item: { id: string }) => item.id)).toEqual([run.id]);
+    await expect(page.getByText("Review required again. Recollect, reanalyze and obtain a new approval.", { exact: true })).toBeVisible();
+    await capture(page, "review-replayed-superseded-run", page.getByRole("button", { name: "Refresh unit evidence", exact: true }));
+  });
+
+  test("lost save can adopt exact historical revision after a newer save", async ({ page, context }) => {
+    const { accounts, projects } = fixture(), scope = projects.enabled;
+    const csrf = await login(page, accounts.operator, scope);
+    const first = await saveMap(context, csrf, scope);
+    await openSaved(page, first);
+    await keyboardText(page, "Unit 1 path", "version-two");
+    expect((await validate(page)).valid).toBe(true);
+    await keyboardActivate(page, page.getByLabel("I confirm this exact affected and prerequisite scope", { exact: true }), "Space");
+    await keyboardText(page, "Revision reason", "Save exact second revision before response loss");
+    await loseNextCommittedResponse(page, "/api/v1/infra-automation/units");
+    const secondResponse = page.waitForResponse((r) => new URL(r.url()).pathname === "/api/v1/infra-automation/units" && r.request().method() === "POST");
+    await keyboardActivate(page, page.getByRole("button", { name: "Save revision", exact: true }));
+    const second = await secondResponse; expect(second.status()).toBe(200);
+    await expect(page.getByText("An earlier save remains unresolved. Inspect refreshed inventory history; this page will not repeat it.", { exact: true })).toBeVisible();
+    const durableHistory = await context.request.get(`/api/v1/infra-automation/units/${first.inventory_id}/revisions?project_id=${scope.projectId}&workspace_id=${scope.workspaceId}`);
+    expect(durableHistory.status()).toBe(200);
+    const committed = (await durableHistory.json()).data.items.find((item: { version: number }) => item.version === 2);
+    expect(committed).toBeTruthy();
+    const third = await saveMap(context, csrf, scope, declaredMap("version-three"), committed);
+    expect(third.version).toBe(3);
+    let saveRequests = 0;
+    const countSave = (request: import("@playwright/test").Request) => { if (new URL(request.url()).pathname === "/api/v1/infra-automation/units" && request.method() === "POST") saveRequests += 1; };
+    page.on("request", countSave);
+    await keyboardActivate(page, page.getByRole("button", { name: "Refresh inventories", exact: true }));
+    await keyboardActivate(page, page.getByRole("button", { name: `Read revision history for ${first.inventory_id}`, exact: true }));
+    await keyboardActivate(page, page.getByRole("button", { name: "Open historical revision 2", exact: true }));
+    await expect(page.getByRole("button", { name: "Use this verified revision", exact: true })).toBeEnabled();
+    await capture(page, "review-historical-save-adoption", page.getByRole("button", { name: "Use this verified revision", exact: true }));
+    await keyboardActivate(page, page.getByRole("button", { name: "Use this verified revision", exact: true }));
+    await expect(page.getByLabel("Unit 1 path", { exact: true })).toBeEnabled();
+    await expect(page.getByLabel("Unit 1 path", { exact: true })).toHaveValue("version-two");
+    expect(saveRequests).toBe(0); page.off("request", countSave);
+  });
+
+  test("all pagination controls freeze during pending artifact reads", async ({ page, context }) => {
+    test.setTimeout(300_000);
+    const { accounts, projects } = fixture(), scope = projects.enabled;
+    const csrf = await login(page, accounts.operator, scope);
+    // Default100workflow/revision quotas and25-item pages support three pages.
+    // Every option below is a real authorized API-created immutable workflow.
+    const created = new Map<string, Awaited<ReturnType<typeof publishedWorkflow>>>();
+    for (let count = 0; count < 51; count += 1) {
+      const value = await publishedWorkflow(context, csrf, scope); created.set(value.workflow.id, value);
+    }
+    const saved = await saveMap(context, csrf, scope);
+    await openSaved(page, saved);
+    const workflowPage = page.waitForResponse((r) => new URL(r.url()).pathname.endsWith("/workflows") && new URL(r.url()).searchParams.has("cursor"));
+    await keyboardActivate(page, page.getByRole("button", { name: "Next workflow page", exact: true }));
+    const middle = (await (await workflowPage).json()).data.items.find((item: { id: string }) => created.has(item.id));
+    expect(middle).toBeTruthy(); const selected = created.get(middle.id)!;
+    let expectedVersion = selected.workflow.draft_version + 1;
+    for (let index = 0; index < 50; index += 1) {
+      const published = await context.request.post(`/api/v1/infra-automation/workflows/${middle.id}/revisions`, { headers: { Origin: origin, "X-CSRF-Token": csrf }, data: {
+        expected_version: expectedVersion++, idempotency_key: `review-pagination-${index}-${Date.now()}`, reason: "Synthetic revision pagination proof",
+      } }); expect(published.status()).toBe(200);
+    }
+    await keyboardSelect(page, "Workflow", middle.id);
+    const revisionPage = page.waitForResponse((r) => new URL(r.url()).pathname.endsWith(`/workflows/${middle.id}/revisions`) && new URL(r.url()).searchParams.has("cursor"));
+    await keyboardActivate(page, page.getByRole("button", { name: "Next revision page", exact: true }));
+    const middleRevision = (await (await revisionPage).json()).data.items[0];
+    await keyboardSelect(page, "Workflow revision", middleRevision.id);
+    await fillRunBindings(page);
+    await page.evaluate(() => {
+      const state = window as unknown as { unitReadCount: number; releaseUnitReads: () => void };
+      state.unitReadCount = 0; const original = File.prototype.text;
+      let release: () => void; const waiting = new Promise<void>((resolve) => { release = resolve; });
+      state.releaseUnitReads = () => { File.prototype.text = original; release(); };
+      File.prototype.text = async function () { state.unitReadCount += 1; await waiting; return original.call(this); };
+    });
+    await keyboardActivate(page, page.getByRole("button", { name: "Start preflight run", exact: true }));
+    await expect.poll(() => page.evaluate(() => (window as unknown as { unitReadCount: number }).unitReadCount)).toBe(2);
+    for (const name of ["First workflow page", "Next workflow page", "First revision page", "Next revision page"]) await expect(page.getByRole("button", { name, exact: true })).toBeDisabled();
+    await capture(page, "review-pending-pagination");
+    const admittedResponse = page.waitForResponse((r) => new URL(r.url()).pathname.endsWith("/units/runs") && r.request().method() === "POST");
+    await page.evaluate(() => (window as unknown as { releaseUnitReads: () => void }).releaseUnitReads());
+    const admitted = await admittedResponse; expect(admitted.status()).toBe(200);
+    expect(admitted.request().postDataJSON().run).toMatchObject({ workflow_id: middle.id, revision_id: middleRevision.id });
+    await expect(page).toHaveURL(new RegExp(`/infra-automation/runs/${(await admitted.json()).data.id}`));
+  });
+
 });
