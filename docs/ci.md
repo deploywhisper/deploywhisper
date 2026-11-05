@@ -14,11 +14,15 @@ required high-priority finding dispositions.
 - `frontend`: installs the React SPA workspace, then runs typecheck, Vitest, and the production build.
 - `changed-tests`: on pull requests, runs changed `test_*.py` modules under `tests/`, excluding `tests/fixtures/` and helper scripts, for faster early feedback. Qualification probes stay executable through their owning tests and are never imported as test modules.
 - `test`: runs the Python suite with pytest in five logical shards with `fail-fast: false`.
-  Services and infrastructure automation run separately. Services has a
+  Services and infrastructure automation run separately, each with a
   25-minute job budget; the other shards retain 15 minutes. On PR #213, all
   1,232 services tests passed in 14m26s, but setup and final cleanup pushed the
   job past its former 15-minute limit. The larger services budget leaves room
-  for that overhead and hosted-runner variation. Test-level cancellation
+  for that overhead and hosted-runner variation. On PR #215, the automation
+  push run reached 99% before GitHub cancelled it at the 15-minute limit;
+  the parallel PR run on the same commit passed in 14m51s including setup
+  and cleanup. Its 25-minute budget provides the same bounded headroom.
+  Test-level cancellation
   deadlines and the requirement that every shard passes are unchanged.
 - The blocking `tests/test_llm` shard includes the prompt-injection regression
   suite documented in

@@ -121,6 +121,7 @@ Codex with bounded native domain, service, UI, browser and independent review la
 - [Structured results and log hashes](../../docs/verification/infra-automation/16-16/validation-summary.json).
 
 ### Completion Notes List
+- PR215 CI follow-up: push run42019789549 was cancelled by the 15-minute automation job limit after reaching99%; the same-commit PR run42019963343 passed in14m51s. Raised only that shard to25minutes, matching services, and updated the existing workflow contract. Local workflow/security contract checks:24tests25subtests pass; Ruff and repository formatting pass. Test-level deadlines and required checks remain enforced.
 - Formal BMad review completed: seven findings repaired and independently verified; existing dependency alert D1 deferred outside the story diff. Fresh root1,866tests/3skips; API754passed/1skip/2,358subtests; automation1,063passed/1skip/3,081subtests; UI438tests+2compat/typecheck/build; actual Compose4passed45.4s,18screenshots,axe0,visual94. Current real collection49checks and integrity9tests73subtests pass. Separate backend/UI branches are prepared for required remote review closure.
 - Earlier dependency/interface review passed using actual16.0/16.3/16.10/16.14 proof. Current collection/isolation integrity:9tests73subtests pass; real collection49checks pass with unit integration added to source-hash coverage. Existing qualified offline ARM64/OpenTofu profile remains the support boundary.
 - AC1–3: closed25unit/200edge/128KiB declarations, exact affected/prerequisite closure, located rejection, canonical ordering and immutable revision/run snapshots. Permutations and complete two-unit shared analysis are exercised. Local maximum-length ASCII corpus59,416input/62,951result bytes;1000validations p50/p95/p99=6.073/6.312/6.564ms (diagnostic only).
@@ -132,6 +133,7 @@ Codex with bounded native domain, service, UI, browser and independent review la
 - Development handoff to formal code review is complete. Planning scope, advisory reports and shared analysis remain unchanged; release/pilot qualification remains owned by later stories.
 
 ### File List
+- `.github/workflows/ci.yml`
 - `README.md`
 - `_bmad-output/implementation-artifacts/16-16-declared-multi-unit-preflight-planning.md`
 - `_bmad-output/implementation-artifacts/deferred-work.md`
@@ -139,6 +141,7 @@ Codex with bounded native domain, service, UI, browser and independent review la
 - `_bmad-output/project-context.md`
 - `api/routes/infra_automation_units.py`
 - `app.py`
+- `docs/ci.md`
 - `docs/infra-automation/browser-ui.md`
 - `docs/infra-automation/units.md`
 - `docs/verification/infra-automation/16-14/results.json`
@@ -226,6 +229,7 @@ Codex with bounded native domain, service, UI, browser and independent review la
 - `tests/test_infra/test_project_membership_migration.py`
 - `tests/test_infra/test_receiver_reconciliation_migration.py`
 - `tests/test_infra/test_runner_enrollment_migration.py`
+- `tests/test_infra/test_supply_chain_remediation.py`
 - `tests/test_infra_automation/test_collection_qualification.py`
 - `tests/test_infra_automation/test_preflight_repository.py`
 - `tests/test_infra_automation/test_receiver_runtime.py`
@@ -235,3 +239,4 @@ Codex with bounded native domain, service, UI, browser and independent review la
 ## Change Log
 - 2026-11-05: Implemented all four bounded packets, resolved independent and composed-browser findings, completed required verification, and advanced to review.
 - 2026-11-05: Formal review repaired R1–R7, recorded D1 separately, reran affected full suites and composed proof, and advanced to done.
+- 2026-11-05: Increased the infra-automation CI job budget after a confirmed hosted-runner timeout; preserved test coverage and per-test deadlines.
