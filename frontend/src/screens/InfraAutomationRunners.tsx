@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, useSyncExternalStore, type Ref } from "rea
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { ApiClientError } from "../api/client";
-import { enrollRunner, getRunnerCapabilities, getRunnerHealth, revokeRunner, rotateRunner, type RunnerCapabilities, type RunnerHealth, type EnrollmentReveal } from "../api/infraAutomationRunners";
+import { enrollRunner, isConfirmedRunnerRejection, getRunnerCapabilities, getRunnerHealth, revokeRunner, rotateRunner, type RunnerCapabilities, type RunnerHealth, type EnrollmentReveal } from "../api/infraAutomationRunners";
 import { Button, Card, SkeletonLine } from "../components/ui";
 import { runnerMutationStore, type RunnerMutationMarker } from "./runnerMutationState";
 import { AutomationFrame, automationError, scopeQuery, type AutomationContext } from "./InfraAutomationShared";
@@ -108,16 +108,18 @@ export function RunnerPanel({ context }: { context: AutomationContext }) {
       queryClient.setQueryData([...queryKey, "capabilities"], current);
       if (!(action === "enroll" ? current.can_enroll : action === "rotate" ? current.can_rotate : current.can_revoke)) throw new ApiClientError("Runner administration unavailable.", 403);
       if (action === "enroll" && !current.configured_profiles.some((item) => item.profile_digest === selectedProfile?.profile_digest && item.tool === selectedProfile.tool && item.tool_version === selectedProfile.tool_version && item.runner_version === selectedProfile.runner_version)) throw new ApiClientError("Collection profile changed.", 409);
-      marker = runnerMutationStore.begin(identityKey, mutationKey, action, target?.id);
-      if (!marker) throw new ApiClientError("A runner administration request remains unresolved. Review current registrations before another request.", 409);
-      submitted = true;
+      const onSubmit = () => {
+        marker = runnerMutationStore.begin(identityKey, mutationKey, action, target?.id);
+        if (!marker) throw new ApiClientError("A runner administration request remains unresolved. Review current registrations before another request.", 409);
+        submitted = true;
+      };
       if (action === "revoke" && target) {
-        await revokeRunner(target.id, requestedReason, context.identity.csrfToken!);
-        runnerMutationStore.verified(marker, { kind: "revoked", runnerId: target.id });
+        await revokeRunner(target.id, requestedReason, context.identity.csrfToken!, onSubmit);
+        runnerMutationStore.verified(marker!, { kind: "revoked", runnerId: target.id });
         if (active.current !== expected || generation.current !== operation) return;
         setNotice("Runner credential revoked. This does not confirm that previously accepted external work has stopped.");
       } else {
-        const result = action === "enroll" ? await enrollRunner(context.scope, selectedProfile!, selectedTags, requestedReason, context.identity.csrfToken!) : await rotateRunner(target!.id, requestedReason, context.identity.csrfToken!);
+        const result = action === "enroll" ? await enrollRunner(context.scope, selectedProfile!, selectedTags, requestedReason, context.identity.csrfToken!, onSubmit) : await rotateRunner(target!.id, requestedReason, context.identity.csrfToken!, onSubmit);
         const enrollment = "enrollment" in result ? result.enrollment : null;
         const expiresAt = enrollment ? enrollment.expires_at : (result as { expires_at: string }).expires_at;
         const runnerId = enrollment?.runner_id ?? target!.id;
@@ -126,7 +128,7 @@ export function RunnerPanel({ context }: { context: AutomationContext }) {
         const mayReveal = stillCurrent && latest.current.identity.status === "ready" && currentAuthority.current.fresh && monotonicDeadline !== null;
         const revealed: RunnerSecret | null = monotonicDeadline === null ? null : { key: expected, kind: enrollment ? "enrollment" : "credential", runnerId, token: result.token, expiresAt, monotonicDeadline, ...(enrollment ? { enrollment } : {}) };
         const display = mayReveal ? visibleRunnerSecret(revealed, expected, true, performance.now(), Date.now()) : null;
-        runnerMutationStore.verified(marker, { kind: "issued", runnerId, credentialCleared: !display });
+        runnerMutationStore.verified(marker!, { kind: "issued", runnerId, credentialCleared: !display });
         if (!stillCurrent) return;
         if (!display) {
           setError("The credential was issued but its secret was cleared because current access or expiry could not be verified. Review the recorded runner before reissuing.");
@@ -136,10 +138,10 @@ export function RunnerPanel({ context }: { context: AutomationContext }) {
       }
       setReason(""); void health.refetch().catch(() => undefined);
     } catch (failure) {
-      const ambiguous = submitted && (!(failure instanceof ApiClientError) || ![400, 401, 403, 404, 409, 422, 429].includes(failure.status));
+      const ambiguous = submitted && !isConfirmedRunnerRejection(failure);
       if (marker) {
         if (ambiguous) runnerMutationStore.unknown(marker);
-        else runnerMutationStore.verified(marker, { kind: "rejected", runnerId: target?.id });
+        else runnerMutationStore.verified(marker!, { kind: "rejected", runnerId: target?.id });
       }
       if (active.current !== expected || generation.current !== operation) return;
       if (ambiguous) { setError("The credential request outcome is unknown. It will not be retried. Review current runner registrations and ask an administrator to revoke uncertain authority before issuing new credentials."); }
@@ -162,7 +164,7 @@ export function RunnerPanel({ context }: { context: AutomationContext }) {
       {allowed && health.isLoading && <div role="status"><SkeletonLine />Loading runner health…</div>}
       {allowed && health.isError && <p className="dw-automation-notice" role="alert">{automationError(health.error)} Retained same-scope health, if shown, is not current authority.</p>}
       {rows && rows.length === 0 && <p>No runners registered in this workspace. An administrator can issue enrollment for an operator-installed collection profile.</p>}
-      {rows && rows.length > 0 && <div className="dw-automation-table-wrap" role="region" aria-label="Runner health table" tabIndex={0}><table><caption>Server-observed connectivity and configuration for this workspace. Online means a heartbeat within 60 seconds; stale is up to 180 seconds.</caption><thead><tr><th scope="col">Runner and connection</th><th scope="col">Versions and profile</th><th scope="col">Active attempt</th><th scope="col">Administration</th></tr></thead><tbody>{rows.map((row) => <tr key={row.id}><td><strong>{row.id}</strong><p><span className="dw-automation-status">{row.connectivity}</span> · Registration {row.status}</p><p>Last heartbeat: {stamp(row.last_seen_at)}<br />{row.heartbeat_age_seconds === null ? "Heartbeat age unavailable" : `${row.heartbeat_age_seconds} seconds at evaluation`}<br />Observed: {stamp(row.evaluated_at)}</p>{row.connectivity_reason === "clock_unavailable" && <p>Clock observation unavailable; check the runner and server clocks.</p>}</td><td>{row.tool} {row.tool_version ?? "Version unavailable"}<br />Runner {row.runner_version} · Protocol {row.protocol_version}<br /><span>Profile {row.profile_status.replaceAll("_", " ")}</span><details><summary>Profile digest and tags</summary><code>{row.profile_digest}</code><p>Tags: {row.tags.join(", ") || "None"}</p></details><p>Credential {row.credential_status}<br />Expires: {stamp(row.credential_expires_at)}</p></td><td>{row.current_task ? <><Link to={`/infra-automation/runs/${encodeURIComponent(row.current_task.run_id)}${scopeQuery(context.scope)}`}>Open active run</Link><p>Step {row.current_task.step_id}<br />Attempt {row.current_task.attempt_id}</p></> : "No active attempt"}</td><td><Button disabled={!actionReady || uncertain || !cap?.can_rotate || row.status === "revoked"} onClick={() => void perform("rotate", row)}>Rotate credential for {row.id}</Button><Button disabled={!actionReady || !!mutations.revocation || !cap?.can_revoke || row.status === "revoked"} onClick={() => void perform("revoke", row)}>Revoke runner {row.id}</Button></td></tr>)}</tbody></table></div>}
+      {rows && rows.length > 0 && <div className="dw-automation-table-wrap" role="region" aria-label="Runner health table" tabIndex={0}><table><caption>Server-observed connectivity and configuration for this workspace. Online means a heartbeat within 60 seconds; stale is up to 180 seconds.</caption><thead><tr><th scope="col">Runner and connection</th><th scope="col">Versions and profile</th><th scope="col">Active attempt</th><th scope="col">Administration</th></tr></thead><tbody>{rows.map((row) => <tr key={row.id}><td><strong>{row.id}</strong><p><span className="dw-automation-status">{row.connectivity}</span> · Registration {row.status}</p><p>Last heartbeat: {stamp(row.last_seen_at)}<br />{row.heartbeat_age_seconds === null ? "Heartbeat age unavailable" : `${row.heartbeat_age_seconds} seconds at evaluation`}<br />Observed: {stamp(row.evaluated_at)}</p>{row.connectivity_reason === "clock_unavailable" && <p>Clock observation unavailable; check the runner and server clocks.</p>}</td><td>{row.tool} {row.tool_version ?? "Version unavailable"}<br />Runner {row.runner_version} · Protocol {row.protocol_version}<br /><span>Profile {row.profile_status.replaceAll("_", " ")}</span><details><summary>Profile digest and tags</summary><code>{row.profile_digest}</code><p>Tags: {row.tags.join(", ") || "None"}</p></details><p>Credential {row.credential_status}<br />Expires: {stamp(row.credential_expires_at)}</p></td><td>{row.current_task ? <><Link to={`/infra-automation/runs/${encodeURIComponent(row.current_task.run_id)}${scopeQuery(context.scope)}`}>Open active run</Link><p>Step {row.current_task.step_id}<br />Attempt {row.current_task.attempt_id}</p></> : "No active attempt"}</td><td><Button disabled={!actionReady || uncertain || !cap?.can_rotate || row.status === "revoked"} onClick={() => void perform("rotate", row)}>Rotate credential for {row.id}</Button><Button disabled={!actionReady || !!mutations.revocations?.has(row.id) || !cap?.can_revoke || row.status === "revoked"} onClick={() => void perform("revoke", row)}>Revoke runner {row.id}</Button></td></tr>)}</tbody></table></div>}
       {rows && health.data && <div className="dw-automation-actions">{(health.data.cursor.gap || health.data.cursor.truncated) && <span>Health listing is incomplete. Refresh or load the next page.</span>}<Button disabled={!cursor || health.isFetching} onClick={() => setCursor(undefined)}>First page</Button><Button disabled={!health.data.cursor.next_cursor || health.isFetching} onClick={() => setCursor(health.data?.cursor.next_cursor ?? undefined)}>Next page</Button></div>}
     </Card>
     {cap?.production_eligible && (cap.can_enroll || cap.can_rotate || cap.can_revoke) && <Card title="Runner administration">
@@ -173,7 +175,7 @@ export function RunnerPanel({ context }: { context: AutomationContext }) {
         {cap.profile_status !== "available" && <p className="dw-automation-notice">Configured collection profiles are {cap.profile_status.replaceAll("_", " ")}. Ask the operator to install and verify the protected profile manifest before enrollment.</p>}
       </form>
       {busy && <p role="status">Submitting runner administration request…</p>}
-      {(uncertain || mutations.revocation) && <p className="dw-automation-notice">No automatic resend is available. Refresh health and revoke uncertain credentials. Unresolved enrollment or rotation remains blocked across same-session navigation until its outcome is verified. A fresh health read alone does not resolve an uncertain request.</p>}
+      {(uncertain || !!mutations.revocations?.size) && <p className="dw-automation-notice">No automatic resend is available. Refresh health and revoke uncertain credentials. Unresolved enrollment or rotation remains blocked across same-session navigation until its outcome is verified. A fresh health read alone does not resolve an uncertain request.</p>}
     </Card>}
     <RunnerSecretPanel secret={visible} onClose={closeSecret} revealRef={secretRef} />
   </div>;

@@ -27,7 +27,7 @@ python -m cli.runner enroll --url https://your-deploywhisper-host \
 
 No secret enters browser storage, a query cache, automatic clipboard copying, audit metadata or a download URL. The reveal lifetime uses fresh server time plus a monotonic browser budget; changing the browser wall clock cannot extend it.
 
-An uncertain response is not retried. A nonsecret pending marker prevents same-session navigation from enabling a blind repeat. A late verified response can identify the completed runner without redisplaying its secret. Inspect registrations and revoke authority you can identify; a different runner's revocation does not prove an unknown enrollment was resolved. Revocation remains available to authorized administrators when collection execution is disabled. It does not confirm that previously accepted external work has stopped.
+An uncertain response is not retried. Only a recognized application status/code pair proves rejection; unrecognized proxy 4xx remain unknown. Revocation uncertainty is tracked per runner, so an unknown result for one runner does not prevent revoking another. A nonsecret pending marker prevents same-session navigation from enabling a blind repeat. A late verified response can identify the completed runner without redisplaying its secret. Inspect registrations and revoke authority you can identify; a different runner's revocation does not prove an unknown enrollment was resolved. Revocation remains available to authorized administrators when collection execution is disabled. It does not confirm that previously accepted external work has stopped.
 
 ## Starting and observing collection
 

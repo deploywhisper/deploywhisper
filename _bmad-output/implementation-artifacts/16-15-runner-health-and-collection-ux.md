@@ -64,6 +64,12 @@ Execute one bounded packet at a time on the story feature branch. Each packet ow
   - [x] Required HTTP lane, uploaded-flow compatibility, operator help and safe1440/760 captures verified.
   - [ ] Resolve the pending HTTPS verification-contract choice and capture the positive runner/enrollment acceptance states.
 
+### Formal review follow-ups — 2026-11-05
+
+- [x] [Review][Patch][R1][P2] Scope uncertain revocation guards per runner so an unknown revoke of A does not disable revoking B (`frontend/src/screens/runnerMutationState.ts:22`).
+- [x] [Review][Patch][R2][P2] Keep issuance unknown on unrecognized/non-JSON4xx; settle only verified application rejection (`frontend/src/screens/InfraAutomationRunners.tsx:139`).
+- [x] [Review][Patch][R3][P2] Align bounded readiness candidate selection with actual dispatch under retained expired runner history (`services/infra_automation_collection_views.py:185`).
+
 ## Dev Notes
 
 - Reuse: Reuse frontend/src/api/client.ts, ProjectSwitcher, Card, Button, Skeleton, SegmentedTabs, badges and theme/tokens.css; validate tabs/focus semantics rather than assuming primitive reuse proves accessibility. Use existing permanent report route and avoid Dashboard additions.
@@ -104,6 +110,9 @@ Codex with native agents for independent readiness, bounded backend/UI implement
 2026-11-05: Prerequisites and final bounded interfaces independently reviewed. PR211 merged8095877 with passing remote checks. Implementation proceeds on separate backend-for-UI and UI branches; the supplemental HTTPS browser verification amendment is pending user clarification. See docs/verification/infra-automation/16-15/readiness.md.
 
 ### Completion Notes List
+- Formal R1–R3 repairs completed and independently verified: bounded per-target revocation guards, verified rejection classification after local validation, and one shared readiness/dispatch candidate ordering. Red regressions reproduced the original failures before repair.
+- Fresh repair evidence: UI398tests+2compatibilitychecks; backendfocused93tests/608subtests; backendroot1795tests/3skips; backendAPI/CLI/infra740passed/1skip/2356subtests; mainfullCI3246tests across10directories exit0; composed26tests (3realHTTP +23syntheticcomponent fault models) pass; realcollection49checks and integrity9tests/69subtests pass. Existingmypybaseline318diagnostics has no new normalized errors.
+- Backend repair is separately committed as f5d6c19 with qualification follow-up86e9825 and merged into the UI integration branch. Current repair details: `docs/verification/infra-automation/16-15/review-fixes.md`. Prior development results below are historical. Positive HTTPS/real-run browser acceptance remains unapproved and unqualified.
 - All planned UI/backend implementation is present and reviewed; the story remains in-progress because positive HTTPS enrollment and actual isolated-runner browser acceptance are not yet authorized/qualified. No mocked component result is counted as that acceptance.
 - Fresh validation: root unittest1794tests/3skips exit0; full localCI3240executions across10directories exit0; API/CLI/infra745passed/1skip/2356subtests; UI377tests and typecheck/build pass; composed19new tests (3realHTTP +16syntheticcomponent fault models) and14realuploaded compatibility tests pass; tested1440/760 keyboard/axe gates pass.
 - Integrated BMad review findings were repaired: pre-send validation, late verified outcome settlement, membership-stable mutation continuity, bounded late-read correction, same-scope draft/focus retention on read failures, and precise lease/evidence recovery. Independent repair verification found no residual implementation finding.
@@ -125,8 +134,10 @@ Codex with native agents for independent readiness, bounded backend/UI implement
 - `docs/infra-automation/runners.md`
 - `docs/verification/infra-automation/16-14/results.json`
 - `docs/verification/infra-automation/16-15/code-review.md`
+- `docs/verification/infra-automation/16-15/formal-code-review.md`
 - `docs/verification/infra-automation/16-15/readiness.md`
 - `docs/verification/infra-automation/16-15/results.md`
+- `docs/verification/infra-automation/16-15/review-fixes.md`
 - `docs/verification/infra-automation/16-15/screenshots/http-initial-1440.png`
 - `docs/verification/infra-automation/16-15/screenshots/http-initial-760.png`
 - `docs/verification/infra-automation/16-15/screenshots/runners-disabled-1440.png`
@@ -167,9 +178,12 @@ Codex with native agents for independent readiness, bounded backend/UI implement
 - `frontend/src/screens/InfraAutomationShared.tsx`
 - `frontend/src/screens/runnerMutationState.test.ts`
 - `frontend/src/screens/runnerMutationState.ts`
+- `models/repositories/infra_automation_runners.py`
 - `scripts/compose-story16-15.yaml`
+- `scripts/qualify_collection.py`
 - `scripts/runner_ui_fixture.py`
 - `services/infra_automation_collection_views.py`
+- `services/infra_automation_runner_tasks.py`
 - `services/infra_automation_runners.py`
 - `tests/test_api/test_collection_views.py`
 - `tests/test_api/test_runner_health_ui.py`
@@ -179,4 +193,12 @@ Codex with native agents for independent readiness, bounded backend/UI implement
 
 ## Change Log
 
+- 2026-11-05: Resolved R1–R3 with red→green regressions, independent verification, real collection witness and clean fullCI/browser checks. Separate HTTPS/real-run acceptance gates remain open.
+
+- 2026-11-05: Formal BMad review of440e683 found three P2 repair items; story remains in-progress and positive HTTPS/real-run browser gates remain open.
+
 - 2026-11-05: Implemented separate backend/UI packets, repaired independent review/browser findings, completed Python/UI/HTTP-browser validation and restored the original app. Positive HTTPS/real-run browser gates remain open pending the user decision.
+
+## Senior Developer Review (AI) — 2026-11-05
+
+Original outcome: **Changes requested**. Three independent layers completed; R1–R3 were opened and are now resolved by the independently verified repair follow-up. Fresh backend23tests/20subtests and UI377tests pass, but do not cover the reproduced cases. [Full formal review](../../docs/verification/infra-automation/16-15/formal-code-review.md) records triggers, impact and repair directions. Earlier no-residual-findings development notes are historical and superseded by this review. The previously requested supplemental HTTPS lane remains unapproved; no positive enrollment/real-run browser acceptance is claimed. No runtime code or public publication changed.

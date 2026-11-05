@@ -378,3 +378,64 @@ test.describe("synthetic reviewed mutation boundaries — not runner acceptance"
     } finally { release(); }
   });
 });
+
+function activeRunner(scope: Scope, id: string) {
+  return { id, project_id: scope.projectId, workspace_id: scope.workspaceId, tags: ["isolated"], tool: "opentofu", profile_digest: digest, runner_version: "1.0", protocol_version: 1, generation: 1, status: "active", last_seen_at: utc(), credential_expires_at: utc(300_000), isolation_qualified: false, current_task: null, evaluated_at: utc(), connectivity: "online", heartbeat_age_seconds: 0, online_threshold_seconds: 60, offline_threshold_seconds: 180, connectivity_reason: "heartbeat_current", credential_status: "valid", profile_status: "registered", tool_version: "1.13.1" };
+}
+
+test.describe("formal runner review regressions — synthetic transport only", () => {
+  test.skip(!fixturePath, "Requires disposable HTTP account fixture; these are not positive HTTPS administration acceptance.");
+  test("an unknown revoke of A does not block revoking B across navigation", async ({ page }) => {
+    const data = fixture(), scope = data.projects.enabled;
+    await runnerModel(page, scope);
+    const rows = [activeRunner(scope, "component-a"), activeRunner(scope, "component-b")];
+    const calls: string[] = [];
+    await page.route("**/api/v1/infra-automation/runners?**", (route) => fulfill(route, { items: rows, cursor }));
+    await page.route("**/api/v1/infra-automation/runners/component-a/revoke", async (route) => { calls.push("a"); await route.abort("failed"); });
+    await page.route("**/api/v1/infra-automation/runners/component-b/revoke", async (route) => {
+      calls.push("b"); rows[1].status = "revoked"; rows[1].credential_status = "revoked"; rows[1].generation += 1;
+      const { current_task, evaluated_at, connectivity, heartbeat_age_seconds, online_threshold_seconds, offline_threshold_seconds, connectivity_reason, credential_status, profile_status, tool_version, ...registration } = rows[1];
+      void [current_task, evaluated_at, connectivity, heartbeat_age_seconds, online_threshold_seconds, offline_threshold_seconds, connectivity_reason, credential_status, profile_status, tool_version];
+      await fulfill(route, registration);
+    });
+    await login(page, data.accounts.operator, pageRoute(scope));
+    await page.getByLabel("Administration reason", { exact: true }).fill("Synthetic revocation recovery");
+    await page.getByRole("button", { name: "Revoke runner component-a", exact: true }).press("Enter");
+    await expect.poll(() => calls.length).toBe(1);
+    await page.getByRole("link", { name: "Workflows and runs", exact: true }).click();
+    await page.getByRole("link", { name: "Runners", exact: true }).click();
+    await page.getByLabel("Administration reason", { exact: true }).fill("Revoke unrelated synthetic runner");
+    await expect(page.getByRole("button", { name: "Revoke runner component-a", exact: true })).toBeDisabled();
+    const other = page.getByRole("button", { name: "Revoke runner component-b", exact: true });
+    await expect(other).toBeEnabled(); await other.press("Enter");
+    await expect.poll(() => calls.join(",")).toBe("a,b");
+    await expect(page.getByText("Revocation confirmed for component-b.", { exact: true })).toBeVisible();
+    await noPersistence(page);
+  });
+
+  for (const action of ["enroll", "rotate"] as const) for (const responseKind of ["html403", "unknown422", "confirmed409"] as const) {
+    test(`${action} ${responseKind} preserves only genuine uncertainty across navigation`, async ({ page }) => {
+      const data = fixture(), scope = data.projects.enabled; await runnerModel(page, scope);
+      await page.route("**/api/v1/infra-automation/runners?**", (route) => fulfill(route, { items: [activeRunner(scope, "component-a")], cursor }));
+      let count = 0;
+      const path = action === "enroll" ? "enrollments" : "component-a/rotate";
+      await page.route(`**/api/v1/infra-automation/runners/${path}`, async (route) => {
+        count += 1;
+        if (responseKind === "html403") await route.fulfill({ status: 403, contentType: "text/html", body: "<p>Unverified proxy rejection</p>" });
+        else await route.fulfill({ status: responseKind === "confirmed409" ? 409 : 422, contentType: "application/json", body: JSON.stringify({ error: { code: responseKind === "confirmed409" ? "binding_conflict" : "unrecognized_proxy_rejection" } }) });
+      });
+      await login(page, data.accounts.operator, pageRoute(scope));
+      await page.getByLabel("Administration reason", { exact: true }).fill("Synthetic response classification");
+      const name = action === "enroll" ? "Issue enrollment" : "Rotate credential for component-a";
+      await page.getByRole("button", { name, exact: true }).press("Enter");
+      await expect.poll(() => count).toBe(1);
+      await expect(page.getByRole("alert").first()).toBeVisible();
+      await page.getByRole("link", { name: "Workflows and runs", exact: true }).click();
+      await page.getByRole("link", { name: "Runners", exact: true }).click();
+      await page.getByLabel("Administration reason", { exact: true }).fill("Review current synthetic authority");
+      if (responseKind === "confirmed409") await expect(page.getByRole("button", { name, exact: true })).toBeEnabled();
+      else await expect(page.getByRole("button", { name, exact: true })).toBeDisabled();
+      expect(count).toBe(1); await noPersistence(page);
+    });
+  }
+});

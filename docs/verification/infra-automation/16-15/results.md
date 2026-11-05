@@ -1,5 +1,7 @@
 # Story 16.15 implementation and verification
 
+The subsequent formal R1–R3 repairs and latest verification are recorded in [review-fixes.md](review-fixes.md).
+
 **Status: implementation verified within the available lanes; story remains in-progress.** Positive HTTPS enrollment and authenticated isolated-runner-to-report browser acceptance are not yet qualified. The supplemental HTTPS validation-lane question is pending; existing transport and identity gates are unchanged.
 
 ## Implementation

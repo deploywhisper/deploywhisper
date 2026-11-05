@@ -39,9 +39,17 @@ function health(value: unknown, scope: AutomationScope): value is RunnerHealth {
   return onlyKeys(row, [...registrationKeys, "current_task", "evaluated_at", "connectivity", "heartbeat_age_seconds", "online_threshold_seconds", "offline_threshold_seconds", "connectivity_reason", "credential_status", "profile_status", "tool_version"]) && utc(row.evaluated_at) && row.online_threshold_seconds === 60 && row.offline_threshold_seconds === 180 && member(row.connectivity_reason, ["heartbeat_current", "heartbeat_stale", "heartbeat_missing", "heartbeat_expired", "clock_unavailable"]) && member(row.connectivity, ["online", "stale", "offline"]) && (row.heartbeat_age_seconds === null || nonnegative(row.heartbeat_age_seconds)) && member(row.credential_status, ["pending", "valid", "expired", "revoked", "unavailable"]) && member(row.profile_status, ["registered", "not_registered", "unavailable"]) && (row.tool_version === null || version(row.tool_version)) && (task === null || (record(task) && onlyKeys(task, ["run_id", "step_id", "attempt_id"]) && identifier(task.run_id) && identifier(task.step_id) && identifier(task.attempt_id)));
 }
 function read<T>(path: string, signal?: AbortSignal) { return requestData<T>(path, { cache: "no-store", credentials: "same-origin", signal }); }
-function mutate<T>(path: string, payload: unknown, csrf: string): Promise<T> {
+export function isConfirmedRunnerRejection(failure: unknown): boolean {
+  if (!(failure instanceof ApiClientError)) return false;
+  const codes: Record<number, string> = { 400: "request_validation_failed", 401: "authentication_required", 403: "permission_denied", 404: "permission_denied", 409: "binding_conflict", 422: "request_validation_failed", 429: "quota_exceeded" };
+  return codes[failure.status] !== undefined && failure.code === codes[failure.status];
+}
+function mutate<T>(path: string, payload: unknown, csrf: string, onSubmit?: () => void): Promise<T> {
   if (!csrf || csrf.length > 1024 || /[\r\n]/.test(csrf)) return Promise.reject(new ApiClientError("Sign in again before managing runners.", 403));
-  return requestData<T>(`${base}${path}`, { method: "POST", cache: "no-store", credentials: "same-origin", headers: { "Content-Type": "application/json", "X-CSRF-Token": csrf }, body: JSON.stringify(payload) });
+  let body: string, headers: Headers;
+  try { body = JSON.stringify(payload); headers = new Headers({ "Content-Type": "application/json", "X-CSRF-Token": csrf }); } catch { return invalid(); }
+  onSubmit?.();
+  return requestData<T>(`${base}${path}`, { method: "POST", cache: "no-store", credentials: "same-origin", headers, body });
 }
 export async function getRunnerCapabilities(scope: AutomationScope, signal?: AbortSignal): Promise<RunnerCapabilities> {
   const value = await read<RunnerCapabilities>(`${base}/runner-capabilities?${scopeQuery(scope)}`, signal);
@@ -61,23 +69,23 @@ export async function getRunnerHealth(scope: AutomationScope, cursor?: string, s
   if (new Set(value.items.map((item) => item.id)).size !== value.items.length) invalid();
   return value;
 }
-export async function enrollRunner(scope: AutomationScope, selected: RunnerProfile, runnerTags: string[], reason: string, csrf: string): Promise<EnrollmentReveal> {
+export async function enrollRunner(scope: AutomationScope, selected: RunnerProfile, runnerTags: string[], reason: string, csrf: string, onSubmit?: () => void): Promise<EnrollmentReveal> {
   scopeQuery(scope); if (!profile(selected) || !tags(runnerTags) || !validReason(reason)) invalid();
-  const value = await mutate<EnrollmentReveal>("/runners/enrollments", { project_id: scope.projectId, workspace_id: scope.workspaceId, tags: runnerTags, tool: selected.tool, profile_digest: selected.profile_digest, runner_version: selected.runner_version, reason }, csrf);
+  const value = await mutate<EnrollmentReveal>("/runners/enrollments", { project_id: scope.projectId, workspace_id: scope.workspaceId, tags: runnerTags, tool: selected.tool, profile_digest: selected.profile_digest, runner_version: selected.runner_version, reason }, csrf, onSubmit);
   if (!record(value) || !onlyKeys(value, ["enrollment", "token"]) || !record(value.enrollment) || !token(value.token) || !value.token.startsWith("enroll-v1-")) invalidMutationResponse();
   const result = value.enrollment;
   if (!onlyKeys(result, ["version", "audience", "enrollment_id", "runner_id", "project_id", "workspace_id", "expires_at", "one_use"]) || result.version !== 1 || result.audience !== "runner-enrollment-v1" || !identifier(result.enrollment_id) || !identifier(result.runner_id) || result.project_id !== String(scope.projectId) || result.workspace_id !== String(scope.workspaceId) || !utc(result.expires_at) || result.one_use !== true) invalidMutationResponse();
   return value;
 }
-export async function rotateRunner(runnerId: string, reason: string, csrf: string): Promise<CredentialReveal> {
+export async function rotateRunner(runnerId: string, reason: string, csrf: string, onSubmit?: () => void): Promise<CredentialReveal> {
   const encoded = id(runnerId); if (!validReason(reason)) invalid();
-  const value = await mutate<CredentialReveal>(`/runners/${encoded}/rotate`, { reason }, csrf);
+  const value = await mutate<CredentialReveal>(`/runners/${encoded}/rotate`, { reason }, csrf, onSubmit);
   if (!record(value) || !onlyKeys(value, ["runner_id", "token", "expires_at", "generation", "audience"]) || value.runner_id !== runnerId || !token(value.token) || !value.token.startsWith("runner-v1-") || !utc(value.expires_at) || !positive(value.generation) || value.audience !== "runner-task-v1") invalidMutationResponse();
   return value;
 }
-export async function revokeRunner(runnerId: string, reason: string, csrf: string): Promise<RunnerRegistration> {
+export async function revokeRunner(runnerId: string, reason: string, csrf: string, onSubmit?: () => void): Promise<RunnerRegistration> {
   const encoded = id(runnerId); if (!validReason(reason)) invalid();
-  const value = await mutate<RunnerRegistration>(`/runners/${encoded}/revoke`, { reason }, csrf);
+  const value = await mutate<RunnerRegistration>(`/runners/${encoded}/revoke`, { reason }, csrf, onSubmit);
   if (!registration(value) || !onlyKeys(value, registrationKeys) || value.id !== runnerId || value.status !== "revoked") invalidMutationResponse();
   return value;
 }

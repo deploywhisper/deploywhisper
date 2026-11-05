@@ -52,3 +52,45 @@ describe("nonsecret runner mutation continuity", () => {
     expect(store.read("scope-two").issuance).toBeDefined();
   });
 });
+
+it("keeps uncertain revocation target-specific and preserves newer tickets", () => {
+  const store = new RunnerMutationStore(2, 2);
+  const first = store.begin("session", "scope", "revoke", "runner-a")!;
+  store.unknown(first);
+  expect(store.begin("session", "scope", "revoke", "runner-a")).toBeNull();
+  const other = store.begin("session", "scope", "revoke", "runner-b");
+  expect(other).not.toBeNull();
+  expect(store.begin("session", "scope", "revoke", "runner-c")).toBeNull();
+  expect(store.read("scope").revocations?.get("runner-a")?.status).toBe("unknown");
+  store.verified(other!, { kind: "revoked", runnerId: "runner-b" });
+  const newer = store.begin("session", "scope", "revoke", "runner-b")!;
+  store.verified(other!, { kind: "revoked", runnerId: "runner-b" });
+  expect(store.read("scope").revocations?.get("runner-b")?.operation).toBe(newer.operation);
+  expect(store.read("scope").revocations?.get("runner-a")?.operation).toBe(first.operation);
+});
+it("an older revoke cannot resolve a later rotation of the same runner", () => {
+  const store = new RunnerMutationStore();
+  const first = store.begin("session", "scope", "rotate", "runner-a")!;
+  store.unknown(first);
+  const revoke = store.begin("session", "scope", "revoke", "runner-a")!;
+  store.verified(first, { kind: "issued", runnerId: "runner-a", credentialCleared: true });
+  const later = store.begin("session", "scope", "rotate", "runner-a")!;
+  store.unknown(later);
+  store.verified(revoke, { kind: "revoked", runnerId: "runner-a" });
+  expect(store.read("scope").issuance?.operation).toBe(later.operation);
+});
+
+
+it("does not prune or evict scopes containing unknown revocations", () => {
+  const store = new RunnerMutationStore(1, 2);
+  const marker = store.begin("old-session", "old-scope", "revoke", "runner-a")!;
+  store.unknown(marker);
+  store.pruneSettledOtherIdentities("new-session");
+  expect(store.begin("new-session", "new-scope", "enroll")).toBeNull();
+  expect(store.read("old-scope").revocations?.get("runner-a")?.operation).toBe(marker.operation);
+  expect(store.begin("old-session", "old-scope", "revoke")).toBeNull();
+  store.verified(marker, { kind: "revoked", runnerId: "different-runner" });
+  expect(store.read("old-scope").revocations?.get("runner-a")?.operation).toBe(marker.operation);
+  store.verified(marker, { kind: "revoked", runnerId: "runner-a" });
+  expect(store.begin("new-session", "new-scope", "enroll")).not.toBeNull();
+});

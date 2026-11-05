@@ -1,5 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { getRunnerCapabilities, getRunnerHealth, enrollRunner, rotateRunner, revokeRunner } from "./infraAutomationRunners";
+import { getRunnerCapabilities, getRunnerHealth, enrollRunner, rotateRunner, revokeRunner, isConfirmedRunnerRejection } from "./infraAutomationRunners";
+
+import { ApiClientError } from "./client";
+import { RunnerMutationStore } from "../screens/runnerMutationState";
 
 const scope = { projectId: 7, workspaceId: 9 };
 const stamp = "2026-11-05T00:00:00Z";
@@ -63,4 +66,65 @@ describe("runner administration boundary", () => {
     await expect(revokeRunner("runner-1", "reason", "")).rejects.toMatchObject({ status: 403 });
     expect(fetcher).not.toHaveBeenCalled();
   });
+});
+
+
+describe("verified runner mutation rejection", () => {
+  for (const action of ["enroll", "rotate"] as const) {
+    for (const status of [400, 401, 403, 404, 409, 422, 429]) {
+      it(`${action} retains uncertainty for uncoded HTTP ${status}`, async () => {
+        const fetcher = vi.fn().mockResolvedValue(new Response("<html>Unverified proxy response</html>", { status }));
+        vi.stubGlobal("fetch", fetcher);
+        const store = new RunnerMutationStore();
+        let marker: ReturnType<RunnerMutationStore["begin"]> = null;
+        const submitted = () => { marker = store.begin("session", "scope", action, action === "rotate" ? "runner-1" : undefined); };
+        try {
+          if (action === "enroll") await enrollRunner(scope, profile, [], "Enroll runner", "csrf", submitted);
+          else await rotateRunner("runner-1", "Rotate runner", "csrf", submitted);
+          expect.fail("Unrecognized response must reject");
+        } catch (failure) {
+          expect(isConfirmedRunnerRejection(failure)).toBe(false);
+          expect(marker).not.toBeNull();
+          store.unknown(marker!);
+        }
+        expect(store.begin("session", "scope", action, "runner-1")).toBeNull();
+        expect(fetcher).toHaveBeenCalledTimes(1);
+      });
+    }
+    it(`${action} settles recognized application rejection`, async () => {
+      const fetcher = vi.fn().mockResolvedValue(Response.json({ error: { code: "request_validation_failed" } }, { status: 422 }));
+      vi.stubGlobal("fetch", fetcher);
+      const store = new RunnerMutationStore();
+      let marker: ReturnType<RunnerMutationStore["begin"]> = null;
+      const submitted = () => { marker = store.begin("session", "scope", action, "runner-1"); };
+      try {
+        if (action === "enroll") await enrollRunner(scope, profile, [], "Enroll runner", "csrf", submitted);
+        else await rotateRunner("runner-1", "Rotate runner", "csrf", submitted);
+        expect.fail("Rejected response must throw");
+      } catch (failure) {
+        expect(isConfirmedRunnerRejection(failure)).toBe(true);
+        store.verified(marker!, { kind: "rejected" });
+      }
+      expect(store.begin("session", "scope", action, "runner-1")).not.toBeNull();
+    });
+  }
+  it("validates input and constructs headers before marking transport", async () => {
+    const fetcher = response(null), submitted = vi.fn();
+    await expect(enrollRunner(scope, profile, [], "bad\treason", "csrf", submitted)).rejects.toMatchObject({ status: 422 });
+    await expect(rotateRunner("runner-1", "reason", "\u20ac", submitted)).rejects.toMatchObject({ status: 422 });
+    await expect(revokeRunner("runner-1", "reason", "", submitted)).rejects.toMatchObject({ status: 403 });
+    expect(submitted).not.toHaveBeenCalled(); expect(fetcher).not.toHaveBeenCalled();
+  });
+});
+
+
+it("accepts only appropriate structured runner rejection codes", () => {
+  const pairs = [[400, "request_validation_failed"], [401, "authentication_required"], [403, "permission_denied"], [404, "permission_denied"], [409, "binding_conflict"], [422, "request_validation_failed"], [429, "quota_exceeded"]] as const;
+  for (const [status, code] of pairs) {
+    expect(isConfirmedRunnerRejection(new ApiClientError("fixed", status, { code }))).toBe(true);
+    expect(isConfirmedRunnerRejection(new ApiClientError("fixed", status, { code: "authority_unavailable" }))).toBe(false);
+    expect(isConfirmedRunnerRejection(new ApiClientError("fixed", status))).toBe(false);
+  }
+  expect(isConfirmedRunnerRejection(new ApiClientError("fixed", 503, { code: "permission_denied" }))).toBe(false);
+  expect(isConfirmedRunnerRejection(new ApiClientError("fixed", 422, { code: "permission_denied" }))).toBe(false);
 });
