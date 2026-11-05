@@ -17,7 +17,7 @@ import config
 import models.database as database
 
 HEAD = "036_add_receiver_reconciliation"
-CURRENT_HEAD = "037_add_runner_enrollment"
+CURRENT_HEAD = "038_add_declared_unit_maps"
 PREVIOUS = "035_add_infra_handoffs"
 
 
@@ -66,12 +66,13 @@ class ReceiverReconciliationMigrationTests(unittest.TestCase):
                 db.execute("SELECT version_num FROM alembic_version").fetchone()[0],
                 CURRENT_HEAD,
             )
-            self.assertEqual(
+            after = dict(
                 db.execute(
                     "SELECT name,sql FROM sqlite_master WHERE type='trigger' ORDER BY name"
-                ).fetchall(),
-                before,
+                ).fetchall()
             )
+            for name, sql in before:
+                self.assertEqual(after[name], sql)
 
     def test_partial_receiver_guard_denies_before_create_all(self):
         command.upgrade(self.config, HEAD)
