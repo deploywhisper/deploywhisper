@@ -18,6 +18,35 @@ from alembic.config import Config
 
 
 class MigrationTests(unittest.TestCase):
+    def test_unit_inventory_startup_recovers_complete_history(self):
+        command.upgrade(self._config(), "head")
+        for remove_history in (False, True):
+            with self.subTest(remove_history=remove_history):
+                if remove_history:
+                    with sqlite3.connect(self.db_path) as connection:
+                        connection.execute("DROP TABLE alembic_version")
+                reload(config_module)
+                reload(tables_module)
+                reload(database_module)
+                database_module.init_db()
+                with sqlite3.connect(self.db_path) as connection:
+                    self.assertEqual(
+                        connection.execute(
+                            "SELECT version_num FROM alembic_version"
+                        ).fetchone()[0],
+                        "038_add_declared_unit_maps",
+                    )
+
+    def test_unit_inventory_partial_schema_requires_recovery(self):
+        command.upgrade(self._config(), "head")
+        with sqlite3.connect(self.db_path) as connection:
+            connection.execute("DROP TABLE infra_automation_run_units")
+        reload(config_module)
+        reload(tables_module)
+        reload(database_module)
+        with self.assertRaisesRegex(RuntimeError, "partial"):
+            database_module.init_db()
+
     def setUp(self) -> None:
         self.tempdir = tempfile.TemporaryDirectory()
         self.db_path = Path(self.tempdir.name) / "migration.db"
@@ -1141,7 +1170,7 @@ class MigrationTests(unittest.TestCase):
         self.assertIn("topology_versions", tables)
         self.assertIn("incident_ingestion_sources", tables)
         self._assert_incident_ingestion_source_schema()
-        self.assertEqual(revision, "037_add_runner_enrollment")
+        self.assertEqual(revision, "038_add_declared_unit_maps")
 
     def test_init_db_repairs_partial_evidence_schema_without_alembic_version(
         self,
@@ -1192,7 +1221,7 @@ class MigrationTests(unittest.TestCase):
         self.assertIn("projects", tables)
         self.assertIn("incident_ingestion_sources", tables)
         self._assert_incident_ingestion_source_schema()
-        self.assertEqual(revision, "037_add_runner_enrollment")
+        self.assertEqual(revision, "038_add_declared_unit_maps")
 
     def test_init_db_repairs_current_schema_without_alembic_version(self) -> None:
         command.upgrade(self._config(), "head")
@@ -1218,7 +1247,7 @@ class MigrationTests(unittest.TestCase):
         finally:
             sqlite_conn.close()
 
-        self.assertEqual(revision, "037_add_runner_enrollment")
+        self.assertEqual(revision, "038_add_declared_unit_maps")
         self.assertIn("report_schema_version", columns)
         self.assertIn("blast_radius_json", columns)
         self.assertIn("project_id", columns)
@@ -1250,7 +1279,7 @@ class MigrationTests(unittest.TestCase):
         finally:
             sqlite_conn.close()
 
-        self.assertEqual(revision, "037_add_runner_enrollment")
+        self.assertEqual(revision, "038_add_declared_unit_maps")
         self.assertEqual(
             self._index_columns("ix_deployment_outcomes_analysis_deployed_outcome"),
             ("analysis_id", "deployed_at", "outcome_label"),
@@ -1276,7 +1305,7 @@ class MigrationTests(unittest.TestCase):
         finally:
             sqlite_conn.close()
 
-        self.assertEqual(revision, "037_add_runner_enrollment")
+        self.assertEqual(revision, "038_add_declared_unit_maps")
         self._assert_incident_ingestion_source_schema()
 
     def test_init_db_rejects_partial_report_workspace_scope_schema(self) -> None:
@@ -2031,7 +2060,7 @@ class MigrationTests(unittest.TestCase):
         finally:
             sqlite_conn.close()
 
-        self.assertEqual(revision, "037_add_runner_enrollment")
+        self.assertEqual(revision, "038_add_declared_unit_maps")
         self._assert_incident_ingestion_source_schema()
 
 

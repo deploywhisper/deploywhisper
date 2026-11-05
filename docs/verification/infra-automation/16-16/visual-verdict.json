@@ -1,0 +1,10 @@
+{
+  "score": 94,
+  "verdict": "pass",
+  "category_match": true,
+  "differences": [
+    "Compact native source selects truncate display text at760px; accessible labels and keyboard typeahead retain the full choice."
+  ],
+  "suggestions": [],
+  "reasoning": "The declared inventory and run evidence retain approved InfraFlow typography, color, rounded surfaces and table hierarchy. Both viewport sizes show readable waves, affected/prerequisite scope, evidence links, canonical lock status and explicit review-required state."
+}

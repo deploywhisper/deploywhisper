@@ -1,0 +1,88 @@
+{
+  "story": "16-16",
+  "status": "review",
+  "runtime": {
+    "local_python": "3.14.3",
+    "production_python": "3.11.17",
+    "node": "24.7.0",
+    "npm": "11.12.1",
+    "docker": "29.1.3"
+  },
+  "results": {
+    "root": {
+      "tests": 1862,
+      "skipped": 3,
+      "exit_code": 0
+    },
+    "api_cli_infra": {
+      "passed": 753,
+      "skipped": 1,
+      "subtests": 2358,
+      "exit_code": 0
+    },
+    "automation": {
+      "passed": 1060,
+      "skipped": 1,
+      "subtests": 3081,
+      "exit_code": 0
+    },
+    "frontend": {
+      "tests": 432,
+      "compatibility_tests": 2
+    },
+    "browser": {
+      "passed": 1,
+      "critical_serious_axe": 0,
+      "screenshots": 10,
+      "visual_score": 94
+    },
+    "qualification": {
+      "collection_checks": 49,
+      "integrity_tests": 9,
+      "integrity_subtests": 73
+    },
+    "mypy": {
+      "existing_code_errors": 318,
+      "changed_line_errors": 0
+    }
+  },
+  "initial_failures_preserved": true,
+  "logs": {
+    "ci_initial": {
+      "path": "/tmp/story16-16-ci.log",
+      "sha256": "952d6546a5ebe868a0d20e6318bcb03f9ad5432ae4bebe45213a8ea5e6e40a1b"
+    },
+    "ci_resume": {
+      "path": "/tmp/story16-16-ci-resume.log",
+      "sha256": "7c93048cbadc11b426448b391b3e7187ebd814f134a5ba385759d8b071a306b0"
+    },
+    "ci_last": {
+      "path": "/tmp/story16-16-ci-last.log",
+      "sha256": "2d5441b6bc224af1021a04f4d01e031ded1b3d91cc9329b205d4382c35f470f8"
+    },
+    "root": {
+      "path": "/tmp/story16-16-unittest.log",
+      "sha256": "5af794ceeb0c685651b03f959e7fbf7758694a103409c6cb1d8762f9d44730b9"
+    },
+    "api_cli_infra": {
+      "path": "/tmp/story16-16-api-cli-infra.log",
+      "sha256": "ed65d7d6aa737fe805d99252b6e77a18c91b3ab9a9eaf71ec2f0c51361f7e0db"
+    },
+    "automation": {
+      "path": "/tmp/story16-16-automation-shard.log",
+      "sha256": "9138559204379268e846b9ed77d1f861a436f9c09011f859c77c9d5732b8f17a"
+    },
+    "ui": {
+      "path": "/tmp/story16-16-ui-final-combined.log",
+      "sha256": "3dd4fe22d97089e6fddac656ce6bcec35a5c70dc1b32504c9d1685cfae330b26"
+    },
+    "mypy": {
+      "path": "/tmp/story16-16-mypy-final.log",
+      "sha256": "f4580dcb2abec503ea500104f04b677bf6e0d7763935730b7d5ed987c9ed8a0d"
+    },
+    "collection": {
+      "path": "/tmp/story16-16-collection-final-static.log",
+      "sha256": "3083206218f8265eff0c7318662243a952ffef43e453dec21c697178788a19f3"
+    }
+  }
+}

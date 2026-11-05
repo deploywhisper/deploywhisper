@@ -51,8 +51,9 @@ export function safeAccountReturnTo(value: string | null | undefined): string {
   const automation = /^\/infra-automation(?:\/(workflows|runs)(?:\/([^/]+))?)?$/.exec(path);
   const approvals = path === "/infra-automation/approvals";
   const runners = path === "/infra-automation/runners";
+  const inventory = path === "/infra-automation/inventory";
   const basic = /^(?:\/(?:history|settings|skills|incidents)?)$/.test(path);
-  if (!(basic || approvals || runners || (report && positiveId(report[1])) || (automation && (!automation[2] || identifier.test(automation[2]))))) return fallback;
+  if (!(basic || approvals || runners || inventory || (report && positiveId(report[1])) || (automation && (!automation[2] || identifier.test(automation[2]))))) return fallback;
   if (query !== undefined) {
     const seen = new Set<string>();
     if (!query || query.split("&").some((pair) => {

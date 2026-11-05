@@ -332,6 +332,8 @@ jobs:
             timeout_minutes: 25
           - shard: infra-automation
             targets: tests/test_infra_automation
+            # Includes process-recovery tests, coverage finalization, and cleanup.
+            timeout_minutes: 25
           - shard: llm
             targets: tests/test_llm
     steps:

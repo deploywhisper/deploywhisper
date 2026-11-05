@@ -1945,3 +1945,70 @@ if "InfraAutomationRunnerTask" not in globals():
         upload_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
         upload_digest: Mapped[str | None] = mapped_column(String(71), nullable=True)
         upload_bytes: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
+
+
+if "InfraAutomationUnitRevision" not in globals():
+
+    class InfraAutomationUnitRevision(Base):
+        __tablename__ = "infra_automation_unit_revisions"
+        __table_args__ = (
+            ForeignKeyConstraint(
+                ["project_id", "workspace_id"],
+                ["project_workspaces.project_id", "project_workspaces.id"],
+                ondelete="RESTRICT",
+            ),
+            UniqueConstraint("inventory_id", "revision_number"),
+            UniqueConstraint("id", "project_id", "workspace_id"),
+            CheckConstraint(
+                "revision_number BETWEEN 1 AND 32 AND length(plan_bytes) BETWEEN 1 AND 131072",
+                name="ck_unit_revision_bounds",
+            ),
+        )
+        id: Mapped[str] = mapped_column(String(64), primary_key=True)
+        inventory_id: Mapped[str] = mapped_column(
+            String(64), nullable=False, index=True
+        )
+        project_id: Mapped[int] = mapped_column(Integer, nullable=False)
+        workspace_id: Mapped[int] = mapped_column(Integer, nullable=False)
+        revision_number: Mapped[int] = mapped_column(Integer, nullable=False)
+        plan_bytes: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+        plan_digest: Mapped[str] = mapped_column(String(71), nullable=False)
+        created_by: Mapped[str] = mapped_column(
+            ForeignKey("identity_accounts.id", ondelete="RESTRICT"), nullable=False
+        )
+        created_at: Mapped[datetime] = mapped_column(
+            DateTime(timezone=True), nullable=False
+        )
+
+
+if "InfraAutomationRunUnits" not in globals():
+
+    class InfraAutomationRunUnits(Base):
+        __tablename__ = "infra_automation_run_units"
+        __table_args__ = (
+            ForeignKeyConstraint(
+                ["revision_id", "project_id", "workspace_id"],
+                [
+                    "infra_automation_unit_revisions.id",
+                    "infra_automation_unit_revisions.project_id",
+                    "infra_automation_unit_revisions.workspace_id",
+                ],
+                ondelete="RESTRICT",
+            ),
+            CheckConstraint(
+                "length(snapshot_bytes) BETWEEN 1 AND 131072 AND (evidence_bytes IS NULL OR length(evidence_bytes) BETWEEN 1 AND 131072)",
+                name="ck_run_units_bounds",
+            ),
+        )
+        run_id: Mapped[str] = mapped_column(
+            ForeignKey("infra_automation_runs.id", ondelete="RESTRICT"),
+            primary_key=True,
+        )
+        revision_id: Mapped[str] = mapped_column(String(64), nullable=False)
+        project_id: Mapped[int] = mapped_column(Integer, nullable=False)
+        workspace_id: Mapped[int] = mapped_column(Integer, nullable=False)
+        snapshot_bytes: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+        snapshot_digest: Mapped[str] = mapped_column(String(71), nullable=False)
+        request_digest: Mapped[str] = mapped_column(String(71), nullable=False)
+        evidence_bytes: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
+        evidence_digest: Mapped[str | None] = mapped_column(String(71), nullable=True)

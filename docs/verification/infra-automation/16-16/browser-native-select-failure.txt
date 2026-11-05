@@ -1,0 +1,42 @@
+
+> deploywhisper-ui-a11y@0.0.0 test:ui-review
+> npm --prefix frontend exec -- playwright test --config=frontend/playwright.config.ts infra-automation-units.spec.ts
+
+
+Running 1 test using 1 worker
+
+(node:38502) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✘  1 [chromium] › frontend/e2e/infra-automation-units.spec.ts:153:3 › declared units using real composed APIs › keyboard exact scope, located errors, confirmation and two-unit evidence (19.2s)
+
+
+  1) [chromium] › frontend/e2e/infra-automation-units.spec.ts:153:3 › declared units using real composed APIs › keyboard exact scope, located errors, confirmation and two-unit evidence
+
+    Error: expect(locator).toHaveValue(expected) failed
+
+    Locator:  getByRole('combobox', { name: 'Workflow', exact: true })
+    Expected: "06f3219b3da50b49361b4bac82864436c1bd7590271c14a3"
+    Received: ""
+    Timeout:  15000ms
+
+    Call log:
+      - Expect "toHaveValue" getByRole('combobox', { name: 'Workflow', exact: true }) with timeout 15000ms
+      - waiting for getByRole('combobox', { name: 'Workflow', exact: true })
+        34 × locator resolved to <select>…</select>
+           - unexpected value ""
+
+
+      77 |   for (let position = 0; position < index; position += 1) await page.keyboard.press("ArrowDown");
+      78 |   await page.keyboard.press("Tab");
+    > 79 |   await expect(control).toHaveValue(value);
+         |                         ^
+      80 | }
+      81 | async function login(page: Page, account: Account, scope: Scope): Promise<string> {
+      82 |   await page.goto(`/settings/account?returnTo=${encodeURIComponent(route(scope))}`);
+        at keyboardSelect (/private/tmp/deploywhisper-story16-16-ui/frontend/e2e/infra-automation-units.spec.ts:79:25)
+        at /private/tmp/deploywhisper-story16-16-ui/frontend/e2e/infra-automation-units.spec.ts:194:5
+
+    Error Context: frontend/test-results/infra-automation-units-dec-2246a-ation-and-two-unit-evidence-chromium/error-context.md
+
+  1 failed
+    [chromium] › frontend/e2e/infra-automation-units.spec.ts:153:3 › declared units using real composed APIs › keyboard exact scope, located errors, confirmation and two-unit evidence

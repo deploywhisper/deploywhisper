@@ -7,6 +7,7 @@ import { cancelCollectionRun, getCollectionView, validCollectionReason, isConfir
 import { Button } from "../components/ui/Button";
 import { Card } from "../components/ui/Card";
 import { AutomationFrame, scopeQuery, type AutomationContext } from "./InfraAutomationShared";
+import { RunUnitsPanel } from "./InfraAutomationInventory";
 import { ApprovalReviewPanel } from "./InfraAutomationApprovals";
 
 export function runMatchesScope(run: Run, scope: AutomationScope): boolean {
@@ -397,6 +398,7 @@ export function RunContent({ context, runId }: { context: AutomationContext; run
     {!context.fresh && <p role="status">Access is being refreshed. Current historical run data is read-only.</p>}
     {run.error && <p role="alert">Retaining last-known run evidence; current server state is unavailable and mutation controls are disabled. <Button onClick={() => void run.refetch()}>Retry run</Button></p>}
     <RunSummary run={run.data} />
+    <RunUnitsPanel context={context} runId={runId} runVersion={run.data.version} onDenied={() => setDenied(true)} />
     {collection.data && collection.data.run_version !== run.data.version && !collection.error && <p role="status">Collection observations are from a different run version. Refresh current evidence before acting. <Button onClick={() => { void Promise.all([run.refetch(), collection.refetch()]); }}>Refresh current collection evidence</Button></p>}
     {collection.error && <p role="alert">Collection observations unavailable. {collection.data && "Retaining last-known collection evidence; current authority is unavailable and mutation controls are disabled."} <Button onClick={() => void collection.refetch()}>Retry collection evidence</Button></p>}
     {collection.data && <>

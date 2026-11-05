@@ -39,6 +39,7 @@ import { AccountAccessScreen } from "./screens/AccountAccess";
 import { InfraAutomationScreen, InfraWorkflowScreen } from "./screens/InfraAutomation";
 import { InfraAutomationRunnersScreen } from "./screens/InfraAutomationRunners";
 import { InfraAutomationRunScreen } from "./screens/InfraAutomationRun";
+import { InfraAutomationInventoryScreen } from "./screens/InfraAutomationInventory";
 import { InfraAutomationApprovalsScreen } from "./screens/InfraAutomationApprovals";
 
 const queryClient = new QueryClient();
@@ -51,6 +52,7 @@ function App() {
         <Route element={<AccountAccessScreen />} path="/settings/account" />
         <Route element={<InfraAutomationScreen />} path="/infra-automation" />
         <Route element={<InfraAutomationApprovalsScreen />} path="/infra-automation/approvals" />
+        <Route element={<InfraAutomationInventoryScreen />} path="/infra-automation/inventory" />
         <Route element={<InfraAutomationRunnersScreen />} path="/infra-automation/runners" />
         <Route element={<InfraWorkflowScreen />} path="/infra-automation/workflows/:workflowId" />
         <Route element={<InfraAutomationRunScreen />} path="/infra-automation/runs/:runId" />

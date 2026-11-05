@@ -1,0 +1,12 @@
+
+> deploywhisper-ui-a11y@0.0.0 test:ui-review
+> npm --prefix frontend exec -- playwright test --config=frontend/playwright.config.ts infra-automation-units.spec.ts
+
+
+Running 1 test using 1 worker
+
+(node:45073) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  1 [chromium] › frontend/e2e/infra-automation-units.spec.ts:161:3 › declared units using real composed APIs › keyboard exact scope, located errors, confirmation and two-unit evidence (28.2s)
+
+  1 passed (29.3s)

@@ -1668,6 +1668,109 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/infra-automation/units": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Units */
+        get: operations["list_units_api_v1_infra_automation_units_get"];
+        put?: never;
+        /** Save Units */
+        post: operations["save_units_api_v1_infra_automation_units_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/infra-automation/units/validate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Validate Units */
+        post: operations["validate_units_api_v1_infra_automation_units_validate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/infra-automation/units/{inventory_id}/revisions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Revision History */
+        get: operations["revision_history_api_v1_infra_automation_units__inventory_id__revisions_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/infra-automation/units/{inventory_id}/revisions/{revision_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Revision */
+        get: operations["get_revision_api_v1_infra_automation_units__inventory_id__revisions__revision_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/infra-automation/units/runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Request Unit Run */
+        post: operations["request_unit_run_api_v1_infra_automation_units_runs_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/infra-automation/runs/{run_id}/units": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Run Units */
+        get: operations["get_run_units_api_v1_infra_automation_runs__run_id__units_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/scanner-imports/sarif": {
         parameters: {
             query?: never;
@@ -4581,6 +4684,19 @@ export interface components {
             outcome: "approve" | "reject";
             /** Confirmation */
             confirmation?: string | null;
+        };
+        /** DeclaredUnit */
+        DeclaredUnit: {
+            /** Id */
+            id: string;
+            /** Source */
+            source: components["schemas"]["UnitSource"] | components["schemas"]["UploadedUnitSource"];
+            /** Environment */
+            environment: string;
+            /** Target */
+            target: string;
+            /** Prerequisites */
+            prerequisites: string[];
         };
         /** DeploymentOutcomeCreateRequest */
         DeploymentOutcomeCreateRequest: {
@@ -7909,6 +8025,20 @@ export interface components {
             /** Definition */
             definition: string;
         };
+        /** SaveUnitsRequest */
+        SaveUnitsRequest: {
+            /** Reason */
+            reason: string;
+            /** Project Id */
+            project_id: number;
+            /** Workspace Id */
+            workspace_id: number;
+            /** Inventory Id */
+            inventory_id?: string | null;
+            /** Expected Version */
+            expected_version: number;
+            map: components["schemas"]["UnitMap"];
+        };
         /**
          * ScannerImportRequest
          * @description Scanner import API request.
@@ -9511,6 +9641,252 @@ export interface components {
             data: components["schemas"]["TopologyValidationData"];
             meta: components["schemas"]["MetaPayload"];
         };
+        /** UnitEvidenceItem */
+        UnitEvidenceItem: {
+            /** Unit Id */
+            unit_id: string;
+            /** Manifest Digest */
+            manifest_digest: string;
+            /** Report Id */
+            report_id: number;
+            /** Report Digest */
+            report_digest: string;
+            /** Source Digest */
+            source_digest: string;
+        };
+        /** UnitEvidenceView */
+        UnitEvidenceView: {
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "pending" | "available" | "changed";
+            /** Combined Digest */
+            combined_digest: string | null;
+            /** Items */
+            items: components["schemas"]["UnitEvidenceItem"][];
+        };
+        /** UnitInputBinding */
+        UnitInputBinding: {
+            /** Unit Id */
+            unit_id: string;
+            /** Intake Step Id */
+            intake_step_id: string;
+            /** Analysis Step Id */
+            analysis_step_id: string;
+            /** Artifacts */
+            artifacts?: components["schemas"]["ArtifactUpload"][];
+        };
+        /** UnitLockView */
+        UnitLockView: {
+            /** Unit Id */
+            unit_id: string;
+            /** Canonical Target */
+            canonical_target: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "held" | "resolved" | "broken" | "not_requested";
+        };
+        /** UnitMap */
+        UnitMap: {
+            /**
+             * Version
+             * @default 1
+             */
+            version: number;
+            /** Units */
+            units: components["schemas"]["DeclaredUnit"][];
+            /** Affected */
+            affected: string[];
+        };
+        /** UnitPlan */
+        UnitPlan: {
+            /**
+             * Version
+             * @default 1
+             */
+            version: number;
+            inventory: components["schemas"]["UnitMap"];
+            /** Waves */
+            waves: string[][];
+            /** Map Digest */
+            map_digest: string;
+            /** Waves Digest */
+            waves_digest: string;
+            /**
+             * Order Kind
+             * @default collection_review
+             * @constant
+             */
+            order_kind: "collection_review";
+        };
+        /** UnitRevisionHistory */
+        UnitRevisionHistory: {
+            /** Items */
+            items: components["schemas"]["UnitRevisionSummary"][];
+            /**
+             * Truncated
+             * @default false
+             * @constant
+             */
+            truncated: false;
+        };
+        /** UnitRevisionHistoryResponse */
+        UnitRevisionHistoryResponse: {
+            data: components["schemas"]["UnitRevisionHistory"];
+            meta: components["schemas"]["AutomationMeta"];
+        };
+        /** UnitRevisionListResponse */
+        UnitRevisionListResponse: {
+            data: components["schemas"]["UnitRevisionPage"];
+            meta: components["schemas"]["AutomationMeta"];
+        };
+        /** UnitRevisionPage */
+        UnitRevisionPage: {
+            /** Items */
+            items: components["schemas"]["UnitRevisionSummary"][];
+            /**
+             * Truncated
+             * @default false
+             * @constant
+             */
+            truncated: false;
+        };
+        /** UnitRevisionResponse */
+        UnitRevisionResponse: {
+            data: components["schemas"]["UnitRevisionView"];
+            meta: components["schemas"]["AutomationMeta"];
+        };
+        /** UnitRevisionSummary */
+        UnitRevisionSummary: {
+            /** Inventory Id */
+            inventory_id: string;
+            /** Revision Id */
+            revision_id: string;
+            /** Version */
+            version: number;
+            /** Project Id */
+            project_id: number;
+            /** Workspace Id */
+            workspace_id: number;
+            /** Map Digest */
+            map_digest: string;
+            /** Waves Digest */
+            waves_digest: string;
+            /** Created By */
+            created_by: string;
+            /** Created At */
+            created_at: string;
+        };
+        /** UnitRevisionView */
+        UnitRevisionView: {
+            /** Inventory Id */
+            inventory_id: string;
+            /** Revision Id */
+            revision_id: string;
+            /** Version */
+            version: number;
+            /** Project Id */
+            project_id: number;
+            /** Workspace Id */
+            workspace_id: number;
+            /** Map Digest */
+            map_digest: string;
+            /** Waves Digest */
+            waves_digest: string;
+            /** Created By */
+            created_by: string;
+            /** Created At */
+            created_at: string;
+            plan: components["schemas"]["UnitPlan"];
+        };
+        /** UnitRunRequest */
+        UnitRunRequest: {
+            run: components["schemas"]["RunRequest"];
+            /** Revision Id */
+            revision_id: string;
+            /** Confirmed Map Digest */
+            confirmed_map_digest: string;
+            /** Bindings */
+            bindings: components["schemas"]["UnitInputBinding"][];
+        };
+        /** UnitRunResponse */
+        UnitRunResponse: {
+            data: components["schemas"]["UnitRunView"];
+            meta: components["schemas"]["AutomationMeta"];
+        };
+        /** UnitRunSnapshot */
+        UnitRunSnapshot: {
+            revision: components["schemas"]["UnitRevisionView"];
+            /** Bindings */
+            bindings: components["schemas"]["UnitStepBinding"][];
+            /** Snapshot Digest */
+            snapshot_digest: string;
+        };
+        /** UnitRunView */
+        UnitRunView: {
+            /** Run Id */
+            run_id: string;
+            /** Project Id */
+            project_id: number;
+            /** Workspace Id */
+            workspace_id: number;
+            /** Run Version */
+            run_version: number;
+            /** Available */
+            available: boolean;
+            snapshot: components["schemas"]["UnitRunSnapshot"] | null;
+            evidence: components["schemas"]["UnitEvidenceView"] | null;
+            /** Locks */
+            locks: components["schemas"]["UnitLockView"][];
+        };
+        /** UnitSource */
+        UnitSource: {
+            /** Path */
+            path: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "declared_repository";
+            /** Repository Id */
+            repository_id: string;
+            /** Commit Sha */
+            commit_sha: string;
+        };
+        /** UnitStepBinding */
+        UnitStepBinding: {
+            /** Unit Id */
+            unit_id: string;
+            /** Intake Step Id */
+            intake_step_id: string;
+            /** Analysis Step Id */
+            analysis_step_id: string;
+        };
+        /** UnitValidation */
+        UnitValidation: {
+            /** Valid */
+            valid: boolean;
+            plan: components["schemas"]["UnitPlan"] | null;
+            /** Errors */
+            errors: components["schemas"]["UnitValidationError"][];
+        };
+        /** UnitValidationError */
+        UnitValidationError: {
+            /** Code */
+            code: string;
+            /** Message */
+            message: string;
+            /** Path */
+            path: (string | number)[];
+        };
+        /** UnitValidationResponse */
+        UnitValidationResponse: {
+            data: components["schemas"]["UnitValidation"];
+            meta: components["schemas"]["AutomationMeta"];
+        };
         /** UpdateSettingsRequest */
         UpdateSettingsRequest: {
             /** Reason */
@@ -9607,12 +9983,39 @@ export interface components {
              */
             limitation: "Uploaded evidence does not establish repository identity or exact-plan custody.";
         };
+        /** UploadedUnitSource */
+        UploadedUnitSource: {
+            /** Path */
+            path: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "uploaded";
+            /**
+             * Repository Source
+             * @default unavailable
+             * @constant
+             */
+            repository_source: "unavailable";
+        };
         /** ValidateDraftRequest */
         ValidateDraftRequest: {
             /** Expected Version */
             expected_version: number;
             /** Definition */
             definition?: string | null;
+        };
+        /** ValidateUnitsRequest */
+        ValidateUnitsRequest: {
+            /** Project Id */
+            project_id: number;
+            /** Workspace Id */
+            workspace_id: number;
+            /** Map */
+            map: {
+                [key: string]: unknown;
+            };
         };
         /** ValidateWorkflowRequest */
         ValidateWorkflowRequest: {
@@ -16183,6 +16586,555 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_units_api_v1_infra_automation_units_get: {
+        parameters: {
+            query: {
+                project_id: number;
+                workspace_id: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UnitRevisionListResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+        };
+    };
+    save_units_api_v1_infra_automation_units_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SaveUnitsRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UnitRevisionResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+        };
+    };
+    validate_units_api_v1_infra_automation_units_validate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ValidateUnitsRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UnitValidationResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+        };
+    };
+    revision_history_api_v1_infra_automation_units__inventory_id__revisions_get: {
+        parameters: {
+            query: {
+                project_id: number;
+                workspace_id: number;
+            };
+            header?: never;
+            path: {
+                inventory_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UnitRevisionHistoryResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+        };
+    };
+    get_revision_api_v1_infra_automation_units__inventory_id__revisions__revision_id__get: {
+        parameters: {
+            query: {
+                project_id: number;
+                workspace_id: number;
+            };
+            header?: never;
+            path: {
+                inventory_id: string;
+                revision_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UnitRevisionResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+        };
+    };
+    request_unit_run_api_v1_infra_automation_units_runs_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UnitRunRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationRunResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+        };
+    };
+    get_run_units_api_v1_infra_automation_runs__run_id__units_get: {
+        parameters: {
+            query: {
+                project_id: number;
+                workspace_id: number;
+            };
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UnitRunResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
                 };
             };
         };

@@ -55,6 +55,14 @@ class CollectionQualificationTests(unittest.TestCase):
 
     def test_changed_runtime_requires_real_requalification(self):
         self.assertTrue(self.record["source_hashes"])
+        self.assertTrue(
+            {
+                "infra_automation/unit_map.py",
+                "infra_automation/unit_contracts.py",
+                "services/infra_automation_units.py",
+                "models/repositories/infra_automation_units.py",
+            }.issubset(self.record["source_hashes"])
+        )
         for relative, expected in self.record["source_hashes"].items():
             with self.subTest(source=relative):
                 self.assertEqual(

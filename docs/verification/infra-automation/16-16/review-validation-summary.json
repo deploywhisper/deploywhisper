@@ -1,0 +1,71 @@
+{
+  "story": "16-16",
+  "reviewed_base": "0f18c01",
+  "reviewed_head": "36778fd",
+  "outcome": "approved_after_repairs",
+  "patches_resolved": 7,
+  "deferred": [
+    "D1 existing brace-expansion GHSA-q2hr-2g5m-vwhr"
+  ],
+  "results": {
+    "root": {
+      "tests": 1866,
+      "skipped": 3,
+      "exit_code": 0
+    },
+    "api_cli_infra": {
+      "passed": 754,
+      "skipped": 1,
+      "subtests": 2358,
+      "exit_code": 0
+    },
+    "automation": {
+      "passed": 1063,
+      "skipped": 1,
+      "subtests": 3081,
+      "exit_code": 0
+    },
+    "frontend": {
+      "tests": 438,
+      "compatibility": 2,
+      "typecheck": "pass",
+      "build": "pass"
+    },
+    "browser": {
+      "passed": 4,
+      "seconds": 45.4,
+      "screenshots": 18,
+      "critical_serious_axe": 0,
+      "visual": 94
+    },
+    "qualification": {
+      "collection_checks": 49,
+      "integrity_tests": 9,
+      "integrity_subtests": 73
+    },
+    "format_files": 565,
+    "existing_mypy_diagnostics": 318
+  },
+  "logs": {
+    "root": {
+      "path": "/tmp/story16-16-review-root.log",
+      "sha256": "418b50cfa3fe4c1d268d61eefe16e1f6efd331fdbc59fab834e71732b3a6b595"
+    },
+    "api_cli_infra": {
+      "path": "/tmp/story16-16-review-api-cli-infra.log",
+      "sha256": "6c496c685bc77993e321acc975d9a561095f3f620a477558e94ed1aec15619ff"
+    },
+    "automation": {
+      "path": "/tmp/story16-16-review-automation.log",
+      "sha256": "6440f721aa828fd85256017e0597a0d2fbb67053de530ee1626144816f3805ac"
+    },
+    "mypy": {
+      "path": "/tmp/story16-16-review-mypy.log",
+      "sha256": "f4580dcb2abec503ea500104f04b677bf6e0d7763935730b7d5ed987c9ed8a0d"
+    },
+    "qualification": {
+      "path": "/tmp/story16-16-review-qualification.log",
+      "sha256": "3083206218f8265eff0c7318662243a952ffef43e453dec21c697178788a19f3"
+    }
+  }
+}

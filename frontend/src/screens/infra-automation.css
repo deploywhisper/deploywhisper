@@ -66,3 +66,8 @@
 .dw-automation-run .dw-card-header > div { min-width: 0; overflow-wrap: anywhere; }
 .dw-automation-run h3 { overflow-wrap: anywhere; }
 .dw-automation-run .dw-button { max-width: 100%; white-space: normal; overflow-wrap: anywhere; }
+
+.dw-unit-inventory input[type="checkbox"] { width: auto; padding: 0; }
+.dw-unit-inventory code { overflow-wrap: anywhere; }
+.dw-unit-inventory fieldset { border: 0; padding: 0; margin: 16px 0; display: grid; gap: 12px; }
+.dw-unit-inventory td .dw-field + .dw-field { margin-top: 12px; }

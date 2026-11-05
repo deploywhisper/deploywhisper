@@ -100,7 +100,7 @@ class SupplyChainRemediationTests(unittest.TestCase):
                 "api-cli-infra": "15",
                 "analysis-parsers": "15",
                 "services": "25",
-                "infra-automation": "15",
+                "infra-automation": "25",
                 "llm": "15",
             },
         )

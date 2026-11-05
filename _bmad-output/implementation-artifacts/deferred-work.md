@@ -108,3 +108,7 @@
   `3af659e..5e9a3b3`, so remediation belongs to dependency maintenance.
   [CI failure](https://github.com/deploywhisper/deploywhisper/actions/runs/40472650527/job/122083216976).
   Blocks merging PR195; engine review remains approved. No audit suppression.
+
+## Deferred from: code review of 16-16-declared-multi-unit-preflight-planning.md (2026-11-05)
+
+- D1 — Existing medium `brace-expansion` CPU denial-of-service advisory GHSA-q2hr-2g5m-vwhr in root `package-lock.json`; confirmed open via GitHub Dependabot alert8 during publication. The lockfile is unchanged by Story16.16. Track as a separate dependency-maintenance change; no dependency update is included in this review. [Alert](https://github.com/deploywhisper/deploywhisper/security/dependabot/8).

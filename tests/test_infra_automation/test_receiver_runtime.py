@@ -260,12 +260,29 @@ class RuntimeTests(unittest.TestCase):
                     case.doCleanups()
 
     def test_concurrent_processes_count_at_most_once(self):
-        children = [self.child() for _ in range(4)]
-        for child in children:
-            stdout, stderr = child.communicate(timeout=20)
-            self.assertEqual(child.returncode, 0, (stdout, stderr))
-        self.assertEqual(self.run_receiver()["counted_actions"], 1)
-        self.assertEqual(self.calls("consume"), 1)
+        # macOS/APFS can return ENOENT for concurrent first O_CREAT|O_NOFOLLOW
+        # opens even while the directory and newly created file both exist.
+        # Initialize storage before this action-deduplication race; production
+        # Linux cold-start qualification remains a separate proof.
+        with self.receiver._ledger():
+            pass
+        children = []
+        try:
+            for _ in range(4):
+                children.append(self.child())
+            for child in children:
+                stdout, stderr = child.communicate(timeout=20)
+                self.assertEqual(child.returncode, 0, (stdout, stderr))
+            self.assertEqual(self.run_receiver()["counted_actions"], 1)
+            self.assertEqual(self.calls("consume"), 1)
+        finally:
+            # Reap every contender before the fixture removes its private tree,
+            # including failures and timeouts while observing an earlier child.
+            for child in children:
+                if child.poll() is None:
+                    child.kill()
+            for child in children:
+                child.communicate(timeout=20)
 
     def test_resumed_action_rechecks_server_and_custody(self):
         child = self.child("local_receipt")

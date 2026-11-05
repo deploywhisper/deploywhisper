@@ -6,6 +6,13 @@ The entry stays visible before account setup and while execution is disabled;
 its presence never grants access or enables starts. The
 Dashboard's analysis flow and global search remain available.
 
+Use **Inventory** (`/infra-automation/inventory`) for manually declared unit
+scope and dependencies. Validate and save an immutable revision, confirm its
+affected/prerequisite scope, then bind every unit to a published workflow's
+intake and analysis steps. Run history shows collection/review waves, evidence
+and canonical locks. See [Declared unit preflight planning](units.md) for bounds,
+source limitations and required reanalysis after changes.
+
 ## Account and project access
 
 Use **Settings → Named account access** (`/settings/account`) to sign in with a

@@ -1,0 +1,11 @@
+{
+  "score": 94,
+  "verdict": "pass",
+  "category_match": true,
+  "differences": [
+    "Recovery and revision-history controls add necessary content within the existing form/table composition.",
+    "Narrow view retains native input overflow and readable evidence tables; screenshots intentionally frame the relevant inner-scroll section."
+  ],
+  "suggestions": [],
+  "reasoning": "The review UI preserves established InfraFlow typography, spacing, surfaces and focus treatment. Located errors and explicit recovery, including rejected-retry uncertainty, remain readable and keyboard discoverable at both required widths."
+}

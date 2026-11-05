@@ -18,7 +18,7 @@ import config
 import models.database as database
 
 HEAD = "035_add_infra_handoffs"
-CURRENT_HEAD = "037_add_runner_enrollment"
+CURRENT_HEAD = "038_add_declared_unit_maps"
 PREVIOUS = "034_add_infra_decisions"
 MIGRATION = import_module(f"migrations.versions.{HEAD}")
 

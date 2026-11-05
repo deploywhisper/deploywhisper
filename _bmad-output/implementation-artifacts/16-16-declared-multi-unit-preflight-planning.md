@@ -1,6 +1,6 @@
 # Story 16.16: Declared Multi Unit Preflight Planning
 
-Status: backlog
+Status: done
 Preparation: refined
 Release: v1.5.0 | Priority: P0, highest-priority feature
 
@@ -38,22 +38,44 @@ Coverage intent: Delta against released v1.4.0; full canonical mappings below ar
 
 Execute one bounded packet at a time on the story feature branch. Each packet owns the named paths; coordinate shared paths and do not revert other edits. Re-estimate after 16.0 spikes; split packets into reviewable PRs without renumbering the canonical story.
 
-- [ ] Packet 16.1: Exact map and deterministic planner — owner: Domain implementer.
+- [x] Packet 16.1: Exact map and deterministic planner — owner: Domain implementer.
   - Owned write paths: `infra_automation/ unit-map schema/planner; schemas/infra-automation/; tests/test_infra_automation/`.
   - Output: bounded closed map, stable sort/waves, exact-cover checks and versioned canonical digest.
   - Acceptance proof: AC1–3: permutation determinism, cycles, unknown IDs, limits and missing/extra scope tests.
-- [ ] Packet 16.2: Snapshot and lock integration — owner: Service implementer.
+- [x] Packet 16.2: Snapshot and lock integration — owner: Service implementer.
   - Owned write paths: `services/infra_automation_service.py; existing run/lock repositories; tests/test_infra_automation/`.
   - Output: immutable map/evidence binding, canonical alias collision and stale-decision invalidation.
   - Acceptance proof: AC3–5: alias, unknown-work, map/source mutation and downstream replan denial.
-- [ ] Packet 16.3: Accessible confirmation and evidence — owner: Frontend implementer.
+- [x] Packet 16.3: Accessible confirmation and evidence — owner: Frontend implementer.
   - Owned write paths: `frontend/src/ inventory and run wave table; frontend/e2e/`.
   - Output: typed manual editor/confirmation with affected/prerequisite distinction and collection-order copy.
   - Acceptance proof: AC1,2,5,6: keyboard cycle/unknown errors, confirmation and lock/wave table Compose flow.
-- [ ] Packet 16.4: Documentation and contract proof — owner: Verifier/documenter.
+- [x] Packet 16.4: Documentation and contract proof — owner: Verifier/documenter.
   - Owned write paths: `docs/infra-automation/units.md; tests/test_api/ and tests/test_infra_automation/`.
   - Output: exact scope examples and measured bounded inputs without 200-unit scale promise.
   - Acceptance proof: AC1–6: API/schema/digest parity and documented future-plan invalidation.
+
+### Review Findings
+
+- [x] [Review][Patch] Bound direct dictionary keys before canonical serialization and include inventory retention in shared quotas.
+- [x] [Review][Patch] Resolve exact latest-attempt evidence and enforce whole-bundle freshness with independent expiry assertions.
+- [x] [Review][Patch] Reject undeclared cross-unit analysis ordering and external handoff ancestors.
+- [x] [Review][Patch] Refresh same-version unit evidence and reject duplicate/incomplete available-evidence responses.
+- [x] [Review][Patch] Recover late/lost saves through observable settlement and exact verified revision adoption; permit explicitly confirmed new preflights.
+- [x] [Review][Patch] Validate genuine keyboard navigation and allow the exact Inventory account return route.
+- [x] [Review][Patch] Update current migration-head expectations and isolate receiver contention proof from the existing macOS cold-file race.
+
+### Formal review follow-ups — 2026-11-05
+
+- [x] [Review][Patch][High] R1: Reject approval-before-collection dependency deadlocks at admission (`services/infra_automation_units.py`).
+- [x] [Review][Patch][Medium] R2: Return the original admitted run on exact idempotent replay after inventory supersession.
+- [x] [Review][Patch][Medium] R3: Recover lost start responses with an explicit same-identity retry; never strand the form or create a fresh request implicitly.
+- [x] [Review][Patch][Medium] R4: Freeze workflow/revision pagination while admission is pending.
+- [x] [Review][Patch][Medium] R5: Align browser source-path validation with backend Unicode character semantics.
+- [x] [Review][Patch][Medium] R6: Associate located errors with their actual controls and provide keyboard links from the summary.
+- [x] [Review][Patch][Medium] R7: Expose bounded revision history so a lost save can be recovered after a later revision supersedes it.
+
+- [x] [Review][Defer] D1: Existing medium brace-expansion advisory in unchanged root package-lock.json; see deferred-work.md.
 
 ## Dev Notes
 
@@ -89,14 +111,132 @@ Execute one bounded packet at a time on the story feature branch. Each packet ow
 ## Dev Agent Record
 
 ### Agent Model Used
-Planning refinement only; implementation agent records its model at execution.
+Codex with bounded native domain, service, UI, browser and independent review lanes.
 
 ### Debug Log References
-Not executed.
+- [Formal review and repairs](../../docs/verification/infra-automation/16-16/formal-code-review.md), [fresh validation](../../docs/verification/infra-automation/16-16/review-validation-summary.json), and [review browser proof](../../docs/verification/infra-automation/16-16/review-browser-proof.md).
+- [Full implementation and validation record](../../docs/verification/infra-automation/16-16/results.md).
+- [Layered review and resolved findings](../../docs/verification/infra-automation/16-16/code-review.md).
+- [Actual composed keyboard/axe/browser proof](../../docs/verification/infra-automation/16-16/browser-proof.md), [screenshots](../../docs/verification/infra-automation/16-16/screenshots.json) and [visual verdict](../../docs/verification/infra-automation/16-16/visual-verdict.json).
+- [Structured results and log hashes](../../docs/verification/infra-automation/16-16/validation-summary.json).
 
 ### Completion Notes List
-- Story specification prepared; no feature implementation, qualification, public RFC acceptance, release publication or runtime tests performed.
-- Implementation and validation commands above are future obligations, not test results.
+- PR215 CI follow-up: push run42019789549 was cancelled by the 15-minute automation job limit after reaching99%; the same-commit PR run42019963343 passed in14m51s. Raised only that shard to25minutes, matching services, and updated the existing workflow contract. Local workflow/security contract checks:24tests25subtests pass; Ruff and repository formatting pass. Test-level deadlines and required checks remain enforced.
+- Formal BMad review completed: seven findings repaired and independently verified; existing dependency alert D1 deferred outside the story diff. Fresh root1,866tests/3skips; API754passed/1skip/2,358subtests; automation1,063passed/1skip/3,081subtests; UI438tests+2compat/typecheck/build; actual Compose4passed45.4s,18screenshots,axe0,visual94. Current real collection49checks and integrity9tests73subtests pass. Separate backend/UI branches are prepared for required remote review closure.
+- Earlier dependency/interface review passed using actual16.0/16.3/16.10/16.14 proof. Current collection/isolation integrity:9tests73subtests pass; real collection49checks pass with unit integration added to source-hash coverage. Existing qualified offline ARM64/OpenTofu profile remains the support boundary.
+- AC1–3: closed25unit/200edge/128KiB declarations, exact affected/prerequisite closure, located rejection, canonical ordering and immutable revision/run snapshots. Permutations and complete two-unit shared analysis are exercised. Local maximum-length ASCII corpus59,416input/62,951result bytes;1000validations p50/p95/p99=6.073/6.312/6.564ms (diagnostic only).
+- AC3–5: existing canonical target locks, unknown-work retention and exact intake/analysis/source linkage; persisted server-derived combined evidence and current revision/whole-bundle deadlines checked at decision admission. Uploaded/mixed bundles remain advisory; collected association requires repository root and actual admitted provenance for every unit. External handoff ancestors cannot masquerade as collection order.
+- AC6: actual composed Inventory edit/unknown/cycle/confirmation/start/review journey produced two reports; mounted evidence supersession observed without run-version change. Keyboard traversal, zero axe critical/serious violations, ten1440/760screenshots and94/100visual verdict pass. Original application restored healthy; disposable resources/private credentials removed.
+- Validation: root1862tests/3skips; exact API/CLI/infra753passed/1skip/2358subtests; automation1060passed/1skip/3081subtests; all ten local-CI directory targets verified after stale migration-head assertions and an existing macOS test-fixture race were repaired. Full logs preserve initial failures rather than hiding them.
+- Frontend432tests plus2compatibilitychecks, typecheck and production build pass. Ruff lint and repo-wide formatting565files pass. Scoped Bandit/full-CI high gate pass. CI mypy retains318existing-code diagnostics, zero on changed lines.
+- Independent review repairs cover pre-serialization bounds, quotas, retry lineage, whole-bundle freshness, exact dependency order, live evidence refresh, exact response coverage, new-preflight recovery and verified lost-save reconciliation. Composed proof additionally repaired the Inventory account return-route allowlist. No unresolved introduced review findings remain.
+- Development handoff to formal code review is complete. Planning scope, advisory reports and shared analysis remain unchanged; release/pilot qualification remains owned by later stories.
 
 ### File List
-- `_bmad-output/implementation-artifacts/16-16-declared-multi-unit-preflight-planning.md` (story specification only).
+- `.github/workflows/ci.yml`
+- `README.md`
+- `_bmad-output/implementation-artifacts/16-16-declared-multi-unit-preflight-planning.md`
+- `_bmad-output/implementation-artifacts/deferred-work.md`
+- `_bmad-output/implementation-artifacts/sprint-status.yaml`
+- `_bmad-output/project-context.md`
+- `api/routes/infra_automation_units.py`
+- `app.py`
+- `docs/ci.md`
+- `docs/infra-automation/browser-ui.md`
+- `docs/infra-automation/units.md`
+- `docs/verification/infra-automation/16-14/results.json`
+- `docs/verification/infra-automation/16-16/browser-initial-navigation-failure.txt`
+- `docs/verification/infra-automation/16-16/browser-native-select-failure.txt`
+- `docs/verification/infra-automation/16-16/browser-proof.md`
+- `docs/verification/infra-automation/16-16/browser-test-label-failure.txt`
+- `docs/verification/infra-automation/16-16/browser-test-reload-failure.txt`
+- `docs/verification/infra-automation/16-16/browser-verified.txt`
+- `docs/verification/infra-automation/16-16/code-review.md`
+- `docs/verification/infra-automation/16-16/formal-code-review.md`
+- `docs/verification/infra-automation/16-16/results.md`
+- `docs/verification/infra-automation/16-16/review-browser-before-retry-hardening.txt`
+- `docs/verification/infra-automation/16-16/review-browser-interrupted.txt`
+- `docs/verification/infra-automation/16-16/review-browser-proof.md`
+- `docs/verification/infra-automation/16-16/review-browser-source.json`
+- `docs/verification/infra-automation/16-16/review-browser-verified.txt`
+- `docs/verification/infra-automation/16-16/review-screenshots.json`
+- `docs/verification/infra-automation/16-16/review-screenshots/inventory-confirmation-1440.png`
+- `docs/verification/infra-automation/16-16/review-screenshots/inventory-confirmation-760.png`
+- `docs/verification/infra-automation/16-16/review-screenshots/inventory-editor-1440.png`
+- `docs/verification/infra-automation/16-16/review-screenshots/inventory-editor-760.png`
+- `docs/verification/infra-automation/16-16/review-screenshots/inventory-unknown-1440.png`
+- `docs/verification/infra-automation/16-16/review-screenshots/inventory-unknown-760.png`
+- `docs/verification/infra-automation/16-16/review-screenshots/review-historical-save-adoption-1440.png`
+- `docs/verification/infra-automation/16-16/review-screenshots/review-historical-save-adoption-760.png`
+- `docs/verification/infra-automation/16-16/review-screenshots/review-pending-pagination-1440.png`
+- `docs/verification/infra-automation/16-16/review-screenshots/review-pending-pagination-760.png`
+- `docs/verification/infra-automation/16-16/review-screenshots/review-replayed-superseded-run-1440.png`
+- `docs/verification/infra-automation/16-16/review-screenshots/review-replayed-superseded-run-760.png`
+- `docs/verification/infra-automation/16-16/review-screenshots/review-retry-rate-rejected-1440.png`
+- `docs/verification/infra-automation/16-16/review-screenshots/review-retry-rate-rejected-760.png`
+- `docs/verification/infra-automation/16-16/review-screenshots/run-review-required-1440.png`
+- `docs/verification/infra-automation/16-16/review-screenshots/run-review-required-760.png`
+- `docs/verification/infra-automation/16-16/review-screenshots/run-unit-evidence-1440.png`
+- `docs/verification/infra-automation/16-16/review-screenshots/run-unit-evidence-760.png`
+- `docs/verification/infra-automation/16-16/review-validation-summary.json`
+- `docs/verification/infra-automation/16-16/review-visual-verdict.json`
+- `docs/verification/infra-automation/16-16/screenshots.json`
+- `docs/verification/infra-automation/16-16/screenshots/inventory-confirmation-1440.png`
+- `docs/verification/infra-automation/16-16/screenshots/inventory-confirmation-760.png`
+- `docs/verification/infra-automation/16-16/screenshots/inventory-editor-1440.png`
+- `docs/verification/infra-automation/16-16/screenshots/inventory-editor-760.png`
+- `docs/verification/infra-automation/16-16/screenshots/inventory-unknown-1440.png`
+- `docs/verification/infra-automation/16-16/screenshots/inventory-unknown-760.png`
+- `docs/verification/infra-automation/16-16/screenshots/run-review-required-1440.png`
+- `docs/verification/infra-automation/16-16/screenshots/run-review-required-760.png`
+- `docs/verification/infra-automation/16-16/screenshots/run-unit-evidence-1440.png`
+- `docs/verification/infra-automation/16-16/screenshots/run-unit-evidence-760.png`
+- `docs/verification/infra-automation/16-16/validation-summary.json`
+- `docs/verification/infra-automation/16-16/visual-verdict.json`
+- `frontend/e2e/infra-automation-units.spec.ts`
+- `frontend/src/api/identity.test.ts`
+- `frontend/src/api/identity.ts`
+- `frontend/src/api/infraAutomationUnits.test.ts`
+- `frontend/src/api/infraAutomationUnits.ts`
+- `frontend/src/api/schema.d.ts`
+- `frontend/src/main.tsx`
+- `frontend/src/screens/InfraAutomationInventory.test.tsx`
+- `frontend/src/screens/InfraAutomationInventory.tsx`
+- `frontend/src/screens/InfraAutomationRun.test.tsx`
+- `frontend/src/screens/InfraAutomationRun.tsx`
+- `frontend/src/screens/InfraAutomationShared.tsx`
+- `frontend/src/screens/infra-automation.css`
+- `infra_automation/claims.py`
+- `infra_automation/unit_contracts.py`
+- `infra_automation/unit_map.py`
+- `migrations/versions/038_add_declared_unit_maps.py`
+- `models/database.py`
+- `models/repositories/infra_automation_units.py`
+- `models/tables.py`
+- `schemas/infra-automation/unit-map-v1.json`
+- `scripts/compose-story16-16.yaml`
+- `scripts/qualify_collection.py`
+- `scripts/unit_ui_fixture.py`
+- `services/infra_automation_decisions.py`
+- `services/infra_automation_units.py`
+- `tests/test_api/test_infra_automation_units.py`
+- `tests/test_infra/test_container_contract.py`
+- `tests/test_infra/test_identity_migration.py`
+- `tests/test_infra/test_infra_automation_engine_migration.py`
+- `tests/test_infra/test_infra_automation_handoff_migration.py`
+- `tests/test_infra/test_infra_automation_workflow_migration.py`
+- `tests/test_infra/test_migrations.py`
+- `tests/test_infra/test_project_membership_migration.py`
+- `tests/test_infra/test_receiver_reconciliation_migration.py`
+- `tests/test_infra/test_runner_enrollment_migration.py`
+- `tests/test_infra/test_supply_chain_remediation.py`
+- `tests/test_infra_automation/test_collection_qualification.py`
+- `tests/test_infra_automation/test_preflight_repository.py`
+- `tests/test_infra_automation/test_receiver_runtime.py`
+- `tests/test_infra_automation/test_unit_map.py`
+- `tests/test_infra_automation/test_units_service.py`
+
+## Change Log
+- 2026-11-05: Implemented all four bounded packets, resolved independent and composed-browser findings, completed required verification, and advanced to review.
+- 2026-11-05: Formal review repaired R1–R7, recorded D1 separately, reran affected full suites and composed proof, and advanced to done.
+- 2026-11-05: Increased the infra-automation CI job budget after a confirmed hosted-runner timeout; preserved test coverage and per-test deadlines.

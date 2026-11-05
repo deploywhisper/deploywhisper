@@ -18,7 +18,7 @@ from alembic.config import Config
 import config
 import models.database as database
 
-HEAD = "037_add_runner_enrollment"
+HEAD = "038_add_declared_unit_maps"
 PREVIOUS = "031_add_infra_workflows"
 TABLES = (
     "infra_automation_runs",

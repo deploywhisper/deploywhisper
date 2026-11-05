@@ -83,7 +83,7 @@ describe("immutable automation run details", () => {
     expect(html).toContain("Last-known evidence available");
     expect(html).toContain("current evidence freshness and authority are unavailable");
   });
-  const context = { scope: { projectId: 1, workspaceId: 2 }, identity: { epoch: 1 }, fresh: true, refresh: async () => {}, selectProject: () => {}, selectWorkspace: () => {} } as unknown as AutomationContext;
+  const context = { scope: { projectId: 1, workspaceId: 2 }, capabilities: { membership_version: 1 }, identity: { epoch: 1 }, fresh: true, refresh: async () => {}, selectProject: () => {}, selectWorkspace: () => {} } as unknown as AutomationContext;
   function renderCachedRun(value: Run, error?: Error) {
     const client = new QueryClient();
     const key = ["automation", 1, 1, 2, "run", "run-one"];
@@ -210,14 +210,14 @@ describe("external handoff evidence", () => {
     const childKey = [...key, "handoffs", 3];
     client.setQueryData(childKey, { version: 1, run_id: "run-one", project_id: 1, workspace_id: 2, items: [externalFixture] });
     client.getQueryCache().find({ queryKey: childKey })?.setState({ error: new ApiClientError("denied", 403), status: "error" });
-    const context = { scope: { projectId: 1, workspaceId: 2 }, identity: { epoch: 1 }, fresh: true } as AutomationContext;
+    const context = { scope: { projectId: 1, workspaceId: 2 }, capabilities: { membership_version: 1 }, identity: { epoch: 1 }, fresh: true } as AutomationContext;
     const html = render(<QueryClientProvider client={client}><RunContent context={context} runId="run-one" /></QueryClientProvider>);
     expect(html).toContain("Run access unavailable");
     expect(html).not.toContain("handoff-one");
     expect(html).not.toContain(runFixture.snapshot_digest);
   });
   it("blocks ambiguous manual reconciliation through equal-version reads and permits advancing evidence", () => {
-    const context = { scope: { projectId: 1, workspaceId: 2 }, identity: { epoch: 1, csrfToken: "synthetic-csrf" }, fresh: true } as AutomationContext;
+    const context = { scope: { projectId: 1, workspaceId: 2 }, capabilities: { membership_version: 1 }, identity: { epoch: 1, csrfToken: "synthetic-csrf" }, fresh: true } as AutomationContext;
     const pendingRequests = new Map([[externalFixture.id, externalFixture.version]]);
     const handoffs = { version: 1 as const, run_id: "run-one", project_id: 1, workspace_id: 2, items: [externalFixture] };
     const draw = (version: number) => render(<HandoffOutcomes handoffs={{ ...handoffs, items: [{ ...externalFixture, version }] }} context={context} pendingRequests={pendingRequests} refresh={async () => {}} onDenied={() => {}} />);
@@ -254,7 +254,7 @@ describe("truthful collection and cancellation views", () => {
     expect(collectionAnnouncement({ ...collectionView, items: [{ ...collectionView.items[0], observations: collectionView.items[0].observations.map((x) => x.kind === "screened_upload" ? { ...x, state: "received" } : x) }] })).not.toBe(before);
   });
   it("does not equate cancellation request with owned or external termination", () => {
-    const context = { scope: { projectId: 1, workspaceId: 2 }, identity: { epoch: 1, csrfToken: "csrf" }, fresh: true } as AutomationContext;
+    const context = { scope: { projectId: 1, workspaceId: 2 }, capabilities: { membership_version: 1 }, identity: { epoch: 1, csrfToken: "csrf" }, fresh: true } as AutomationContext;
     const html = render(<CancelRunControl run={runFixture} value={collectionView} context={context} fresh refresh={async () => {}} onDenied={() => {}} />);
     expect(html).toContain("Not independently confirmed by this view");
     expect(html).toContain("Not confirmed; inspect verified external outcome evidence");
@@ -266,7 +266,7 @@ describe("truthful collection and cancellation views", () => {
     const key = ["automation", 1, 1, 2, "run", "run-one"];
     client.setQueryData(key, runFixture); client.setQueryData([...key, "collection"], collectionView);
     client.getQueryCache().find({ queryKey: [...key, "collection"] })?.setState({ error: new ApiClientError("denied", 403), status: "error" });
-    const context = { scope: { projectId: 1, workspaceId: 2 }, identity: { epoch: 1 }, fresh: true } as AutomationContext;
+    const context = { scope: { projectId: 1, workspaceId: 2 }, capabilities: { membership_version: 1 }, identity: { epoch: 1 }, fresh: true } as AutomationContext;
     const html = render(<QueryClientProvider client={client}><RunContent context={context} runId="run-one" /></QueryClientProvider>);
     expect(html).toContain("Run access unavailable"); expect(html).not.toContain(collectionView.items[0].commit_sha);
   });
@@ -319,7 +319,7 @@ describe("late cancellation request settlement", () => {
     client.setQueryData(key, { ...runFixture, state: "running" });
     client.setQueryData([...key, "collection"], { ...collectionView, cancellation: { ...collectionView.cancellation, can_cancel: true } });
     client.getQueryCache().find({ queryKey: [...key, "collection"] })?.setState({ error: new ApiClientError("unavailable", 503), status: "error" });
-    const context = { scope: { projectId: 1, workspaceId: 2 }, identity: { epoch: 1, csrfToken: "csrf" }, fresh: true } as AutomationContext;
+    const context = { scope: { projectId: 1, workspaceId: 2 }, capabilities: { membership_version: 1 }, identity: { epoch: 1, csrfToken: "csrf" }, fresh: true } as AutomationContext;
     const html = render(<QueryClientProvider client={client}><RunContent context={context} runId="run-one" /></QueryClientProvider>);
     expect(html).toContain("Cancellation reason"); expect(html).toContain("last-known collection evidence");
     expect(html).toContain("Request cancellation"); expect(html).toContain("disabled");
@@ -340,7 +340,7 @@ describe("last-known run recovery", () => {
     client.setQueryData([...key, "collection"], { ...collectionView, cancellation: { ...collectionView.cancellation, can_cancel: true } });
     client.setQueryData([...key, "handoffs", 3], { version: 1, run_id: "run-one", project_id: 1, workspace_id: 2, items: [externalFixture] });
     client.getQueryCache().find({ queryKey: key })?.setState({ error: new ApiClientError("unavailable", 503), status: "error" });
-    const context = { scope: { projectId: 1, workspaceId: 2 }, identity: { epoch: 1, csrfToken: "csrf" }, fresh: true } as AutomationContext;
+    const context = { scope: { projectId: 1, workspaceId: 2 }, capabilities: { membership_version: 1 }, identity: { epoch: 1, csrfToken: "csrf" }, fresh: true } as AutomationContext;
     const html = render(<QueryClientProvider client={client}><RunContent context={context} runId="run-one" /></QueryClientProvider>);
     expect(html).toContain("last-known run evidence");
     expect(html).toContain("Cancellation reason");
@@ -355,7 +355,7 @@ describe("last-known run recovery", () => {
       client.setQueryData(key, { ...runFixture, project_id: projectId });
       client.setQueryData([...key, "collection"], collectionView);
       client.getQueryCache().find({ queryKey: key })?.setState({ error: new ApiClientError("unavailable", status), status: "error" });
-      const context = { scope: { projectId: 1, workspaceId: 2 }, identity: { epoch: 1 }, fresh: true } as AutomationContext;
+      const context = { scope: { projectId: 1, workspaceId: 2 }, capabilities: { membership_version: 1 }, identity: { epoch: 1 }, fresh: true } as AutomationContext;
       const html = render(<QueryClientProvider client={client}><RunContent context={context} runId="run-one" /></QueryClientProvider>);
       expect(html).not.toContain("Cancellation reason"); expect(html).not.toContain(collectionView.items[0].commit_sha);
       expect(html).toContain(status === 503 ? "Run unavailable" : "Run access unavailable");
@@ -365,7 +365,7 @@ describe("last-known run recovery", () => {
 
 describe("retained read panels during network faults", () => {
   const page = { items: [{ id: "attempt-one", run_id: "run-one", step_id: "collect", attempt_number: 1, state: "running" as const, version: 1, fence: 1, generation: 1, deadline_at: runFixture.deadline_at, lease_until: runFixture.deadline_at, output: null, uploads: [] }], cursor: { version: 1, limit: 25, snapshot_id: "snapshot", next_cursor: null, last_sequence: 1, gap: false, truncated: false } };
-  const context = { scope: { projectId: 1, workspaceId: 2 }, identity: { epoch: 1, csrfToken: "csrf" }, fresh: true } as AutomationContext;
+  const context = { scope: { projectId: 1, workspaceId: 2 }, capabilities: { membership_version: 1 }, identity: { epoch: 1, csrfToken: "csrf" }, fresh: true } as AutomationContext;
   it("retains step log controls and reconciliation fields when their authorized reads return503", () => {
     const client = new QueryClient(), key = ["automation", 1, 1, 2, "run", "run-one"];
     client.setQueryData(key, { ...runFixture, state: "running" });

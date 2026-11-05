@@ -9,6 +9,8 @@ describe("account return destinations", () => {
     }
   });
   it.each([
+    "/infra-automation/inventory",
+    "/infra-automation/inventory?project_id=2&workspace_id=1",
     "/infra-automation/runners",
     "/infra-automation/runners?project_id=2&workspace_id=1",
     "/infra-automation/approvals?project_id=2&workspace_id=1",
@@ -17,6 +19,10 @@ describe("account return destinations", () => {
     expect(safeAccountReturnTo(path)).toBe(path);
   });
   it.each([
+    "/infra-automation/inventory/save",
+    "/infra-automation/inventory?token=private",
+    "/infra-automation/inventory?action=start",
+    "/infra-automation/inventory?revision_id=private",
     "/infra-automation/runners/enroll",
     "/infra-automation/runners?token=private",
     "/infra-automation/runners?view=enroll",
@@ -89,6 +95,7 @@ describe("local account configuration", () => {
     const { localAccountReturnTo } = await import("./identity");
     expect(localAccountReturnTo(null)).toBe("/settings");
     expect(localAccountReturnTo("https://example.test")).toBe("/settings");
+    expect(localAccountReturnTo("/infra-automation/inventory?project_id=7&workspace_id=9")).toBe("/infra-automation/inventory?project_id=7&workspace_id=9");
     expect(localAccountReturnTo("/infra-automation?project_id=7")).toBe("/infra-automation?project_id=7");
   });
 });

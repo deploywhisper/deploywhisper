@@ -1,0 +1,112 @@
+{
+  "screenshots": [
+    {
+      "path": "docs/verification/infra-automation/16-16/review-screenshots/inventory-confirmation-1440.png",
+      "width": 1440,
+      "height": 1000,
+      "sha256": "bb8f1c4e7754a4fbf180f578daf589c724a907cd457c0a487bfc70a2cc0486c2"
+    },
+    {
+      "path": "docs/verification/infra-automation/16-16/review-screenshots/inventory-confirmation-760.png",
+      "width": 760,
+      "height": 1000,
+      "sha256": "baa05257ec0c0544d16e9f91d5ee223e313700d0219ed8639e30b6209ef61138"
+    },
+    {
+      "path": "docs/verification/infra-automation/16-16/review-screenshots/inventory-editor-1440.png",
+      "width": 1440,
+      "height": 1000,
+      "sha256": "c37264a5d4c405a3fb420b5bdeeb94f9a8515eb287c2250140a1c9da75e5f9fa"
+    },
+    {
+      "path": "docs/verification/infra-automation/16-16/review-screenshots/inventory-editor-760.png",
+      "width": 760,
+      "height": 1000,
+      "sha256": "ce3cdf003377c6e6c221cf90a00a8fb90e40784416f4957d31baadf566201876"
+    },
+    {
+      "path": "docs/verification/infra-automation/16-16/review-screenshots/inventory-unknown-1440.png",
+      "width": 1440,
+      "height": 1000,
+      "sha256": "3c9d155f6e2ed3e4de9ffffef7b729433888ad6377ae70047d7a9fdc83647ad2"
+    },
+    {
+      "path": "docs/verification/infra-automation/16-16/review-screenshots/inventory-unknown-760.png",
+      "width": 760,
+      "height": 1000,
+      "sha256": "68b17866b9993ec9e821578e4a620be7de1eb290317769d40706ab19f70ebb99"
+    },
+    {
+      "path": "docs/verification/infra-automation/16-16/review-screenshots/review-historical-save-adoption-1440.png",
+      "width": 1440,
+      "height": 1000,
+      "sha256": "5a5c4f048da6d2958b07e60b48b39d1ca755e81ee0b16f2cc6896c5da69d1ee3"
+    },
+    {
+      "path": "docs/verification/infra-automation/16-16/review-screenshots/review-historical-save-adoption-760.png",
+      "width": 760,
+      "height": 1000,
+      "sha256": "d0b1de1a7d832c8dcbfb86a3e63424dd011665d3a72bf1029f53d86cf096f887"
+    },
+    {
+      "path": "docs/verification/infra-automation/16-16/review-screenshots/review-pending-pagination-1440.png",
+      "width": 1440,
+      "height": 1000,
+      "sha256": "e7b8a5ad91addb4f75f5d2cd7770a6ccd9627d902c8cd28bb8daab5df0b8972b"
+    },
+    {
+      "path": "docs/verification/infra-automation/16-16/review-screenshots/review-pending-pagination-760.png",
+      "width": 760,
+      "height": 1000,
+      "sha256": "0bced3e47ca220874027acd8b82b25b515735e4d97d7ecdddb2f04e592b3bd4b"
+    },
+    {
+      "path": "docs/verification/infra-automation/16-16/review-screenshots/review-replayed-superseded-run-1440.png",
+      "width": 1440,
+      "height": 1000,
+      "sha256": "697f7766fe6c7a1a76cfe074166dbe38b6ba0ac031b77caf078e599a01de761b"
+    },
+    {
+      "path": "docs/verification/infra-automation/16-16/review-screenshots/review-replayed-superseded-run-760.png",
+      "width": 760,
+      "height": 1000,
+      "sha256": "ec3f26fc39702e095601235909a0ef3bae8b06d3c56e36399dc4be80101608c5"
+    },
+    {
+      "path": "docs/verification/infra-automation/16-16/review-screenshots/review-retry-rate-rejected-1440.png",
+      "width": 1440,
+      "height": 1000,
+      "sha256": "703ccef33b5a52b26f9e35e66f94efac764c9ae053cc91a0901eae18f938c008"
+    },
+    {
+      "path": "docs/verification/infra-automation/16-16/review-screenshots/review-retry-rate-rejected-760.png",
+      "width": 760,
+      "height": 1000,
+      "sha256": "160fc189069fd408c7d182b3c216d18597c8dab314348392d5c07c15c8b446e2"
+    },
+    {
+      "path": "docs/verification/infra-automation/16-16/review-screenshots/run-review-required-1440.png",
+      "width": 1440,
+      "height": 1000,
+      "sha256": "7b606edb9aa80a353ace9633a2cf8596cc9606c56f3bcb6087ac65f1b31a753d"
+    },
+    {
+      "path": "docs/verification/infra-automation/16-16/review-screenshots/run-review-required-760.png",
+      "width": 760,
+      "height": 1000,
+      "sha256": "c3b6fc3b026b15e04efdd984cf3d74376ad7f170f57a50b4abe592581404fc0c"
+    },
+    {
+      "path": "docs/verification/infra-automation/16-16/review-screenshots/run-unit-evidence-1440.png",
+      "width": 1440,
+      "height": 1000,
+      "sha256": "8771862ecefdca5e4737e58acb545cf0bacb52aa6b347545a6964d0c03beeb79"
+    },
+    {
+      "path": "docs/verification/infra-automation/16-16/review-screenshots/run-unit-evidence-760.png",
+      "width": 760,
+      "height": 1000,
+      "sha256": "c340e73acc31067c9eb41381d70111f6ebbad915a42c19f1fdf3f81299debcc3"
+    }
+  ]
+}
