@@ -208,7 +208,7 @@ def save_units(request: SaveUnitsRequest):
 def list_units(project_id: int, workspace_id: int):
     with auth.authorized_session() as session:
         _human_scope(session, project_id, workspace_id, "automation.read")
-        latest = {}
+        latest: dict[str, InfraAutomationUnitRevision] = {}
         for row in repo.revisions(session, project_id, workspace_id):
             latest.setdefault(row.inventory_id, row)
         if len(latest) > MAX_INVENTORIES:
@@ -435,6 +435,8 @@ def request_unit_run(
             request.run, registry=registry, registry_contract=registry_contract, now=now
         )
         run = runs.get_run(session, run_view["id"])
+        if run is None:
+            raise LifecycleError(503)
         document = engine._document(run)
         plan = plan_unit_map(view["plan"]["inventory"])
         lock_bindings = _bind_steps(session, run, document, plan, request.bindings)

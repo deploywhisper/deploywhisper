@@ -23,6 +23,10 @@ The planner admits at most 25 units, 200 explicit prerequisite edges and 128 KiB
 of UTF-8 JSON, with nesting bounded to 16. These are conservative planner bounds,
 not a 200-unit scale or production throughput promise. The separate workflow
 limit remains 50 actual steps, including policy, decision and handoff steps.
+Retained authoring is bounded to 25 inventories per project, 32 revisions per
+inventory and 8 MiB of project inventory content, subject to the shared engine
+storage quotas. Revisions are immutable; saving a later revision supersedes old
+run eligibility without rewriting historical run evidence.
 
 Units, affected IDs, prerequisite IDs and members of each wave sort
 lexicographically before versioned canonical hashing. Input order does not change
