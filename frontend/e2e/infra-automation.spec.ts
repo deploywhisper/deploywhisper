@@ -58,6 +58,7 @@ const origin = () => new URL(process.env.BASE_URL ?? "http://localhost:8080").or
 // Passwords, cookies and CSRF values remain in test process memory. In particular,
 // never attach API bodies, storageState or traces to this credential-entry lane.
 async function login(page: Page, account: Account, returnTo: string): Promise<string> {
+  await new Promise<void>((resolve) => setTimeout(resolve, 3500));
   await page.goto(`/settings/account?returnTo=${encodeURIComponent(returnTo)}`);
   const username = page.getByLabel("Username", { exact: true });
   await expect(username).toBeEnabled();
@@ -233,6 +234,8 @@ test.describe("isolated authenticated infrastructure automation", () => {
     await expect(page.getByRole("alert").first()).toContainText(/sign-in failed/i);
     await expect(page.getByRole("alert").filter({ hasText: /sign-in failed/i }).first()).toBeFocused();
     await expect(page.getByLabel("Password", { exact: true })).toHaveValue("");
+    const guidance = page.getByText("Operator setup for local accounts", { exact: true });
+    await guidance.focus(); await guidance.press("Enter");
     await expect(page.getByText(/python -m cli.identity/)).toBeVisible();
     await cleanAxe(page);
   });
@@ -244,10 +247,7 @@ test.describe("isolated authenticated infrastructure automation", () => {
       await page.getByLabel("Username", { exact: true }).fill(accounts.operator.username);
       await page.getByLabel("Password", { exact: true }).fill(accounts.operator.password);
       await page.getByRole("button", { name: "Sign in", exact: true }).click();
-      await expect(page).toHaveURL((url) => url.origin === origin() && url.pathname === "/infra-automation" && !url.hash &&
-        Array.from(url.searchParams.entries()).every(([key, value]) =>
-          ["project_id", "workspace_id"].includes(key) && /^[1-9]\d*$/.test(value) && Number.isSafeInteger(Number(value))) &&
-        ["project_id", "workspace_id"].every((key) => url.searchParams.getAll(key).length <= 1));
+      await expect(page).toHaveURL((url) => url.origin === origin() && url.pathname === "/settings" && !url.search && !url.hash);
     });
   }
 

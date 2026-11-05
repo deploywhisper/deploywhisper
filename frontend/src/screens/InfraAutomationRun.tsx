@@ -1,8 +1,9 @@
-import { Fragment, useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { ApiClientError } from "../api/client";
 import { getRunHandoffs, reconcileHandoff, type ExternalHandoff, type RunHandoffs, getRun, getRunSteps, getRunLogs, getRunReports, type AutomationScope, type Run, type Step, type StepPage, type RunReports, type LogPage } from "../api/infraAutomation";
+import { cancelCollectionRun, getCollectionView, validCollectionReason, isConfirmedCollectionRejection, type CollectionView, type CollectionObservation } from "../api/infraAutomationCollection";
 import { Button } from "../components/ui/Button";
 import { Card } from "../components/ui/Card";
 import { AutomationFrame, scopeQuery, type AutomationContext } from "./InfraAutomationShared";
@@ -18,10 +19,20 @@ export function runReadPolicy(run: Run | undefined): { interval: number | false;
   return { interval: run && !terminalStates.has(run.state) ? 5000 : false, version: run?.version ?? null };
 }
 
-export function retainAttemptPage(previous: StepPage | undefined, previousKey: readonly unknown[] | undefined, currentKey: readonly unknown[], error: unknown): StepPage | undefined {
-  if (error || !previousKey || previousKey.length !== currentKey.length) return undefined;
-  // Only the penultimate key (run version) may change. Identity, scope, run and cursor must match.
-  return previousKey.every((value, index) => index === previousKey.length - 2 || value === currentKey[index]) ? previous : undefined;
+export function retainAttemptPage<T>(previous: T | undefined, previousKey: readonly unknown[] | undefined, currentKey: readonly unknown[], error: unknown, versionOffsetFromEnd = 2): T | undefined {
+  if (protectedError(error) || !previousKey || previousKey.length !== currentKey.length) return undefined;
+  // Only the declared run-version position may change. Identity, scope, run,
+  // resource kind and any cursor must still match; non-auth errors retain historical reads only.
+  return previousKey.every((value, index) => index === previousKey.length - versionOffsetFromEnd || value === currentKey[index]) ? previous : undefined;
+}
+
+export type CollectionRefreshHistory = { runVersion: number | null; attempted: Set<number> };
+export function nextCollectionRefresh(runVersion: number | undefined, collectionVersion: number | undefined, busy: boolean, history: CollectionRefreshHistory): "run" | "collection" | null {
+  if (busy || runVersion === undefined || collectionVersion === undefined) return null;
+  if (history.runVersion !== runVersion) { history.runVersion = runVersion; history.attempted.clear(); }
+  if (runVersion === collectionVersion || history.attempted.has(collectionVersion) || history.attempted.size >= 8) return null;
+  history.attempted.add(collectionVersion);
+  return collectionVersion < runVersion ? "collection" : "run";
 }
 
 export function evidenceRefreshDelay(evidence: RunReports["evidence_status"] | undefined, now = Date.now(), deadlineChecks: ReadonlySet<string> = new Set()): number | null {
@@ -112,9 +123,10 @@ export function ScreenedLogContent({ page }: { page: LogPage }) {
   </>;
 }
 
-export function EvidenceSummary({ reports, runId }: { reports: RunReports; runId: string }) {
+export function EvidenceSummary({ reports, runId, stale = false }: { reports: RunReports; runId: string; stale?: boolean }) {
   const evidence = reports.evidence_status;
-  return <Card eyebrow="Evidence and uncertainty" title={`Evidence ${evidence.status}`}>
+  return <Card eyebrow="Evidence and uncertainty" title={`${stale ? "Last-known evidence" : "Evidence"} ${evidence.status}`}>
+    {stale && <p>Stored status only; current evidence freshness and authority are unavailable. Refresh before acting.</p>}
     <p>Briefings remain advisory. Approval eligibility depends on retained source evidence and current server checks.</p>
     <dl className="dw-automation-facts"><dt>Evaluated at</dt><dd>{evidence.evaluated_at}</dd><dt>Evidence deadline</dt><dd>{evidence.evidence_deadline}</dd>
       <dt>Manifest present</dt><dd>{evidence.manifest_present ? "Yes" : "No"}</dd><dt>Evidence basis</dt><dd>Run {evidence.run_state}, version {evidence.run_version}; attempt {evidence.attempt_id ?? "unavailable"}, {evidence.attempt_state ?? "unavailable"}</dd>
@@ -138,8 +150,8 @@ export function AttemptLogs({ runId, attemptId, context, onDenied }: { runId: st
   useEffect(() => { if (protectedError(logs.error)) onDenied(); }, [logs.error, onDenied]);
   return <Card eyebrow="Requested screened logs" title={`Attempt ${attemptId}`}>
     {logs.isPending && <p role="status">Loading screened logs…</p>}
-    {logs.error && <p role="alert">Screened logs unavailable. Refresh access or retry this page.</p>}
-    {!logs.error && logs.data && <><ScreenedLogContent page={logs.data} />{logs.data.cursor.next_cursor && <Button onClick={() => setCursor(logs.data.cursor.next_cursor ?? undefined)}>Next log page</Button>}</>}
+    {logs.error && <p role="alert">Screened logs unavailable. {logs.data && !protectedError(logs.error) && "Retaining last-known screened logs; refresh this page before treating them as current."} Refresh access or retry this page.</p>}
+    {!protectedError(logs.error) && logs.data && <><ScreenedLogContent page={logs.data} />{logs.data.cursor.next_cursor && <Button onClick={() => setCursor(logs.data.cursor.next_cursor ?? undefined)}>Next log page</Button>}</>}
     {cursor && <Button onClick={() => setCursor(undefined)}>First log page</Button>}
     <Button disabled={logs.isFetching} onClick={() => void logs.refetch()}>Refresh logs</Button>
   </Card>;
@@ -218,6 +230,90 @@ export function HandoffOutcomes({ handoffs, context, refresh, onDenied, pendingR
   </Card>;
 }
 
+
+type CancellationTicket = { version: number };
+export class CancellationRequests {
+  private values = new Map<string, CancellationTicket>();
+  private listeners = new Set<() => void>();
+  subscribe = (listener: () => void) => { this.listeners.add(listener); return () => { this.listeners.delete(listener); }; };
+  get = (key: string) => this.values.get(key);
+  private changed() { this.listeners.forEach((listener) => listener()); }
+  begin(key: string, version: number): CancellationTicket { const value = { version }; this.values.set(key, value); this.changed(); return value; }
+  reject(key: string, ticket: CancellationTicket) { if (this.get(key) !== ticket) return; this.values.delete(key); this.changed(); }
+}
+const pendingCancellations = new CancellationRequests();
+function observationCorrection(observation: CollectionObservation): string | null {
+  if (observation.state !== "stale" && observation.state !== "timed_out") return null;
+  if (observation.kind === "collection" || observation.kind === "analysis") return `The ${observation.kind} lease or execution deadline is no longer current. This does not confirm that owned processes stopped. Review runner recovery and request fresh collection and analysis.`;
+  if (observation.kind === "screened_upload") return "Screened upload evidence expired or was superseded. Request fresh collection and analysis; do not reuse the old evidence for approval.";
+  return null;
+}
+export function collectionAnnouncement(value: CollectionView): string {
+  return value.items.map((item) => `${item.step_id}: ${item.observations.map((observation) => `${observation.kind.replaceAll("_", " ")} ${observation.state.replaceAll("_", " ")}`).join(", ")}`).join(". ");
+}
+export function CollectionTimeline({ value, stale = false }: { value: CollectionView; stale?: boolean }) {
+  const signature = collectionAnnouncement(value);
+  const previous = useRef(signature);
+  const [announcement, setAnnouncement] = useState("");
+  useEffect(() => { if (!stale && previous.current !== signature) { previous.current = signature; setAnnouncement(signature); } }, [signature, stale]);
+  return <Card eyebrow="Durable collection evidence" title="Collection progress">
+    <p aria-live="polite" aria-atomic="true" className="sr-only">{announcement}</p>
+    <p>Observed by the server at {value.observed_at}. Observation time is not a stage completion time. Unobserved stages are not assumed complete.</p>
+    {value.items.map((item) => <section key={item.step_id} aria-label={`Collection ${item.step_id}`}>
+      <h3>{item.step_id}</h3><dl className="dw-automation-facts"><dt>Bound repository</dt><dd>{item.repository_id}</dd><dt>Immutable source commit</dt><dd><code>{item.commit_sha}</code></dd><dt>Requested profile</dt><dd><code>{item.profile_digest}</code></dd><dt>Attempt</dt><dd>{item.attempt_number ?? "Not assigned"} · {item.attempt_state ?? "Not observed"}</dd><dt>Lease until</dt><dd>{item.lease_until ?? "Not observed"}</dd></dl>
+      <ol className="dw-automation-attempts">{item.observations.map((observation) => <li key={observation.kind}><strong>{{ source_bound: "Source bound to run", collection: "Runner collection", screened_upload: "Server screening and upload", analysis: "Shared analysis" }[observation.kind]}</strong>: {observation.state.replaceAll("_", " ")}<p>{observation.event_at ? `Recorded event: ${observation.event_at}` : "Event time unavailable"}</p>{observationCorrection(observation) && <p>{observationCorrection(observation)}</p>}</li>)}</ol>
+      {item.routing_failure && <p role="status">No eligible runner was available when this attempt was requested. The server did not wait or use a fallback.</p>}
+      {!item.diagnosis.eligible && <p>{item.diagnosis.correction}</p>}
+    </section>)}
+    <p>No eligible runner waits are queued: the current finite wait is {value.finite_wait_seconds} seconds. Correct the reported configuration before requesting a new collection; there is no silent fallback.</p>
+    <Uncertainty limitations={value.limitations} todos={[]} />
+  </Card>;
+}
+export function CancelRunControl({ run, value, context, fresh, refresh, onDenied }: { run: Run; value: CollectionView; context: AutomationContext; fresh: boolean; refresh: () => Promise<unknown>; onDenied: () => void }) {
+  const key = `${context.identity.epoch}:${context.scope.projectId}:${context.scope.workspaceId}:${run.id}`;
+  const pending = useSyncExternalStore(pendingCancellations.subscribe, () => pendingCancellations.get(key), () => pendingCancellations.get(key));
+  const blocked = pending !== undefined && run.version <= pending.version;
+  const [reason, setReason] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState("");
+  const messageRef = useRef<HTMLParagraphElement>(null);
+  useEffect(() => { if (message) messageRef.current?.focus(); }, [message]);
+  const mounted = useRef(true);
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
+  async function cancel() {
+    if (busy || blocked || !fresh || !context.fresh || !context.identity.csrfToken || !value.cancellation.can_cancel || !validCollectionReason(reason)) return;
+    setBusy(true); setMessage(""); let ticket: CancellationTicket | undefined; let committed = false;
+    try {
+      await context.ensureFresh();
+      const current = await getCollectionView(run.id, context.scope);
+      if (!mounted.current) return;
+      if (current.run_version !== run.version || !current.cancellation.can_cancel) throw new ApiClientError("Cancellation state changed.", 409, { code: "binding_conflict" });
+      const result = await cancelCollectionRun(run, context.scope, reason, context.identity.csrfToken, () => { ticket = pendingCancellations.begin(key, run.version); });
+      committed = true;
+      if (!mounted.current) return;
+      setMessage(result.cancel_requested ? "Cancellation request recorded. Owned-process termination and external stop are not confirmed by this response." : "Current run state returned. No cancellation or external stop is inferred; review refreshed evidence.");
+      setReason(""); await refresh();
+    } catch (error) {
+      if (ticket && !committed && isConfirmedCollectionRejection(error)) pendingCancellations.reject(key, ticket);
+      if (!mounted.current) return;
+      const failure = reconciliationFailure(error);
+      if (failure === "denied") onDenied();
+      else if (committed) setMessage("Cancellation response was received, but current evidence could not be refreshed. Read current server state; nothing is resent automatically.");
+      else if (ticket && !isConfirmedCollectionRejection(error)) setMessage("Cancellation was not confirmed. Refresh server state before another request; nothing is resent automatically.");
+      else setMessage("Cancellation was rejected or state changed. Refresh access and run evidence before a new request.");
+    } finally { if (mounted.current) setBusy(false); }
+  }
+  return <Card eyebrow="Cancellation evidence" title="Cancellation">
+    <dl className="dw-automation-facts"><dt>Request recorded</dt><dd>{value.cancellation.requested ? value.cancellation.requested_at ?? "Yes; timestamp unavailable" : "No"}</dd><dt>Owned-process termination</dt><dd>Not independently confirmed by this view</dd><dt>External stop</dt><dd>{value.cancellation.external_possible ? "Not confirmed; inspect verified external outcome evidence below" : "No external acceptance reported by this view"}</dd></dl>
+    {value.cancellation.external_possible && <p>The external pipeline may already have accepted work. A cancellation request does not stop it or release retained target locks. Reconcile the recorded outcome; do not resend.</p>}
+    {message && <p role="status" tabIndex={-1} ref={messageRef}>{message}</p>}
+    {blocked && <p role="status">A cancellation request remains unconfirmed at this run version. Refresh current run evidence before continuing.</p>}
+    {value.cancellation.can_cancel && <div className="dw-automation-form"><label className="dw-field">Cancellation reason<input value={reason} maxLength={256} disabled={busy || blocked} onChange={(event) => setReason(event.target.value)} /></label><div><Button disabled={busy || blocked || !fresh || !context.fresh || !context.identity.csrfToken || !validCollectionReason(reason)} onClick={() => void cancel()}>{busy ? "Requesting cancellation…" : "Request cancellation"}</Button></div></div>}
+    {reason.length > 0 && !validCollectionReason(reason) && <p role="alert">Use a nonempty single-line cancellation reason of at most 256 characters; tabs and line separators are not accepted.</p>}
+    <Button disabled={busy} onClick={() => void refresh()}>Refresh cancellation evidence</Button>
+  </Card>;
+}
+
 export function RunContent({ context, runId }: { context: AutomationContext; runId: string }) {
   const [cursor, setCursor] = useState<string>();
   const [attempt, setAttempt] = useState<string | null>(null);
@@ -225,6 +321,10 @@ export function RunContent({ context, runId }: { context: AutomationContext; run
   const [recovering, setRecovering] = useState(false);
   // Keep ambiguous writes blocked across child read errors and run-version changes.
   const pendingHandoffRequests = useRef(new Map<string, number>());
+  const collectionRefreshHistory = useRef<CollectionRefreshHistory>({ runVersion: null, attempted: new Set() });
+  const retainedSteps = useRef<{ key: readonly unknown[]; value: StepPage }>();
+  const retainedReports = useRef<{ key: readonly unknown[]; value: RunReports }>();
+  const retainedHandoffs = useRef<{ key: readonly unknown[]; value: RunHandoffs }>();
   const runHeading = useRef<HTMLHeadingElement>(null);
   const focusedRun = useRef<string | null>(null);
   const key = ["automation", context.identity.epoch, context.scope.projectId, context.scope.workspaceId, "run", runId];
@@ -235,10 +335,33 @@ export function RunContent({ context, runId }: { context: AutomationContext; run
   // Versioned child keys force a final read when the run reaches a terminal version.
   const stepKey = [...key, "steps", readPolicy.version, cursor];
   const steps = useQuery<StepPage>({ queryKey: stepKey, placeholderData: (previous, previousQuery) => retainAttemptPage(previous, previousQuery?.queryKey, stepKey, previousQuery?.state.error), queryFn: ({ signal }) => getRunSteps(runId, cursor, signal), enabled, retry: false, gcTime: 0, refetchInterval: enabled ? readPolicy.interval : false, refetchOnWindowFocus: false });
-  const reports = useQuery({ queryKey: [...key, "reports", readPolicy.version], queryFn: ({ signal }) => getRunReports(runId, signal), enabled, retry: false, gcTime: 0, refetchInterval: enabled ? readPolicy.interval : false, refetchOnWindowFocus: false });
-  const handoffs = useQuery({ queryKey: [...key, "handoffs", readPolicy.version], queryFn: ({ signal }) => getRunHandoffs(runId, context.scope, signal), enabled, retry: false, gcTime: 0, refetchInterval: (query) => enabled && !query.state.error ? readPolicy.interval : false, refetchOnWindowFocus: false });
+  const reportKey = [...key, "reports", readPolicy.version];
+  const handoffKey = [...key, "handoffs", readPolicy.version];
+  const reports = useQuery<RunReports>({ queryKey: reportKey, placeholderData: (previous, previousQuery) => retainAttemptPage(previous, previousQuery?.queryKey, reportKey, previousQuery?.state.error, 1), queryFn: ({ signal }) => getRunReports(runId, signal), enabled, retry: false, gcTime: 0, refetchInterval: enabled ? readPolicy.interval : false, refetchOnWindowFocus: false });
+  const handoffs = useQuery<RunHandoffs>({ queryKey: handoffKey, placeholderData: (previous, previousQuery) => retainAttemptPage(previous, previousQuery?.queryKey, handoffKey, previousQuery?.state.error, 1), queryFn: ({ signal }) => getRunHandoffs(runId, context.scope, signal), enabled, retry: false, gcTime: 0, refetchInterval: (query) => enabled && !query.state.error ? readPolicy.interval : false, refetchOnWindowFocus: false });
+  const collection = useQuery({ queryKey: [...key, "collection"], queryFn: ({ signal }) => getCollectionView(runId, context.scope, signal), enabled, retry: false, gcTime: 0, refetchInterval: enabled ? readPolicy.interval : false, refetchOnWindowFocus: false });
+  useEffect(() => {
+    if (!enabled || collection.error || run.error) return;
+    const target = nextCollectionRefresh(run.data?.version, collection.data?.run_version, run.isFetching || collection.isFetching, collectionRefreshHistory.current);
+    if (target === "collection") void collection.refetch();
+    else if (target === "run") void run.refetch();
+  }, [enabled, run.data?.version, collection.data?.run_version, run.isFetching, collection.isFetching, run.error, collection.error, run.refetch, collection.refetch]);
   useEvidenceDeadlineRefresh(enabled && !reports.error ? reports.data?.evidence_status : undefined, reports.refetch);
-  const accessDenied = denied || [run.error, steps.error, reports.error, handoffs.error].some(protectedError);
+  const accessDenied = denied || [run.error, steps.error, reports.error, handoffs.error, collection.error].some(protectedError);
+  // Placeholder data survives a version transition while pending, but React
+  // Query drops it on error. Keep only the last authorized read of this exact
+  // scope/resource/cursor so a transport failure cannot remove focused controls.
+  const stepData = steps.data ?? retainAttemptPage(retainedSteps.current?.value, retainedSteps.current?.key, stepKey, steps.error);
+  const reportData = reports.data ?? retainAttemptPage(retainedReports.current?.value, retainedReports.current?.key, reportKey, reports.error, 1);
+  const handoffData = handoffs.data ?? retainAttemptPage(retainedHandoffs.current?.value, retainedHandoffs.current?.key, handoffKey, handoffs.error, 1);
+  if (accessDenied || !matching) {
+    retainedSteps.current = undefined; retainedReports.current = undefined; retainedHandoffs.current = undefined;
+  } else {
+    if (steps.data && !steps.isPlaceholderData && !steps.error) retainedSteps.current = { key: stepKey, value: steps.data };
+    if (reports.data && !reports.isPlaceholderData && !reports.error) retainedReports.current = { key: reportKey, value: reports.data };
+    if (handoffs.data && !handoffs.isPlaceholderData && !handoffs.error) retainedHandoffs.current = { key: handoffKey, value: handoffs.data };
+  }
+  useEffect(() => { if ([run.error, steps.error, reports.error, handoffs.error, collection.error].some(protectedError)) setDenied(true); }, [run.error, steps.error, reports.error, handoffs.error, collection.error]);
   useEffect(() => {
     if (matching && !accessDenied && !run.error && runHeading.current && focusedRun.current !== runId) {
       focusedRun.current = runId;
@@ -254,6 +377,7 @@ export function RunContent({ context, runId }: { context: AutomationContext; run
         () => steps.refetch({ throwOnError: true }),
         () => reports.refetch({ throwOnError: true }),
         () => handoffs.refetch({ throwOnError: true }),
+        () => collection.refetch({ throwOnError: true }),
       ]);
       setDenied(false);
     } catch {
@@ -265,25 +389,35 @@ export function RunContent({ context, runId }: { context: AutomationContext; run
   }
   if (accessDenied || recovering) return <div role="alert"><h1>Run access unavailable</h1><p>Your session or permission changed. Protected run details have been cleared.</p><Button disabled={recovering} onClick={() => void recoverAccess()}>{recovering ? "Refreshing access…" : "Refresh access"}</Button></div>;
   if (run.isPending) return <p role="status">Loading immutable run…</p>;
-  if (run.error || !run.data || run.data.id !== runId) return <div role="alert"><h1>Run unavailable</h1><p>The run could not be read. Check your connection and access.</p><Button onClick={() => void run.refetch()}>Retry run</Button></div>;
+  if (!run.data || run.data.id !== runId || (run.error && !matching)) return <div role="alert"><h1>Run unavailable</h1><p>The run could not be read. Check your connection and access.</p><Button onClick={() => void run.refetch()}>Retry run</Button></div>;
   if (!matching) return <Card title="Run belongs to another scope"><p>Select the run’s project and workspace to read its details.</p>
     {run.data.project_id !== context.scope.projectId ? <Button onClick={() => context.selectProject(run.data.project_id)}>Use run project</Button> : <Button onClick={() => context.selectWorkspace(run.data.workspace_id)}>Use run workspace</Button>}
   </Card>;
   return <div className="dw-automation-stack dw-automation-run"><Link to={`/infra-automation${scopeQuery(context.scope)}&view=runs`}>← Run history</Link><h2 ref={runHeading} tabIndex={-1}>Preflight run</h2>
     {!context.fresh && <p role="status">Access is being refreshed. Current historical run data is read-only.</p>}
+    {run.error && <p role="alert">Retaining last-known run evidence; current server state is unavailable and mutation controls are disabled. <Button onClick={() => void run.refetch()}>Retry run</Button></p>}
     <RunSummary run={run.data} />
+    {collection.data && collection.data.run_version !== run.data.version && !collection.error && <p role="status">Collection observations are from a different run version. Refresh current evidence before acting. <Button onClick={() => { void Promise.all([run.refetch(), collection.refetch()]); }}>Refresh current collection evidence</Button></p>}
+    {collection.error && <p role="alert">Collection observations unavailable. {collection.data && "Retaining last-known collection evidence; current authority is unavailable and mutation controls are disabled."} <Button onClick={() => void collection.refetch()}>Retry collection evidence</Button></p>}
+    {collection.data && <>
+      {collection.data.items.length > 0 && <CollectionTimeline value={collection.data} stale={!!run.error || !!collection.error || collection.data.run_version !== run.data.version} />}
+      <CancelRunControl run={run.data} value={collection.data} context={context} fresh={!run.error && !collection.error && !run.isFetching && !collection.isFetching && collection.data.run_version === run.data.version} refresh={() => Promise.all([run.refetch(), collection.refetch()])} onDenied={() => setDenied(true)} />
+    </>}
     {handoffs.isPending && <p role="status">Loading external outcome evidence…</p>}
-    {handoffs.error ? <p role="alert">External outcome evidence unavailable. <Button onClick={() => void handoffs.refetch()}>Retry outcome evidence</Button></p> : handoffs.data && <HandoffOutcomes handoffs={handoffs.data} context={context} refresh={handoffs.refetch} onDenied={() => setDenied(true)} pendingRequests={pendingHandoffRequests.current} />}
+    {handoffs.error && <p role="alert">External outcome evidence unavailable. {handoffData && "Retaining last-known external outcome evidence; reconciliation requires a fresh read."} <Button onClick={() => void handoffs.refetch()}>Retry outcome evidence</Button></p>}
+    {handoffData && <HandoffOutcomes handoffs={handoffData} context={{ ...context, fresh: context.fresh && !run.error && !run.isFetching && !handoffs.error && !!handoffs.data && !handoffs.isPlaceholderData }} refresh={handoffs.refetch} onDenied={() => setDenied(true)} pendingRequests={pendingHandoffRequests.current} />}
     {steps.isPending && <p role="status">Loading step attempts…</p>}
     {steps.isPlaceholderData && <p role="status">Refreshing step attempts…</p>}
-    {steps.error ? <p role="alert">Step attempts unavailable. <Button onClick={() => void steps.refetch()}>Retry attempts</Button>{cursor && <Button onClick={() => setCursor(undefined)}>Reload current attempts</Button>}</p> : steps.data && <>
-      <AttemptTimeline steps={steps.data.items} onLogs={setAttempt} />
-      {(steps.data.cursor.gap || steps.data.cursor.truncated) && <p role="status">Attempt history {steps.data.cursor.gap ? "contains a sequence gap" : "is truncated"}.</p>}
-      <div className="dw-automation-actions">{cursor && <Button onClick={() => setCursor(undefined)}>First attempt page</Button>}{steps.data.cursor.next_cursor && <Button onClick={() => setCursor(steps.data.cursor.next_cursor ?? undefined)}>Next attempt page</Button>}</div>
+    {steps.error && <p role="alert">Step attempts unavailable. {stepData && "Retaining last-known step attempts; current lease and execution state are unavailable."} <Button onClick={() => void steps.refetch()}>Retry attempts</Button>{cursor && <Button onClick={() => setCursor(undefined)}>Reload current attempts</Button>}</p>}
+    {stepData && <>
+      <AttemptTimeline steps={stepData.items} onLogs={setAttempt} />
+      {(stepData.cursor.gap || stepData.cursor.truncated) && <p role="status">Attempt history {stepData.cursor.gap ? "contains a sequence gap" : "is truncated"}.</p>}
+      <div className="dw-automation-actions">{cursor && <Button onClick={() => setCursor(undefined)}>First attempt page</Button>}{stepData.cursor.next_cursor && <Button onClick={() => setCursor(stepData.cursor.next_cursor ?? undefined)}>Next attempt page</Button>}</div>
     </>}
     {attempt && <AttemptLogs key={attempt} runId={runId} attemptId={attempt} context={context} onDenied={() => setDenied(true)} />}
     {reports.isPending && <p role="status">Loading evidence status…</p>}
-    {reports.error ? <p role="alert">Evidence status unavailable. <Button onClick={() => void reports.refetch()}>Retry evidence</Button></p> : reports.data && <EvidenceSummary reports={reports.data} runId={runId} />}
+    {reports.error && <p role="alert">Evidence status unavailable. {reportData && "Retaining last-known report evidence; current freshness is unavailable."} <Button onClick={() => void reports.refetch()}>Retry evidence</Button></p>}
+    {reportData && <EvidenceSummary reports={reportData} runId={runId} stale={!!run.error || !!reports.error || !reports.data || reports.isPlaceholderData} />}
   </div>;
 }
 

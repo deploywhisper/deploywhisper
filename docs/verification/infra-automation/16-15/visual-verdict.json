@@ -1,0 +1,10 @@
+{
+  "score": 93,
+  "verdict": "pass",
+  "category_match": true,
+  "differences": [
+    "New runner navigation and HTTP-unavailable content are intentional; populated HTTPS health/enrollment views are not yet qualified."
+  ],
+  "suggestions": [],
+  "reasoning": "The final 1440/760 HTTP and uploaded-run captures preserve the approved InfraFlow shell, typography, cards, spacing and visible focus treatment. This pass applies only to the captured HTTP and uploaded compatibility states."
+}

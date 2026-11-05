@@ -9,12 +9,17 @@ describe("account return destinations", () => {
     }
   });
   it.each([
+    "/infra-automation/runners",
+    "/infra-automation/runners?project_id=2&workspace_id=1",
     "/infra-automation/approvals?project_id=2&workspace_id=1",
     "/infra-automation/runs/run-1?project_id=2&workspace_id=1&approval_id=approval-1",
   ])("preserves an approved scoped approval return destination %j", (path) => {
     expect(safeAccountReturnTo(path)).toBe(path);
   });
   it.each([
+    "/infra-automation/runners/enroll",
+    "/infra-automation/runners?token=private",
+    "/infra-automation/runners?view=enroll",
     "/infra-automation/approvals/approval-1",
     "/infra-automation/approvals?approval_id=approval-1",
     "/infra-automation/workflows/wf-1?approval_id=approval-1",
