@@ -416,6 +416,10 @@ def _charge(session, run, delta, now, bounds=None):
     global_used = (
         session.scalar(select(func.sum(InfraAutomationRun.retained_bytes))) or 0
     )
+    from models.repositories.infra_automation_units import retained_bytes as unit_bytes
+
+    project_used += unit_bytes(session, run.project_id)
+    global_used += unit_bytes(session)
     if (
         project_used + delta > bounds.project_bytes
         or global_used + delta > bounds.global_bytes
@@ -839,7 +843,7 @@ def complete_attempt(session, handle, *, expected_version, state, now=None):
             or output.model_dump() not in json.loads(row.uploads_json)
         ):
             _deny()
-    return _write(
+    result = _write(
         session,
         row,
         expected_version,
@@ -847,6 +851,11 @@ def complete_attempt(session, handle, *, expected_version, state, now=None):
         "engine.attempt_" + state,
         timestamp,
     )
+    if state == "succeeded" and row.step_kind == "shared_analysis":
+        from services.infra_automation_units import finalize_run_evidence
+
+        finalize_run_evidence(session, repo.get_run(session, row.run_id), now=timestamp)
+    return result
 
 
 def safety_cleanup(

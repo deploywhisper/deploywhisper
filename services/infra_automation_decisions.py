@@ -288,6 +288,9 @@ class DecisionService:
         if type(material) is not DecisionMaterial:
             raise LifecycleError(503)
         binding = support.revalidate(material.binding, DecisionBinding)
+        from services.infra_automation_units import assert_unit_binding
+
+        assert_unit_binding(session, run, binding, now=self._now())
         runtime = runtime_workflow(document)
         step = next((step for step in runtime.steps if step.id == step_id), None)
         if step is None or step.kind != "human_decision":

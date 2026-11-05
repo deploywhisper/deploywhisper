@@ -747,6 +747,7 @@ Project documentation currently lives in a few places:
 - [Online Receiver and Outcome Reconciliation](./docs/infra-automation/receiver-online-v1.md)
 - [Local Plan Collection, Provenance and Custody](./docs/infra-automation/collection.md)
 - [Runner Health and Collection Recovery](./docs/infra-automation/runners.md)
+- [Declared Unit Scope and Preflight Waves](./docs/infra-automation/units.md)
 - [Workflow Editor, Account Access, and Run History](./docs/infra-automation/browser-ui.md)
 - [CI Guide](./docs/ci.md)
 - [CI Secrets Checklist](./docs/ci-secrets-checklist.md)

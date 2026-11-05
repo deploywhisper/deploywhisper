@@ -1,0 +1,171 @@
+{
+  "$defs": {
+    "DeclaredUnit": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.:-]*$",
+          "title": "Id",
+          "type": "string"
+        },
+        "source": {
+          "discriminator": {
+            "mapping": {
+              "declared_repository": "#/$defs/UnitSource",
+              "uploaded": "#/$defs/UploadedUnitSource"
+            },
+            "propertyName": "kind"
+          },
+          "oneOf": [
+            {
+              "$ref": "#/$defs/UnitSource"
+            },
+            {
+              "$ref": "#/$defs/UploadedUnitSource"
+            }
+          ],
+          "title": "Source"
+        },
+        "environment": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.:-]*$",
+          "title": "Environment",
+          "type": "string"
+        },
+        "target": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.:-]*$",
+          "title": "Target",
+          "type": "string"
+        },
+        "prerequisites": {
+          "items": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.:-]*$",
+            "type": "string"
+          },
+          "maxItems": 25,
+          "title": "Prerequisites",
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "source",
+        "environment",
+        "target",
+        "prerequisites"
+      ],
+      "title": "DeclaredUnit",
+      "type": "object"
+    },
+    "UnitSource": {
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "maxLength": 512,
+          "minLength": 1,
+          "title": "Path",
+          "type": "string"
+        },
+        "kind": {
+          "const": "declared_repository",
+          "title": "Kind",
+          "type": "string"
+        },
+        "repository_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.:-]*$",
+          "title": "Repository Id",
+          "type": "string"
+        },
+        "commit_sha": {
+          "maxLength": 40,
+          "minLength": 40,
+          "pattern": "^[0-9a-f]{40}$",
+          "title": "Commit Sha",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path",
+        "kind",
+        "repository_id",
+        "commit_sha"
+      ],
+      "title": "UnitSource",
+      "type": "object"
+    },
+    "UploadedUnitSource": {
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "maxLength": 512,
+          "minLength": 1,
+          "title": "Path",
+          "type": "string"
+        },
+        "kind": {
+          "const": "uploaded",
+          "title": "Kind",
+          "type": "string"
+        },
+        "repository_source": {
+          "const": "unavailable",
+          "default": "unavailable",
+          "title": "Repository Source",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path",
+        "kind"
+      ],
+      "title": "UploadedUnitSource",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "version": {
+      "default": 1,
+      "maximum": 1,
+      "minimum": 1,
+      "title": "Version",
+      "type": "integer"
+    },
+    "units": {
+      "items": {
+        "$ref": "#/$defs/DeclaredUnit"
+      },
+      "maxItems": 25,
+      "minItems": 1,
+      "title": "Units",
+      "type": "array"
+    },
+    "affected": {
+      "items": {
+        "maxLength": 128,
+        "minLength": 1,
+        "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.:-]*$",
+        "type": "string"
+      },
+      "maxItems": 25,
+      "minItems": 1,
+      "title": "Affected",
+      "type": "array"
+    }
+  },
+  "required": [
+    "units",
+    "affected"
+  ],
+  "title": "UnitMap",
+  "type": "object"
+}

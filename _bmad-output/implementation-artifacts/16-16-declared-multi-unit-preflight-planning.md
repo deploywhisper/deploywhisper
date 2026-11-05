@@ -1,6 +1,6 @@
 # Story 16.16: Declared Multi Unit Preflight Planning
 
-Status: backlog
+Status: in-progress
 Preparation: refined
 Release: v1.5.0 | Priority: P0, highest-priority feature
 
@@ -89,14 +89,46 @@ Execute one bounded packet at a time on the story feature branch. Each packet ow
 ## Dev Agent Record
 
 ### Agent Model Used
-Planning refinement only; implementation agent records its model at execution.
+Codex; native independent readiness, domain and service implementation agents.
 
 ### Debug Log References
-Not executed.
+- 2026-11-05 entry review: native independent reviewer verified 16.0 accepted RFC exception and qualification, completed 16.3/16.10, and independently repaired 16.14 evidence. Current integrity command: `./.venv/bin/python -m pytest tests/test_infra_automation/test_collection_qualification.py tests/test_infra_automation/test_runner_isolation_qualification.py -q` — 9 passed, 69 subtests passed.
+- Final interfaces reviewed: closed declared map; separate immutable run association; exact unit/intake/analysis coverage; authoritative evidence digest verified at decision admission; canonical shared target registry. Existing collector verifies repository root only; other declared paths must not become verified source claims.
+- Packet estimates after prerequisite review: domain/schema 2 review units; persistence/run/source/lock integration 3–4; UI/API confirmation 2–3; composed-browser/contract proof 2. These are planning units, not measured delivery time.
+- Conservative proposed bounds: 25 units, 200 edges, 128 KiB; measure before claiming support. Actual workflow limit remains 50 steps independently.
 
 ### Completion Notes List
-- Story specification prepared; no feature implementation, qualification, public RFC acceptance, release publication or runtime tests performed.
-- Implementation and validation commands above are future obligations, not test results.
+- Backend packet: immutable scoped inventory revisions, exact run bindings and shared target locks; server-derived combined evidence and earliest whole-bundle deadlines. Uploaded/mixed bundles remain advisory. Final focused service 42 tests/27 subtests passed; broader unit/decision/target regression 69 tests/25 subtests passed; API 6 tests passed. Migration startup/recovery 36 tests/2 subtests passed. Full repository CI and composed UI remain pending.
+- Packet 16.1 implemented strict declarations, exact scope and deterministic versioned map/wave hashes. Red-first missing-module test followed by 11 passing tests/20 subtests; scoped Ruff/Bandit and repository formatting passed. Independent review identified and verified correction of an oversized dictionary-key pre-serialization resource gap; final domain result 12 tests/25 subtests.
+- Local diagnostic measurement: 25 units/200 edges, maximum-length ASCII corpus, 59,416 input bytes and 62,951 result bytes; 1,000 validations p50 6.073 ms, p95 6.312 ms, p99 6.564 ms. This is not production throughput qualification.
+- Implementation started after independent prerequisite/interface review. Packet acceptance and full story verification remain pending.
+- Only explicitly recorded validation commands are completed evidence; remaining commands are obligations.
 
 ### File List
-- `_bmad-output/implementation-artifacts/16-16-declared-multi-unit-preflight-planning.md` (story specification only).
+- `README.md`
+- `_bmad-output/implementation-artifacts/16-16-declared-multi-unit-preflight-planning.md`
+- `_bmad-output/implementation-artifacts/sprint-status.yaml`
+- `api/routes/infra_automation_units.py`
+- `app.py`
+- `docs/infra-automation/units.md`
+- `docs/verification/infra-automation/16-14/results.json`
+- `frontend/src/api/schema.d.ts`
+- `infra_automation/claims.py`
+- `infra_automation/unit_contracts.py`
+- `infra_automation/unit_map.py`
+- `migrations/versions/038_add_declared_unit_maps.py`
+- `models/database.py`
+- `models/repositories/infra_automation_units.py`
+- `models/tables.py`
+- `schemas/infra-automation/unit-map-v1.json`
+- `scripts/qualify_collection.py`
+- `services/infra_automation_decisions.py`
+- `services/infra_automation_units.py`
+- `tests/test_api/test_infra_automation_units.py`
+- `tests/test_infra/test_migrations.py`
+- `tests/test_infra_automation/test_collection_qualification.py`
+- `tests/test_infra_automation/test_unit_map.py`
+- `tests/test_infra_automation/test_units_service.py`
+
+## Change Log
+- 2026-11-05: Implemented domain and backend packet; frontend and final acceptance verification in progress.
