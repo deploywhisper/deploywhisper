@@ -28,7 +28,7 @@
 #   - done: Retrospective has been completed
 #
 # RECONCILIATION BASELINE: v1.4.0 published 2026-10-07; accepted through 12.4, plus 12.6 and 13.8
-# NEXT WORKFLOW: Story16.15 R1–R3 resolved and tested; supplemental HTTPS positive enrollment/real-run acceptance remains pending
+# NEXT WORKFLOW: Story16.15 backend PR212 open; UI PR213 draft; positive HTTPS enrollment/real-run browser acceptance remains pending
 # RELEASE ENABLER: 12-5-sbom-and-release-checksums (SBOM remains unshipped)
 # EVIDENCE: story-implementation-status-map.md and planning-artifacts/sprint-change-proposal-2026-10-07-v1.4.0-status-reconciliation.md
 # WORKFLOW NOTES:

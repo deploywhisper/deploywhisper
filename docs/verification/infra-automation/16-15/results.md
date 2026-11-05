@@ -57,4 +57,8 @@ The existing repository app container was temporarily stopped only for exclusive
 
 [AGENTS.md](../../../../AGENTS.md) requires all browser verification at HTTP localhost:8080. Runner administration requires actual HTTPS and production-eligible origin-bound sessions. A separate same-origin HTTPS Compose lane is the safe proposed supplement; cross-origin requests, fake forwarded headers, or weakening local-development identity would not qualify it. The user decision remains pending.
 
-After approval, implement and execute that lane with real enrollment/redemption and the qualified isolated runner, capture populated health/enrollment/recovery states at 1440/760, and complete the remaining AC3/AC4/AC6 proof. No public PR or release was created; backend and UI publication must remain separate.
+After approval, implement and execute that lane with real enrollment/redemption and the qualified isolated runner, capture populated health/enrollment/recovery states at 1440/760, and complete the remaining AC3/AC4/AC6 proof. At the initial verification stage no public PR or release had been created; subsequent authorized publication is recorded below.
+
+## Authorized Git Flow publication
+
+[Backend-for-UI PR #212](https://github.com/deploywhisper/deploywhisper/pull/212) and dependent [UI draft PR #213](https://github.com/deploywhisper/deploywhisper/pull/213) target `develop`. Both branches are pushed. Merge the backend lane first; the UI remains draft until positive HTTPS enrollment and authenticated real-runner browser acceptance are complete. Story status remains in-progress. No merge or release was performed.

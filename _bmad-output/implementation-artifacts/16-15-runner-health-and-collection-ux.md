@@ -39,12 +39,12 @@ Coverage intent: Delta against released v1.4.0; full canonical mappings below ar
 
 Execute one bounded packet at a time on the story feature branch. Each packet owns the named paths; coordinate shared paths and do not revert other edits. Re-estimate after 16.0 spikes; split packets into reviewable PRs without renumbering the canonical story.
 
-- [ ] Packet 15.1: Health contract integration — owner: API implementer.
+- [x] Packet 15.1: Health contract integration — owner: API implementer.
   - Owned write paths: `api/routes/infra_automation.py and tests/test_api/`.
   - Output: bounded scoped health/tag/status fields, versioned errors; additive backend-for-UI PR.
   - Acceptance proof: AC1,2: permission/profile/tag/finite-wait contract tests.
   - [x] Additive backend implementation, generated contract, independent review and tests complete on local backend branch `db73571`.
-  - [ ] Publish the separate labeled backend-for-UI PR during authorized closeout.
+  - [x] Published separate labeled [backend-for-UI PR #212](https://github.com/deploywhisper/deploywhisper/pull/212) targeting develop.
 - [ ] Packet 15.2: Runner screen and transient enrollment — owner: Frontend implementer.
   - Owned write paths: `frontend/src/ automation runner view and API adapter; frontend/src/ tests`.
   - Output: real health table, explicit qualification, transient one-time reveal/revoke/rotate UI.
@@ -110,6 +110,7 @@ Codex with native agents for independent readiness, bounded backend/UI implement
 2026-11-05: Prerequisites and final bounded interfaces independently reviewed. PR211 merged8095877 with passing remote checks. Implementation proceeds on separate backend-for-UI and UI branches; the supplemental HTTPS browser verification amendment is pending user clarification. See docs/verification/infra-automation/16-15/readiness.md.
 
 ### Completion Notes List
+- Authorized Git Flow publication completed: [backend PR #212](https://github.com/deploywhisper/deploywhisper/pull/212) is open with the backend-for-ui label; dependent [UI draft PR #213](https://github.com/deploywhisper/deploywhisper/pull/213) also targets develop. Both feature branches are pushed. The UI remains draft and the story remains in-progress until the positive HTTPS/real-run browser acceptance gates are resolved; no merge or release was performed.
 - Formal R1–R3 repairs completed and independently verified: bounded per-target revocation guards, verified rejection classification after local validation, and one shared readiness/dispatch candidate ordering. Red regressions reproduced the original failures before repair.
 - Fresh repair evidence: UI398tests+2compatibilitychecks; backendfocused93tests/608subtests; backendroot1795tests/3skips; backendAPI/CLI/infra740passed/1skip/2356subtests; mainfullCI3246tests across10directories exit0; composed26tests (3realHTTP +23syntheticcomponent fault models) pass; realcollection49checks and integrity9tests/69subtests pass. Existingmypybaseline318diagnostics has no new normalized errors.
 - Backend repair is separately committed as f5d6c19 with qualification follow-up86e9825 and merged into the UI integration branch. Current repair details: `docs/verification/infra-automation/16-15/review-fixes.md`. Prior development results below are historical. Positive HTTPS/real-run browser acceptance remains unapproved and unqualified.
@@ -192,6 +193,8 @@ Codex with native agents for independent readiness, bounded backend/UI implement
 - `tests/test_infra_automation/test_runner_health_ui.py`
 
 ## Change Log
+
+- 2026-11-05: Published separate backend PR #212 and dependent UI draft #213 under user-authorized Git Flow closeout; retained all open HTTPS/real-run acceptance gates and in-progress status.
 
 - 2026-11-05: Resolved R1–R3 with red→green regressions, independent verification, real collection witness and clean fullCI/browser checks. Separate HTTPS/real-run acceptance gates remain open.
 
