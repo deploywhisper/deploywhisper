@@ -37,6 +37,7 @@ import { SkillsScreen } from "./screens/Skills";
 import { IdentityProvider, useIdentity } from "./screens/IdentitySession";
 import { AccountAccessScreen } from "./screens/AccountAccess";
 import { InfraAutomationScreen, InfraWorkflowScreen } from "./screens/InfraAutomation";
+import { InfraAutomationRunnersScreen } from "./screens/InfraAutomationRunners";
 import { InfraAutomationRunScreen } from "./screens/InfraAutomationRun";
 import { InfraAutomationApprovalsScreen } from "./screens/InfraAutomationApprovals";
 
@@ -50,6 +51,7 @@ function App() {
         <Route element={<AccountAccessScreen />} path="/settings/account" />
         <Route element={<InfraAutomationScreen />} path="/infra-automation" />
         <Route element={<InfraAutomationApprovalsScreen />} path="/infra-automation/approvals" />
+        <Route element={<InfraAutomationRunnersScreen />} path="/infra-automation/runners" />
         <Route element={<InfraWorkflowScreen />} path="/infra-automation/workflows/:workflowId" />
         <Route element={<InfraAutomationRunScreen />} path="/infra-automation/runs/:runId" />
         <Route element={<ComponentGallery />} path="/dev/components" />

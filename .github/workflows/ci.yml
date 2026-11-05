@@ -314,7 +314,7 @@ jobs:
   test:
     name: "Test — ${{ matrix.shard }}"
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: ${{ matrix.timeout_minutes || 15 }}
     needs:
       - quality
       - frontend
@@ -328,6 +328,8 @@ jobs:
             targets: tests/test_analysis tests/test_parsers
           - shard: services
             targets: tests/test_services
+            # Includes dependency setup, coverage upload, and post-job cleanup.
+            timeout_minutes: 25
           - shard: infra-automation
             targets: tests/test_infra_automation
           - shard: llm

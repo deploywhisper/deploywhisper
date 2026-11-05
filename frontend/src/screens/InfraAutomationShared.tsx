@@ -131,8 +131,9 @@ function ScopeWorkspace({ shell, project, children }: { shell: ShellProjectConte
     {context && !context.capabilities.execution_enabled && <p className="dw-automation-notice" role="status">InfraFlow execution is disabled for this project. Authorized workflow and run history remain available; new runs cannot start. Contact your project administrator about enablement.</p>}
     {context && !identity.csrfToken && <p className="dw-automation-notice">This restored session permits reading. <AccountLink /> before making changes or submitting a decision.</p>}
     {context && <nav className="dw-automation-actions dw-automation-nav" aria-label="InfraFlow sections">
-      <Link to={`/infra-automation${scopeQuery(scope)}`} aria-current={location.pathname === "/infra-automation/approvals" || params.has("approval_id") ? undefined : "page"}>Workflows and runs</Link>
-      <Link to={`/infra-automation/approvals${scopeQuery(scope)}`} aria-current={location.pathname === "/infra-automation/approvals" || params.has("approval_id") ? "page" : undefined}>Approvals</Link>
+      <Link to={`/infra-automation${scopeQuery(scope)}`} aria-current={location.pathname === "/infra-automation/approvals" || location.pathname === "/infra-automation/runners" || params.has("approval_id") ? undefined : "page"}>Workflows and runs</Link>
+      <Link to={`/infra-automation/approvals${scopeQuery(scope)}`} aria-current={location.pathname === "/infra-automation/approvals" || (location.pathname !== "/infra-automation/runners" && params.has("approval_id")) ? "page" : undefined}>Approvals</Link>
+      <Link to={`/infra-automation/runners${scopeQuery(scope)}`} aria-current={location.pathname === "/infra-automation/runners" ? "page" : undefined}>Runners</Link>
     </nav>}
     {context && children(context)}
   </div>;

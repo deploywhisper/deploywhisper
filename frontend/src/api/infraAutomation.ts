@@ -1,4 +1,5 @@
 import { ApiClientError, requestData } from "./client";
+import { validCollectedReportProvenance } from "./infraAutomationCollection";
 import type { components } from "./schema";
 
 type Schemas = components["schemas"];
@@ -147,7 +148,7 @@ export async function getRunReports(runId: string, signal?: AbortSignal): Promis
   for (const link of value.items) {
     if (!record(link) || link.run_id !== runId || !positive(link.report_id) || link.report_url !== `/reports/${link.report_id}` ||
         link.approval_eligible !== false || !record(link.provenance) || link.provenance.version !== 1 ||
-        link.provenance.kind !== "uploaded" || link.provenance.repository_source !== "unavailable") invalid();
+        !(link.provenance.kind === "uploaded" && link.provenance.repository_source === "unavailable" || validCollectedReportProvenance(link.provenance, runId))) invalid();
   }
   return value;
 }

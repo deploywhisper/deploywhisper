@@ -4,7 +4,7 @@
 
 ## Reviewed implementation contracts
 
-- Backend health/admin contracts stay on `feature/16-15-runner-health-backend-for-ui`; frontend changes stay on `feature/16-15-runner-health-and-collection-ux`. Backend-for-UI publication remains separate from UI publication. Current work is local implementation, not public publication.
+- Backend health/admin contracts stay on `feature/16-15-runner-health-backend-for-ui`; frontend changes stay on `feature/16-15-runner-health-and-collection-ux`. Backend-for-UI publication remains separate from UI publication. Implementation used separate branches; backend PR #212 is now merged into develop, and UI PR #213 remains open. Publication history is recorded in results.md; positive HTTPS/real-run acceptance remains pending.
 - Extend existing health with authoritative evaluation time and connectivity: online through60 seconds, stale through180 seconds, otherwise offline. Missing/future heartbeats are not fresh. These are descriptive thresholds; matching the60-second freshness predicate does not establish full task eligibility or isolation qualification.
 - Preserve registration and credential state separately. Trusted configured profile metadata can be displayed, but `isolation_qualified=False` remains truthful: health cannot independently attest execution controls. Separate runner capabilities preserve the existing closed editor capability array.
 - Typed enrollment/rotation/revoke envelopes retain existing HTTPS, production-eligible human and scoped administrator gates. Browser secret values are uncached transient component state with expiry/context/authorization clearing.
@@ -18,3 +18,5 @@ Independent review accepted this durable-state design as satisfying AC4 accuracy
 Existing runner administration requires HTTPS and production-eligible sessions. The mandatory browser origin in AGENTS.md/story is `http://localhost:8080`, whose local-development sessions intentionally cannot supply that authority. Cross-origin HTTPS APIs or spoofed forwarding headers do not resolve the identity/origin contract.
 
 A user clarification is pending for a supplemental same-origin HTTPS Compose browser lane while retaining the required HTTP lane for existing flows and denied states. No security gate will be weakened. Independent implementation, unit/API tests and HTTP-denial evidence proceed; positive enrollment/real-run browser acceptance stays unclaimed until this verification amendment is authorized and exercised.
+
+Proposed supplemental origin: `https://localhost:8443` (port checked available). It would serve SPA and API under the same actual TLS origin, use a disposable local certificate/fixture and retain all production-eligible session and credential gates. It has not been implemented or executed while the explicit exception to the HTTP-only browser rule is pending.

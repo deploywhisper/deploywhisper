@@ -39,22 +39,36 @@ Coverage intent: Delta against released v1.4.0; full canonical mappings below ar
 
 Execute one bounded packet at a time on the story feature branch. Each packet owns the named paths; coordinate shared paths and do not revert other edits. Re-estimate after 16.0 spikes; split packets into reviewable PRs without renumbering the canonical story.
 
-- [ ] Packet 15.1: Health contract integration — owner: API implementer.
+- [x] Packet 15.1: Health contract integration — owner: API implementer.
   - Owned write paths: `api/routes/infra_automation.py and tests/test_api/`.
   - Output: bounded scoped health/tag/status fields, versioned errors; additive backend-for-UI PR.
   - Acceptance proof: AC1,2: permission/profile/tag/finite-wait contract tests.
+  - [x] Additive backend implementation, generated contract, independent review and tests complete on local backend branch `db73571`.
+  - [x] Published separate labeled [backend-for-UI PR #212](https://github.com/deploywhisper/deploywhisper/pull/212) targeting develop.
 - [ ] Packet 15.2: Runner screen and transient enrollment — owner: Frontend implementer.
   - Owned write paths: `frontend/src/ automation runner view and API adapter; frontend/src/ tests`.
   - Output: real health table, explicit qualification, transient one-time reveal/revoke/rotate UI.
   - Acceptance proof: AC1–3: component tests plus secret-state clearing and administrator denial.
+  - [x] Runner screen/adapters and transient-state implementation pass unit and composed component fault-model tests.
+  - [ ] Complete positive same-origin HTTPS enrollment/rotation/revocation browser proof.
 - [ ] Packet 15.3: Collection timeline and cancellation — owner: Frontend implementer.
   - Owned write paths: `frontend/src/ automation run view; frontend/e2e/ automation tests`.
   - Output: cursor logs, gap/truncation states, actual cancellation/unknown copy, stable focus.
   - Acceptance proof: AC4,5: real runner E2E with lease loss, log limits and accepted/unknown dispatch.
+  - [x] Durable observations, routing, cancellation, late-response and network/focus implementation plus unit/fault-model checks complete.
+  - [ ] Complete authenticated real isolated-runner browser collection/recovery proof under the approved HTTPS lane.
 - [ ] Packet 15.4: Compose acceptance and help — owner: UI verifier/documenter.
   - Owned write paths: `frontend/e2e/; docs/infra-automation/runners.md`.
   - Output: screenshots and keyboard/axe evidence tied to real API-backed data.
   - Acceptance proof: AC6: composed 1440/760 runner-to-report and recovery paths.
+  - [x] Required HTTP lane, uploaded-flow compatibility, operator help and safe1440/760 captures verified.
+  - [ ] Resolve the pending HTTPS verification-contract choice and capture the positive runner/enrollment acceptance states.
+
+### Formal review follow-ups — 2026-11-05
+
+- [x] [Review][Patch][R1][P2] Scope uncertain revocation guards per runner so an unknown revoke of A does not disable revoking B (`frontend/src/screens/runnerMutationState.ts:22`).
+- [x] [Review][Patch][R2][P2] Keep issuance unknown on unrecognized/non-JSON4xx; settle only verified application rejection (`frontend/src/screens/InfraAutomationRunners.tsx:139`).
+- [x] [Review][Patch][R3][P2] Align bounded readiness candidate selection with actual dispatch under retained expired runner history (`services/infra_automation_collection_views.py:185`).
 
 ## Dev Notes
 
@@ -96,27 +110,102 @@ Codex with native agents for independent readiness, bounded backend/UI implement
 2026-11-05: Prerequisites and final bounded interfaces independently reviewed. PR211 merged8095877 with passing remote checks. Implementation proceeds on separate backend-for-UI and UI branches; the supplemental HTTPS browser verification amendment is pending user clarification. See docs/verification/infra-automation/16-15/readiness.md.
 
 ### Completion Notes List
+- Publication status: [backend PR #212](https://github.com/deploywhisper/deploywhisper/pull/212) merged into develop as `27f7eca`; [UI PR #213](https://github.com/deploywhisper/deploywhisper/pull/213) is open and no longer a draft. The UI branch includes the updated develop ancestry. Story status remains in-progress until the positive HTTPS/real-run browser acceptance gates are resolved; PR readiness does not qualify those gates.
+- Formal R1–R3 repairs completed and independently verified: bounded per-target revocation guards, verified rejection classification after local validation, and one shared readiness/dispatch candidate ordering. Red regressions reproduced the original failures before repair.
+- Fresh repair evidence: UI398tests+2compatibilitychecks; backendfocused93tests/608subtests; backendroot1795tests/3skips; backendAPI/CLI/infra740passed/1skip/2356subtests; mainfullCI3246tests across10directories exit0; composed26tests (3realHTTP +23syntheticcomponent fault models) pass; realcollection49checks and integrity9tests/69subtests pass. Existingmypybaseline318diagnostics has no new normalized errors.
+- Backend repair is separately committed as f5d6c19 with qualification follow-up86e9825 and merged into the UI integration branch. Current repair details: `docs/verification/infra-automation/16-15/review-fixes.md`. Prior development results below are historical. Positive HTTPS/real-run browser acceptance remains unapproved and unqualified.
+- All planned UI/backend implementation is present and reviewed; the story remains in-progress because positive HTTPS enrollment and actual isolated-runner browser acceptance are not yet authorized/qualified. No mocked component result is counted as that acceptance.
+- Fresh validation: root unittest1794tests/3skips exit0; full localCI3240executions across10directories exit0; API/CLI/infra745passed/1skip/2356subtests; UI377tests and typecheck/build pass; composed19new tests (3realHTTP +16syntheticcomponent fault models) and14realuploaded compatibility tests pass; tested1440/760 keyboard/axe gates pass.
+- Integrated BMad review findings were repaired: pre-send validation, late verified outcome settlement, membership-stable mutation continuity, bounded late-read correction, same-scope draft/focus retention on read failures, and precise lease/evidence recovery. Independent repair verification found no residual implementation finding.
+- Visual verdict93 forcapturedHTTP/compatibilitystates. PopulatedHTTPSrunner/enrollment views remain unqualified. The original app container and data volume were restored unchanged; private browser credential exports were destroyed.
+- Current details, proof tiers and limits: `docs/verification/infra-automation/16-15/results.md`; pending verification amendment: `docs/verification/infra-automation/16-15/readiness.md`.
+- Python mypy retains320diagnostics outsidechangedfiles (includingmissingPyYAMLstubs); no changed-file errors. Configuredsecuritygatepasses withthe unchangedsample-IP mediumBandit finding disclosed. No dependencies or migrations added.
 - Backend packet implemented and independently reviewed: scoped runner health/capabilities and durable collection/readiness projections, typed transient admin responses, existing HTTPS/production-identity gates preserved. Focused backend review31tests/20subtests and existing runner API/enrollment21tests/22subtests passed; generated frontend schema typechecks and314 existing UI tests pass. Refreshed16.14 collector qualification49checks passed with current hashes. Full story/browser acceptance remains in progress.
 - UI work is isolated in `/tmp/deploywhisper-story16-15-ui` on its own feature branch. Positive HTTPS enrollment/real-run browser evidence remains pending the explicit verification-lane decision.
 
 ### File List
 
+- `README.md`
 - `_bmad-output/implementation-artifacts/16-15-runner-health-and-collection-ux.md`
 - `_bmad-output/implementation-artifacts/sprint-status.yaml`
 - `api/routes/infra_automation_collection_views.py`
 - `api/routes/infra_automation_runner_admin.py`
 - `api/routes/infra_automation_runner_views.py`
 - `app.py`
+- `docs/infra-automation/runners.md`
 - `docs/verification/infra-automation/16-14/results.json`
+- `docs/verification/infra-automation/16-15/code-review.md`
+- `docs/verification/infra-automation/16-15/formal-code-review.md`
 - `docs/verification/infra-automation/16-15/readiness.md`
+- `docs/verification/infra-automation/16-15/results.md`
+- `docs/verification/infra-automation/16-15/review-fixes.md`
+- `docs/verification/infra-automation/16-15/screenshots/http-initial-1440.png`
+- `docs/verification/infra-automation/16-15/screenshots/http-initial-760.png`
+- `docs/verification/infra-automation/16-15/screenshots/runners-disabled-1440.png`
+- `docs/verification/infra-automation/16-15/screenshots/runners-disabled-760.png`
+- `docs/verification/infra-automation/16-15/screenshots/runners-http-unavailable-1440.png`
+- `docs/verification/infra-automation/16-15/screenshots/runners-http-unavailable-760.png`
+- `docs/verification/infra-automation/16-15/screenshots/runners-reader-unavailable-1440.png`
+- `docs/verification/infra-automation/16-15/screenshots/runners-reader-unavailable-760.png`
+- `docs/verification/infra-automation/16-15/screenshots/upload-briefing-1440.png`
+- `docs/verification/infra-automation/16-15/screenshots/upload-briefing-760.png`
+- `docs/verification/infra-automation/16-15/screenshots/upload-execution-disabled-1440.png`
+- `docs/verification/infra-automation/16-15/screenshots/upload-execution-disabled-760.png`
+- `docs/verification/infra-automation/16-15/screenshots/upload-readonly-1440.png`
+- `docs/verification/infra-automation/16-15/screenshots/upload-readonly-760.png`
+- `docs/verification/infra-automation/16-15/screenshots/upload-run-1440.png`
+- `docs/verification/infra-automation/16-15/screenshots/upload-run-760.png`
+- `docs/verification/infra-automation/16-15/screenshots/upload-workflow-1440.png`
+- `docs/verification/infra-automation/16-15/screenshots/upload-workflow-760.png`
+- `docs/verification/infra-automation/16-15/visual-verdict.json`
+- `frontend/e2e/infra-automation-runner-component.spec.ts`
+- `frontend/e2e/infra-automation-runners.spec.ts`
+- `frontend/e2e/infra-automation.spec.ts`
+- `frontend/src/api/identity.test.ts`
+- `frontend/src/api/identity.ts`
+- `frontend/src/api/infraAutomation.ts`
+- `frontend/src/api/infraAutomationCollection.test.ts`
+- `frontend/src/api/infraAutomationCollection.ts`
+- `frontend/src/api/infraAutomationRunners.test.ts`
+- `frontend/src/api/infraAutomationRunners.ts`
 - `frontend/src/api/schema.d.ts`
+- `frontend/src/main.tsx`
+- `frontend/src/screens/InfraAutomation.test.tsx`
+- `frontend/src/screens/InfraAutomation.tsx`
+- `frontend/src/screens/InfraAutomationRun.test.tsx`
+- `frontend/src/screens/InfraAutomationRun.tsx`
+- `frontend/src/screens/InfraAutomationRunners.test.tsx`
+- `frontend/src/screens/InfraAutomationRunners.tsx`
+- `frontend/src/screens/InfraAutomationShared.tsx`
+- `frontend/src/screens/runnerMutationState.test.ts`
+- `frontend/src/screens/runnerMutationState.ts`
+- `models/repositories/infra_automation_runners.py`
+- `scripts/compose-story16-15.yaml`
+- `scripts/qualify_collection.py`
+- `scripts/runner_ui_fixture.py`
 - `services/infra_automation_collection_views.py`
+- `services/infra_automation_runner_tasks.py`
 - `services/infra_automation_runners.py`
 - `tests/test_api/test_collection_views.py`
 - `tests/test_api/test_runner_health_ui.py`
+- `tests/test_infra/test_runner_ui_fixture_guard.py`
 - `tests/test_infra_automation/test_collection_views.py`
 - `tests/test_infra_automation/test_runner_health_ui.py`
 
 ## Change Log
 
+- 2026-11-05: Merged develop after backend PR #212 landed; resolved documentation conflicts by preserving the full UI/review evidence and backend implementation history. Runtime, tests, and CI configuration remain identical to the passing `6eba251` tree. UI validation not applicable to this documentation-only merge.
+
+- 2026-11-05: Published separate backend PR #212 and dependent UI draft #213 under user-authorized Git Flow closeout; retained all open HTTPS/real-run acceptance gates and in-progress status.
+
+- 2026-11-05: Resolved R1–R3 with red→green regressions, independent verification, real collection witness and clean fullCI/browser checks. Separate HTTPS/real-run acceptance gates remain open.
+
+- 2026-11-05: Formal BMad review of440e683 found three P2 repair items; story remains in-progress and positive HTTPS/real-run browser gates remain open.
+
+- 2026-11-05: Implemented separate backend/UI packets, repaired independent review/browser findings, completed Python/UI/HTTP-browser validation and restored the original app. Positive HTTPS/real-run browser gates remain open pending the user decision.
+
 - 2026-11-05: Implemented additive backend-for-UI contracts on a separate feature branch; independently reviewed with no findings. Browser/overall story gates remain open.
+
+## Senior Developer Review (AI) — 2026-11-05
+
+Original outcome: **Changes requested**. Three independent layers completed; R1–R3 were opened and are now resolved by the independently verified repair follow-up. Fresh backend23tests/20subtests and UI377tests pass, but do not cover the reproduced cases. [Full formal review](../../docs/verification/infra-automation/16-15/formal-code-review.md) records triggers, impact and repair directions. Earlier no-residual-findings development notes are historical and superseded by this review. The previously requested supplemental HTTPS lane remains unapproved; no positive enrollment/real-run browser acceptance is claimed. No runtime code or public publication changed.

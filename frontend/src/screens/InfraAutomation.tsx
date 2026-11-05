@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { ApiClientError } from "../api/client";
@@ -7,6 +7,7 @@ import {
   validateWorkflow, validateDraft, saveWorkflowDraft, publishWorkflow, startPreflight,
   type AutomationScope, type WorkflowDetail, type Validation,
 } from "../api/infraAutomation";
+import { getCollectionReadiness, startCollectedRun, validCollectionReason, isConfirmedCollectionRejection, type CollectionReadiness } from "../api/infraAutomationCollection";
 import { Button, SegmentedTabs } from "../components/ui";
 import { AutomationFrame, AccountLink, automationError, scopeQuery, type AutomationContext } from "./InfraAutomationShared";
 
@@ -63,7 +64,7 @@ export function RunHistory({ context }: { context: AutomationContext }) {
   return <section aria-labelledby="automation-index-tab-runs" id="automation-index-panel-runs" role="tabpanel" tabIndex={0}>
     <div className="dw-automation-actions"><h2>Run history</h2><Button disabled={query.isFetching} onClick={() => { void query.refetch(); }}>Refresh runs</Button></div>
     {query.isPending && <p role="status">Loading runs…</p>}{query.isError && <p role="alert">{automationError(query.error)}</p>}
-    {!denied(query.error) && <>{!query.isPending && !query.isError && !items.length && <p>No uploaded preflight runs in this scope.</p>}
+    {!denied(query.error) && <>{!query.isPending && !query.isError && !items.length && <p>No preflight runs in this scope.</p>}
       {items.length > 0 && <div className="dw-automation-table-wrap" role="region" aria-label="Run history table" tabIndex={0}><table><caption>Immutable runs in the selected scope</caption><thead><tr><th scope="col">Run</th><th scope="col">Recorded state</th><th scope="col">Revision</th><th scope="col">Created at</th></tr></thead><tbody>{items.map((run) => <tr key={run.id}><td><Link to={`/infra-automation/runs/${encodeURIComponent(run.id)}${scopeQuery(context.scope)}`}>{run.id}</Link></td><td><span className="dw-automation-status">{run.state}</span></td><td><code>{run.revision_id}</code></td><td>{run.created_at}</td></tr>)}</tbody></table></div>}
       {query.data?.pages.some((page) => page.cursor.gap) && <p role="status">The retained run list has a gap. Refresh to read current history.</p>}
       {query.hasNextPage && <Button disabled={query.isFetchingNextPage} onClick={() => { void query.fetchNextPage(); }}>More runs</Button>}
@@ -80,6 +81,83 @@ function IndexContent({ context }: { context: AutomationContext }) {
 
 export function InfraAutomationScreen() {
   return <AutomationFrame>{(context) => <IndexContent key={`${context.identity.epoch}:${context.scope.projectId}:${context.scope.workspaceId}`} context={context} />}</AutomationFrame>;
+}
+
+export function collectionCanRequest(value: CollectionReadiness | undefined): boolean {
+  return !!value && value.execution_enabled && value.can_request && value.items.length > 0 && value.items.every((item) => item.diagnosis.eligible || item.diagnosis.code === "details_unavailable");
+}
+type CollectionStartOutcome = { kind: "pending" | "confirmed"; requestId: string; runId?: string };
+export class CollectionStartRequests {
+  private values = new Map<string, CollectionStartOutcome>();
+  private listeners = new Set<() => void>();
+  subscribe = (listener: () => void) => { this.listeners.add(listener); return () => { this.listeners.delete(listener); }; };
+  get = (key: string) => this.values.get(key);
+  private changed() { this.listeners.forEach((listener) => listener()); }
+  begin(key: string, requestId: string): CollectionStartOutcome { const value: CollectionStartOutcome = { kind: "pending", requestId }; this.values.set(key, value); this.changed(); return value; }
+  succeed(key: string, ticket: CollectionStartOutcome, runId: string) { if (this.get(key) !== ticket) return; this.values.set(key, { ...ticket, kind: "confirmed", runId }); this.changed(); }
+  reject(key: string, ticket: CollectionStartOutcome) { if (this.get(key) !== ticket) return; this.values.delete(key); this.changed(); }
+  clearConfirmed(key: string) { if (this.get(key)?.kind !== "confirmed") return; this.values.delete(key); this.changed(); }
+}
+const collectionStartRequests = new CollectionStartRequests();
+
+export function CollectionRunStart({ context, workflowId, revisionId, blocked }: { context: AutomationContext; workflowId: string; revisionId: string; blocked: boolean }) {
+  const navigate = useNavigate();
+  const key = `${context.identity.epoch}:${context.scope.projectId}:${context.scope.workspaceId}:collection:${workflowId}:${revisionId}`;
+  const [inputs, setInputs] = useState("{}");
+  const [why, setWhy] = useState("");
+  const [busy, setBusy] = useState(false);
+  const outcome = useSyncExternalStore(collectionStartRequests.subscribe, () => collectionStartRequests.get(key), () => collectionStartRequests.get(key));
+  const uncertain = outcome?.kind === "pending";
+  const confirmed = outcome?.kind === "confirmed";
+  const [error, setError] = useState("");
+  const mounted = useRef(true);
+  const summary = useRef<HTMLParagraphElement>(null);
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
+  useEffect(() => { if (error) summary.current?.focus(); }, [error]);
+  const readiness = useQuery({ queryKey: ["automation", context.identity.epoch, context.scope.projectId, context.scope.workspaceId, "collection-readiness", workflowId, revisionId], queryFn: ({ signal }) => getCollectionReadiness(workflowId, revisionId, context.scope, signal), enabled: context.scope.workspaceId !== null, retry: false, gcTime: 0, refetchOnWindowFocus: true });
+  async function start() {
+    if (busy || blocked || !!outcome || !validCollectionReason(why) || !context.fresh || !context.identity.csrfToken || !collectionCanRequest(readiness.data)) return;
+    setBusy(true); setError(""); let ticket: CollectionStartOutcome | undefined;
+    try {
+      const values = parseRunInputs(inputs);
+      const permission = await context.ensureFresh();
+      const current = await readiness.refetch({ throwOnError: true });
+      if (!mounted.current) return;
+      if (!permission.execution_enabled || !permission.capabilities.includes("automation.request") || context.scope.workspaceId === null || !collectionCanRequest(current.data)) throw new ApiClientError("Collection unavailable.", 403);
+      const requestId = crypto.randomUUID();
+      const run = await startCollectedRun({ workflow_id: workflowId, revision_id: revisionId, workspace_id: context.scope.workspaceId, inputs: values, reason: why, idempotency_key: requestId, total_timeout_seconds: 3600 }, context.scope, context.identity.csrfToken, () => { ticket = collectionStartRequests.begin(key, requestId); });
+      if (ticket) collectionStartRequests.succeed(key, ticket, run.id);
+      if (!mounted.current) return;
+      navigate(`/infra-automation/runs/${encodeURIComponent(run.id)}${scopeQuery(context.scope)}`);
+    } catch (error) {
+      const rejected = isConfirmedCollectionRejection(error);
+      if (ticket && rejected) collectionStartRequests.reject(key, ticket);
+      if (!mounted.current) return;
+      if (ticket && !rejected) setError("Collection request was not confirmed. Read run history before requesting again; this page will not resend the request.");
+      else setError(error instanceof Error && error.message.startsWith("Run inputs") ? error.message : automationError(error));
+    } finally { if (mounted.current) setBusy(false); }
+  }
+  return <section className="dw-automation-section" aria-labelledby="collection-start-heading"><h2 id="collection-start-heading">Request isolated collection</h2>
+    <p>Planning can execute repository and provider code. Use an approved immutable source and an isolated runner with limited credentials. No apply or deployment is authorized.</p>
+    {readiness.isPending && context.scope.workspaceId !== null && <p role="status">Reading collection readiness…</p>}
+    {context.scope.workspaceId === null && <p>Select a concrete workspace before collection.</p>}
+    {readiness.error && <p role="alert">{automationError(readiness.error)}</p>}
+    {!readiness.error && readiness.data && <><p>Readiness observed at {readiness.data.observed_at}. Current finite wait: {readiness.data.finite_wait_seconds} seconds; unavailable runners do not trigger a fallback.</p>
+      {!readiness.data.execution_enabled && <p>Collection execution is disabled for this project.</p>}
+      {!readiness.data.can_request && <p>Your account cannot request collection in this scope.</p>}
+      <ul>{readiness.data.items.map((source) => <li key={source.step_id}><strong>{source.step_id}</strong><p>Repository: {source.repository_id ?? "Resolved from run inputs at admission"}</p><p>Commit: <code>{source.commit_sha ?? "Resolved from run inputs at admission"}</code></p><p>Profile: <code>{source.profile_digest}</code></p><p>{source.diagnosis.correction}</p>{source.inputs_required && <p>Supply the declared scalar source inputs below; the server binds their immutable values at admission.</p>}</li>)}</ul>
+    </>}
+    <Button disabled={busy || readiness.isFetching || context.scope.workspaceId === null} onClick={() => void readiness.refetch()}>Refresh collection readiness</Button>
+    <p><Link to={`/infra-automation/runners${scopeQuery(context.scope)}`}>Inspect scoped runner availability</Link></p>
+    <p>Use declared scalar inputs only. Never paste infrastructure credentials.</p>
+    <div className="dw-automation-form"><label className="dw-field">Collection inputs (JSON)<textarea rows={3} spellCheck={false} value={inputs} onChange={(event) => setInputs(event.target.value)} disabled={busy || !!outcome} /></label><label className="dw-field">Collection reason<input value={why} onChange={(event) => setWhy(event.target.value)} maxLength={256} disabled={busy || !!outcome} /></label>
+      <div><Button variant="primary-gradient" disabled={busy || blocked || !!outcome || !context.fresh || !context.identity.csrfToken || readiness.isFetching || !!readiness.error || !collectionCanRequest(readiness.data) || !validCollectionReason(why)} onClick={() => void start()}>{busy ? "Requesting collection…" : "Request collection"}</Button></div>
+    </div>
+    {why.length > 0 && !validCollectionReason(why) && <p role="alert">Use a nonempty single-line collection reason of at most 256 characters; tabs and line separators are not accepted.</p>}
+    {confirmed && outcome.runId && <p role="status">Collection request confirmed. <Link to={`/infra-automation/runs/${encodeURIComponent(outcome.runId)}${scopeQuery(context.scope)}`}>Open confirmed collection run</Link> <Button onClick={() => { collectionStartRequests.clearConfirmed(key); setInputs("{}"); setWhy(""); setError(""); }}>Prepare another collection</Button></p>}
+    {error && <p ref={summary} tabIndex={-1} role="alert">{error}</p>}
+    {uncertain && <p>Request outcome is unresolved. <Link to={`/infra-automation${scopeQuery(context.scope)}&view=runs`}>Read run history</Link> before any new request.</p>}
+  </section>;
 }
 
 function WorkflowEditor({ context, workflowId }: { context: AutomationContext; workflowId: string }) {
@@ -167,7 +245,7 @@ function WorkflowEditor({ context, workflowId }: { context: AutomationContext; w
       if (!alive.current) return;
       setRevisionId(value.id); await revisions.refetch();
       const current = await workflowQuery.refetch();
-      if (alive.current && current.data && !current.error) { loadRecord(current.data); setMessageKind("success"); setMessage(`Revision ${value.revision_number} published immutably. It is ready for a permitted uploaded preflight.`); }
+      if (alive.current && current.data && !current.error) { loadRecord(current.data); setMessageKind("success"); setMessage(`Revision ${value.revision_number} published immutably. It is ready for a permitted preflight.`); }
     } catch (error) { await failure(error, submitted); } finally { if (alive.current) setBusy(false); }
   }
   async function start() {
@@ -199,6 +277,7 @@ function WorkflowEditor({ context, workflowId }: { context: AutomationContext; w
   if (isNew && !permittedDraft) return <p role="alert">Workflow authoring is not permitted in this scope.</p>;
   const steps = selected.data?.definition.steps;
   const uploadOnly = steps?.length === 2 && steps.filter((step) => step.kind === "uploaded_intake").length === 1 && steps.filter((step) => step.kind === "shared_analysis").length === 1;
+  const collected = steps?.some((step) => step.kind === "admitted_collection") ?? false;
   const canStart = mutable && !needsReview && permittedRequest && context.capabilities.execution_enabled && context.scope.workspaceId !== null && selected.isSuccess && !selected.isFetching && uploadOnly && files.length > 0 && Boolean(runReason.trim()) && !uncertain;
   return <div className="dw-automation-stack">
     <Link to={`/infra-automation${scopeQuery(context.scope)}`}>Back to workflows</Link>
@@ -232,7 +311,8 @@ function WorkflowEditor({ context, workflowId }: { context: AutomationContext; w
       {revisions.hasNextPage && <Button onClick={() => { void revisions.fetchNextPage(); }}>More revisions</Button>}
       <Button disabled={revisions.isFetching} onClick={() => { void revisions.refetch(); }}>Refresh revisions</Button>
     </section>}
-    {!isNew && <section className="dw-automation-section"><h2>Start uploaded preflight</h2><p>Uploaded evidence has unverified repository provenance and remains advisory. No apply or deployment action is authorized.</p>
+    {!isNew && collected && <CollectionRunStart key={revisionId} context={context} workflowId={workflowId} revisionId={revisionId} blocked={!mutable || needsReview || uncertain} />}
+    {!isNew && !collected && <section className="dw-automation-section"><h2>Start uploaded preflight</h2><p>Uploaded evidence has unverified repository provenance and remains advisory. No apply or deployment action is authorized.</p>
       {!context.capabilities.execution_enabled && <p>New starts are disabled by project policy.</p>}{!permittedRequest && <p>Requesting runs is not permitted for this account.</p>}{context.scope.workspaceId === null && <p>Select an authorized concrete workspace before starting.</p>}{selected.data && !uploadOnly && <p>This revision is not supported by the uploaded preflight entrypoint. Use a two-step uploaded-intake/shared-analysis revision.</p>}
       <div className="dw-automation-form"><label className="dw-field" htmlFor="preflight-artifacts"><span>Uploaded artifacts</span><input id="preflight-artifacts" type="file" multiple accept=".tf,.tfvars,.hcl,.json,.yaml,.yml" disabled={busy || !permittedRequest} onChange={(event) => { setFiles(Array.from(event.target.files ?? [])); setMessage(null); }} /></label><p>Up to 32 distinct UTF-8 files and 8 MiB total. Never upload state, saved binary plans or credentials. The server screens every artifact.</p>
         <div className="dw-field"><label htmlFor="preflight-inputs">Run inputs (JSON)</label><textarea id="preflight-inputs" rows={3} spellCheck={false} value={inputs} disabled={busy || !permittedRequest} onChange={(event) => setInputs(event.target.value)} /></div>
