@@ -14,10 +14,12 @@ required high-priority finding dispositions.
 - `frontend`: installs the React SPA workspace, then runs typecheck, Vitest, and the production build.
 - `changed-tests`: on pull requests, runs changed `test_*.py` modules under `tests/`, excluding `tests/fixtures/` and helper scripts, for faster early feedback. Qualification probes stay executable through their owning tests and are never imported as test modules.
 - `test`: runs the Python suite with pytest in five logical shards with `fail-fast: false`.
-  Services and infrastructure automation run separately, each retaining its
-  15-minute job budget. Combining the expanded engine process tests with services
-  exceeded that budget on hosted runners; no tests or cancellation deadlines
-  were relaxed to make the pipeline pass.
+  Services and infrastructure automation run separately. Services has a
+  25-minute job budget; the other shards retain 15 minutes. On PR #213, all
+  1,232 services tests passed in 14m26s, but setup and final cleanup pushed the
+  job past its former 15-minute limit. The larger services budget leaves room
+  for that overhead and hosted-runner variation. Test-level cancellation
+  deadlines and the requirement that every shard passes are unchanged.
 - The blocking `tests/test_llm` shard includes the prompt-injection regression
   suite documented in
   [`docs/ai-safety/prompt-injection-testing.md`](./ai-safety/prompt-injection-testing.md).

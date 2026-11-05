@@ -87,7 +87,23 @@ class SupplyChainRemediationTests(unittest.TestCase):
         }
         self.assertEqual(shards["services"], "tests/test_services")
         self.assertEqual(shards["infra-automation"], "tests/test_infra_automation")
-        self.assertEqual(data["jobs"]["test"]["timeout-minutes"], "15")
+        test_job = data["jobs"]["test"]
+        self.assertEqual(
+            test_job["timeout-minutes"], "${{ matrix.timeout_minutes || 15 }}"
+        )
+        self.assertEqual(
+            {
+                shard["shard"]: shard.get("timeout_minutes", "15")
+                for shard in test_job["strategy"]["matrix"]["include"]
+            },
+            {
+                "api-cli-infra": "15",
+                "analysis-parsers": "15",
+                "services": "25",
+                "infra-automation": "15",
+                "llm": "15",
+            },
+        )
 
     def test_analytics_defaults_read_only_and_limits_committed_paths(self):
         data = self.workflow("refresh-skill-analytics")
