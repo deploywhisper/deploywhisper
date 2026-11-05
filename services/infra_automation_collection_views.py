@@ -15,6 +15,7 @@ from infra_automation.lifecycle import LifecycleError, Positive
 from infra_automation.state import UTCText, TERMINAL_STATES
 from models.repositories import infra_automation_runs as runs
 from models.repositories import infra_automation_reports as reports
+from models.repositories import infra_automation_runners as runner_repo
 from services import infra_automation_engine_service as engine
 from services import infra_automation_support as support
 from services import project_service as auth
@@ -171,24 +172,7 @@ def _routing(
         requirements = None
     if requirements is None:
         return diagnosis("profile_unavailable")
-    candidates = list(
-        session.scalars(
-            select(InfraAutomationRunner)
-            .where(
-                InfraAutomationRunner.project_id == project_id,
-                InfraAutomationRunner.workspace_id == workspace_id,
-                InfraAutomationRunner.status == "active",
-            )
-            # Current credential slots are capped at100 per project. Sort live
-            # credentials first so retained expired/revoked history cannot hide
-            # an eligible runner behind the read ceiling.
-            .order_by(
-                InfraAutomationRunner.credential_expires_at.desc(),
-                InfraAutomationRunner.created_at.desc(),
-            )
-            .limit(1000)
-        )
-    )
+    candidates = runner_repo.routing_candidates(session, project_id, workspace_id, now)
     if not candidates:
         retained = session.scalar(
             select(InfraAutomationRunner.id)

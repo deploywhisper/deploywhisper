@@ -4,8 +4,16 @@ from __future__ import annotations
 
 from datetime import timedelta
 import unittest
+from sqlalchemy import func, insert, select
+
+from infra_automation import claims as engine_claims
+from models.repositories import infra_automation_runners as runner_repo
+from models.repositories import infra_automation_runs as runs
+from models.tables import InfraAutomationAudit, InfraAutomationRunner
 from tests.test_infra_automation import test_collection_intake as fixture
 from services import infra_automation_collection_views as views
+from services import infra_automation_runner_tasks as tasks
+from services.infra_automation_support import digest
 from services import project_service as auth
 
 
@@ -191,3 +199,160 @@ class CollectionViewTests(unittest.TestCase):
                 self.case.run.id, project_id=100, workspace_id=100
             )
         self.assertEqual(value["items"][0]["observations"][1]["state"], "stale")
+
+
+class CollectionRoutingIntegrationTests(unittest.TestCase):
+    setUp = CollectionViewTests.setUp
+
+    def seed_history(self, **changes):
+        # Synthetic retained registrations deliberately sort ahead of the real
+        # runner under ID ordering, with identical timestamps to test tie breaks.
+        template = {
+            column.key: getattr(self.case.runner, column.key)
+            for column in InfraAutomationRunner.__table__.columns
+        }
+        template["credential_expires_at"] = self.case.now
+        template.update(changes)
+        with self.case.factory.begin() as db:
+            db.execute(
+                insert(InfraAutomationRunner),
+                [dict(template, id=f"000-history-{i:04d}") for i in range(1000)],
+            )
+
+    def new_pending(self, *, busy=False):
+        if not busy:
+            with self.case.factory() as db:
+                original = runs.get_attempt(db, self.case.pending.id)
+            if original.state == "claimed":
+                self.case.operation(
+                    engine_claims.safety_cleanup,
+                    self.case.owner,
+                    attempt_id=self.case.pending.id,
+                    expected_version=original.version,
+                    state="failed",
+                )
+        self.request_count = getattr(self, "request_count", 0) + 1
+        self.case.request["key_digest"] = digest(
+            f"readiness-to-routing-{self.request_count}".encode()
+        )
+        run = self.case.admit()
+        pending = self.case.attempt(run)
+        self.case.operation(
+            engine_claims.start_run,
+            self.case.owner,
+            run_id=run.id,
+            expected_version=1,
+        )
+        self.addCleanup(lambda: tasks._MAILBOX.pop(pending.id, None))
+        return pending
+
+    def readiness_then_assign(self, pending, expected_code):
+        with self.case.credentials():
+            readiness = views.get_readiness(
+                self.case.run.workflow_id,
+                self.case.run.revision_id,
+                project_id=100,
+                workspace_id=100,
+                now=self.case.now,
+            )
+        self.assertEqual(readiness["items"][0]["diagnosis"]["code"], expected_code)
+        result = tasks.queue_assignment(
+            self.case.owner,
+            pending.id,
+            self.case.requirements,
+            now=self.case.now,
+            session_factory=self.case.factory,
+        )
+        with self.case.factory() as db:
+            attempt = runs.get_attempt(db, pending.id)
+            failure = db.scalar(
+                select(InfraAutomationAudit.id).where(
+                    InfraAutomationAudit.target_id == pending.id,
+                    InfraAutomationAudit.event_type == "runner.no_eligible_runner",
+                )
+            )
+            if expected_code == "eligible":
+                self.assertIsNotNone(result)
+                self.assertEqual(result["runner_id"], self.case.runner.id)
+                self.assertEqual(attempt.state, "claimed")
+                self.assertIsNone(failure)
+            else:
+                self.assertIsNone(result)
+                self.assertEqual(attempt.state, "failed")
+                self.assertIsNotNone(failure)
+            self.assertEqual(
+                db.scalar(select(func.count()).select_from(InfraAutomationRunner)),
+                1001,
+            )
+
+    def test_expired_active_history_cannot_mask_available_runner(self):
+        self.seed_history()
+        self.readiness_then_assign(self.new_pending(), "eligible")
+
+    def test_future_created_history_cannot_mask_available_runner(self):
+        self.seed_history(
+            created_at=self.case.now + timedelta(days=1),
+            credential_expires_at=self.case.now + timedelta(days=30),
+        )
+        self.readiness_then_assign(self.new_pending(), "eligible")
+
+    def test_busy_runner_remains_unavailable_with_expired_history(self):
+        self.seed_history()
+        self.readiness_then_assign(self.new_pending(busy=True), "runner_busy")
+
+    def test_expired_history_does_not_bypass_profile_rejection(self):
+        self.seed_history(profile_digest="sha256:" + "c" * 64)
+        with self.case.factory.begin() as db:
+            db.get(InfraAutomationRunner, self.case.runner.id).profile_digest = (
+                "sha256:" + "c" * 64
+            )
+        self.readiness_then_assign(self.new_pending(), "profile_mismatch")
+
+    def test_current_candidate_order_is_bounded_and_deterministic(self):
+        self.seed_history()
+        with self.case.factory() as db:
+            candidates = runner_repo.routing_candidates(db, 100, 100, self.case.now)
+            self.assertEqual(
+                [row.id for row in candidates],
+                [self.case.runner.id] + [f"000-history-{i:04d}" for i in range(999)],
+            )
+            self.assertEqual(
+                runner_repo.routing_candidates(db, 100, 101, self.case.now), []
+            )
+
+    def test_candidate_priority_preserves_live_rejections(self):
+        self.seed_history()
+        mutations = (
+            ("credential_hash", None, "credential_unavailable"),
+            ("credential_expires_at", self.case.now, "credential_unavailable"),
+            (
+                "credential_expires_at",
+                self.case.now.replace(microsecond=999999),
+                "credential_unavailable",
+            ),
+            (
+                "created_at",
+                self.case.now + timedelta(microseconds=1),
+                "credential_unavailable",
+            ),
+            ("authorization_epoch", 999, "credential_unavailable"),
+            ("issuer_membership_version", 999, "credential_unavailable"),
+            ("last_seen_at", self.case.now - timedelta(seconds=61), "heartbeat_stale"),
+            ("last_seen_at", self.case.now + timedelta(seconds=1), "heartbeat_stale"),
+        )
+        for field, value, expected in mutations:
+            with self.subTest(field=field, value=value):
+                pending = self.new_pending()
+                with self.case.factory.begin() as db:
+                    row = db.get(InfraAutomationRunner, self.case.runner.id)
+                    original = getattr(row, field)
+                    setattr(row, field, value)
+                try:
+                    self.readiness_then_assign(pending, expected)
+                finally:
+                    with self.case.factory.begin() as db:
+                        setattr(
+                            db.get(InfraAutomationRunner, self.case.runner.id),
+                            field,
+                            original,
+                        )
