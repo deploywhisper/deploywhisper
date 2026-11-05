@@ -62,3 +62,7 @@ After approval, implement and execute that lane with real enrollment/redemption 
 ## Authorized Git Flow publication
 
 [Backend-for-UI PR #212](https://github.com/deploywhisper/deploywhisper/pull/212) and dependent [UI draft PR #213](https://github.com/deploywhisper/deploywhisper/pull/213) target `develop`. Both branches are pushed. Merge the backend lane first; the UI remains draft until positive HTTPS enrollment and authenticated real-runner browser acceptance are complete. Story status remains in-progress. No merge or release was performed.
+
+### Base-branch reconciliation — 2026-11-05
+
+Backend PR #212 merged into `develop` as `27f7eca`. UI PR #213 is now open without draft status; its branch merges that develop commit and preserves the later UI/review evidence. The earlier publication paragraph records the initial draft state. Story status remains in-progress and the positive HTTPS/real-run acceptance gates remain open. This reconciliation changes documentation only: application, test, dependency, and workflow bytes match the green CI commit `6eba251`.

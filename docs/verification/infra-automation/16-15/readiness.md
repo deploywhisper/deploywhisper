@@ -4,7 +4,7 @@
 
 ## Reviewed implementation contracts
 
-- Backend health/admin contracts stay on `feature/16-15-runner-health-backend-for-ui`; frontend changes stay on `feature/16-15-runner-health-and-collection-ux`. Backend-for-UI publication remains separate from UI publication. Implementation used separate local branches; subsequent authorized PR publication is recorded in results.md.
+- Backend health/admin contracts stay on `feature/16-15-runner-health-backend-for-ui`; frontend changes stay on `feature/16-15-runner-health-and-collection-ux`. Backend-for-UI publication remains separate from UI publication. Implementation used separate branches; backend PR #212 is now merged into develop, and UI PR #213 remains open. Publication history is recorded in results.md; positive HTTPS/real-run acceptance remains pending.
 - Extend existing health with authoritative evaluation time and connectivity: online through60 seconds, stale through180 seconds, otherwise offline. Missing/future heartbeats are not fresh. These are descriptive thresholds; matching the60-second freshness predicate does not establish full task eligibility or isolation qualification.
 - Preserve registration and credential state separately. Trusted configured profile metadata can be displayed, but `isolation_qualified=False` remains truthful: health cannot independently attest execution controls. Separate runner capabilities preserve the existing closed editor capability array.
 - Typed enrollment/rotation/revoke envelopes retain existing HTTPS, production-eligible human and scoped administrator gates. Browser secret values are uncached transient component state with expiry/context/authorization clearing.

@@ -110,7 +110,7 @@ Codex with native agents for independent readiness, bounded backend/UI implement
 2026-11-05: Prerequisites and final bounded interfaces independently reviewed. PR211 merged8095877 with passing remote checks. Implementation proceeds on separate backend-for-UI and UI branches; the supplemental HTTPS browser verification amendment is pending user clarification. See docs/verification/infra-automation/16-15/readiness.md.
 
 ### Completion Notes List
-- Authorized Git Flow publication completed: [backend PR #212](https://github.com/deploywhisper/deploywhisper/pull/212) is open with the backend-for-ui label; dependent [UI draft PR #213](https://github.com/deploywhisper/deploywhisper/pull/213) also targets develop. Both feature branches are pushed. The UI remains draft and the story remains in-progress until the positive HTTPS/real-run browser acceptance gates are resolved; no merge or release was performed.
+- Publication status: [backend PR #212](https://github.com/deploywhisper/deploywhisper/pull/212) merged into develop as `27f7eca`; [UI PR #213](https://github.com/deploywhisper/deploywhisper/pull/213) is open and no longer a draft. The UI branch includes the updated develop ancestry. Story status remains in-progress until the positive HTTPS/real-run browser acceptance gates are resolved; PR readiness does not qualify those gates.
 - Formal R1–R3 repairs completed and independently verified: bounded per-target revocation guards, verified rejection classification after local validation, and one shared readiness/dispatch candidate ordering. Red regressions reproduced the original failures before repair.
 - Fresh repair evidence: UI398tests+2compatibilitychecks; backendfocused93tests/608subtests; backendroot1795tests/3skips; backendAPI/CLI/infra740passed/1skip/2356subtests; mainfullCI3246tests across10directories exit0; composed26tests (3realHTTP +23syntheticcomponent fault models) pass; realcollection49checks and integrity9tests/69subtests pass. Existingmypybaseline318diagnostics has no new normalized errors.
 - Backend repair is separately committed as f5d6c19 with qualification follow-up86e9825 and merged into the UI integration branch. Current repair details: `docs/verification/infra-automation/16-15/review-fixes.md`. Prior development results below are historical. Positive HTTPS/real-run browser acceptance remains unapproved and unqualified.
@@ -194,6 +194,8 @@ Codex with native agents for independent readiness, bounded backend/UI implement
 
 ## Change Log
 
+- 2026-11-05: Merged develop after backend PR #212 landed; resolved documentation conflicts by preserving the full UI/review evidence and backend implementation history. Runtime, tests, and CI configuration remain identical to the passing `6eba251` tree. UI validation not applicable to this documentation-only merge.
+
 - 2026-11-05: Published separate backend PR #212 and dependent UI draft #213 under user-authorized Git Flow closeout; retained all open HTTPS/real-run acceptance gates and in-progress status.
 
 - 2026-11-05: Resolved R1–R3 with red→green regressions, independent verification, real collection witness and clean fullCI/browser checks. Separate HTTPS/real-run acceptance gates remain open.
@@ -201,6 +203,8 @@ Codex with native agents for independent readiness, bounded backend/UI implement
 - 2026-11-05: Formal BMad review of440e683 found three P2 repair items; story remains in-progress and positive HTTPS/real-run browser gates remain open.
 
 - 2026-11-05: Implemented separate backend/UI packets, repaired independent review/browser findings, completed Python/UI/HTTP-browser validation and restored the original app. Positive HTTPS/real-run browser gates remain open pending the user decision.
+
+- 2026-11-05: Implemented additive backend-for-UI contracts on a separate feature branch; independently reviewed with no findings. Browser/overall story gates remain open.
 
 ## Senior Developer Review (AI) — 2026-11-05
 
