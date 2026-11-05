@@ -22,6 +22,7 @@ from infra_automation.unit_contracts import (
     UnitRevisionView,
     UnitRevisionSummary,
     UnitRevisionPage,
+    UnitRevisionHistory,
     UnitValidation,
     UnitRunView,
 )
@@ -224,6 +225,30 @@ def list_units(project_id: int, workspace_id: int):
         )
 
 
+def list_revisions(inventory_id, *, project_id, workspace_id):
+    """Return the complete bounded history within the current human read scope."""
+    with auth.authorized_session() as session:
+        _human_scope(session, project_id, workspace_id, "automation.read")
+        rows = repo.revision_history(
+            session, support.identifier(inventory_id), project_id, workspace_id
+        )
+        if not rows:
+            raise auth.TrustedAuthorizationError()
+        items = [
+            UnitRevisionSummary.model_validate(
+                {
+                    key: value
+                    for key, value in _revision_view(row).items()
+                    if key != "plan"
+                }
+            )
+            for row in rows
+        ]
+        return support.bounded_payload(
+            UnitRevisionHistory(items=items).model_dump(mode="json")
+        )
+
+
 def get_revision(inventory_id, revision_id, *, project_id, workspace_id):
     with auth.authorized_session() as session:
         _human_scope(session, project_id, workspace_id, "automation.read")
@@ -306,8 +331,10 @@ def _bind_steps(session, run, document, plan, bindings):
             if item.analysis_step_id in _ancestors(steps, intake.id)
         }
         intake_ancestors = _ancestors(steps, intake.id)
+        # A decision consumes the complete bundle, so collection or analysis
+        # cannot wait on a decision that itself needs their missing evidence.
         if any(
-            steps[ancestor].kind == "registered_github_handoff"
+            steps[ancestor].kind in {"human_decision", "registered_github_handoff"}
             for ancestor in intake_ancestors
         ):
             raise LifecycleError(422)
@@ -333,7 +360,7 @@ def _bind_steps(session, run, document, plan, bindings):
             review_intakes != declared
             or review_analyses != declared
             or any(
-                steps[ancestor].kind == "registered_github_handoff"
+                steps[ancestor].kind in {"human_decision", "registered_github_handoff"}
                 for ancestor in review_ancestors
             )
         ):
@@ -400,11 +427,6 @@ def request_unit_run(
         ):
             raise auth.TrustedAuthorizationError()
         view = _revision_view(revision)
-        if (
-            repo.latest(session, revision.inventory_id).id != revision.id
-            or view["map_digest"] != request.confirmed_map_digest
-        ):
-            raise LifecycleError(409)
         payload = request.model_dump(mode="json")
         payload["bindings"] = sorted(
             payload["bindings"], key=lambda item: item["unit_id"]
@@ -431,6 +453,13 @@ def request_unit_run(
                 registry_contract=registry_contract,
                 now=now,
             )
+        # Replaying an accepted request above reads its existing run. Only a
+        # new admission requires the inventory revision to remain current.
+        if (
+            repo.latest(session, revision.inventory_id).id != revision.id
+            or view["map_digest"] != request.confirmed_map_digest
+        ):
+            raise LifecycleError(409)
         run_view = engine.request_run(
             request.run, registry=registry, registry_contract=registry_contract, now=now
         )

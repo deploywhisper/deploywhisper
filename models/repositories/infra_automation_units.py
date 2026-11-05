@@ -38,6 +38,24 @@ def revisions(session, project_id, workspace_id=None):
     return rows
 
 
+def revision_history(session, inventory_id, project_id, workspace_id):
+    rows = list(
+        session.scalars(
+            select(InfraAutomationUnitRevision)
+            .where(
+                InfraAutomationUnitRevision.inventory_id == inventory_id,
+                InfraAutomationUnitRevision.project_id == project_id,
+                InfraAutomationUnitRevision.workspace_id == workspace_id,
+            )
+            .order_by(InfraAutomationUnitRevision.revision_number.desc())
+            .limit(33)
+        )
+    )
+    if len(rows) > 32:
+        raise LifecycleError(503)
+    return rows
+
+
 def run_units(session, run_id):
     return session.get(InfraAutomationRunUnits, run_id)
 

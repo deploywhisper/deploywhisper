@@ -75,6 +75,53 @@ class UnitApiTests(unittest.TestCase):
         self.assertEqual(response.json()["data"], saved)
         self.assertEqual(response.headers["cache-control"], "no-store")
 
+    def test_revision_history_keeps_superseded_saves_recoverable_and_scoped(self):
+        first = self.save()
+        for version in range(1, 32):
+            self.save_payload.update(
+                inventory_id=first["inventory_id"], expected_version=version
+            )
+            self.save()
+        path = self.path + f"/{first['inventory_id']}/revisions"
+        response = self.client.get(
+            path + "?project_id=1&workspace_id=1", headers=self.headers()
+        )
+        self.assertEqual(response.status_code, 200, response.text)
+        history = response.json()["data"]
+        self.assertFalse(history["truncated"])
+        self.assertEqual(
+            [item["version"] for item in history["items"]], list(range(32, 0, -1))
+        )
+        self.assertEqual(history["items"][-1]["revision_id"], first["revision_id"])
+        self.assertEqual(response.headers["cache-control"], "no-store")
+        self.assert_error(
+            self.client.get(
+                path + "?project_id=2&workspace_id=3", headers=self.headers()
+            ),
+            403,
+        )
+        self.assert_error(
+            self.client.get(
+                path + "?project_id=1&workspace_id=2", headers=self.headers()
+            ),
+            403,
+        )
+        self.assert_error(self.client.get(path + "?project_id=1&workspace_id=1"), 401)
+        self.assert_error(
+            self.client.get(
+                self.path + "/unavailable/revisions?project_id=1&workspace_id=1",
+                headers=self.headers(),
+            ),
+            403,
+        )
+        self.member("read-only")
+        self.assertEqual(
+            self.client.get(
+                path + "?project_id=1&workspace_id=1", headers=self.headers()
+            ).status_code,
+            200,
+        )
+
     def test_validation_returns_located_nonreflective_errors(self):
         self.inventory["units"][0]["prerequisites"] = ["private-unknown-unit"]
         response = self.client.post(
@@ -169,6 +216,7 @@ class UnitApiTests(unittest.TestCase):
             (base + "/units", "post"),
             (base + "/units/validate", "post"),
             (base + "/units/{inventory_id}/revisions/{revision_id}", "get"),
+            (base + "/units/{inventory_id}/revisions", "get"),
             (base + "/units/runs", "post"),
             (base + "/runs/{run_id}/units", "get"),
         }
