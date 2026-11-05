@@ -1,6 +1,6 @@
 # Story 16.15: Runner Health and Collection UX
 
-Status: backlog
+Status: in-progress
 Preparation: refined
 Release: v1.5.0 | Priority: P0, highest-priority feature
 
@@ -90,14 +90,33 @@ Execute one bounded packet at a time on the story feature branch. Each packet ow
 ## Dev Agent Record
 
 ### Agent Model Used
-Planning refinement only; implementation agent records its model at execution.
+Codex with native agents for independent readiness, bounded backend/UI implementation and verification.
 
 ### Debug Log References
-Not executed.
+2026-11-05: Prerequisites and final bounded interfaces independently reviewed. PR211 merged8095877 with passing remote checks. Implementation proceeds on separate backend-for-UI and UI branches; the supplemental HTTPS browser verification amendment is pending user clarification. See docs/verification/infra-automation/16-15/readiness.md.
 
 ### Completion Notes List
-- Story specification prepared; no feature implementation, qualification, public RFC acceptance, release publication or runtime tests performed.
-- Implementation and validation commands above are future obligations, not test results.
+- Backend packet implemented and independently reviewed: scoped runner health/capabilities and durable collection/readiness projections, typed transient admin responses, existing HTTPS/production-identity gates preserved. Focused backend review31tests/20subtests and existing runner API/enrollment21tests/22subtests passed; generated frontend schema typechecks and314 existing UI tests pass. Refreshed16.14 collector qualification49checks passed with current hashes. Full story/browser acceptance remains in progress.
+- UI work is isolated in `/tmp/deploywhisper-story16-15-ui` on its own feature branch. Positive HTTPS enrollment/real-run browser evidence remains pending the explicit verification-lane decision.
 
 ### File List
-- `_bmad-output/implementation-artifacts/16-15-runner-health-and-collection-ux.md` (story specification only).
+
+- `_bmad-output/implementation-artifacts/16-15-runner-health-and-collection-ux.md`
+- `_bmad-output/implementation-artifacts/sprint-status.yaml`
+- `api/routes/infra_automation_collection_views.py`
+- `api/routes/infra_automation_runner_admin.py`
+- `api/routes/infra_automation_runner_views.py`
+- `app.py`
+- `docs/verification/infra-automation/16-14/results.json`
+- `docs/verification/infra-automation/16-15/readiness.md`
+- `frontend/src/api/schema.d.ts`
+- `services/infra_automation_collection_views.py`
+- `services/infra_automation_runners.py`
+- `tests/test_api/test_collection_views.py`
+- `tests/test_api/test_runner_health_ui.py`
+- `tests/test_infra_automation/test_collection_views.py`
+- `tests/test_infra_automation/test_runner_health_ui.py`
+
+## Change Log
+
+- 2026-11-05: Implemented additive backend-for-UI contracts on a separate feature branch; independently reviewed with no findings. Browser/overall story gates remain open.

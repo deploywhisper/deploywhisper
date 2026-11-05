@@ -6,10 +6,11 @@ from datetime import datetime, timedelta, timezone
 import hashlib
 import hmac
 import json
+import math
 import secrets
 from typing import Annotated, Literal
 
-from pydantic import Field, SecretStr, StrictStr
+from pydantic import Field, SecretStr, StrictStr, StrictBool, StrictInt
 from sqlalchemy import select
 from infra_automation.contracts import ClosedModel
 from infra_automation.lifecycle import CursorEnvelope, LifecycleError, Positive, Reason
@@ -426,7 +427,7 @@ class RunnerTaskHealth(ClosedModel):
     attempt_id: Identifier
 
 
-class RunnerHealth(ClosedModel):
+class RunnerRegistrationView(ClosedModel):
     id: Identifier
     project_id: Positive
     workspace_id: Positive
@@ -440,7 +441,192 @@ class RunnerHealth(ClosedModel):
     last_seen_at: StrictStr | None
     credential_expires_at: StrictStr | None
     isolation_qualified: Literal[False]
+
+
+class RunnerHealth(RunnerRegistrationView):
     current_task: RunnerTaskHealth | None
+    evaluated_at: StrictStr
+    connectivity: Literal["online", "stale", "offline"]
+    heartbeat_age_seconds: Annotated[StrictInt, Field(ge=0)] | None
+    connectivity_reason: Literal[
+        "heartbeat_current",
+        "heartbeat_stale",
+        "heartbeat_missing",
+        "heartbeat_expired",
+        "clock_unavailable",
+    ]
+    online_threshold_seconds: Literal[60] = 60
+    offline_threshold_seconds: Literal[180] = 180
+    credential_status: Literal["pending", "valid", "expired", "revoked", "unavailable"]
+    profile_status: Literal["registered", "not_registered", "unavailable"]
+    tool_version: Annotated[StrictStr, Field(max_length=64)] | None
+
+
+class RunnerProfileChoice(ClosedModel):
+    profile_digest: Digest
+    tool: Identifier
+    tool_version: Annotated[StrictStr, Field(max_length=64)]
+    runner_version: Identifier
+    tags: Annotated[list[Identifier], Field(max_length=32)]
+
+
+class RunnerCapabilities(ClosedModel):
+    version: Literal[1] = 1
+    project_id: Positive
+    workspace_id: Positive
+    evaluated_at: StrictStr
+    production_eligible: StrictBool
+    execution_enabled: StrictBool
+    can_read_health: StrictBool
+    can_enroll: StrictBool
+    can_rotate: StrictBool
+    can_revoke: StrictBool
+    restriction: Literal[
+        "none",
+        "https_required",
+        "privileged_role_required",
+        "administrator_required",
+        "execution_disabled",
+    ]
+    profile_status: Literal["available", "not_configured", "unavailable"]
+    configured_profiles: Annotated[list[RunnerProfileChoice], Field(max_length=16)]
+
+
+def _profiles():
+    from services.infra_automation_collection import configured_profiles
+
+    try:
+        values = configured_profiles()
+        for value in values:
+            RunnerProfileChoice.model_validate(value.model_dump())
+            for label in (
+                value.tool,
+                value.tool_version,
+                value.runner_version,
+                *value.tags,
+            ):
+                _screen(label)
+        return values, "available" if values else "not_configured"
+    except (LifecycleError, ValueError, TypeError):
+        # Health history remains readable when the protected profile is unavailable.
+        return (), "unavailable"
+
+
+def capabilities(project_id, workspace_id, *, now=None):
+    """Deny-only UI projection; never a substitute for mutation authentication."""
+    with authorization.authorized_session() as session:
+        grant = support.scope(
+            session, project_id, workspace_id, "automation.read", mutation=False
+        )
+        if (
+            grant.principal.principal_type != "human"
+            or grant.principal.credential_audience != "human"
+        ):
+            raise authorization.TrustedAuthorizationError()
+        _, settings = support.policy_state(session, project_id)
+        production = grant.principal.production_eligible
+        role_allowed = grant.role in {"admin", "maintainer"}
+        admin = authorization.trusted_capability_allowed(
+            grant.principal, grant.role, "automation.admin"
+        )
+        readable = bool(production and role_allowed)
+        manageable = bool(production and admin)
+        profiles, profile_status = _profiles() if readable else ((), "unavailable")
+        restriction = (
+            "https_required"
+            if not production
+            else "privileged_role_required"
+            if not role_allowed
+            else "administrator_required"
+            if not admin
+            else "execution_disabled"
+            if not settings.enabled
+            else "none"
+        )
+        result = RunnerCapabilities(
+            project_id=project_id,
+            workspace_id=workspace_id,
+            evaluated_at=_time(_now(now)),
+            production_eligible=production,
+            execution_enabled=settings.enabled,
+            can_read_health=readable,
+            can_enroll=manageable and settings.enabled,
+            can_rotate=manageable and settings.enabled,
+            can_revoke=manageable,
+            restriction=restriction,
+            profile_status=profile_status,
+            configured_profiles=[
+                RunnerProfileChoice.model_validate(p.model_dump()) for p in profiles
+            ],
+        ).model_dump(mode="json")
+        return support.bounded_payload(result)
+
+
+def _health_facts(session, row, timestamp, profiles, profile_status):
+    # Read connectivity never changes credentials, leases, qualification or trust.
+    age = (
+        (timestamp - _utc(row.last_seen_at)).total_seconds()
+        if row.last_seen_at
+        else None
+    )
+    connectivity = (
+        "offline"
+        if age is None or age < 0 or age > 180
+        else "online"
+        if age <= 60
+        else "stale"
+    )
+    credential = (
+        "pending"
+        if row.status == "pending"
+        else "revoked"
+        if row.status == "revoked"
+        else "unavailable"
+        if row.credential_hash is None
+        or row.credential_expires_at is None
+        or timestamp < _utc(row.created_at)
+        else "expired"
+        if timestamp >= _utc(row.credential_expires_at).replace(microsecond=0)
+        else "valid"
+    )
+    if credential == "valid":
+        try:
+            validate_runner(session, row, now=timestamp)
+        except (LifecycleError, authorization.TrustedAuthorizationError):
+            credential = "unavailable"
+    connectivity_reason = (
+        "heartbeat_missing"
+        if age is None
+        else "clock_unavailable"
+        if age < 0
+        else "heartbeat_current"
+        if age <= 60
+        else "heartbeat_stale"
+        if age <= 180
+        else "heartbeat_expired"
+    )
+    profile = next(
+        (
+            p
+            for p in profiles
+            if (p.profile_digest, p.tool, p.runner_version)
+            == (row.profile_digest, row.tool, row.runner_version)
+        ),
+        None,
+    )
+    return dict(
+        evaluated_at=_time(timestamp),
+        connectivity=connectivity,
+        heartbeat_age_seconds=math.ceil(age) if age is not None and age >= 0 else None,
+        connectivity_reason=connectivity_reason,
+        credential_status=credential,
+        profile_status="unavailable"
+        if profile_status == "unavailable"
+        else "registered"
+        if profile
+        else "not_registered",
+        tool_version=profile.tool_version if profile else None,
+    )
 
 
 class RunnerHealthPage(ClosedModel):
@@ -448,15 +634,20 @@ class RunnerHealthPage(ClosedModel):
     cursor: CursorEnvelope
 
 
-def health(project_id, workspace_id, *, limit=25, cursor=None):
+def health(project_id, workspace_id, *, limit=25, cursor=None, now=None):
     from services.infra_automation_service import _binding, _page
 
     with authorization.authorized_session() as session:
         grant = _human(session, project_id, workspace_id, mutation=False)
+        timestamp = _now(now)
+        profiles, profile_status = _profiles()
 
         def render(item):
             row = item.runner
             view = _view(row)
+            view.update(
+                _health_facts(session, row, timestamp, profiles, profile_status)
+            )
             active = session.scalar(
                 select(InfraAutomationAttempt)
                 .join(

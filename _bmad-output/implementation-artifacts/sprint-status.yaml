@@ -225,7 +225,7 @@ development_status:
   16-12-runner-enrollment-and-attempt-protocol: done
   16-13-isolated-runner-execution-profile: review
   16-14-opentofu-terraform-collection-and-provenance: review
-  16-15-runner-health-and-collection-ux: backlog
+  16-15-runner-health-and-collection-ux: in-progress
   16-16-declared-multi-unit-preflight-planning: backlog
   16-17-signed-trigger-intake-and-cli: backlog
   16-18-operator-recovery-retention-and-network-readiness: backlog

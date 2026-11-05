@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
-from sqlalchemy import Integer, and_, cast, func, or_, select
+from sqlalchemy import Integer, and_, case, cast, func, or_, select
 from models.tables import (
     InfraAutomationAudit,
     InfraAutomationRunner,
@@ -26,6 +26,32 @@ def get_enrollment(session, enrollment_id):
         .where(InfraAutomationRunnerEnrollment.id == enrollment_id)
         .execution_options(populate_existing=True)
     )
+
+
+def routing_candidates(session, project_id, workspace_id, now):
+    """Share bounded routing order without treating credentials as authority.
+
+    Current credential slots are capped at 100 per project. Prioritize their
+    valid time windows before retained history, with an ID tie break shared by
+    readiness and admission. Callers still recheck all live runner authority.
+    """
+    current_credential = and_(
+        InfraAutomationRunner.credential_hash.is_not(None),
+        InfraAutomationRunner.created_at <= now,
+        cast(func.strftime("%s", InfraAutomationRunner.credential_expires_at), Integer)
+        > int(now.timestamp()),
+    )
+    return session.scalars(
+        select(InfraAutomationRunner)
+        .where(
+            InfraAutomationRunner.project_id == project_id,
+            InfraAutomationRunner.workspace_id == workspace_id,
+            InfraAutomationRunner.status == "active",
+        )
+        .order_by(case((current_credential, 0), else_=1), InfraAutomationRunner.id)
+        .limit(1000)
+        .execution_options(populate_existing=True)
+    ).all()
 
 
 def live_count(session, project_id, now, *, excluding=None):
