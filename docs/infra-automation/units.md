@@ -28,6 +28,12 @@ inventory and 8 MiB of project inventory content, subject to the shared engine
 storage quotas. Revisions are immutable; saving a later revision supersedes old
 run eligibility without rewriting historical run evidence.
 
+Authorized readers can recover older revisions through
+`GET /api/v1/infra-automation/units/{inventory_id}/revisions` with explicit
+`project_id` and `workspace_id`. The response contains all retained revision
+summaries in descending version order, at most 32, with `truncated: false`.
+This permits locating a saved revision even when another edit superseded it.
+
 Units, affected IDs, prerequisite IDs and members of each wave sort
 lexicographically before versioned canonical hashing. Input order does not change
 the map or wave digest. Changing source, path, target, environment, scope or edges
@@ -35,12 +41,19 @@ changes the map identity. A wave contains all units whose prerequisites were in
 earlier waves; it describes collection/review order only.
 
 Run integration must preserve an immutable confirmed revision and exact
-unit-to-intake/analysis bindings before collection starts. The combined evidence
+unit-to-intake/analysis bindings before collection starts. Collection and analysis
+cannot depend on a human decision that itself requires the complete bundle.
+The combined evidence
 digest must come from retained server evidence, not a caller-supplied digest.
 Existing canonical target aliases and locks remain authoritative; expiry or
 cancellation cannot release unknown external work, and audited lock break never
 issues an approval. Default unavailable approval-material providers remain
 unavailable.
+
+An identical authenticated start request with its original idempotency key reads
+back the previously admitted run, including after inventory supersession. It does
+not admit new work or renew eligibility. Changed payloads still conflict, and new
+run admission requires the latest inventory revision.
 
 Uploaded and mixed-source bundles remain advisory. Action eligibility requires
 actual admitted collected evidence for every unit, the current immutable revision,

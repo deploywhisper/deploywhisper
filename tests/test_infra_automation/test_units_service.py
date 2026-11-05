@@ -99,6 +99,39 @@ class UnitServiceTests(PreflightServiceTests):
         self.assertEqual(view["evidence"]["status"], "pending")
         self.assertEqual(self.start(revision)["id"], run["id"])
 
+    def test_accepted_replay_survives_inventory_supersession_without_new_authority(
+        self,
+    ):
+        revision = self.save()
+        original = self.start(revision)
+        with self.credentials():
+            units.save_units(
+                SaveUnitsRequest(
+                    project_id=100,
+                    workspace_id=100,
+                    inventory_id=revision["inventory_id"],
+                    expected_version=1,
+                    reason="Supersede reviewed inventory",
+                    map=inventory(),
+                )
+            )
+        self.assertEqual(self.start(revision)["id"], original["id"])
+        new_request = self.request.run.model_dump(mode="json")
+        new_request["idempotency_key"] = "new-start-after-supersession"
+        with self.assertRaises(LifecycleError):
+            self.start(revision, run=new_request)
+        changed = self.request.run.model_dump(mode="json")
+        changed["reason"] = "Different request with original key"
+        with self.assertRaises(LifecycleError):
+            self.start(revision, run=changed)
+        with self.factory() as db:
+            self.assertEqual(
+                db.scalar(select(func.count()).select_from(InfraAutomationRun)), 1
+            )
+        self.member("read-only")
+        with self.assertRaises(auth.TrustedAuthorizationError):
+            self.start(revision)
+
     def test_wrong_confirmation_and_mapping_roll_back_admission(self):
         revision = self.save()
         for change in (
@@ -629,6 +662,71 @@ class UnitTargetTests(unittest.TestCase):
         with self.assertRaises(LifecycleError):
             self.admit(request)
         self.assertEqual(self.case.counts(), before)
+
+    def _assert_decision_order_rejected(self, stage):
+        import json
+        from infra_automation.state import RunRequest
+        from models.repositories import infra_automation_workflows as workflows
+        from tests.test_infra_automation import test_workflow_snapshots as snapshots
+
+        request = self.request(two=True)
+        with self.case.factory() as db:
+            workflow = json.loads(
+                workflows.get_revision(db, request.run.revision_id).canonical_definition
+            )
+        steps = {step["id"]: step for step in workflow["steps"]}
+        steps["collect_1"]["depends_on"] = [
+            "decision" if stage == "intake" else "analyze"
+        ]
+        if stage == "analysis":
+            steps["analyze_1"]["depends_on"] = ["collect_1", "decision"]
+        workflow_ids = snapshots.WorkflowSnapshotTests.publish_fixture(
+            self.case, workflow
+        )
+        with self.case.credentials():
+            from models.repositories import infra_automation_units as repository
+
+            with auth.authorized_session() as session:
+                old = units._revision_view(
+                    repository.revision(session, request.revision_id)
+                )
+            declared = old["plan"]["inventory"]
+            declared["affected"] = ["unit1"]
+            declared["units"][1]["prerequisites"] = ["unit0"]
+            revision = units.save_units(
+                SaveUnitsRequest(
+                    project_id=100,
+                    workspace_id=100,
+                    inventory_id=old["inventory_id"],
+                    expected_version=1,
+                    reason="Declared collection dependency",
+                    map=declared,
+                )
+            )
+        changed = request.model_copy(
+            update={
+                "run": RunRequest(
+                    workflow_id=workflow_ids[0],
+                    revision_id=workflow_ids[1],
+                    workspace_id=100,
+                    idempotency_key="decision-before-" + stage,
+                    reason="Reject circular evidence wait",
+                ),
+                "revision_id": revision["revision_id"],
+                "confirmed_map_digest": revision["map_digest"],
+            }
+        )
+        before = self.case.counts()
+        with self.assertRaises(LifecycleError) as caught:
+            self.admit(changed)
+        self.assertEqual(caught.exception.status_code, 422)
+        self.assertEqual(self.case.counts(), before)
+
+    def test_upstream_decision_before_intake_cannot_deadlock_combined_evidence(self):
+        self._assert_decision_order_rejected("intake")
+
+    def test_upstream_decision_before_analysis_cannot_deadlock_combined_evidence(self):
+        self._assert_decision_order_rejected("analysis")
 
     def test_upstream_external_handoff_is_not_collection_order(self):
         from infra_automation.state import RunRequest

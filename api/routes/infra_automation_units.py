@@ -11,6 +11,7 @@ from infra_automation.contracts import ClosedModel
 from infra_automation.unit_contracts import (
     SaveUnitsRequest,
     UnitRevisionPage,
+    UnitRevisionHistory,
     UnitRevisionView,
     UnitRunRequest,
     UnitRunView,
@@ -41,6 +42,11 @@ class UnitRevisionListResponse(ClosedModel):
     meta: AutomationMeta
 
 
+class UnitRevisionHistoryResponse(ClosedModel):
+    data: UnitRevisionHistory
+    meta: AutomationMeta
+
+
 class UnitValidationResponse(ClosedModel):
     data: UnitValidation
     meta: AutomationMeta
@@ -64,6 +70,19 @@ def save_units(payload: SaveUnitsRequest):
 @router.post("/units/validate", response_model=UnitValidationResponse)
 def validate_units(payload: ValidateUnitsRequest):
     return _response(service.validate_units(payload))
+
+
+@router.get(
+    "/units/{inventory_id}/revisions", response_model=UnitRevisionHistoryResponse
+)
+def revision_history(
+    inventory_id: ObjectId, project_id: ScopeId, workspace_id: ScopeId
+):
+    return _response(
+        service.list_revisions(
+            inventory_id, project_id=project_id, workspace_id=workspace_id
+        )
+    )
 
 
 @router.get(

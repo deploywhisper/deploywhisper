@@ -77,6 +77,11 @@ class UnitRevisionPage(ClosedModel):
     truncated: Literal[False] = False
 
 
+class UnitRevisionHistory(ClosedModel):
+    items: Annotated[list[UnitRevisionSummary], Field(max_length=32)]
+    truncated: Literal[False] = False
+
+
 class UnitRunSnapshot(ClosedModel):
     revision: UnitRevisionView
     bindings: Annotated[list[UnitStepBinding], Field(min_length=1, max_length=25)]

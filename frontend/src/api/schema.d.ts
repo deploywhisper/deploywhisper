@@ -1703,6 +1703,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/infra-automation/units/{inventory_id}/revisions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Revision History */
+        get: operations["revision_history_api_v1_infra_automation_units__inventory_id__revisions_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/infra-automation/units/{inventory_id}/revisions/{revision_id}": {
         parameters: {
             query?: never;
@@ -9705,6 +9722,22 @@ export interface components {
              */
             order_kind: "collection_review";
         };
+        /** UnitRevisionHistory */
+        UnitRevisionHistory: {
+            /** Items */
+            items: components["schemas"]["UnitRevisionSummary"][];
+            /**
+             * Truncated
+             * @default false
+             * @constant
+             */
+            truncated: false;
+        };
+        /** UnitRevisionHistoryResponse */
+        UnitRevisionHistoryResponse: {
+            data: components["schemas"]["UnitRevisionHistory"];
+            meta: components["schemas"]["AutomationMeta"];
+        };
         /** UnitRevisionListResponse */
         UnitRevisionListResponse: {
             data: components["schemas"]["UnitRevisionPage"];
@@ -16732,6 +16765,85 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["UnitValidationResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+        };
+    };
+    revision_history_api_v1_infra_automation_units__inventory_id__revisions_get: {
+        parameters: {
+            query: {
+                project_id: number;
+                workspace_id: number;
+            };
+            header?: never;
+            path: {
+                inventory_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UnitRevisionHistoryResponse"];
                 };
             };
             /** @description Unauthorized */
