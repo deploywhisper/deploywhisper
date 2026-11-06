@@ -10,10 +10,13 @@ import math
 import os
 import re
 import secrets
+import queue
+import socket
 import ssl
 import stat
 import sys
 import time
+import threading
 from urllib.parse import urlencode, urlsplit
 
 from api.errors import build_error
@@ -40,6 +43,9 @@ BASE = "/api/v1/infra-automation"
 _IDENTIFIER = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}\Z")
 _TOKEN = re.compile(r"[A-Za-z0-9_-]{43}\Z")
 _ENV = re.compile(r"[A-Z][A-Z0-9_]{0,127}\Z")
+# Timed-out DNS calls cannot be forcibly interrupted by Python. Keep their
+# daemon workers counted until they exit; repeated calls cannot accumulate them.
+_TRANSPORT_SLOTS = threading.BoundedSemaphore(4)
 
 
 class CliError(Exception):
@@ -98,6 +104,7 @@ def _origin(value):
         port = parsed.port
         if (
             parsed.scheme not in {"http", "https"}
+            or value != f"{parsed.scheme}://{parsed.netloc}"
             or not parsed.hostname
             or parsed.username is not None
             or parsed.password is not None
@@ -239,39 +246,151 @@ def _positive(value):
     return value
 
 
+class _TransportDeadline:
+    def __init__(self, timeout):
+        self.end = time.monotonic() + timeout
+        self.closed = threading.Event()
+        self.lock = threading.Lock()
+        self.socket = None
+
+    def remaining(self):
+        value = self.end - time.monotonic()
+        if self.closed.is_set() or value <= 0:
+            raise CliError(503)
+        return value
+
+    def watch(self, sock):
+        with self.lock:
+            try:
+                self.remaining()
+            except CliError:
+                sock.close()
+                raise
+            self.socket = sock
+
+    def close(self):
+        self.closed.set()
+        with self.lock:
+            sock = self.socket
+            self.socket = None
+        if sock is not None:
+            try:
+                sock.shutdown(socket.SHUT_RDWR)
+            except OSError:
+                pass
+            sock.close()
+
+    def connect(self, address, timeout=None, source_address=None):
+        # Separate DNS from connect: a resolver that finishes after cancellation
+        # must not initiate even a TCP connection, let alone a late POST.
+        answers = socket.getaddrinfo(address[0], address[1], 0, socket.SOCK_STREAM)
+        for family, kind, protocol, _, destination in answers:
+            self.remaining()
+            sock = socket.socket(family, kind, protocol)
+            try:
+                self.watch(sock)
+                sock.settimeout(self.remaining())
+                sock.connect(destination)
+                self.remaining()
+                return sock
+            except OSError:
+                sock.close()
+        raise CliError(503)
+
+
+class _DeadlineConnection(http.client.HTTPConnection):
+    def __init__(self, host, port, deadline):
+        super().__init__(host, port, timeout=deadline.remaining())
+        self.deadline = deadline
+        self._create_connection = deadline.connect
+        self.auto_open = 0
+
+    def send(self, data):
+        remaining = self.deadline.remaining()
+        if self.sock is not None:
+            self.sock.settimeout(remaining)
+        return super().send(data)
+
+
 def _exchange(origin, method, path, headers, body, timeout):
-    """One direct bounded request; http.client never follows redirects/proxies."""
-    parsed = urlsplit(origin)
-    connection = (
-        http.client.HTTPSConnection(
-            parsed.hostname,
-            parsed.port,
-            timeout=timeout,
-            context=ssl.create_default_context(),
-        )
-        if parsed.scheme == "https"
-        else http.client.HTTPConnection(parsed.hostname, parsed.port, timeout=timeout)
-    )
-    deadline = time.monotonic() + timeout
-    try:
-        connection.request(method, path, body=body, headers=headers)
-        with connection.getresponse() as response:
-            raw = bytearray()
-            while len(raw) <= MAX_BODY:
-                remaining = deadline - time.monotonic()
-                if remaining <= 0:
+    """Bound the complete exchange, including DNS, TLS and trickled headers.
+
+    A deadline seals the result channel and closes the owned socket. Workers
+    cannot send after a late DNS/connect return or keep the CLI process alive.
+    """
+    deadline = _TransportDeadline(timeout)
+    slots = _TRANSPORT_SLOTS
+    if not slots.acquire(blocking=False):
+        raise CliError(503)
+    result = queue.Queue(maxsize=1)
+
+    def worker():
+        connection = None
+        try:
+            parsed = urlsplit(origin)
+            secure = parsed.scheme == "https"
+            connection = _DeadlineConnection(
+                parsed.hostname, parsed.port or (443 if secure else 80), deadline
+            )
+            connection.connect()
+            deadline.remaining()
+            if secure:
+                context = ssl.create_default_context()
+                context.set_alpn_protocols(["http/1.1"])
+                deadline.remaining()
+                connection.sock = context.wrap_socket(
+                    connection.sock,
+                    server_hostname=parsed.hostname,
+                    do_handshake_on_connect=False,
+                )
+                deadline.watch(connection.sock)
+                connection.sock.settimeout(deadline.remaining())
+                connection.sock.do_handshake()
+            deadline.remaining()
+            connection.request(
+                method, path, body=body, headers={**headers, "Host": parsed.netloc}
+            )
+            with connection.getresponse() as response:
+                raw = bytearray()
+                while len(raw) <= MAX_BODY:
+                    deadline.remaining()
+                    chunk = response.read1(min(8192, MAX_BODY + 1 - len(raw)))
+                    if not chunk:
+                        break
+                    raw.extend(chunk)
+                if len(raw) > MAX_BODY:
                     raise CliError(503)
-                if connection.sock is not None:
-                    connection.sock.settimeout(remaining)
-                chunk = response.read1(min(8192, MAX_BODY + 1 - len(raw)))
-                if not chunk:
-                    break
-                raw.extend(chunk)
-            if len(raw) > MAX_BODY:
-                raise CliError(503)
-            return response.status, bytes(raw)
+                deadline.remaining()
+                result.put_nowait((response.status, bytes(raw)))
+        except Exception:
+            if not deadline.closed.is_set():
+                result.put_nowait(None)
+        finally:
+            try:
+                if connection is not None:
+                    connection.close()
+            finally:
+                slots.release()
+
+    try:
+        thread = threading.Thread(target=worker, daemon=True, name="automation-http")
+        try:
+            thread.start()
+        except Exception:
+            slots.release()
+            raise
+        # KeyboardInterrupt during Thread.start may happen after native startup.
+        # Keep that ambiguous slot owned by the worker rather than allowing a
+        # replacement to escape the concurrency bound. The CLI exits uncertain.
+        value = result.get(timeout=deadline.remaining())
+        deadline.remaining()
+        if value is None:
+            raise CliError(503)
+        return value
+    except queue.Empty:
+        raise CliError(503) from None
     finally:
-        connection.close()
+        deadline.close()
 
 
 def _error(status, body=None):

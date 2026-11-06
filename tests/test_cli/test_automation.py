@@ -264,6 +264,23 @@ class AutomationCliTests(unittest.TestCase):
         code, _ = self.run_cli("--unknown", self.key)
         self.assertEqual(code, 2)
 
+    def test_noncanonical_https_scheme_is_rejected_before_credentials_are_sent(self):
+        value = json.loads(self.human.read_text())
+        value["origin"] = "HTTPS://example.invalid"
+        self.human.write_text(json.dumps(value))
+        code, result = self.run_cli("status", "run-one")
+        self.assertEqual(code, 2)
+        self.assertEqual(result["error"]["code"], "request_validation_failed")
+        self.assertEqual(self.calls, [])
+
+    def test_canonical_https_uses_secure_human_cookie(self):
+        value = json.loads(self.human.read_text())
+        value["origin"] = "https://example.invalid"
+        self.human.write_text(json.dumps(value))
+        code, _ = self.run_cli("status", "run-one")
+        self.assertEqual(code, 0)
+        self.assertEqual(self.calls[0][3]["Cookie"], f"__Host-dw-session={self.token}")
+
     def test_interrupted_request_reports_unavailable_not_rejected(self):
         def interrupted(*args):
             raise KeyboardInterrupt()
@@ -606,7 +623,9 @@ class AutomationTransportTests(unittest.TestCase):
         import threading
 
         self.seen = []
+        self.stop = threading.Event()
         seen = self.seen
+        stop = self.stop
 
         class Handler(BaseHTTPRequestHandler):
             def log_message(self, *args):
@@ -614,6 +633,19 @@ class AutomationTransportTests(unittest.TestCase):
 
             def do_GET(self):
                 seen.append((self.path, dict(self.headers)))
+                if self.path == "/trickle":
+                    try:
+                        self.wfile.write(b"HTTP/1.1 200 OK\r\nX-Slow: ")
+                        self.wfile.flush()
+                        for _ in range(40):
+                            if stop.wait(0.04):
+                                return
+                            self.wfile.write(b"x")
+                            self.wfile.flush()
+                        self.wfile.write(b"\r\nContent-Length: 2\r\n\r\n{}")
+                    except OSError:
+                        pass
+                    return
                 if self.path == "/redirect":
                     self.send_response(302)
                     self.send_header("Location", "/secret-sink")
@@ -627,11 +659,14 @@ class AutomationTransportTests(unittest.TestCase):
                         else b'{"data":{},"meta":{}}'
                     )
 
+            do_POST = do_GET
+
         self.server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
         thread = threading.Thread(target=self.server.serve_forever, daemon=True)
         thread.start()
 
         def close():
+            self.stop.set()
             self.server.shutdown()
             self.server.server_close()
             thread.join(timeout=2)
@@ -661,6 +696,191 @@ class AutomationTransportTests(unittest.TestCase):
     def test_real_http_oversize_is_bounded(self):
         with self.assertRaises(automation.CliError):
             automation._exchange(self.origin, "GET", "/oversized", {}, None, 2)
+
+    def test_trickled_headers_cannot_extend_total_deadline(self):
+        import time
+
+        started = time.monotonic()
+        with self.assertRaises(automation.CliError) as caught:
+            automation._exchange(self.origin, "GET", "/trickle", {}, None, 0.2)
+        self.assertEqual(caught.exception.status, 503)
+        self.assertLess(time.monotonic() - started, 0.65)
+
+    def test_late_dns_never_sends_request_and_transport_capacity_is_bounded(self):
+        import socket
+        import threading
+        import time
+
+        resolve = socket.getaddrinfo
+        release = threading.Event()
+        resolved = threading.Event()
+
+        def delayed(*args, **kwargs):
+            release.wait(0.8)
+            try:
+                return resolve(*args, **kwargs)
+            finally:
+                resolved.set()
+
+        timer = threading.Timer(0.7, release.set)
+        timer.start()
+        slots = threading.BoundedSemaphore(1)
+        try:
+            with (
+                patch.object(socket, "getaddrinfo", side_effect=delayed) as lookup,
+                patch.object(automation, "_TRANSPORT_SLOTS", slots),
+            ):
+                started = time.monotonic()
+                with self.assertRaises(automation.CliError):
+                    automation._exchange(self.origin, "POST", "/late", {}, b"{}", 0.1)
+                self.assertLess(time.monotonic() - started, 0.4)
+                # A timed-out resolver still owns its slot until it really exits.
+                with self.assertRaises(automation.CliError):
+                    automation._exchange(self.origin, "POST", "/extra", {}, b"{}", 0.1)
+                self.assertEqual(lookup.call_count, 1)
+                release.set()
+                self.assertTrue(resolved.wait(1))
+                self.assertTrue(slots.acquire(timeout=1))
+                slots.release()
+                self.assertEqual(lookup.call_count, 1)
+            self.assertEqual(self.seen, [])
+            with patch.object(automation, "_TRANSPORT_SLOTS", slots):
+                self.assertEqual(
+                    automation._exchange(self.origin, "GET", "/ok", {}, None, 1)[0],
+                    200,
+                )
+        finally:
+            release.set()
+            timer.cancel()
+            timer.join(timeout=1)
+
+    def test_interrupted_thread_start_keeps_slot_until_worker_exits(self):
+        import socket
+        import threading
+
+        resolve = socket.getaddrinfo
+        start = threading.Thread.start
+        entered, release = threading.Event(), threading.Event()
+        slots = threading.BoundedSemaphore(1)
+
+        def delayed(*args, **kwargs):
+            entered.set()
+            release.wait(1)
+            return resolve(*args, **kwargs)
+
+        def interrupted(thread):
+            start(thread)
+            self.assertTrue(entered.wait(1))
+            raise KeyboardInterrupt()
+
+        try:
+            with (
+                patch.object(socket, "getaddrinfo", side_effect=delayed),
+                patch.object(
+                    threading.Thread, "start", side_effect=interrupted, autospec=True
+                ),
+                patch.object(automation, "_TRANSPORT_SLOTS", slots),
+            ):
+                with self.assertRaises(KeyboardInterrupt):
+                    automation._exchange(self.origin, "POST", "/late", {}, b"{}", 2)
+                self.assertFalse(slots.acquire(blocking=False))
+                release.set()
+                self.assertTrue(slots.acquire(timeout=1))
+                slots.release()
+            self.assertEqual(self.seen, [])
+        finally:
+            release.set()
+
+
+class AutomationTlsTests(unittest.TestCase):
+    def test_real_tls_requires_trust_and_checks_hostname(self):
+        from datetime import timedelta
+        from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+        import ssl
+        import threading
+        from cryptography import x509
+        from cryptography.hazmat.primitives import hashes, serialization
+        from cryptography.hazmat.primitives.asymmetric import rsa
+        from cryptography.x509.oid import NameOID
+
+        with tempfile.TemporaryDirectory() as directory:
+            key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+            name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "localhost")])
+            now = datetime.now(timezone.utc)
+            certificate = (
+                x509.CertificateBuilder()
+                .subject_name(name)
+                .issuer_name(name)
+                .public_key(key.public_key())
+                .serial_number(x509.random_serial_number())
+                .not_valid_before(now - timedelta(minutes=1))
+                .not_valid_after(now + timedelta(days=1))
+                .add_extension(
+                    x509.SubjectAlternativeName([x509.DNSName("localhost")]),
+                    critical=False,
+                )
+                .sign(key, hashes.SHA256())
+            )
+            cert_path, key_path = (
+                Path(directory) / "cert.pem",
+                Path(directory) / "key.pem",
+            )
+            cert_path.write_bytes(certificate.public_bytes(serialization.Encoding.PEM))
+            key_path.write_bytes(
+                key.private_bytes(
+                    serialization.Encoding.PEM,
+                    serialization.PrivateFormat.PKCS8,
+                    serialization.NoEncryption(),
+                )
+            )
+            key_path.chmod(0o600)
+            seen = []
+
+            class Handler(BaseHTTPRequestHandler):
+                def log_message(self, *args):
+                    pass
+
+                def do_GET(self):
+                    seen.append(self.path)
+                    self.send_response(200)
+                    self.send_header("Content-Length", "2")
+                    self.end_headers()
+                    self.wfile.write(b"{}")
+
+            server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+            context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+            context.load_cert_chain(cert_path, key_path)
+            server.socket = context.wrap_socket(server.socket, server_side=True)
+            thread = threading.Thread(target=server.serve_forever, daemon=True)
+            thread.start()
+            try:
+                origin = f"https://localhost:{server.server_port}"
+                with self.assertRaises(automation.CliError):
+                    automation._exchange(origin, "GET", "/untrusted", {}, None, 2)
+                trusted = ssl.create_default_context(cafile=str(cert_path))
+                self.assertTrue(trusted.check_hostname)
+                self.assertEqual(trusted.verify_mode, ssl.CERT_REQUIRED)
+                with patch.object(
+                    automation.ssl, "create_default_context", return_value=trusted
+                ):
+                    with self.assertRaises(automation.CliError):
+                        automation._exchange(
+                            f"https://127.0.0.1:{server.server_port}",
+                            "GET",
+                            "/wrong-host",
+                            {},
+                            None,
+                            2,
+                        )
+                    self.assertEqual(
+                        automation._exchange(origin, "GET", "/trusted", {}, None, 2),
+                        (200, b"{}"),
+                    )
+                self.assertEqual(seen, ["/trusted"])
+            finally:
+                server.shutdown()
+                server.server_close()
+                thread.join(timeout=2)
 
 
 class AutomationDispatchTests(unittest.TestCase):

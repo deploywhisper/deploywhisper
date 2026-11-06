@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "workflow_revision_id": "replace-with-published-revision",
+  "project_id": 100,
+  "workspace_id": 100,
+  "source": {
+    "repository_id": "example-repository",
+    "commit_sha": "1111111111111111111111111111111111111111",
+    "origin": "cli"
+  },
+  "inputs": {},
+  "idempotency_key": "example-operation-001"
+}
