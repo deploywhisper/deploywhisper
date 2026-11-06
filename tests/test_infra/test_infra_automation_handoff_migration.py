@@ -18,7 +18,7 @@ import config
 import models.database as database
 
 HEAD = "035_add_infra_handoffs"
-CURRENT_HEAD = "038_add_declared_unit_maps"
+CURRENT_HEAD = "039_add_signed_trigger_intake"
 PREVIOUS = "034_add_infra_decisions"
 MIGRATION = import_module(f"migrations.versions.{HEAD}")
 
@@ -108,13 +108,12 @@ class InfraAutomationHandoffMigrationTests(unittest.TestCase):
             )
             previous = dict(before)
             self.assertEqual({name: after[name] for name in previous}, previous)
-            receiver = import_module(
-                "migrations.versions.036_add_receiver_reconciliation"
-            )
             current = import_module(f"migrations.versions.{CURRENT_HEAD}")
-            self.assertEqual(
-                set(after) - set(previous), set(receiver.GUARDS) | set(current.GUARDS)
-            )
+            added_guards: set[str] = set()
+            while current.revision != HEAD:
+                added_guards.update(getattr(current, "GUARDS", {}))
+                current = import_module(f"migrations.versions.{current.down_revision}")
+            self.assertEqual(set(after) - set(previous), added_guards)
 
     def test_partial_handoff_tables_and_guards_fail_before_create_all(self):
         corruptions = [f"DROP TABLE {table}" for table in MIGRATION.TABLES] + [

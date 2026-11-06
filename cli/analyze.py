@@ -1118,6 +1118,10 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="DeployWhisper CLI")
     subparsers = parser.add_subparsers(dest="command")
 
+    subparsers.add_parser(
+        "automation", help="Use authenticated automation API commands."
+    )
+
     subparsers.add_parser("skills", help="List built-in and custom AI skill statuses.")
     skill_parser = subparsers.add_parser(
         "skill", help="Authoring and package actions for individual skills."
@@ -1526,6 +1530,10 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main() -> None:
+    if sys.argv[1:2] == ["automation"]:
+        from cli.automation import main as automation_main
+
+        raise SystemExit(automation_main(sys.argv[2:]))
     parser = build_parser()
     args = parser.parse_args()
 

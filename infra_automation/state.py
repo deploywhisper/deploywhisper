@@ -12,6 +12,7 @@ from pydantic import (
     StrictInt,
     StrictStr,
     TypeAdapter,
+    model_validator,
 )
 from infra_automation.contracts import ClosedModel, OutputKind, SAFE_INTEGER
 from infra_automation.lifecycle import (
@@ -19,6 +20,8 @@ from infra_automation.lifecycle import (
     MutationRequest,
     Positive,
     CursorEnvelope,
+    UploadedSnapshotSource,
+    CollectedSnapshotSource,
 )
 from infra_automation.workflow_schema import Identifier, Digest
 
@@ -145,7 +148,44 @@ def _log_bytes(value: str) -> str:
     return value
 
 
+class RunOrigin(ClosedModel):
+    version: Annotated[StrictInt, Field(ge=1, le=1)] = 1
+    kind: Literal["manual", "cli", "webhook", "pull_request"]
+    principal_id: Identifier
+    principal_type: Literal["human", "service", "agent"]
+    key_id: Identifier | None = None
+    pr_ref: Annotated[StrictStr, Field(min_length=1, max_length=128)] | None = None
+    sources: Annotated[
+        list[
+            Annotated[
+                UploadedSnapshotSource | CollectedSnapshotSource,
+                Field(discriminator="kind"),
+            ]
+        ],
+        Field(max_length=50),
+    ]
+
+    @model_validator(mode="after")
+    def consistent_origin(self):
+        if self.principal_type == "human":
+            valid = (
+                self.kind in {"manual", "cli"}
+                and self.key_id is None
+                and self.pr_ref is None
+            )
+        else:
+            valid = (
+                self.kind in {"webhook", "cli", "pull_request"}
+                and self.key_id is not None
+                and (self.kind == "pull_request") == (self.pr_ref is not None)
+            )
+        if not valid:
+            raise ValueError("Invalid request origin.")
+        return self
+
+
 class RunView(ClosedModel):
+    origin: RunOrigin | None = None
     id: Identifier
     workflow_id: Identifier
     revision_id: Identifier

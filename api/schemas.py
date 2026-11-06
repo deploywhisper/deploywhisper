@@ -2907,7 +2907,7 @@ class AutomationAuditItem(AutomationClosedModel):
     project_id: AutomationPositive
     workspace_id: AutomationPositive | None
     actor_principal_id: AutomationIdentifier
-    actor_type: Literal["human", "service"]
+    actor_type: Literal["human", "service", "agent"]
     actor_role: Literal[
         "admin", "maintainer", "reviewer", "contributor", "read-only", "coordinator"
     ]
@@ -2920,7 +2920,12 @@ class AutomationAuditItem(AutomationClosedModel):
 
     @model_validator(mode="after")
     def consistent_actor_attribution(self):
-        if (self.actor_type == "service") != (self.actor_role == "coordinator"):
+        allowed = {
+            "human": {"admin", "maintainer", "reviewer", "contributor", "read-only"},
+            "service": {"coordinator", "contributor", "read-only"},
+            "agent": {"contributor", "read-only"},
+        }
+        if self.actor_role not in allowed[self.actor_type]:
             raise ValueError("Invalid automation audit attribution.")
         return self
 

@@ -2012,3 +2012,56 @@ if "InfraAutomationRunUnits" not in globals():
         request_digest: Mapped[str] = mapped_column(String(71), nullable=False)
         evidence_bytes: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
         evidence_digest: Mapped[str | None] = mapped_column(String(71), nullable=True)
+
+
+if "InfraAutomationTriggerClock" not in globals():
+
+    class InfraAutomationTriggerClock(Base):
+        __tablename__ = "infra_automation_trigger_clock"
+        __table_args__ = (CheckConstraint("id = 1", name="ck_trigger_clock_singleton"),)
+        id: Mapped[int] = mapped_column(Integer, primary_key=True)
+        last_seen_at: Mapped[datetime] = mapped_column(
+            DateTime(timezone=True), nullable=False
+        )
+
+
+if "InfraAutomationTriggerNonce" not in globals():
+
+    class InfraAutomationTriggerNonce(Base):
+        __tablename__ = "infra_automation_trigger_nonces"
+        key_id: Mapped[str] = mapped_column(String(128), primary_key=True)
+        nonce_digest: Mapped[str] = mapped_column(String(64), primary_key=True)
+        project_id: Mapped[int] = mapped_column(
+            ForeignKey("projects.id", ondelete="RESTRICT"), nullable=False, index=True
+        )
+        expires_at: Mapped[datetime] = mapped_column(
+            DateTime(timezone=True), nullable=False, index=True
+        )
+        created_at: Mapped[datetime] = mapped_column(
+            DateTime(timezone=True), nullable=False
+        )
+
+
+if "InfraAutomationRunOrigin" not in globals():
+
+    class InfraAutomationRunOrigin(Base):
+        __tablename__ = "infra_automation_run_origins"
+        __table_args__ = (
+            CheckConstraint(
+                "length(origin_bytes) BETWEEN 1 AND 32768", name="ck_run_origin_bytes"
+            ),
+        )
+        run_id: Mapped[str] = mapped_column(
+            ForeignKey("infra_automation_runs.id", ondelete="RESTRICT"),
+            primary_key=True,
+        )
+        origin_bytes: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+        origin_digest: Mapped[str] = mapped_column(String(71), nullable=False)
+        operation_digest: Mapped[str | None] = mapped_column(String(71), nullable=True)
+        key_id: Mapped[str | None] = mapped_column(
+            String(128), nullable=True, index=True
+        )
+        source_repository_id: Mapped[str | None] = mapped_column(
+            String(128), nullable=True
+        )
+        source_commit_sha: Mapped[str | None] = mapped_column(String(40), nullable=True)

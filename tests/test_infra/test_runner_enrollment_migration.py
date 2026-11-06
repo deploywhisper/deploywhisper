@@ -47,7 +47,7 @@ class RunnerEnrollmentMigrationTests(unittest.TestCase):
         with closing(sqlite3.connect(self.path)) as db:
             self.assertEqual(
                 db.execute("SELECT version_num FROM alembic_version").fetchone()[0],
-                "038_add_declared_unit_maps",
+                "039_add_signed_trigger_intake",
             )
             self.assertEqual(db.execute("PRAGMA foreign_key_check").fetchall(), [])
 

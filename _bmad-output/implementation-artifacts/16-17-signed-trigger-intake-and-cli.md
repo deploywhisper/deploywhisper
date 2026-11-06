@@ -1,6 +1,6 @@
 # Story 16.17: Signed Trigger Intake and CLI
 
-Status: backlog
+Status: in-progress
 Preparation: refined
 Release: v1.5.0 | Priority: P0, highest-priority feature
 
@@ -89,14 +89,72 @@ Execute one bounded packet at a time on the story feature branch. Each packet ow
 ## Dev Agent Record
 
 ### Agent Model Used
-Planning refinement only; implementation agent records its model at execution.
+Codex with bounded native implementation and independent review agents.
 
 ### Debug Log References
-Not executed.
+- [Independent entry/interface review](../../docs/verification/infra-automation/16-17/readiness.md).
+- 2026-11-05 independent readiness/interface review verified16.0/16.4/16.11 evidence and the implemented16.15 scoped history/UI dependency. The separate16.15 HTTPS enrollment/real-runner browser gates remain open.
+- Current qualification integrity: `./.venv/bin/python -m pytest tests/test_infra_automation/test_collection_qualification.py tests/test_infra_automation/test_runner_isolation_qualification.py -q` — 9 tests/73 subtests pass.
+- Reviewed interfaces: raw-byte signed route before JSON; protected manifest/environment key references; bounded durable nonce/clock reservation; distinct service-request credential context and machine authority stamp with unchanged human snapshot bytes; server-selected origin channels; thin authenticated HTTP CLI. Account/membership/key versions, expiry and restore state remain live at every effect.
+- Packet estimates: signing/replay2–3; machine authority/admission4–5; CLI2–3; origins/types/docs/browser2–3 review units. No calendar/production-throughput claim.
 
 ### Completion Notes List
-- Story specification prepared; no feature implementation, qualification, public RFC acceptance, release publication or runtime tests performed.
-- Implementation and validation commands above are future obligations, not test results.
+- Backend/CLI checkpoint: pure signing12tests63subtests; combinedbackend77tests161subtests; schema13tests20subtests; realcredential/effectproof9tests68subtests; actualAPInegativeparity10tests43subtests. CLI120tests17subtests and18focused5subtests pass; Ruff/Bandit/scopedtyping checks pass. Broader verification and UI remain pending.
+- Independent review found clock-high-water, project-wide execution-scope, signing-key reflection and post-authenticated payload/operation-binding issues. These are repaired with red/green regressions; final review and source qualification remain obligations.
+- Migration verification:72tests89subtests passed with one stale added-guard expectation; repaired guard-chain check and trigger migration rerun8tests38subtests pass. Full affected shard will be run after integration.
+- Implementation started after independent preparation review. Full story acceptance remains pending.
+- Only explicitly recorded executed checks are proof; remaining validation commands are obligations.
 
 ### File List
-- `_bmad-output/implementation-artifacts/16-17-signed-trigger-intake-and-cli.md` (story specification only).
+- `_bmad-output/implementation-artifacts/16-17-signed-trigger-intake-and-cli.md`
+- `_bmad-output/implementation-artifacts/sprint-status.yaml`
+- `api/routes/infra_automation_triggers.py`
+- `api/schemas.py`
+- `app.py`
+- `cli/analyze.py`
+- `cli/automation.py`
+- `config.py`
+- `docs/verification/infra-automation/16-17/readiness.md`
+- `frontend/src/api/schema.d.ts`
+- `infra_automation/claims.py`
+- `infra_automation/lifecycle.py`
+- `infra_automation/state.py`
+- `infra_automation/trigger_contracts.py`
+- `infra_automation/trigger_signing.py`
+- `migrations/versions/039_add_signed_trigger_intake.py`
+- `models/database.py`
+- `models/repositories/infra_automation_runs.py`
+- `models/repositories/infra_automation_triggers.py`
+- `models/tables.py`
+- `schemas/infra-automation/engine-v1.json`
+- `schemas/infra-automation/trigger-v1.json`
+- `schemas/infra-automation/workflow-lifecycle-v1.json`
+- `services/infra_automation_engine_service.py`
+- `services/infra_automation_engine_support.py`
+- `services/infra_automation_policy.py`
+- `services/infra_automation_service.py`
+- `services/infra_automation_snapshots.py`
+- `services/infra_automation_trigger_authority.py`
+- `services/infra_automation_triggers.py`
+- `services/project_service.py`
+- `tests/test_api/test_infra_automation_triggers.py`
+- `tests/test_api/test_trigger_admission_parity.py`
+- `tests/test_cli/test_automation.py`
+- `tests/test_infra/test_container_contract.py`
+- `tests/test_infra/test_identity_migration.py`
+- `tests/test_infra/test_infra_automation_engine_migration.py`
+- `tests/test_infra/test_infra_automation_handoff_migration.py`
+- `tests/test_infra/test_infra_automation_workflow_migration.py`
+- `tests/test_infra/test_migrations.py`
+- `tests/test_infra/test_project_membership_migration.py`
+- `tests/test_infra/test_receiver_reconciliation_migration.py`
+- `tests/test_infra/test_runner_enrollment_migration.py`
+- `tests/test_infra/test_trigger_migration.py`
+- `tests/test_infra_automation/test_preflight_repository.py`
+- `tests/test_infra_automation/test_trigger_authority.py`
+- `tests/test_infra_automation/test_trigger_intake.py`
+- `tests/test_infra_automation/test_trigger_privileges.py`
+- `tests/test_infra_automation/test_trigger_signing.py`
+
+## Change Log
+- 2026-11-06: Implemented signing, replay/authority, intake/origin and CLI packets; final UI and full verification in progress.

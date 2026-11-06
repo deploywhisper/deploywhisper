@@ -17,7 +17,7 @@ from alembic.config import Config
 import config
 import models.database as database
 
-HEAD = "038_add_declared_unit_maps"
+HEAD = "039_add_signed_trigger_intake"
 PREVIOUS = "029_add_identity_lifecycle"
 
 

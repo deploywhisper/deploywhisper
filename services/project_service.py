@@ -1355,6 +1355,10 @@ def guard_project(
             "role.manage",
         },
     )
+    if principal.credential_audience == "service-request-v1":
+        from services.infra_automation_trigger_authority import enforce_scope
+
+        enforce_scope(principal, project_id, workspace_id)
     member = membership_repository.get_membership(
         session, principal_id=principal.principal_id, project_id=project_id
     )

@@ -23,6 +23,53 @@
       "title": "CancelRunRequest",
       "type": "object"
     },
+    "CollectedSnapshotSource": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "collected",
+          "title": "Kind",
+          "type": "string"
+        },
+        "step_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.:-]*(?![\\s\\S])",
+          "title": "Step Id",
+          "type": "string"
+        },
+        "repository_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.:-]*(?![\\s\\S])",
+          "title": "Repository Id",
+          "type": "string"
+        },
+        "commit_sha": {
+          "maxLength": 40,
+          "minLength": 40,
+          "pattern": "^[0-9a-f]{40}(?![\\s\\S])",
+          "title": "Commit Sha",
+          "type": "string"
+        },
+        "profile_digest": {
+          "maxLength": 71,
+          "minLength": 71,
+          "pattern": "^sha256:[0-9a-f]{64}(?![\\s\\S])",
+          "title": "Profile Digest",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "step_id",
+        "repository_id",
+        "commit_sha",
+        "profile_digest"
+      ],
+      "title": "CollectedSnapshotSource",
+      "type": "object"
+    },
     "CursorEnvelope": {
       "additionalProperties": false,
       "properties": {
@@ -259,6 +306,103 @@
       "title": "RetryAttemptRequest",
       "type": "object"
     },
+    "RunOrigin": {
+      "additionalProperties": false,
+      "properties": {
+        "version": {
+          "default": 1,
+          "maximum": 1,
+          "minimum": 1,
+          "title": "Version",
+          "type": "integer"
+        },
+        "kind": {
+          "enum": [
+            "manual",
+            "cli",
+            "webhook",
+            "pull_request"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "principal_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.:-]*(?![\\s\\S])",
+          "title": "Principal Id",
+          "type": "string"
+        },
+        "principal_type": {
+          "enum": [
+            "human",
+            "service",
+            "agent"
+          ],
+          "title": "Principal Type",
+          "type": "string"
+        },
+        "key_id": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.:-]*(?![\\s\\S])",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Key Id"
+        },
+        "pr_ref": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Pr Ref"
+        },
+        "sources": {
+          "items": {
+            "discriminator": {
+              "mapping": {
+                "collected": "#/$defs/CollectedSnapshotSource",
+                "uploaded": "#/$defs/UploadedSnapshotSource"
+              },
+              "propertyName": "kind"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/$defs/UploadedSnapshotSource"
+              },
+              {
+                "$ref": "#/$defs/CollectedSnapshotSource"
+              }
+            ]
+          },
+          "maxItems": 50,
+          "title": "Sources",
+          "type": "array"
+        }
+      },
+      "required": [
+        "kind",
+        "principal_id",
+        "principal_type",
+        "sources"
+      ],
+      "title": "RunOrigin",
+      "type": "object"
+    },
     "RunPage": {
       "additionalProperties": false,
       "properties": {
@@ -366,6 +510,17 @@
     "RunView": {
       "additionalProperties": false,
       "properties": {
+        "origin": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RunOrigin"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "id": {
           "maxLength": 128,
           "minLength": 1,
@@ -643,6 +798,45 @@
         "lease_until"
       ],
       "title": "StepView",
+      "type": "object"
+    },
+    "UploadedSnapshotSource": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "uploaded",
+          "title": "Kind",
+          "type": "string"
+        },
+        "repository_id": {
+          "default": null,
+          "title": "Repository Id",
+          "type": "null"
+        },
+        "commit_sha": {
+          "default": null,
+          "title": "Commit Sha",
+          "type": "null"
+        },
+        "limitation": {
+          "const": "Uploaded evidence does not establish repository identity or exact-plan custody.",
+          "default": "Uploaded evidence does not establish repository identity or exact-plan custody.",
+          "title": "Limitation",
+          "type": "string"
+        },
+        "step_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.:-]*(?![\\s\\S])",
+          "title": "Step Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "step_id"
+      ],
+      "title": "UploadedSnapshotSource",
       "type": "object"
     },
     "WorkerResult": {

@@ -177,6 +177,43 @@ class AuthorityStamp(ClosedModel):
     advisory_policy_digest: Digest
 
 
+class MachineAuthorityStamp(AuthorityStamp):
+    credential_audience: Literal["service-request-v1"] = "service-request-v1"
+    principal_type: Literal["service", "agent"]
+    key_id: Identifier
+    key_digest: Digest
+    credential_expires_at: Annotated[
+        StrictStr,
+        Field(
+            min_length=20,
+            max_length=20,
+            pattern=r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$",
+        ),
+    ]
+
+    @field_validator("credential_expires_at")
+    @classmethod
+    def valid_expiry(cls, value):
+        datetime.strptime(value, "%Y-%m-%dT%H:%M:%SZ")
+        return value
+
+
+RunAuthority = AuthorityStamp | MachineAuthorityStamp
+
+
+def decode_authority(value) -> RunAuthority:
+    return TypeAdapter(RunAuthority).validate_python(value)
+
+
+def revalidate_authority(value) -> RunAuthority:
+    if type(value) not in {AuthorityStamp, MachineAuthorityStamp}:
+        raise LifecycleError(422)
+    try:
+        return decode_authority(value.model_dump(warnings="error"))
+    except (ValueError, TypeError):
+        raise LifecycleError(422) from None
+
+
 EffectOperation = Literal["start", "claim", "dispatch", "consume"]
 RetentionState = Literal["pending", "accepted", "unknown", "terminal"]
 
@@ -226,7 +263,7 @@ class SnapshotDocument(ClosedModel):
     ]
     policy: AutomationSettings
     advisory_policy: PolicyAdapterSettings
-    authority: AuthorityStamp
+    authority: RunAuthority
     captured_at: Annotated[
         StrictStr,
         Field(
@@ -259,8 +296,8 @@ class SnapshotExport:
         return json.loads(self.canonical_bytes)
 
     @property
-    def authority(self) -> AuthorityStamp:
-        return AuthorityStamp.model_validate(self.data["authority"])
+    def authority(self) -> RunAuthority:
+        return decode_authority(self.data["authority"])
 
     @property
     def snapshot(self) -> SnapshotDocument:

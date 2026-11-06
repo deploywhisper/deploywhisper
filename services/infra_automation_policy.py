@@ -11,6 +11,8 @@ from infra_automation.contracts import SAFE_INTEGER
 from infra_automation.lifecycle import (
     AdvanceEpochRequest,
     AuthorityStamp,
+    MachineAuthorityStamp,
+    revalidate_authority,
     LifecycleError,
     UpdateSettingsRequest,
 )
@@ -305,11 +307,20 @@ def _current_authority(session: Session, stamp: AuthorityStamp):
         # A digest-only change without the atomic epoch hook is not a proven
         # invalidation event and cannot justify deleting evidence.
         raise LifecycleError(503)
+    from services.infra_automation_trigger_authority import live_machine_stamp
+
+    principal_current = (
+        type(stamp) is AuthorityStamp and account.principal_type == "human"
+    ) or (
+        type(stamp) is MachineAuthorityStamp
+        and account.principal_type == stamp.principal_type
+        and live_machine_stamp(session, stamp)
+    )
     current = (
         settings.enabled
         and account.enabled
         and member.enabled
-        and account.principal_type == "human"
+        and principal_current
         and account.authentication_version == stamp.authentication_version
         and member.authorization_version == stamp.membership_version
         and (member.workspace_id is None or member.workspace_id == stamp.workspace_id)
@@ -329,7 +340,7 @@ def check_live_policy(session: Session, stamp: AuthorityStamp, operation: str) -
     Machine audience/attempt authentication belongs to each future machine owner.
     Read/reconcile instead check the current reader, not the historic requester.
     """
-    stamp = support.revalidate(stamp, AuthorityStamp)
+    stamp = revalidate_authority(stamp)
     if type(operation) is not str or operation not in {
         "start",
         "claim",
@@ -367,7 +378,7 @@ def retention_allows_delete(
     expired evidence and a known authority invalidation; age alone is insufficient.
     This predicate neither deletes data nor issues authority.
     """
-    stamp = support.revalidate(stamp, AuthorityStamp)
+    stamp = revalidate_authority(stamp)
     _scoped_rows(session, stamp)
     support.scope(
         session, stamp.project_id, stamp.workspace_id, "automation.admin", mutation=True
