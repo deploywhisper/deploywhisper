@@ -1,0 +1,12 @@
+{
+  "score": 87,
+  "verdict": "revise",
+  "category_match": true,
+  "differences": [
+    "Narrow history origin cells wrap the complete principal ID into many short lines, making each row disproportionately tall."
+  ],
+  "suggestions": [
+    "Keep the history origin summary compact and retain the exact principal ID in the detailed origin section."
+  ],
+  "reasoning": "Existing InfraFlow visual language is preserved, but the new full principal ID makes the 760px history table difficult to scan."
+}

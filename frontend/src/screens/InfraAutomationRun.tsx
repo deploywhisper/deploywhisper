@@ -7,6 +7,7 @@ import { cancelCollectionRun, getCollectionView, validCollectionReason, isConfir
 import { Button } from "../components/ui/Button";
 import { Card } from "../components/ui/Card";
 import { AutomationFrame, scopeQuery, type AutomationContext } from "./InfraAutomationShared";
+import { RunOriginDetails } from "./InfraAutomationOrigin";
 import { RunUnitsPanel } from "./InfraAutomationInventory";
 import { ApprovalReviewPanel } from "./InfraAutomationApprovals";
 
@@ -83,6 +84,7 @@ export function RunSummary({ run }: { run: Run }) {
       {run.cancel_requested && <><dt>Cancellation requested at</dt><dd>{run.cancellation_requested_at ?? "Time unavailable"}</dd></>}
     </dl>
     <p className="dw-muted">Digests above describe the run snapshot, workflow definition and scalar inputs. Artifact digests are shown with their attempt outputs.</p>
+    <RunOriginDetails origin={run.origin} />
   </Card>;
 }
 

@@ -1,0 +1,35 @@
+
+> deploywhisper-ui-a11y@0.0.0 test:ui-review
+> npm --prefix frontend exec -- playwright test --config=frontend/playwright.config.ts infra-automation-triggers.spec.ts
+
+
+Running 1 test using 1 worker
+
+(node:4845) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✘  1 [chromium] › frontend/e2e/infra-automation-triggers.spec.ts:162:3 › signed trigger origin using real composed APIs › manual, CLI, service and agent origins remain distinct and source-pinned (38.0s)
+
+
+  1) [chromium] › frontend/e2e/infra-automation-triggers.spec.ts:162:3 › signed trigger origin using real composed APIs › manual, CLI, service and agent origins remain distinct and source-pinned
+
+    TimeoutError: locator.evaluate: Timeout 15000ms exceeded.
+    Call log:
+      - waiting for getByRole('button', { name: 'Refresh runs', exact: true })
+
+
+      61 |   await expect(control).toBeEnabled();
+      62 |   for (let count = 0; count < 160; count += 1) {
+    > 63 |     if (await control.evaluate((element) => element === document.activeElement)) return;
+         |                       ^
+      64 |     await page.keyboard.press(reverse ? "Shift+Tab" : "Tab");
+      65 |   }
+      66 |   await expect(control).toBeFocused();
+        at tabTo (/private/tmp/deploywhisper-story16-17-ui/frontend/e2e/infra-automation-triggers.spec.ts:63:23)
+        at keyboardActivate (/private/tmp/deploywhisper-story16-17-ui/frontend/e2e/infra-automation-triggers.spec.ts:69:3)
+        at showRun (/private/tmp/deploywhisper-story16-17-ui/frontend/e2e/infra-automation-triggers.spec.ts:146:3)
+        at /private/tmp/deploywhisper-story16-17-ui/frontend/e2e/infra-automation-triggers.spec.ts:197:22
+
+    Error Context: frontend/test-results/infra-automation-triggers--1cd6b--distinct-and-source-pinned-chromium/error-context.md
+
+  1 failed
+    [chromium] › frontend/e2e/infra-automation-triggers.spec.ts:162:3 › signed trigger origin using real composed APIs › manual, CLI, service and agent origins remain distinct and source-pinned

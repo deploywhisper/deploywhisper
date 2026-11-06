@@ -12,6 +12,7 @@ export type RevisionDetail = Schemas["AutomationRevisionDetail"];
 export type RevisionPage = Schemas["AutomationRevisionPage"];
 export type Capabilities = Schemas["AutomationCapabilities"];
 export type Run = Schemas["RunView"];
+export type RunOrigin = Schemas["RunOrigin"];
 export type RunPage = Schemas["RunPage"];
 export type Step = Schemas["StepView"];
 export type StepPage = Schemas["StepPage"];
@@ -129,10 +130,18 @@ export function startPreflight(payload: PreflightRequest, csrf: string): Promise
   return mutate("/preflights", payload, csrf);
 }
 export async function getRuns(scope: AutomationScope, cursor?: string, signal?: AbortSignal): Promise<RunPage> {
-  return checkPage(await read<RunPage>(`${base}/runs?${pagedParams(cursor, scopedParams(scope))}`, signal));
+  const page = checkPage(await read<RunPage>(`${base}/runs?${pagedParams(cursor, scopedParams(scope))}`, signal));
+  for (const run of page.items) {
+    if (!record(run) || !matchesScope(run, scope)) invalid();
+    checkRunOrigin(run);
+  }
+  return page;
 }
-export function getRun(runId: string, signal?: AbortSignal): Promise<Run> {
-  return read(`${base}/runs/${id(runId)}`, signal);
+export async function getRun(runId: string, signal?: AbortSignal): Promise<Run> {
+  const run = await read<Run>(`${base}/runs/${id(runId)}`, signal);
+  if (!record(run) || run.id !== runId) invalid();
+  checkRunOrigin(run);
+  return run;
 }
 export async function getRunSteps(runId: string, cursor?: string, signal?: AbortSignal): Promise<StepPage> {
   return checkPage(await read<StepPage>(`${base}/runs/${id(runId)}/steps?${pagedParams(cursor)}`, signal));
@@ -182,6 +191,37 @@ function utc(value: unknown): value is string {
   const date = new Date(value);
   return Number.isFinite(date.getTime()) && date.toISOString().replace(".000Z", "Z") === value;
 }
+function checkRunOrigin(run: Record<string, unknown>): void {
+  const origin = run.origin;
+  // Origin is additive; old records and old servers do not gain invented attribution.
+  if (origin === undefined || origin === null) return;
+  if (!record(origin) || !onlyKeys(origin, ["version", "kind", "principal_id", "principal_type", "key_id", "pr_ref", "sources"]) ||
+      origin.version !== 1 || !member(origin.kind, ["manual", "cli", "webhook", "pull_request"]) ||
+      !identifier(origin.principal_id) || origin.principal_id !== run.requested_by ||
+      !member(origin.principal_type, ["human", "service", "agent"]) ||
+      !Array.isArray(origin.sources) || origin.sources.length > 50) invalid();
+  if (origin.principal_type === "human") {
+    if (!member(origin.kind, ["manual", "cli"]) || origin.key_id != null || origin.pr_ref != null) invalid();
+  } else if (!member(origin.kind, ["cli", "webhook", "pull_request"]) || !identifier(origin.key_id) ||
+      (origin.kind === "pull_request" ? !singleLineText(origin.pr_ref, 128) || !origin.pr_ref : origin.pr_ref != null)) invalid();
+  const steps = new Set<string>();
+  for (const source of origin.sources) {
+    if (!record(source) || !identifier(source.step_id) || steps.has(source.step_id)) invalid();
+    steps.add(source.step_id);
+    if (source.kind === "uploaded") {
+      if (!onlyKeys(source, ["kind", "step_id", "repository_id", "commit_sha", "limitation"]) || source.repository_id != null || source.commit_sha != null ||
+          source.limitation !== "Uploaded evidence does not establish repository identity or exact-plan custody.") invalid();
+    } else if (source.kind !== "collected" || !onlyKeys(source, ["kind", "step_id", "repository_id", "commit_sha", "profile_digest"]) ||
+        !identifier(source.repository_id) || !commitValue(source.commit_sha) || !digestValue(source.profile_digest)) invalid();
+  }
+}
+
+function validAuditActor(type: unknown, role: unknown): boolean {
+  if (type === "human") return member(role, actorRoles) && role !== "coordinator";
+  if (type === "service") return member(role, ["coordinator", "contributor", "read-only"]);
+  return type === "agent" && member(role, ["contributor", "read-only"]);
+}
+
 function matchesScope(value: Record<string, unknown>, scope: AutomationScope): boolean {
   return value.project_id === scope.projectId && positive(value.workspace_id) && (scope.workspaceId === null || value.workspace_id === scope.workspaceId);
 }
@@ -306,8 +346,7 @@ export async function getAutomationAudit(scope: AutomationScope, cursor?: string
   const page = checkPage(await read<AutomationAuditPage>(`${base}/audit?${pagedParams(cursor, scopedParams(scope))}`, signal));
   for (const event of page.items) {
     if (!record(event) || !identifier(event.id) || event.project_id !== scope.projectId || !(event.workspace_id === null || positive(event.workspace_id)) ||
-        (scope.workspaceId !== null && event.workspace_id !== scope.workspaceId) || !identifier(event.actor_principal_id) || !member(event.actor_type, ["human", "service"]) ||
-        !member(event.actor_role, actorRoles) || (event.actor_type === "service") !== (event.actor_role === "coordinator") || !textValue(event.event_type, 64) || !event.event_type ||
+        (scope.workspaceId !== null && event.workspace_id !== scope.workspaceId) || !identifier(event.actor_principal_id) || !validAuditActor(event.actor_type, event.actor_role) || !textValue(event.event_type, 64) || !event.event_type ||
         !identifier(event.target_id) || !textValue(event.reason, 256) || !utc(event.created_at) ||
         !(event.before_digest === null || digestValue(event.before_digest)) || !(event.after_digest === null || digestValue(event.after_digest))) invalid();
   }

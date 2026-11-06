@@ -1,11 +1,11 @@
 ---
 project_name: 'deploywhisper'
 user_name: 'psaho01'
-date: '2026-11-05'
+date: '2026-11-06'
 sections_completed:
   ['technology_stack', 'language_rules', 'framework_rules', 'testing_rules', 'quality_rules', 'workflow_rules', 'anti_patterns']
 status: 'complete'
-rule_count: 51
+rule_count: 52
 optimized_for_llm: true
 ---
 
@@ -127,6 +127,8 @@ The owner adopted the bounded preflight/handoff plan on 2026-10-07. This is futu
 
 - Story 16.16 uses `infra_automation/unit_map.py` and `services/infra_automation_units.py` for declared inventories (25 units, 200 edges, 128 KiB), immutable revision/run associations in migration038, and exact intake/analysis coverage. Waves describe collection/review order only. Reuse the canonical target registry and locks. Associated decisions require all-unit admitted collected evidence, current revision and server-derived combined digest; the earliest source/custody/policy deadline bounds the whole bundle. Uploaded or mixed bundles remain advisory; collected bindings support repository root only. Inventory supersession/expiry may not change run version, so its UI evidence refreshes independently. Exact accepted unit-run replay precedes latest-revision checks; only new admission requires the latest map. Reject human-decision/handoff ancestors before unit collection or analysis. Bounded32-revision history and explicit same-key retries recover lost responses; failed retries cannot retire earlier uncertainty. See `docs/infra-automation/units.md`.
 
+- Story16.17 signed requests use `trigger_signing.py`, `trigger_contracts.py`, `services/infra_automation_trigger_authority.py` and `infra_automation_triggers.py`. Authenticate bounded exact raw bytes and reserve the durable nonce before parsing; a fresh nonce may recover only the exact authenticated operation. Keep machine authority as the closed subtype of the existing human stamp, with live key/config/account/membership/restore/expiry and durable clock fences at every effect. Reject known signing-key reflection in decoded inputs, resolved snapshots and validation output. Machine reads filter own key/requester and current revision/source scope before pagination. Global-human/project-admin provisioning creates inert nonhuman accounts, never human sessions. Preserve origin independently from later human decisions. CLI credentials are private, transport has a bounded total deadline, and ambiguous outcomes require the same body/idempotency key. See `docs/infra-automation/triggers.md`.
+
 ---
 
 ## Usage Guidelines
@@ -144,4 +146,4 @@ The owner adopted the bounded preflight/handoff plan on 2026-10-07. This is futu
 - Update it when tooling, validation commands, or architecture boundaries materially change.
 - Remove rules that become obsolete or are contradicted by the current codebase.
 
-Last Updated: 2026-11-05
+Last Updated: 2026-11-06

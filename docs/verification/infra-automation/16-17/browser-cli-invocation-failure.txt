@@ -1,0 +1,30 @@
+
+> deploywhisper-ui-a11y@0.0.0 test:ui-review
+> npm --prefix frontend exec -- playwright test --config=frontend/playwright.config.ts infra-automation-triggers.spec.ts
+
+
+Running 1 test using 1 worker
+
+(node:99989) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✘  1 [chromium] › frontend/e2e/infra-automation-triggers.spec.ts:153:3 › signed trigger origin using real composed APIs › manual, CLI, service and agent origins remain distinct and source-pinned (804ms)
+
+
+  1) [chromium] › frontend/e2e/infra-automation-triggers.spec.ts:153:3 › signed trigger origin using real composed APIs › manual, CLI, service and agent origins remain distinct and source-pinned
+
+    Error: The real synthetic CLI/signed API exercise did not complete. Synthetic CLI human-request failed: exit=2, code=unavailable.
+
+      118 |     const stderr = (failure as { stderr?: Buffer }).stderr?.toString() ?? "";
+      119 |     const safe = stderr.match(/Synthetic CLI [a-z-]+ failed: exit=-?\d+, code=[a-z_]+\./)?.[0] ?? stderr.match(/Disposable signed-origin fixture failed \([A-Za-z]+, status=(?:None|\d+)\)\./)?.[0];
+    > 120 |     throw new Error(`The real synthetic CLI/signed API exercise did not complete.${safe ? ` ${safe}` : ""}`);
+          |           ^
+      121 |   }
+      122 | }
+      123 |
+        at exerciseOrigins (/private/tmp/deploywhisper-story16-17-ui/frontend/e2e/infra-automation-triggers.spec.ts:120:11)
+        at /private/tmp/deploywhisper-story16-17-ui/frontend/e2e/infra-automation-triggers.spec.ts:155:18
+
+    Error Context: frontend/test-results/infra-automation-triggers--1cd6b--distinct-and-source-pinned-chromium/error-context.md
+
+  1 failed
+    [chromium] › frontend/e2e/infra-automation-triggers.spec.ts:153:3 › signed trigger origin using real composed APIs › manual, CLI, service and agent origins remain distinct and source-pinned
