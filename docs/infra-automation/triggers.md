@@ -197,6 +197,10 @@ collector provenance.
 
 ## Authenticated CLI
 
+From a source checkout, use `python cli.py automation`. The runtime container
+ships the equivalent module entrypoint, `python -m cli.analyze automation`;
+it does not contain the checkout-only top-level `cli.py` file.
+
 The existing entrypoint dispatches the new group before legacy role/environment
 handling:
 

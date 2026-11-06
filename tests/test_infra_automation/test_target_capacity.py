@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from contextlib import contextmanager
 from datetime import datetime, timedelta
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -27,6 +28,23 @@ from tests.test_infra_automation import test_target_admission as fixture
 
 
 class TargetCapacityTests(fixture.TargetAdmissionTests):
+    @contextmanager
+    def target_charges(self):
+        """Observe target allocation independently of other admission metadata."""
+        amounts = []
+        capture = targets.capture_run_targets
+
+        def tracked(*args, **kwargs):
+            with patch.object(claims, "_charge", wraps=claims._charge) as charge:
+                result = capture(*args, **kwargs)
+            amounts.extend(
+                call.args[2] for call in charge.call_args_list if call.args[2]
+            )
+            return result
+
+        with patch.object(targets, "capture_run_targets", side_effect=tracked):
+            yield amounts
+
     @staticmethod
     def bookkeeping_size(values):
         return len(
@@ -67,9 +85,8 @@ class TargetCapacityTests(fixture.TargetAdmissionTests):
     def test_lock_reservation_covers_longest_utf8_break_reason(self):
         self.register()
         request = self.request("target-one", "target-two")
-        with patch.object(claims, "_charge", wraps=claims._charge) as charge:
+        with self.target_charges() as positive:
             created = self.admit(request)
-        positive = [call.args[2] for call in charge.call_args_list if call.args[2]]
         self.assertEqual(len(positive), 1)
         with self.factory() as session:
             allocated, locks, _ = self.captured_allocation(
@@ -126,11 +143,8 @@ class TargetCapacityTests(fixture.TargetAdmissionTests):
         before = self.counts()
         with self.assertRaises(RollbackProbe):
             with self.credentials(), authorization.authorized_session() as session:
-                with patch.object(claims, "_charge", wraps=claims._charge) as charge:
+                with self.target_charges() as positive:
                     created = self.admit(request)
-                positive = [
-                    call.args[2] for call in charge.call_args_list if call.args[2]
-                ]
                 self.assertEqual(len(positive), 1)
                 _, locks, copies = self.captured_allocation(
                     session, created["id"], positive[0]

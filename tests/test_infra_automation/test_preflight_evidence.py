@@ -133,12 +133,13 @@ class PreflightEvidenceTests(LifecycleCase):
             row = runs.get_run(db, self.run_id)
             row.state = "failed"
             row.version += 1
+            expected_version = row.version
         first = self.project(manifest=True).model_dump(mode="json")
         self.engine.dispose()
         second = self.project(manifest=True).model_dump(mode="json")
         self.assertEqual(first, second)
         self.assertEqual(second["run_state"], "failed")
-        self.assertEqual(second["run_version"], 2)
+        self.assertEqual(second["run_version"], expected_version)
         self.assertIn("Analysis did not complete successfully.", second["limitations"])
 
     def test_freshness_uses_evidence_ttl_not_short_execution_timeout(self):
