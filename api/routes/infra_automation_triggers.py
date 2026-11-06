@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from fastapi import APIRouter, Depends, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.routing import APIRoute
@@ -123,7 +125,7 @@ class SignedTriggerRoute(ApiRoute):
         return handler
 
 
-errors = {
+errors: dict[int | str, dict[str, Any]] = {
     status: {"model": AutomationErrorResponse}
     for status in (401, 403, 409, 422, 429, 503)
 }
