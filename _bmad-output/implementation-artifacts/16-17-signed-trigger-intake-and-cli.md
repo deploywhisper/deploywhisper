@@ -107,6 +107,7 @@ Codex with bounded native protocol, backend, CLI, privilege-proof, UI, browser,
 documentation and independent review lanes.
 
 ### Debug Log References
+- [PR217 conflict and CI repair](../../docs/verification/infra-automation/16-17/pr217-ci-repair.md): base refreshed after backend squash; stale test request clock repaired without weakening runtime fences.
 - [Publication browser proof](../../docs/verification/infra-automation/16-17/closeout-browser-proof.md) and [backend closeout](../../docs/verification/infra-automation/16-17/backend-closeout.md).
 - [Entry review](../../docs/verification/infra-automation/16-17/readiness.md).
 - [Implementation, commands and validation](../../docs/verification/infra-automation/16-17/results.md).
@@ -115,6 +116,7 @@ documentation and independent review lanes.
 - [Structured results and log hashes](../../docs/verification/infra-automation/16-17/validation-summary.json).
 
 ### Completion Notes List
+- PR217 CI repair: retained complete UI story/sprint records while merging backend squash48a9a9a from develop; resolved tree equals9947f8e before the test repair. Decision-matrix request time now refreshes at signing; deterministic red/green regression verifies real403 denials for all four principal/role pairs after slow setup. Entire privilege module10tests72subtests passes. Production code and negative-clock guards unchanged; UI validation not applicable. Fresh exact-head CI must pass before repair closure.
 - 2026-11-09 GitHub analysis follow-up: explicit TLS1.2 minimum added to CLI and TLS fixtures after two CodeQL protocol-default alerts. WholeCLI127/17subtests, automationCLI25/5subtests and productionPython3.11 TLS2tests pass; no certificate/hostname checks disabled. Fresh Compose rerun on corrected CLI1test28.7s/12screens/axe0/visual94; original5970 restored healthy. Final GitHub checks and root smoke validate the publication head; no suppression or support expansion.
 - 2026-11-09 Git Flow closeout: both formal findings are resolved and the exact tested runtime/source hashes remain current. Fresh standalone backend51tests/65subtests and generated-contract frontend typecheck pass. Fresh production Compose browser1test28.7s,12screenshots1440/760,zeroaxecritical/serious andvisual94 pass; original container5970d092 restored healthy and private fixtures removed. Separate backend-for-UI and dependent origin-UI PRs target develop, backend first. Story-owned contract is complete; existing production-qualification gates remain with their owning stories. Publication is explicitly authorized; no merge, deployment or release is requested.
 - 2026-11-07 review follow-up: CR17-1/CR17-2 resolved. Nine clock regressions plus project/report authorization prove successful-effect clock retention, rollback-only observations under the same SQLite reservation, storage failure, released-savepoint COMMIT failure and lost-driver-reservation replacement preservation. Signed OpenAPI declares all four headers on all five operations; regenerated types and pre-parser denial assertions pass.
@@ -132,6 +134,7 @@ documentation and independent review lanes.
 - BMad help handoff: code-review closure on separate local backend/CLI and UI branches. No public push, PR, credential setup or release was performed by this development task.
 
 ### File List
+- `docs/verification/infra-automation/16-17/pr217-ci-repair.md`
 - `docs/verification/infra-automation/16-17/backend-closeout.md`
 - `docs/verification/infra-automation/16-17/closeout-browser-output.txt`
 - `docs/verification/infra-automation/16-17/closeout-browser-proof.json`
@@ -259,6 +262,7 @@ documentation and independent review lanes.
 - `tests/test_infra_automation/test_trigger_signing.py`
 
 ## Change Log
+- 2026-11-09: Refreshed PR217 from develop after backend squash; corrected stale decision-matrix fixture time and added deterministic regression for coverage-loaded CI.
 - 2026-11-09: Verified unchanged tested source and fresh production Compose proof; accepted story closeout and separate backend/UI publication layout; marked done.
 - 2026-11-07: Resolved both formal review findings; repaired loss-of-SQLite-reservation cleanup compatibility; completed full final validation and returned to review.
 - 2026-11-06: Implemented all four packets, repaired independent review and verification findings, completed required checks and advanced to review.
