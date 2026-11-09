@@ -46,3 +46,11 @@ above remain historical proof for those source bytes; GitHub CI and a fresh
 root unittest run validate the final publication head. No CodeQL suppression or
 weak TLS fixture was introduced. The fresh browser source/image hashes include
 the corrected CLI; its updated result is1test28.7s with12screens/axe0/visual94.
+
+## UI test assertion follow-up
+
+UI CodeQL identified the test-only tag-stripping expression used to inspect a
+static summary. It now matches the bounded plain-text span and checks its
+expected visible label without rewriting HTML. Production rendering is unchanged.
+Fresh frontend479tests/2compatibilitychecks, typecheck and production asset build
+pass. No sanitizer suppression or product/flow/style change was introduced.

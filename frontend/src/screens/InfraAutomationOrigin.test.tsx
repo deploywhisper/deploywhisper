@@ -41,7 +41,8 @@ describe("run origin presentation", () => {
   it("keeps long principal IDs out of compact history text while retaining exact detail", () => {
     const origin = { ...machine, principal_id: "a".repeat(48) };
     const summary = renderToStaticMarkup(<RunOriginSummary origin={origin} />);
-    const visible = summary.replace(/<[^>]*>/g, "");
+    const visible = summary.match(/^<span\b[^>]*>([^<]*)<\/span>$/)?.[1];
+    expect(visible).toBe("Signed PR request · Agent");
     expect(visible).toContain("Signed PR request"); expect(visible).toContain("Agent");
     expect(visible).not.toContain(origin.principal_id);
     expect(renderToStaticMarkup(<RunOriginDetails origin={origin} />)).toContain(origin.principal_id);
