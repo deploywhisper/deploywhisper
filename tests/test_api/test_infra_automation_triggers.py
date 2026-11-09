@@ -16,6 +16,7 @@ from infra_automation.trigger_signing import (
     TIMESTAMP_HEADER,
     NONCE_HEADER,
     SIGNATURE_HEADER,
+    SIGNED_PATHS,
 )
 from models.tables import InfraAutomationTriggerNonce, IdentitySession, IdentityAccount
 from tests.test_infra_automation import test_trigger_authority as fixtures
@@ -195,3 +196,48 @@ class SignedTriggerApiTests(fixtures.TriggerFixture):
         self.assertIn(
             "origin", schema["components"]["schemas"]["RunView"]["properties"]
         )
+
+    def test_openapi_documents_required_signing_headers_on_every_signed_operation(self):
+        schema = self.client.app.openapi()
+        formats = {
+            KEY_ID_HEADER: r"^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+            TIMESTAMP_HEADER: r"^[1-9][0-9]{0,15}$",
+            NONCE_HEADER: r"^[A-Za-z0-9_-]{16,128}$",
+            SIGNATURE_HEADER: r"^sha256=[0-9a-f]{64}$",
+        }
+        for path in SIGNED_PATHS:
+            with self.subTest(path=path):
+                operation = schema["paths"][path]["post"]
+                headers = {
+                    parameter["name"]: parameter
+                    for parameter in operation.get("parameters", [])
+                    if parameter["in"] == "header"
+                }
+                self.assertEqual(set(headers), set(formats))
+                for name, pattern in formats.items():
+                    self.assertTrue(headers[name]["required"])
+                    self.assertEqual(headers[name]["schema"]["type"], "string")
+                    self.assertEqual(headers[name]["schema"]["pattern"], pattern)
+                    self.assertTrue(headers[name]["description"])
+                self.assertIn("HMAC-SHA256", operation["description"])
+                self.assertIn("exact raw body bytes", operation["description"])
+                self.assertIn("before JSON parsing", operation["description"])
+                self.assertIn("nonce", operation["description"])
+        human = schema["paths"]["/api/v1/infra-automation/triggers/principals"]["post"]
+        self.assertFalse(
+            any(item["name"] in formats for item in human.get("parameters", []))
+        )
+
+    def test_missing_signing_headers_rejects_before_parsing_every_signed_operation(
+        self,
+    ):
+        with patch.object(routes, "_bounded_body", AsyncMock()) as parser:
+            for path in SIGNED_PATHS:
+                with self.subTest(path=path):
+                    response = self.client.post(
+                        path,
+                        content=b'{"broken":',
+                        headers={"Content-Type": "application/json"},
+                    )
+                    self.assertEqual(response.status_code, 401, response.text)
+            parser.assert_not_awaited()

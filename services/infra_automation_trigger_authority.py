@@ -8,13 +8,14 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 from contextvars import ContextVar
+from dataclasses import dataclass
 from datetime import datetime, timezone
 import hashlib
 import hmac
 import json
 import secrets
 
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.exc import SQLAlchemyError
 
 import config
@@ -166,6 +167,14 @@ def load_key(key_id):
         raise LifecycleError(503) from None
 
 
+@dataclass
+class _ClockObservation:
+    at: datetime
+
+    def __call__(self, session):
+        _retain_clock(session, self.at)
+
+
 def _check_clock(session, now, *, require_existing):
     clock = session.get(InfraAutomationTriggerClock, 1, populate_existing=True)
     if clock is None:
@@ -174,6 +183,29 @@ def _check_clock(session, now, *, require_existing):
         return
     if now < clock.last_seen_at.replace(tzinfo=timezone.utc):
         raise LifecycleError(503)
+    observation = auth.register_operation_observation(
+        session, "signed-trigger-clock", _ClockObservation(now)
+    )
+    if type(observation) is not _ClockObservation or now < observation.at:
+        raise LifecycleError(503)
+    observation.at = now
+    _retain_clock(session, now)
+
+
+def _retain_clock(session, now):
+    """Advance only the checked clock; also used after business rollback."""
+    try:
+        session.execute(
+            update(InfraAutomationTriggerClock)
+            .where(
+                InfraAutomationTriggerClock.id == 1,
+                InfraAutomationTriggerClock.last_seen_at < now,
+            )
+            .values(last_seen_at=now)
+            .execution_options(synchronize_session=False)
+        )
+    except SQLAlchemyError:
+        raise LifecycleError(503) from None
 
 
 def _live_key(session, definition, fingerprint, *, now):
