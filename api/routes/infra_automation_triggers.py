@@ -129,6 +129,80 @@ errors: dict[int | str, dict[str, Any]] = {
     status: {"model": AutomationErrorResponse}
     for status in (401, 403, 409, 422, 429, 503)
 }
+_SIGNED_OPENAPI: dict[str, Any] = {
+    "description": (
+        "Authenticate using all four required signing headers. HMAC-SHA256 binds "
+        "the version-1 length-delimited key ID, POST method, exact operation path, "
+        "timestamp, nonce and SHA-256 digest of the exact raw body bytes. "
+        "Authentication and durable nonce reservation occur before JSON parsing. "
+        "Use a fresh cryptographically random nonce and a canonical positive Unix "
+        "timestamp strictly within 300 seconds of server UTC time. Reencoding the "
+        "body invalidates the signature. Cookie and Authorization credentials, "
+        "duplicate signing headers, query strings and path aliases are rejected. "
+        "The signing key's live principal and scope allowlists supply authority; "
+        "signed credentials never grant human approval or publication authority. "
+        "See docs/infra-automation/triggers.md for the framing and sender recipe."
+    ),
+    "parameters": [
+        {
+            "name": KEY_ID_HEADER,
+            "in": "header",
+            "required": True,
+            "description": "Configured scoped signing-key identifier, not the secret key.",
+            "schema": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128,
+                "pattern": r"^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+            },
+        },
+        {
+            "name": TIMESTAMP_HEADER,
+            "in": "header",
+            "required": True,
+            "description": (
+                "Positive Unix seconds, at most 9007199254740991, without leading "
+                "zeros or whitespace; absolute server clock skew must be less than 300 seconds."
+            ),
+            "schema": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 16,
+                "pattern": r"^[1-9][0-9]{0,15}$",
+            },
+        },
+        {
+            "name": NONCE_HEADER,
+            "in": "header",
+            "required": True,
+            "description": (
+                "Fresh cryptographically random nonce; durable uniqueness is enforced "
+                "per key through the authenticated request's expiry window."
+            ),
+            "schema": {
+                "type": "string",
+                "minLength": 16,
+                "maxLength": 128,
+                "pattern": r"^[A-Za-z0-9_-]{16,128}$",
+            },
+        },
+        {
+            "name": SIGNATURE_HEADER,
+            "in": "header",
+            "required": True,
+            "description": (
+                "HMAC-SHA256 of the version-1 length-delimited signing representation; "
+                "sha256= followed by the lowercase 64-hex MAC. Never send the secret key."
+            ),
+            "schema": {
+                "type": "string",
+                "minLength": 71,
+                "maxLength": 71,
+                "pattern": r"^sha256=[0-9a-f]{64}$",
+            },
+        },
+    ],
+}
 router = APIRouter(
     prefix="/api/v1/infra-automation/triggers",
     route_class=SignedTriggerRoute,
@@ -137,23 +211,35 @@ router = APIRouter(
 )
 
 
-@router.post("/webhook", response_model=AutomationRunResponse)
-@router.post("/cli/run", response_model=AutomationRunResponse)
+@router.post(
+    "/webhook", response_model=AutomationRunResponse, openapi_extra=_SIGNED_OPENAPI
+)
+@router.post(
+    "/cli/run", response_model=AutomationRunResponse, openapi_extra=_SIGNED_OPENAPI
+)
 def webhook(payload: TriggerRequest):
     return _response(service.request_trigger(payload))
 
 
-@router.post("/validate", response_model=AutomationValidationResponse)
+@router.post(
+    "/validate",
+    response_model=AutomationValidationResponse,
+    openapi_extra=_SIGNED_OPENAPI,
+)
 def validate(payload: ValidateWorkflowRequest):
     return _response(service.validate_signed(payload))
 
 
-@router.post("/status", response_model=AutomationRunResponse)
+@router.post(
+    "/status", response_model=AutomationRunResponse, openapi_extra=_SIGNED_OPENAPI
+)
 def status(payload: TriggerStatusRequest):
     return _response(service.signed_status(payload))
 
 
-@router.post("/list", response_model=AutomationRunListResponse)
+@router.post(
+    "/list", response_model=AutomationRunListResponse, openapi_extra=_SIGNED_OPENAPI
+)
 def list_runs(payload: TriggerListRequest):
     return _response(service.signed_list(payload))
 

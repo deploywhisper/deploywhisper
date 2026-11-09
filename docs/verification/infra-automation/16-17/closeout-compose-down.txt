@@ -1,0 +1,6 @@
+ Container deploywhisper-story16-17-deploywhisper-1 Stopping
+ Container deploywhisper-story16-17-deploywhisper-1 Stopped
+ Container deploywhisper-story16-17-deploywhisper-1 Removing
+ Container deploywhisper-story16-17-deploywhisper-1 Removed
+ Network deploywhisper-story16-17_default Removing
+ Network deploywhisper-story16-17_default Removed

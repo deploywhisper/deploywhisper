@@ -1780,7 +1780,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Webhook */
+        /**
+         * Webhook
+         * @description Authenticate using all four required signing headers. HMAC-SHA256 binds the version-1 length-delimited key ID, POST method, exact operation path, timestamp, nonce and SHA-256 digest of the exact raw body bytes. Authentication and durable nonce reservation occur before JSON parsing. Use a fresh cryptographically random nonce and a canonical positive Unix timestamp strictly within 300 seconds of server UTC time. Reencoding the body invalidates the signature. Cookie and Authorization credentials, duplicate signing headers, query strings and path aliases are rejected. The signing key's live principal and scope allowlists supply authority; signed credentials never grant human approval or publication authority. See docs/infra-automation/triggers.md for the framing and sender recipe.
+         */
         post: operations["webhook_api_v1_infra_automation_triggers_cli_run_post"];
         delete?: never;
         options?: never;
@@ -1797,7 +1800,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Webhook */
+        /**
+         * Webhook
+         * @description Authenticate using all four required signing headers. HMAC-SHA256 binds the version-1 length-delimited key ID, POST method, exact operation path, timestamp, nonce and SHA-256 digest of the exact raw body bytes. Authentication and durable nonce reservation occur before JSON parsing. Use a fresh cryptographically random nonce and a canonical positive Unix timestamp strictly within 300 seconds of server UTC time. Reencoding the body invalidates the signature. Cookie and Authorization credentials, duplicate signing headers, query strings and path aliases are rejected. The signing key's live principal and scope allowlists supply authority; signed credentials never grant human approval or publication authority. See docs/infra-automation/triggers.md for the framing and sender recipe.
+         */
         post: operations["webhook_api_v1_infra_automation_triggers_webhook_post"];
         delete?: never;
         options?: never;
@@ -1814,7 +1820,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Validate */
+        /**
+         * Validate
+         * @description Authenticate using all four required signing headers. HMAC-SHA256 binds the version-1 length-delimited key ID, POST method, exact operation path, timestamp, nonce and SHA-256 digest of the exact raw body bytes. Authentication and durable nonce reservation occur before JSON parsing. Use a fresh cryptographically random nonce and a canonical positive Unix timestamp strictly within 300 seconds of server UTC time. Reencoding the body invalidates the signature. Cookie and Authorization credentials, duplicate signing headers, query strings and path aliases are rejected. The signing key's live principal and scope allowlists supply authority; signed credentials never grant human approval or publication authority. See docs/infra-automation/triggers.md for the framing and sender recipe.
+         */
         post: operations["validate_api_v1_infra_automation_triggers_validate_post"];
         delete?: never;
         options?: never;
@@ -1831,7 +1840,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Status */
+        /**
+         * Status
+         * @description Authenticate using all four required signing headers. HMAC-SHA256 binds the version-1 length-delimited key ID, POST method, exact operation path, timestamp, nonce and SHA-256 digest of the exact raw body bytes. Authentication and durable nonce reservation occur before JSON parsing. Use a fresh cryptographically random nonce and a canonical positive Unix timestamp strictly within 300 seconds of server UTC time. Reencoding the body invalidates the signature. Cookie and Authorization credentials, duplicate signing headers, query strings and path aliases are rejected. The signing key's live principal and scope allowlists supply authority; signed credentials never grant human approval or publication authority. See docs/infra-automation/triggers.md for the framing and sender recipe.
+         */
         post: operations["status_api_v1_infra_automation_triggers_status_post"];
         delete?: never;
         options?: never;
@@ -1848,7 +1860,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** List Runs */
+        /**
+         * List Runs
+         * @description Authenticate using all four required signing headers. HMAC-SHA256 binds the version-1 length-delimited key ID, POST method, exact operation path, timestamp, nonce and SHA-256 digest of the exact raw body bytes. Authentication and durable nonce reservation occur before JSON parsing. Use a fresh cryptographically random nonce and a canonical positive Unix timestamp strictly within 300 seconds of server UTC time. Reencoding the body invalidates the signature. Cookie and Authorization credentials, duplicate signing headers, query strings and path aliases are rejected. The signing key's live principal and scope allowlists supply authority; signed credentials never grant human approval or publication authority. See docs/infra-automation/triggers.md for the framing and sender recipe.
+         */
         post: operations["list_runs_api_v1_infra_automation_triggers_list_post"];
         delete?: never;
         options?: never;
@@ -17448,7 +17463,16 @@ export interface operations {
     webhook_api_v1_infra_automation_triggers_cli_run_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Configured scoped signing-key identifier, not the secret key. */
+                "X-DeployWhisper-Key-Id": string;
+                /** @description Positive Unix seconds, at most 9007199254740991, without leading zeros or whitespace; absolute server clock skew must be less than 300 seconds. */
+                "X-DeployWhisper-Timestamp": string;
+                /** @description Fresh cryptographically random nonce; durable uniqueness is enforced per key through the authenticated request's expiry window. */
+                "X-DeployWhisper-Nonce": string;
+                /** @description HMAC-SHA256 of the version-1 length-delimited signing representation; sha256= followed by the lowercase 64-hex MAC. Never send the secret key. */
+                "X-DeployWhisper-Signature": string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -17526,7 +17550,16 @@ export interface operations {
     webhook_api_v1_infra_automation_triggers_webhook_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Configured scoped signing-key identifier, not the secret key. */
+                "X-DeployWhisper-Key-Id": string;
+                /** @description Positive Unix seconds, at most 9007199254740991, without leading zeros or whitespace; absolute server clock skew must be less than 300 seconds. */
+                "X-DeployWhisper-Timestamp": string;
+                /** @description Fresh cryptographically random nonce; durable uniqueness is enforced per key through the authenticated request's expiry window. */
+                "X-DeployWhisper-Nonce": string;
+                /** @description HMAC-SHA256 of the version-1 length-delimited signing representation; sha256= followed by the lowercase 64-hex MAC. Never send the secret key. */
+                "X-DeployWhisper-Signature": string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -17604,7 +17637,16 @@ export interface operations {
     validate_api_v1_infra_automation_triggers_validate_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Configured scoped signing-key identifier, not the secret key. */
+                "X-DeployWhisper-Key-Id": string;
+                /** @description Positive Unix seconds, at most 9007199254740991, without leading zeros or whitespace; absolute server clock skew must be less than 300 seconds. */
+                "X-DeployWhisper-Timestamp": string;
+                /** @description Fresh cryptographically random nonce; durable uniqueness is enforced per key through the authenticated request's expiry window. */
+                "X-DeployWhisper-Nonce": string;
+                /** @description HMAC-SHA256 of the version-1 length-delimited signing representation; sha256= followed by the lowercase 64-hex MAC. Never send the secret key. */
+                "X-DeployWhisper-Signature": string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -17682,7 +17724,16 @@ export interface operations {
     status_api_v1_infra_automation_triggers_status_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Configured scoped signing-key identifier, not the secret key. */
+                "X-DeployWhisper-Key-Id": string;
+                /** @description Positive Unix seconds, at most 9007199254740991, without leading zeros or whitespace; absolute server clock skew must be less than 300 seconds. */
+                "X-DeployWhisper-Timestamp": string;
+                /** @description Fresh cryptographically random nonce; durable uniqueness is enforced per key through the authenticated request's expiry window. */
+                "X-DeployWhisper-Nonce": string;
+                /** @description HMAC-SHA256 of the version-1 length-delimited signing representation; sha256= followed by the lowercase 64-hex MAC. Never send the secret key. */
+                "X-DeployWhisper-Signature": string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -17760,7 +17811,16 @@ export interface operations {
     list_runs_api_v1_infra_automation_triggers_list_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Configured scoped signing-key identifier, not the secret key. */
+                "X-DeployWhisper-Key-Id": string;
+                /** @description Positive Unix seconds, at most 9007199254740991, without leading zeros or whitespace; absolute server clock skew must be less than 300 seconds. */
+                "X-DeployWhisper-Timestamp": string;
+                /** @description Fresh cryptographically random nonce; durable uniqueness is enforced per key through the authenticated request's expiry window. */
+                "X-DeployWhisper-Nonce": string;
+                /** @description HMAC-SHA256 of the version-1 length-delimited signing representation; sha256= followed by the lowercase 64-hex MAC. Never send the secret key. */
+                "X-DeployWhisper-Signature": string;
+            };
             path?: never;
             cookie?: never;
         };

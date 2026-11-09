@@ -87,7 +87,14 @@ pending machine effects even if the account version is unchanged.
 Human authority stamps retain their original canonical serialization. New machine
 stamps separately bind the credential policy and expiry; the key expiry caps the
 run window. The durable clock prevents a backwards clock step from reviving
-already-stale machine authority. Restore procedures must advance the restore
+already-stale machine authority. Successful machine checks advance that shared
+floor in the same reserved SQLite transaction as the effect. Business writes
+are isolated behind an operation savepoint: after a rejected operation, those
+writes roll back and only the maximum checked clock observation is committed
+under the still-held reservation. A second process cannot act between rollback
+and clock retention. Observation persistence failures deny the operation; an
+observation lost before a durable commit during a process/storage failure is not
+claimed as retained. Restore procedures must advance the restore
 epoch and reinstall appropriately rotated credentials; do not remove replay
 records or reset the clock to recover access.
 

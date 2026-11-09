@@ -1152,6 +1152,7 @@ def authorized_session(session_factory=None) -> Iterator[Session]:
         or (credentials.service.session_factory if credentials else SessionLocal)
     )
     commit_callbacks: list[Callable[[Callable[[], Session]], None]] = []
+    observations: dict[str, Callable[[Session], None]] = {}
     with factory() as session:
         if session.get_bind().dialect.name != "sqlite":
             raise TrustedAuthorizationError()
@@ -1159,14 +1160,22 @@ def authorized_session(session_factory=None) -> Iterator[Session]:
         rollback_callbacks = ExitStack()
         session.info["project_operation_rollback"] = rollback_callbacks
         session.info["project_operation_commit"] = commit_callbacks
+        session.info["project_operation_observations"] = observations
         transaction_token = None
+        savepoint = None
         connection = None
         try:
             connection = session.connection().connection.driver_connection
             session.connection().exec_driver_sql("BEGIN IMMEDIATE")
             transaction_token = _operation_transaction.set(session.get_transaction())
+            # Keep the outer reservation while a rejected operation rolls back.
+            # Only registered deny-only observations may outlive business writes.
+            savepoint = session.begin_nested()
+            session.connection()  # Materialize SAVEPOINT before raw SQL writes.
             yield session
             _require_operation(session)
+            for persist in observations.values():
+                persist(session)
             session.commit()
         except BaseException:
             # Compensate filesystem writes while SQLite still reserves the
@@ -1176,9 +1185,31 @@ def authorized_session(session_factory=None) -> Iterator[Session]:
                 if connection is not None and connection.in_transaction:
                     rollback_callbacks.close()
             finally:
-                session.rollback()
+                try:
+                    if connection is not None and not connection.in_transaction:
+                        # SQLite may have rolled back independently on storage
+                        # failure. Its savepoints and reservation are already
+                        # gone: discard ORM state without issuing stale SQL or
+                        # persisting observations over a replacement writer.
+                        session.connection().rollback()
+                        session.invalidate()
+                    elif (
+                        savepoint is not None
+                        and session.get_nested_transaction() is savepoint
+                        and observations
+                    ):
+                        savepoint.rollback()
+                        for persist in observations.values():
+                            persist(session)
+                        session.commit()
+                    else:
+                        session.rollback()
+                except BaseException:
+                    session.rollback()
+                    raise
             raise
         finally:
+            session.info.pop("project_operation_observations", None)
             session.info.pop("project_operation_rollback", None)
             session.info.pop("project_operation_commit", None)
             if transaction_token is not None:
@@ -1196,6 +1227,20 @@ def authorized_session(session_factory=None) -> Iterator[Session]:
             logging.getLogger(__name__).warning(
                 "Deferred operation cleanup failed; retained artifacts may remain."
             )
+
+
+def register_operation_observation(
+    session: Session, key: str, callback: Callable[[Session], None]
+) -> Callable[[Session], None]:
+    """Retain a deny-only observation after savepoint rollback, under the lock.
+
+    Internal callbacks may persist only their independently checked observation;
+    never replay business writes or mint authority. Return the existing callback
+    for repeated keys so its monotonic facts survive inner savepoint rollbacks.
+    Reapply observations on successful commit as well as outer rollback.
+    """
+    _require_operation(session)
+    return session.info["project_operation_observations"].setdefault(key, callback)
 
 
 def register_operation_rollback(session: Session, callback: Callable[[], None]) -> None:

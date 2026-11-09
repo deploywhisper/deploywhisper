@@ -1,5 +1,5 @@
 # generated: 2026-05-01
-# last_updated: 2026-11-04
+# last_updated: 2026-11-09
 # project: deploywhisper
 # project_key: NOKEY
 # tracking_system: file-system
@@ -39,7 +39,7 @@
 # - Dev moves story to review, then runs code-review
 
 generated: 2026-05-01
-last_updated: 2026-11-04
+last_updated: 2026-11-09
 project: deploywhisper
 project_key: NOKEY
 tracking_system: file-system
@@ -227,7 +227,7 @@ development_status:
   16-14-opentofu-terraform-collection-and-provenance: review
   16-15-runner-health-and-collection-ux: in-progress
   16-16-declared-multi-unit-preflight-planning: done
-  16-17-signed-trigger-intake-and-cli: review
+  16-17-signed-trigger-intake-and-cli: done
   16-18-operator-recovery-retention-and-network-readiness: backlog
   16-19-production-qualification-and-v1-5-0-release: backlog
   epic-16-retrospective: optional

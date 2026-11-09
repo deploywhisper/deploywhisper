@@ -1,0 +1,6 @@
+ Network deploywhisper-story16-17_default Creating
+ Network deploywhisper-story16-17_default Created
+ Container deploywhisper-story16-17-deploywhisper-1 Creating
+ Container deploywhisper-story16-17-deploywhisper-1 Created
+ Container deploywhisper-story16-17-deploywhisper-1 Starting
+ Container deploywhisper-story16-17-deploywhisper-1 Started

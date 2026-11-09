@@ -1,0 +1,177 @@
+{
+  "story": "16.17",
+  "status": "review",
+  "date": "2026-11-07",
+  "findings_resolved": [
+    "CR17-1",
+    "CR17-2"
+  ],
+  "source_head_before_fixes": "51bb952",
+  "source_hashes": {
+    "services/project_service.py": "f3dc974cdc6eb28122fa123bec4fabc4cf223fd68f3222510181e18ca0a141a2",
+    "services/infra_automation_trigger_authority.py": "bc69d682fd5fd28613608d3c2d56fd5959af940a28e868eac0b9788a2a633aa6",
+    "api/routes/infra_automation_triggers.py": "12c013f738d2c23205352a232095fce188dcc35284efe1ff40f1241631d64525",
+    "tests/test_infra_automation/test_trigger_clock.py": "dea99ed54707ccdb67f1cb87aab18077845a3781987389a1b158e06b2ac6bbeb",
+    "tests/test_api/test_infra_automation_triggers.py": "d7a9246e27a047cc84224ff9eb58d154f4dcf19c0a0e59718e860390ad486a6d",
+    "frontend/src/api/schema.d.ts": "2baa0b3a05272857c734c9163efcd862bfce8ec938653e4acd91965cd56488e8",
+    "docs/verification/infra-automation/16-14/results.json": "58a04315c74fab9ab9bbcf0825e155c6e61def8ffea52c7c721db7e65e77f738"
+  },
+  "environment": {
+    "LLM_API_BASE": "http://127.0.0.1:1",
+    "python311": "3.11.17",
+    "production_image": "sha256:3d5c2573d35a79b86a21d882769a3833852b9ffc840a3ad29fcc0a761b3aed8b"
+  },
+  "checks": {
+    "root_unittest": {
+      "command": "LLM_API_BASE=http://127.0.0.1:1 ./.venv/bin/python -m unittest discover -q",
+      "tests": 1932,
+      "skips": 3,
+      "exit_code": 0,
+      "log": {
+        "path": "/tmp/story16-17-fix-root-final.log",
+        "sha256": "bdb74e8c7d659c6a63cbf7a5744a020fe3e220a8bac080b112416cedf0d8f745"
+      }
+    },
+    "local_ci": {
+      "command": "LLM_API_BASE=http://127.0.0.1:1 bash scripts/ci-local.sh",
+      "targets": [
+        {
+          "target": "tests/test_analysis",
+          "tests": 69,
+          "skips": 0
+        },
+        {
+          "target": "tests/test_api",
+          "tests": 374,
+          "skips": 0
+        },
+        {
+          "target": "tests/test_cli",
+          "tests": 126,
+          "skips": 0
+        },
+        {
+          "target": "tests/test_docs",
+          "tests": 51,
+          "skips": 0
+        },
+        {
+          "target": "tests/test_infra",
+          "tests": 300,
+          "skips": 1
+        },
+        {
+          "target": "tests/test_infra_automation",
+          "tests": 1109,
+          "skips": 1
+        },
+        {
+          "target": "tests/test_llm",
+          "tests": 76,
+          "skips": 1
+        },
+        {
+          "target": "tests/test_models",
+          "tests": 22,
+          "skips": 0
+        },
+        {
+          "target": "tests/test_parsers",
+          "tests": 43,
+          "skips": 0
+        },
+        {
+          "target": "tests/test_services",
+          "tests": 1232,
+          "skips": 0
+        }
+      ],
+      "tests": 3402,
+      "exit_code": 0,
+      "log": {
+        "path": "/tmp/story16-17-fix-ci-local-final.log",
+        "sha256": "882ebb27d5e664cbb5df798122e0c8bd1e3b2323dcb5470dea5c8a6a970c8c5a"
+      }
+    },
+    "api_cli_infra": {
+      "command": "LLM_API_BASE=http://127.0.0.1:1 ./.venv/bin/python -m pytest tests/test_api tests/test_cli tests/test_infra -v --tb=short",
+      "passed": 799,
+      "skips": 1,
+      "subtests": 2433,
+      "exit_code": 0,
+      "log": {
+        "path": "/tmp/story16-17-fix-api-cli-infra-final.log",
+        "sha256": "e7fa9a6ed550f55716093eb00a65a9330b2d78dc2d8da43c46e752d6190d2065"
+      }
+    },
+    "automation": {
+      "command": "LLM_API_BASE=http://127.0.0.1:1 ./.venv/bin/python -m pytest tests/test_infra_automation -v --tb=short",
+      "passed": 1108,
+      "skips": 1,
+      "subtests": 3236,
+      "exit_code": 0,
+      "log": {
+        "path": "/tmp/story16-17-fix-automation-final.log",
+        "sha256": "fced3996de385df018c697f2c380c7dd9ebda043059ab2e589e6f26f1372dc09"
+      }
+    },
+    "python311": {
+      "tests": 27,
+      "exit_code": 0,
+      "log": {
+        "path": "/tmp/story16-17-fix-python311-final.log",
+        "sha256": "b3039b0b4b563b4e5c9022a91d66ad0e262ca04066d6429cef6dd976014534a0"
+      }
+    },
+    "collection_qualification": {
+      "command": "./.venv/bin/python scripts/qualify_collection.py",
+      "checks": 49,
+      "qualified": true,
+      "exit_code": 0,
+      "log": {
+        "path": "/tmp/story16-17-fix-qualification-final.log",
+        "sha256": "3083206218f8265eff0c7318662243a952ffef43e453dec21c697178788a19f3"
+      }
+    },
+    "qualification_integrity": {
+      "tests": 9,
+      "subtests": 86,
+      "exit_code": 0,
+      "log": {
+        "path": "/tmp/story16-17-fix-integrity-final.log",
+        "sha256": "9e696529cf9ee395eca4904f475bede6f9a75660514c19af08c2653e40a9e1cd"
+      }
+    },
+    "frontend": {
+      "commands": [
+        "OPENAPI_URL=/tmp/story16-17-openapi.json npm run ui:gen-api",
+        "npm run ui:typecheck",
+        "npm run ui:test",
+        "npm run ui:build"
+      ],
+      "tests": 479,
+      "compatibility_checks": 2,
+      "result": "passed"
+    },
+    "mypy": {
+      "errors": 317,
+      "changed_runtime_file_errors": 0,
+      "result": "pre-existing baseline unchanged"
+    },
+    "scoped_bandit": {
+      "severity": "all",
+      "confidence": "all",
+      "findings": 0
+    },
+    "independent_review": {
+      "result": "no introduced findings",
+      "final_regression_tests": 10
+    }
+  },
+  "limitations": [
+    "UI validation not applicable: no rendered surface changed",
+    "Existing production TLS/live-runner/browser and wider collector/delivery gates remain with owning stories",
+    "Storage/process failure before durable commit cannot retain an uncommitted observation"
+  ],
+  "public_push_or_pr": false
+}

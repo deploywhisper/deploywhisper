@@ -1,0 +1,195 @@
+ Image deploywhisper-story16-17:ui-proof Building
+#1 [internal] load local bake definitions
+#1 reading from stdin 592B done
+#1 DONE 0.0s
+
+#2 [internal] load build definition from Dockerfile
+#2 transferring dockerfile: 3.50kB done
+#2 DONE 0.0s
+
+#3 [internal] load metadata for docker.io/library/node:26-alpine@sha256:143494b1da2945f061539253adc65e4f1569ddf07da2d384c022c791a9d90a4a
+#3 ...
+
+#4 [internal] load metadata for docker.io/library/python:3.11-slim@sha256:0dd364ba7e10242f07755449e3a3d0e35f9efd987952737b90def6709ab0c5ce
+#4 DONE 1.6s
+
+#3 [internal] load metadata for docker.io/library/node:26-alpine@sha256:143494b1da2945f061539253adc65e4f1569ddf07da2d384c022c791a9d90a4a
+#3 DONE 1.6s
+
+#5 [internal] load .dockerignore
+#5 transferring context: 376B done
+#5 DONE 0.0s
+
+#6 [frontend 1/6] FROM docker.io/library/node:26-alpine@sha256:143494b1da2945f061539253adc65e4f1569ddf07da2d384c022c791a9d90a4a
+#6 DONE 0.0s
+
+#7 [builder 1/7] FROM docker.io/library/python:3.11-slim@sha256:0dd364ba7e10242f07755449e3a3d0e35f9efd987952737b90def6709ab0c5ce
+#7 DONE 0.0s
+
+#8 [internal] load build context
+#8 transferring context: 2.28MB 0.1s done
+#8 DONE 0.1s
+
+#9 [frontend 2/6] WORKDIR /frontend
+#9 CACHED
+
+#10 [frontend 3/6] COPY frontend/package.json frontend/package-lock.json ./
+#10 CACHED
+
+#11 [frontend 4/6] RUN npm ci
+#11 CACHED
+
+#12 [frontend 5/6] COPY frontend/ .
+#12 DONE 0.1s
+
+#13 [frontend 6/6] RUN npm run build            # outputs /frontend/dist
+#13 0.401
+#13 0.401 > deploywhisper-frontend@0.0.0 build
+#13 0.401 > tsc -b && vite build
+#13 0.401
+#13 6.590 vite v8.1.6 building client environment for production...
+#13 6.600 [2K
+transforming...✓ 1856 modules transformed.
+#13 8.304 rendering chunks...
+#13 8.601 computing gzip size...
+#13 8.610 dist/index.html                                                          0.83 kB │ gzip:   0.37 kB
+#13 8.610 dist/assets/inter-vietnamese-400-normal-DMkecbls.woff2                   4.97 kB
+#13 8.610 dist/assets/inter-vietnamese-600-normal-Cc8MFFhd.woff2                   5.10 kB
+#13 8.610 dist/assets/inter-vietnamese-500-normal-DOriooB6.woff2                   5.11 kB
+#13 8.610 dist/assets/inter-greek-ext-400-normal-DGGRlc-M.woff2                    5.26 kB
+#13 8.610 dist/assets/inter-greek-ext-500-normal-C4iEst2y.woff2                    5.42 kB
+#13 8.610 dist/assets/inter-greek-ext-600-normal-DRtmH8MT.woff2                    5.43 kB
+#13 8.610 dist/assets/inter-vietnamese-400-normal-Bbgyi5SW.woff                    6.50 kB
+#13 8.610 dist/assets/inter-vietnamese-500-normal-mJboJaSs.woff                    6.59 kB
+#13 8.610 dist/assets/inter-vietnamese-600-normal-BuLX-rYi.woff                    6.64 kB
+#13 8.610 dist/assets/inter-greek-ext-400-normal-KugGGMne.woff                     7.06 kB
+#13 8.610 dist/assets/inter-greek-ext-500-normal-2j5mBUwD.woff                     7.19 kB
+#13 8.610 dist/assets/inter-greek-ext-600-normal-B8X0CLgF.woff                     7.21 kB
+#13 8.610 dist/assets/jetbrains-mono-vietnamese-wght-normal-Bt-aOZkq.woff2         7.50 kB
+#13 8.610 dist/assets/inter-cyrillic-400-normal-obahsSVq.woff2                     7.71 kB
+#13 8.610 dist/assets/inter-greek-400-normal-B4URO6DV.woff2                        7.77 kB
+#13 8.610 dist/assets/inter-cyrillic-500-normal-BasfLYem.woff2                     7.90 kB
+#13 8.610 dist/assets/inter-greek-500-normal-BIZE56-Y.woff2                        7.92 kB
+#13 8.610 dist/assets/inter-greek-600-normal-plRanbMR.woff2                        7.94 kB
+#13 8.610 dist/assets/inter-cyrillic-600-normal-CWCymEST.woff2                     7.97 kB
+#13 8.610 dist/assets/plus-jakarta-sans-vietnamese-wght-normal-qRpaaN48.woff2      8.35 kB
+#13 8.610 dist/assets/jetbrains-mono-greek-wght-normal-Bw9x6K1M.woff2              9.00 kB
+#13 8.610 dist/assets/inter-cyrillic-400-normal-HOLc17fK.woff                      9.78 kB
+#13 8.610 dist/assets/inter-greek-400-normal-q2sYcFCs.woff                         9.92 kB
+#13 8.610 dist/assets/inter-cyrillic-600-normal-4D_pXhcN.woff                      9.93 kB
+#13 8.610 dist/assets/inter-cyrillic-500-normal-CxZf_p3X.woff                      9.94 kB
+#13 8.610 dist/assets/inter-greek-500-normal-Xzm54t5V.woff                         9.98 kB
+#13 8.610 dist/assets/inter-greek-600-normal-BZpKdvQh.woff                        10.03 kB
+#13 8.610 dist/assets/inter-cyrillic-ext-400-normal-BQZuk6qB.woff2                10.23 kB
+#13 8.610 dist/assets/inter-cyrillic-ext-500-normal-B0yAr1jD.woff2                10.43 kB
+#13 8.610 dist/assets/inter-cyrillic-ext-600-normal-Dfes3d0z.woff2                10.48 kB
+#13 8.610 dist/assets/jetbrains-mono-cyrillic-wght-normal-D73BlboJ.woff2          12.10 kB
+#13 8.610 dist/assets/inter-cyrillic-ext-400-normal-DQukG94-.woff                 13.33 kB
+#13 8.610 dist/assets/inter-cyrillic-ext-500-normal-BmqWE9Dz.woff                 13.45 kB
+#13 8.610 dist/assets/inter-cyrillic-ext-600-normal-Bcila6Z-.woff                 13.46 kB
+#13 8.610 dist/assets/jetbrains-mono-latin-ext-wght-normal-DBQx-q_a.woff2         15.19 kB
+#13 8.610 dist/assets/plus-jakarta-sans-latin-ext-wght-normal-DmpS2jIq.woff2      21.72 kB
+#13 8.610 dist/assets/inter-latin-400-normal-C38fXH4l.woff2                       23.66 kB
+#13 8.610 dist/assets/inter-latin-500-normal-Cerq10X2.woff2                       24.27 kB
+#13 8.610 dist/assets/inter-latin-600-normal-LgqL8muc.woff2                       24.45 kB
+#13 8.610 dist/assets/plus-jakarta-sans-latin-wght-normal-eXO_dkmS.woff2          27.34 kB
+#13 8.610 dist/assets/inter-latin-400-normal-CyCys3Eg.woff                        30.69 kB
+#13 8.610 dist/assets/inter-latin-600-normal-CiBQ2DWP.woff                        31.26 kB
+#13 8.610 dist/assets/inter-latin-500-normal-BL9OpVg8.woff                        31.28 kB
+#13 8.610 dist/assets/inter-latin-ext-400-normal-C1nco2VV.woff2                   35.00 kB
+#13 8.610 dist/assets/inter-latin-ext-500-normal-CV4jyFjo.woff2                   36.02 kB
+#13 8.610 dist/assets/inter-latin-ext-600-normal-D2bJ5OIk.woff2                   36.26 kB
+#13 8.610 dist/assets/jetbrains-mono-latin-wght-normal-B9CIFXIH.woff2             40.40 kB
+#13 8.610 dist/assets/inter-latin-ext-400-normal-77YHD8bZ.woff                    47.56 kB
+#13 8.610 dist/assets/inter-latin-ext-500-normal-BxGbmqWO.woff                    48.49 kB
+#13 8.610 dist/assets/inter-latin-ext-600-normal-CIVaiw4L.woff                    48.66 kB
+#13 8.610 dist/assets/deploywhisper-logo-BiQfvcRu.png                          1,092.57 kB
+#13 8.610 dist/assets/index-BSOribyd.css                                          89.43 kB │ gzip:  19.91 kB
+#13 8.610 dist/assets/index-C0b8_18B.js                                          587.43 kB │ gzip: 168.26 kB
+#13 8.610
+#13 8.610 ✓ built in 2.02s
+#13 8.611 [plugin builtin:vite-reporter]
+#13 8.611 (!) Some chunks are larger than 500 kB after minification. Consider:
+#13 8.611 - Using dynamic import() to code-split the application
+#13 8.611 - Use build.rolldownOptions.output.codeSplitting to improve chunking: https://rolldown.rs/reference/OutputOptions.codeSplitting
+#13 8.611 - Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+#13 DONE 8.7s
+
+#14 [builder 6/7] RUN python -m pip install --require-hashes --only-binary=:all: --no-compile -r requirements.txt     && python -c "import pathlib, shutil, site; site_packages=[pathlib.Path(path) for path in site.getsitepackages()]; patterns=('pip','pip-*','wheel','wheel-*'); [shutil.rmtree(path, ignore_errors=True) if path.is_dir() else path.unlink(missing_ok=True) for base in site_packages for pattern in patterns for path in base.glob(pattern)]; [shutil.rmtree(path, ignore_errors=True) for base in site_packages for path in base.rglob('__pycache__')]; [shutil.rmtree(path, ignore_errors=True) for base in site_packages for name in ('tests','test','docs','examples') for path in base.rglob(name) if path.is_dir()]"     && rm -f "/opt/venv"/bin/pip "/opt/venv"/bin/pip3 "/opt/venv"/bin/pip3.11
+#14 CACHED
+
+#15 [builder 7/7] RUN find "/opt/venv" -type f ( -name '*.so' -o -name '*.so.*' ) -exec strip --strip-unneeded {} + 2>/dev/null || true
+#15 CACHED
+
+#16 [runtime  5/18] COPY --from=frontend --chown=appuser:appuser /frontend/dist ./frontend/dist
+#16 CACHED
+
+#17 [runtime  2/18] WORKDIR /app
+#17 CACHED
+
+#18 [builder 3/7] RUN apt-get update     && apt-get install -y --no-install-recommends binutils     && rm -rf /var/lib/apt/lists/*
+#18 CACHED
+
+#19 [runtime  3/18] RUN groupadd --system appuser     && useradd --system --gid appuser --home-dir /app --shell /usr/sbin/nologin appuser     && mkdir -p /app/data /app/skills/custom     && chown -R appuser:appuser /app
+#19 CACHED
+
+#20 [builder 2/7] WORKDIR /build
+#20 CACHED
+
+#21 [runtime  4/18] COPY --from=builder /opt/venv /opt/venv
+#21 CACHED
+
+#22 [builder 4/7] RUN python -m venv "/opt/venv"
+#22 CACHED
+
+#23 [builder 5/7] COPY requirements.txt .
+#23 CACHED
+
+#24 [runtime  6/18] COPY --chown=appuser:appuser app.py config.py logging_config.py alembic.ini ./
+#24 CACHED
+
+#25 [runtime  7/18] COPY --chown=appuser:appuser api ./api
+#25 DONE 0.0s
+
+#26 [runtime  8/18] COPY --chown=appuser:appuser analysis ./analysis
+#26 DONE 0.0s
+
+#27 [runtime  9/18] COPY --chown=appuser:appuser cli ./cli
+#27 DONE 0.0s
+
+#28 [runtime 10/18] COPY --chown=appuser:appuser evidence ./evidence
+#28 DONE 0.0s
+
+#29 [runtime 11/18] COPY --chown=appuser:appuser integrations ./integrations
+#29 DONE 0.0s
+
+#30 [runtime 12/18] COPY --chown=appuser:appuser infra_automation ./infra_automation
+#30 DONE 0.0s
+
+#31 [runtime 13/18] COPY --chown=appuser:appuser llm ./llm
+#31 DONE 0.0s
+
+#32 [runtime 14/18] COPY --chown=appuser:appuser migrations ./migrations
+#32 DONE 0.0s
+
+#33 [runtime 15/18] COPY --chown=appuser:appuser models ./models
+#33 DONE 0.0s
+
+#34 [runtime 16/18] COPY --chown=appuser:appuser parsers ./parsers
+#34 DONE 0.0s
+
+#35 [runtime 17/18] COPY --chown=appuser:appuser services ./services
+#35 DONE 0.0s
+
+#36 [runtime 18/18] COPY --chown=appuser:appuser skills ./skills
+#36 DONE 0.0s
+
+#37 exporting to image
+#37 exporting layers 0.1s done
+#37 writing image sha256:433f8f2c0dfbc3675ced5b59a4494d7f60b2afe7e438be137eb9709ff0f7dc8e done
+#37 naming to docker.io/library/deploywhisper-story16-17:ui-proof done
+#37 DONE 0.1s
+
+#38 resolving provenance for metadata file
+#38 DONE 0.0s
+ Image deploywhisper-story16-17:ui-proof Built
