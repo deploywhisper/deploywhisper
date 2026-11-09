@@ -793,6 +793,45 @@ class AutomationTransportTests(unittest.TestCase):
 
 
 class AutomationTlsTests(unittest.TestCase):
+    def test_https_transport_sets_explicit_tls_floor_before_wrapping(self):
+        import ssl
+        from unittest.mock import MagicMock
+
+        context = MagicMock()
+        # A recording double verifies explicit policy rather than inheriting
+        # whichever default OpenSSL happens to provide on the test host.
+        context.minimum_version = None
+        wrapped_socket = context.wrap_socket.return_value
+
+        def wrap_with_checked_floor(*args, **kwargs):
+            self.assertEqual(context.minimum_version, ssl.TLSVersion.TLSv1_2)
+            return wrapped_socket
+
+        context.wrap_socket.side_effect = wrap_with_checked_floor
+        connection = MagicMock()
+        raw_socket = connection.sock
+        response = connection.getresponse.return_value.__enter__.return_value
+        response.status = 200
+        response.read1.side_effect = [b"{}", b""]
+        with (
+            patch.object(automation, "_DeadlineConnection", return_value=connection),
+            patch.object(
+                automation.ssl, "create_default_context", return_value=context
+            ) as factory,
+        ):
+            self.assertEqual(
+                automation._exchange(
+                    "https://example.test", "GET", "/status", {}, None, 1
+                ),
+                (200, b"{}"),
+            )
+        factory.assert_called_once_with()
+        self.assertEqual(context.minimum_version, ssl.TLSVersion.TLSv1_2)
+        context.set_alpn_protocols.assert_called_once_with(["http/1.1"])
+        context.wrap_socket.assert_called_once_with(
+            raw_socket, server_hostname="example.test", do_handshake_on_connect=False
+        )
+
     def test_real_tls_requires_trust_and_checks_hostname(self):
         from datetime import timedelta
         from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -849,6 +888,7 @@ class AutomationTlsTests(unittest.TestCase):
 
             server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
             context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+            context.minimum_version = ssl.TLSVersion.TLSv1_2
             context.load_cert_chain(cert_path, key_path)
             server.socket = context.wrap_socket(server.socket, server_side=True)
             thread = threading.Thread(target=server.serve_forever, daemon=True)
@@ -858,6 +898,7 @@ class AutomationTlsTests(unittest.TestCase):
                 with self.assertRaises(automation.CliError):
                     automation._exchange(origin, "GET", "/untrusted", {}, None, 2)
                 trusted = ssl.create_default_context(cafile=str(cert_path))
+                trusted.minimum_version = ssl.TLSVersion.TLSv1_2
                 self.assertTrue(trusted.check_hostname)
                 self.assertEqual(trusted.verify_mode, ssl.CERT_REQUIRED)
                 with patch.object(

@@ -336,6 +336,7 @@ def _exchange(origin, method, path, headers, body, timeout):
             deadline.remaining()
             if secure:
                 context = ssl.create_default_context()
+                context.minimum_version = ssl.TLSVersion.TLSv1_2
                 context.set_alpn_protocols(["http/1.1"])
                 deadline.remaining()
                 connection.sock = context.wrap_socket(
