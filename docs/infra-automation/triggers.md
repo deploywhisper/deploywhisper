@@ -216,8 +216,8 @@ python cli.py automation --credential-file FILE [--url EXACT_ORIGIN] [--timeout 
 ```
 
 Use a private owner-only regular single-link credential file (mode 0400/0600).
-The origin is pinned in that file; `--url` must match it. HTTPS uses normal TLS
-verification. HTTP is limited to the explicit loopback development origin.
+The origin is pinned in that file; `--url` must match it. HTTPS explicitly requires
+TLS 1.2 or newer and keeps system certificate trust and hostname verification. HTTP is limited to the explicit loopback development origin.
 Redirects and proxy-environment forwarding are disabled. The CLI accepts no raw
 signing-key argument and never uses legacy actor/role environment variables as
 automation identity.

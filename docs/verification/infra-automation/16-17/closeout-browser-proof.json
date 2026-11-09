@@ -1,6 +1,6 @@
 {
-  "started_at": "2026-11-09T10:30:44.106667+00:00",
-  "source_head": "51bb952e5af89d0810b279f84cd7b34cc30041eb",
+  "started_at": "2026-11-09T10:41:49.057530+00:00",
+  "source_head": "165a420c40c922d1d216580b7f400e16f77cb7ea",
   "source_sha256": {
     "services/infra_automation_trigger_authority.py": "bc69d682fd5fd28613608d3c2d56fd5959af940a28e868eac0b9788a2a633aa6",
     "services/project_service.py": "f3dc974cdc6eb28122fa123bec4fabc4cf223fd68f3222510181e18ca0a141a2",
@@ -8,7 +8,7 @@
     "api/routes/infra_automation_triggers.py": "12c013f738d2c23205352a232095fce188dcc35284efe1ff40f1241631d64525",
     "infra_automation/trigger_contracts.py": "e5391cf5e247aa9744e01fc353c1061b6ecf26c59e52459579bf1fabd42596cc",
     "infra_automation/trigger_signing.py": "2ac2e3fb8aa7e8d16152d538b1193875b5c82503604226ea46543c6fd66ad5e7",
-    "cli/automation.py": "fb2a58579adcb1f525ab3c063571f0520637b4d3510a69ee802fb6c8a8462976",
+    "cli/automation.py": "0bf9e1cff601cbf2aed0ec4bc0e272db0b084706e1f39a2fad461a7e32ec0438",
     "cli/analyze.py": "92940ead6c0a25226c96c90d8df4a3ea48941e8e9285c7c38e5edc7eca617172",
     "frontend/src/api/schema.d.ts": "2baa0b3a05272857c734c9163efcd862bfce8ec938653e4acd91965cd56488e8",
     "frontend/src/api/infraAutomation.ts": "ce9c61f885d33eb522aa55b5dfb1923ed143cb3bb70215470bb77f334e63aa94",
@@ -24,9 +24,50 @@
   },
   "original_container_id": "5970d092f40105574b40ba43996b4af1b770a85697f085318d1fb4360c83b31f",
   "original_http_status_before": 200,
-  "image": "sha256:433f8f2c0dfbc3675ced5b59a4494d7f60b2afe7e438be137eb9709ff0f7dc8e",
+  "image": "sha256:751f927ce9edcc9147aef6948f57da7192d4186e244b2c638a3722dd18cddacf",
   "command": "BASE_URL=http://localhost:8080 TRIGGER_UI_CONTAINER=deploywhisper-story16-17-deploywhisper-1 TRIGGER_UI_FIXTURE=<private0600> npm run test:ui-review -- infra-automation-triggers.spec.ts",
   "scope": "HTTP local-development disposable tmpfs; actual API and CLI admission/origin; no production TLS, collector or delivery qualification",
+  "previous_proof": {
+    "started_at": "2026-11-09T10:30:44.106667+00:00",
+    "completed_at": "2026-11-09T10:31:25.019784+00:00",
+    "source_head": "51bb952e5af89d0810b279f84cd7b34cc30041eb",
+    "image": "sha256:433f8f2c0dfbc3675ced5b59a4494d7f60b2afe7e438be137eb9709ff0f7dc8e",
+    "source_sha256": {
+      "services/infra_automation_trigger_authority.py": "bc69d682fd5fd28613608d3c2d56fd5959af940a28e868eac0b9788a2a633aa6",
+      "services/project_service.py": "f3dc974cdc6eb28122fa123bec4fabc4cf223fd68f3222510181e18ca0a141a2",
+      "services/infra_automation_triggers.py": "8e8519fa5d754211bdd053109b79b31babf3ce551c220c8bb4b88966e7607f56",
+      "api/routes/infra_automation_triggers.py": "12c013f738d2c23205352a232095fce188dcc35284efe1ff40f1241631d64525",
+      "infra_automation/trigger_contracts.py": "e5391cf5e247aa9744e01fc353c1061b6ecf26c59e52459579bf1fabd42596cc",
+      "infra_automation/trigger_signing.py": "2ac2e3fb8aa7e8d16152d538b1193875b5c82503604226ea46543c6fd66ad5e7",
+      "cli/automation.py": "fb2a58579adcb1f525ab3c063571f0520637b4d3510a69ee802fb6c8a8462976",
+      "cli/analyze.py": "92940ead6c0a25226c96c90d8df4a3ea48941e8e9285c7c38e5edc7eca617172",
+      "frontend/src/api/schema.d.ts": "2baa0b3a05272857c734c9163efcd862bfce8ec938653e4acd91965cd56488e8",
+      "frontend/src/api/infraAutomation.ts": "ce9c61f885d33eb522aa55b5dfb1923ed143cb3bb70215470bb77f334e63aa94",
+      "frontend/src/screens/InfraAutomationOrigin.tsx": "31ef3c0bb79b5c20870b8d1e8f443a8882dee227ef668ec2b4c99b3d8bd3a2ce",
+      "frontend/src/screens/InfraAutomation.tsx": "bcc15f933bd43db7bda889b8b1eaf161fe7ae245fc8e8bafc8e53793a7d2c86e",
+      "frontend/src/screens/InfraAutomationRun.tsx": "d8e0082fc367da4d978a35222ba3f1609c7fc1f6bf5c082ab8b21e9c8d75aab2",
+      "scripts/trigger_ui_fixture.py": "e90c03cd7632dc262add50969a1aaee2f35f8be490d46b87a46073d59e36d559",
+      "scripts/seed_infra_automation_ui.py": "7045ae7525e21d9a09ec57032a272def59de1b08d2a437d853310a1fa5ed536c",
+      "scripts/compose-story16-17.yaml": "4a456c15c518dec0752315a2427b765c21835efa4761b2bb2bb92abb369d6d58",
+      "frontend/e2e/infra-automation-triggers.spec.ts": "c5cd2e5186cef9a3aa6afc29b12c0bc356768ec4790c7f6a50618c338ccd8cc5",
+      "Dockerfile": "2a3d62f73923e1dec180e5b3cb9d5393580f3829ef9c629330084c40f95a104e",
+      "requirements.txt": "6ec6842ee077b4d538e5929657da4e44b2feb4a5a441def463fb3e9d032f216d"
+    },
+    "test_result": {
+      "tests_passed": 1,
+      "test_duration_seconds": 25.3,
+      "runner_duration_seconds": 26.6,
+      "viewport_widths": [
+        1440,
+        760
+      ],
+      "viewport_height": 1000,
+      "axe_critical_serious_violations": 0,
+      "axe_scans": 12,
+      "keyboard": "native Tab/Shift+Tab login, arrow-key tabs, keyboard link/button navigation passed"
+    },
+    "result": "passed"
+  },
   "disposable_http_status": 200,
   "fixture_mode": "0o600",
   "runtime": {
@@ -40,73 +81,73 @@
   "screenshots": [
     {
       "path": "docs/verification/infra-automation/16-17/closeout-screenshots/origin-agent-cli-1440.png",
-      "sha256": "caf96fc151f4ec21c9b9d7a75bde28f1fa9444cc5d02d24a03fa7a1e6d94604f",
+      "sha256": "4a7c854e77433d5dd3b7fd61db7ae720317962c51889f1240ef1898280ec6053",
       "width": 1440,
       "height": 1000
     },
     {
       "path": "docs/verification/infra-automation/16-17/closeout-screenshots/origin-agent-cli-760.png",
-      "sha256": "5eed332f0396280ef60f296074bbe68e382250ee2187aae23e4a2da981a93956",
+      "sha256": "c7cbff5804ff9e44325152ae4278d45e5f05b56cae134f3ced7d0f09f1c45fa2",
       "width": 760,
       "height": 1000
     },
     {
       "path": "docs/verification/infra-automation/16-17/closeout-screenshots/origin-history-1440.png",
-      "sha256": "cd12ce4c7090487d273939b3e799a62214c773d20c1f0957c4e9e009b480602b",
+      "sha256": "d465e5df549808fb6905a2c02fdfc493d2cdac4dfdd72b96da396c77cff4f404",
       "width": 1440,
       "height": 1000
     },
     {
       "path": "docs/verification/infra-automation/16-17/closeout-screenshots/origin-history-760.png",
-      "sha256": "6a1652f9979da40e634b7ead878166949876705623d0863b638c683cf695ca52",
+      "sha256": "7a85ebbca95c0c151516966499f36296d4e27e18d9e5e0ab0f0078a6d0a3a9f0",
       "width": 760,
       "height": 1000
     },
     {
       "path": "docs/verification/infra-automation/16-17/closeout-screenshots/origin-human-cli-1440.png",
-      "sha256": "cf10d5826b2bca3bb7489be2c5965fe823efcfda92ea70940323d6da95f88630",
+      "sha256": "486be7c278e5e8d158f184c91a2ba6ce900a2fe1f31100990679cc465ca75b80",
       "width": 1440,
       "height": 1000
     },
     {
       "path": "docs/verification/infra-automation/16-17/closeout-screenshots/origin-human-cli-760.png",
-      "sha256": "25a57e6fce5f5ebac5429cb150ed9605ac384ebf05d78e820c59974ce4d06720",
+      "sha256": "4dce90c0a4416021da5e1cf4c63b70203a61250dcb5684ec597bb440054a935f",
       "width": 760,
       "height": 1000
     },
     {
       "path": "docs/verification/infra-automation/16-17/closeout-screenshots/origin-manual-1440.png",
-      "sha256": "1c21457b4b3146fb2737ad4cda13e736f56f060275c45067620b51a5688fe114",
+      "sha256": "d831de9e5da48eacf71f4c738414ac0a242d83a625ad11e03536561b0052aeba",
       "width": 1440,
       "height": 1000
     },
     {
       "path": "docs/verification/infra-automation/16-17/closeout-screenshots/origin-manual-760.png",
-      "sha256": "a380b5fba1e9272757749e5ff21321b0c7c7b812b1a764823a2343d78a5e7e79",
+      "sha256": "4376d06cd9924207d01f2fd1d06a7f2b237a50c2d6db5c376631637bca41fcd2",
       "width": 760,
       "height": 1000
     },
     {
       "path": "docs/verification/infra-automation/16-17/closeout-screenshots/origin-service-pr-1440.png",
-      "sha256": "c4db338ae6dc9f3cbf7b517e0c619e1226af526e35fcd182dce22092ebbe8ff7",
+      "sha256": "21b849e484d725e367182555d762a51ad783c18ffb6dda58141e4643e166bc8e",
       "width": 1440,
       "height": 1000
     },
     {
       "path": "docs/verification/infra-automation/16-17/closeout-screenshots/origin-service-pr-760.png",
-      "sha256": "62857157f9ef40d2fb5fca121d2f9700032783fe72f5b575610be55d352cdfd6",
+      "sha256": "9d82a91ff2180bfe95c22923656bb3c6075c04bd0b465896ce0219a7fa538c1a",
       "width": 760,
       "height": 1000
     },
     {
       "path": "docs/verification/infra-automation/16-17/closeout-screenshots/origin-service-webhook-1440.png",
-      "sha256": "e0e1146ad1cdf19ba257a4c4a50da0aaf8b2c476faf88e427c5590929a2cfdda",
+      "sha256": "3b0a35845c87f7f001f7c6e9376dc64f64a579851287c2d22b4bafb43a9ea1ef",
       "width": 1440,
       "height": 1000
     },
     {
       "path": "docs/verification/infra-automation/16-17/closeout-screenshots/origin-service-webhook-760.png",
-      "sha256": "ec7c99cece5abba7340c461397c3c63de856b6759113f06a62a4b86aeb150d08",
+      "sha256": "09fe92628f8459ddf0172c003b75d479b43949a74bb35f3db9d97b5ca0b6a6f8",
       "width": 760,
       "height": 1000
     }
@@ -118,12 +159,19 @@
   "original_restored_running": true,
   "original_restored_container_id": "5970d092f40105574b40ba43996b4af1b770a85697f085318d1fb4360c83b31f",
   "private_fixture_removed": true,
-  "completed_at": "2026-11-09T10:31:25.019784+00:00",
-  "source_state": "working tree based on source_head, including reviewed fixes; source_sha256 pins exact tested bytes",
+  "completed_at": "2026-11-09T10:42:33.767958+00:00",
+  "raw_log_sha256": {
+    "closeout-build.txt": "92baeab157743d82a657bcf6f2ad66cf1bbe168e128baf5b23d62b58aa0e918b",
+    "closeout-compose-up.txt": "af98536d3c094cf869f1912f4e21292afcb20e3010d649a83446e7711505b507",
+    "closeout-browser-output.txt": "db3484b0195c612a648fd4b35b61b79411d6829aefe65cc5bb6b7839c2e0a40d",
+    "closeout-compose-down.txt": "5c7d01e63bbfd1a9446135012141013081c43151d85edf1de2121c165e4001d4"
+  },
+  "source_state": "working tree based on source_head, including explicit CLI TLS1.2 floor; source_sha256 pins exact tested bytes",
+  "rerun_reason": "Fresh production Compose browser proof after explicit CLI TLS1.2 minimum was added for CodeQL; this HTTP origin lane does not itself qualify TLS negotiation.",
   "test_result": {
     "tests_passed": 1,
-    "test_duration_seconds": 25.3,
-    "runner_duration_seconds": 26.6,
+    "test_duration_seconds": 28.7,
+    "runner_duration_seconds": 29.7,
     "viewport_widths": [
       1440,
       760
@@ -141,17 +189,11 @@
   },
   "historical_screenshots_preserved": true,
   "original_docker_health_after": "healthy",
+  "log_normalization": "Trailing whitespace stripped per line; trailing empty lines removed; one final newline. raw_log_sha256 identifies direct command output before normalization.",
   "log_sha256": {
-    "closeout-build.txt": "f764be99ed7f558aed404499e8e13db64ef065f248c033f4aec636f60c9103cc",
+    "closeout-build.txt": "afc7914711b5b1d1e0d04239418140a4cedef5e709d4b3879fd70e8353461254",
     "closeout-compose-up.txt": "278f01a8d32b1cb5ff8e66f0bfd1d5922a0f3fa70a4e39d29ba5a64b53e1f417",
-    "closeout-browser-output.txt": "97d01f57f7a72629fabbc48da336ba97645973853449912fb53813dc8d931a97",
+    "closeout-browser-output.txt": "db3484b0195c612a648fd4b35b61b79411d6829aefe65cc5bb6b7839c2e0a40d",
     "closeout-compose-down.txt": "bb069d460134881875f2503a4256e66ffdf48fcc9473e08bd167d05671592309"
-  },
-  "raw_log_sha256": {
-    "closeout-build.txt": "b8920ee8bbcb5eff4198fd347eaabf25454731c8078cfea5e3c7b6183dcff5e9",
-    "closeout-compose-up.txt": "af98536d3c094cf869f1912f4e21292afcb20e3010d649a83446e7711505b507",
-    "closeout-browser-output.txt": "97d01f57f7a72629fabbc48da336ba97645973853449912fb53813dc8d931a97",
-    "closeout-compose-down.txt": "5c7d01e63bbfd1a9446135012141013081c43151d85edf1de2121c165e4001d4"
-  },
-  "log_normalization": "Trailing whitespace and extra terminal blank lines normalized for git; raw hashes retained and original raw files retained locally."
+  }
 }

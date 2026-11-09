@@ -7,5 +7,5 @@
     "Detail captures have different vertical scroll offsets while retaining the same origin facts, source table and focus treatment."
   ],
   "suggestions": [],
-  "reasoning": "Representative 1440px and 760px captures retain the accepted InfraFlow typography, spacing, compact history attribution, readable origin details and visible keyboard focus. Differences are disposable data and scroll position; no visual product change or refinement is required."
+  "reasoning": "Representative 1440px and 760px captures retain the accepted InfraFlow typography, spacing, compact history attribution, readable origin details and visible keyboard focus. The CLI TLS floor introduces no rendered change; no visual product refinement is required."
 }

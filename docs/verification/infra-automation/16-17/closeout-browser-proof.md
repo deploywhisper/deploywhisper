@@ -1,6 +1,6 @@
 # Story 16.17 publication closeout browser proof — 2026-11-09
 
-**Passed:** one composed Chromium journey, **25.3 seconds** (26.6 seconds total
+**Passed:** one composed Chromium journey, **28.7 seconds** (29.7 seconds total
 runner time), twelve 1440×1000 / 760×1000 screenshots, and **zero critical or
 serious axe violations** across twelve scans. Native keyboard login, Tab and
 Shift+Tab traversal, arrow-key tab selection, and keyboard activation of history
@@ -17,10 +17,16 @@ accepted proof is **94/100, pass**; no visual refinements were made.
 ## Exact execution
 
 The current production runtime image was built **before** stopping the original
-app. Image: `sha256:433f8f2c0dfbc3675ced5b59a4494d7f60b2afe7e438be137eb9709ff0f7dc8e`.
-The working tree included the reviewer fixes on top of
-`51bb952e5af89d0810b279f84cd7b34cc30041eb`; the structured proof pins the exact
+app. Image: `sha256:751f927ce9edcc9147aef6948f57da7192d4186e244b2c638a3722dd18cddacf`.
+This rerun follows the CodeQL-driven explicit TLS minimum correction.
+The working tree included the current CLI fix on top of
+`165a420c40c922d1d216580b7f400e16f77cb7ea`, including the explicit CLI
+TLS 1.2 minimum; the structured proof pins the exact
 source bytes rather than claiming that this base commit alone contains the fixes.
+The earlier passing proof metadata is retained under `previous_proof` in the
+JSON; these current screenshots and log hashes supersede its captures.
+This HTTP browser lane does not itself prove TLS negotiation; the separate
+CLI TLS tests own that validation.
 The image uses Python 3.11.17; the host used Node 24.7.0, Playwright 1.63.0 and
 Docker 29.1.3.
 
@@ -86,3 +92,10 @@ The private host directory and fixture were removed. The tmpfs database and
 container-held synthetic secrets disappeared with the disposable container.
 Original data was never mounted into the proof lane. Historical screenshots and
 product/test source remained unchanged by this verification task.
+
+## Public log normalization
+
+Before recording final hashes, public logs had trailing whitespace removed per
+line, trailing empty lines removed, and one final newline retained. The JSON
+records both raw command-output SHA-256 values and the final normalized log
+SHA-256 values. Test outcomes and messages were not changed.
