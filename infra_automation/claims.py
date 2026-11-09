@@ -417,9 +417,14 @@ def _charge(session, run, delta, now, bounds=None):
         session.scalar(select(func.sum(InfraAutomationRun.retained_bytes))) or 0
     )
     from models.repositories.infra_automation_units import retained_bytes as unit_bytes
+    from models.repositories.infra_automation_triggers import (
+        retained_bytes as trigger_bytes,
+    )
 
     project_used += unit_bytes(session, run.project_id)
     global_used += unit_bytes(session)
+    project_used += trigger_bytes(session, run.project_id)
+    global_used += trigger_bytes(session)
     if (
         project_used + delta > bounds.project_bytes
         or global_used + delta > bounds.global_bytes

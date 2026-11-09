@@ -34,7 +34,7 @@ class MigrationTests(unittest.TestCase):
                         connection.execute(
                             "SELECT version_num FROM alembic_version"
                         ).fetchone()[0],
-                        "038_add_declared_unit_maps",
+                        "039_add_signed_trigger_intake",
                     )
 
     def test_unit_inventory_partial_schema_requires_recovery(self):
@@ -1170,7 +1170,7 @@ class MigrationTests(unittest.TestCase):
         self.assertIn("topology_versions", tables)
         self.assertIn("incident_ingestion_sources", tables)
         self._assert_incident_ingestion_source_schema()
-        self.assertEqual(revision, "038_add_declared_unit_maps")
+        self.assertEqual(revision, "039_add_signed_trigger_intake")
 
     def test_init_db_repairs_partial_evidence_schema_without_alembic_version(
         self,
@@ -1221,7 +1221,7 @@ class MigrationTests(unittest.TestCase):
         self.assertIn("projects", tables)
         self.assertIn("incident_ingestion_sources", tables)
         self._assert_incident_ingestion_source_schema()
-        self.assertEqual(revision, "038_add_declared_unit_maps")
+        self.assertEqual(revision, "039_add_signed_trigger_intake")
 
     def test_init_db_repairs_current_schema_without_alembic_version(self) -> None:
         command.upgrade(self._config(), "head")
@@ -1247,7 +1247,7 @@ class MigrationTests(unittest.TestCase):
         finally:
             sqlite_conn.close()
 
-        self.assertEqual(revision, "038_add_declared_unit_maps")
+        self.assertEqual(revision, "039_add_signed_trigger_intake")
         self.assertIn("report_schema_version", columns)
         self.assertIn("blast_radius_json", columns)
         self.assertIn("project_id", columns)
@@ -1279,7 +1279,7 @@ class MigrationTests(unittest.TestCase):
         finally:
             sqlite_conn.close()
 
-        self.assertEqual(revision, "038_add_declared_unit_maps")
+        self.assertEqual(revision, "039_add_signed_trigger_intake")
         self.assertEqual(
             self._index_columns("ix_deployment_outcomes_analysis_deployed_outcome"),
             ("analysis_id", "deployed_at", "outcome_label"),
@@ -1305,7 +1305,7 @@ class MigrationTests(unittest.TestCase):
         finally:
             sqlite_conn.close()
 
-        self.assertEqual(revision, "038_add_declared_unit_maps")
+        self.assertEqual(revision, "039_add_signed_trigger_intake")
         self._assert_incident_ingestion_source_schema()
 
     def test_init_db_rejects_partial_report_workspace_scope_schema(self) -> None:
@@ -2060,7 +2060,7 @@ class MigrationTests(unittest.TestCase):
         finally:
             sqlite_conn.close()
 
-        self.assertEqual(revision, "038_add_declared_unit_maps")
+        self.assertEqual(revision, "039_add_signed_trigger_intake")
         self._assert_incident_ingestion_source_schema()
 
 

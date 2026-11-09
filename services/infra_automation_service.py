@@ -449,7 +449,7 @@ def restore_workflow(
 
 
 def _binding(grant, *, workspace_id, family, workflow_id=None):
-    return {
+    binding = {
         "principal": grant.principal.principal_id,
         "authentication_version": grant.principal.authentication_version,
         "membership_version": grant.authorization_version,
@@ -458,6 +458,9 @@ def _binding(grant, *, workspace_id, family, workflow_id=None):
         "family": family,
         "workflow_id": workflow_id,
     }
+    if grant.principal.credential_audience == "service-request-v1":
+        binding["credential_binding"] = grant.principal.session_id
+    return binding
 
 
 def _page(*, binding, limit, cursor, maximum, fetch, render):

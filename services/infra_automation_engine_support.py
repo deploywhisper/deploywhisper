@@ -66,7 +66,11 @@ def ensure_engine_actor(
         mutation=True,
     )
     if verified.principal.principal_type != "human":
-        raise authorization.TrustedAuthorizationError()
+        from services.infra_automation_trigger_authority import requester
+
+        requester(session, verified)
+        # Provisioning creates the inert actor under verified human administration.
+        return engine_actor(session)
     row = session.get(IdentityAccount, ENGINE_ACTOR_ID, populate_existing=True)
     if row is None:
         if session.scalar(

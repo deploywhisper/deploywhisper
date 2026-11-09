@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from infra_automation.contracts import RegistryContract
 from infra_automation.lifecycle import (
     AuthorityStamp,
+    MachineAuthorityStamp,
     CollectedSnapshotSource,
     LifecycleError,
     SnapshotDocument,
@@ -42,14 +43,12 @@ def export_run_snapshot(
     operation must authenticate its caller and recheck live policy before acting.
     """
     with authorization.authorized_session() as session:
-        workflow, grant = support.workflow(
-            session, workflow_id, "automation.request", mutation=True
-        )
-        if (
-            grant.principal.principal_type != "human"
-            or grant.principal.credential_audience != "human"
-        ):
-            raise authorization.TrustedAuthorizationError()
+        from services.infra_automation_trigger_authority import admission_workflow
+
+        workflow, grant = admission_workflow(session, workflow_id, workspace_id)
+        from services.infra_automation_trigger_authority import requester, stamp_fields
+
+        requester(session, grant)
         if workflow.archived:
             raise LifecycleError(409)
         revision = repository.get_revision(session, support.identifier(revision_id))
@@ -143,8 +142,21 @@ def export_run_snapshot(
             support.screened([source.model_dump(mode="json") for source in sources])
         except (ResolutionError, ValueError, TypeError):
             raise LifecycleError(422) from None
+        from services.infra_automation_trigger_authority import (
+            validate_machine_sources,
+            current,
+        )
+
+        credential = current()
+        if credential is not None:
+            credential.protect(resolved_inputs)
+            credential.protect(definition.model_dump(mode="json"))
+        validate_machine_sources(session, grant, revision.id, sources)
         advisory = support.advisory_policy(session, workflow.project_id)
-        authority = AuthorityStamp(
+        machine_fields = stamp_fields(session, grant)
+        stamp_model = MachineAuthorityStamp if machine_fields else AuthorityStamp
+        authority = stamp_model(
+            **machine_fields,
             workflow_id=workflow.id,
             revision_id=revision.id,
             project_id=workflow.project_id,

@@ -17,7 +17,7 @@ import config
 import models.database as database
 
 HEAD = "036_add_receiver_reconciliation"
-CURRENT_HEAD = "038_add_declared_unit_maps"
+CURRENT_HEAD = "039_add_signed_trigger_intake"
 PREVIOUS = "035_add_infra_handoffs"
 
 

@@ -69,6 +69,7 @@ _KNOWN_ALEMBIC_REVISIONS = {
     "036_add_receiver_reconciliation",
     "037_add_runner_enrollment",
     "038_add_declared_unit_maps",
+    "039_add_signed_trigger_intake",
 }
 _BASELINE_TABLES = {"analysis_reports", "app_settings"}
 _EVIDENCE_TABLES = {
@@ -1199,6 +1200,9 @@ def _bootstrap_brownfield_revision() -> None:
         has_complete_units = _infra_automation_schema_complete(
             connection, tables, "038_add_declared_unit_maps"
         )
+        has_complete_triggers = _infra_automation_schema_complete(
+            connection, tables, "039_add_signed_trigger_intake"
+        )
         tables = _repair_partial_evidence_schema(connection, tables)
 
         has_baseline_tables = _BASELINE_TABLES.issubset(tables)
@@ -1240,6 +1244,7 @@ def _bootstrap_brownfield_revision() -> None:
                 "036_add_receiver_reconciliation",
                 "037_add_runner_enrollment",
                 "038_add_declared_unit_maps",
+                "039_add_signed_trigger_intake",
             } and not _identity_schema_complete(connection, tables):
                 raise RuntimeError(
                     "Detected a partial identity schema. Manual recovery is required."
@@ -1256,6 +1261,7 @@ def _bootstrap_brownfield_revision() -> None:
                     "036_add_receiver_reconciliation",
                     "037_add_runner_enrollment",
                     "038_add_declared_unit_maps",
+                    "039_add_signed_trigger_intake",
                 }
                 and not has_complete_authorization
             ):
@@ -1273,6 +1279,7 @@ def _bootstrap_brownfield_revision() -> None:
                     "036_add_receiver_reconciliation",
                     "037_add_runner_enrollment",
                     "038_add_declared_unit_maps",
+                    "039_add_signed_trigger_intake",
                 }
                 and not has_complete_automation
             ):
@@ -1288,6 +1295,7 @@ def _bootstrap_brownfield_revision() -> None:
                 "036_add_receiver_reconciliation",
                 "037_add_runner_enrollment",
                 "038_add_declared_unit_maps",
+                "039_add_signed_trigger_intake",
             }:
                 raise RuntimeError(
                     "Detected a partial infra automation migration history. Manual recovery is required."
@@ -1302,6 +1310,7 @@ def _bootstrap_brownfield_revision() -> None:
                     "036_add_receiver_reconciliation",
                     "037_add_runner_enrollment",
                     "038_add_declared_unit_maps",
+                    "039_add_signed_trigger_intake",
                 }
             ) != has_complete_engine:
                 raise RuntimeError(
@@ -1316,6 +1325,7 @@ def _bootstrap_brownfield_revision() -> None:
                     "036_add_receiver_reconciliation",
                     "037_add_runner_enrollment",
                     "038_add_declared_unit_maps",
+                    "039_add_signed_trigger_intake",
                 }
             ) != has_complete_preflight:
                 raise RuntimeError(
@@ -1329,6 +1339,7 @@ def _bootstrap_brownfield_revision() -> None:
                     "036_add_receiver_reconciliation",
                     "037_add_runner_enrollment",
                     "038_add_declared_unit_maps",
+                    "039_add_signed_trigger_intake",
                 }
             ) != has_complete_decisions:
                 raise RuntimeError(
@@ -1341,6 +1352,7 @@ def _bootstrap_brownfield_revision() -> None:
                     "036_add_receiver_reconciliation",
                     "037_add_runner_enrollment",
                     "038_add_declared_unit_maps",
+                    "039_add_signed_trigger_intake",
                 }
             ) != has_complete_handoffs:
                 raise RuntimeError(
@@ -1352,20 +1364,33 @@ def _bootstrap_brownfield_revision() -> None:
                     "036_add_receiver_reconciliation",
                     "037_add_runner_enrollment",
                     "038_add_declared_unit_maps",
+                    "039_add_signed_trigger_intake",
                 }
             ) != has_complete_receiver:
                 raise RuntimeError(
                     "Detected a partial infra receiver migration history. Manual recovery is required."
                 )
             if (
-                revision in {"037_add_runner_enrollment", "038_add_declared_unit_maps"}
+                revision
+                in {
+                    "037_add_runner_enrollment",
+                    "038_add_declared_unit_maps",
+                    "039_add_signed_trigger_intake",
+                }
             ) != has_complete_runners:
                 raise RuntimeError(
                     "Detected a partial infra runner migration history. Manual recovery is required."
                 )
-            if (revision == "038_add_declared_unit_maps") != has_complete_units:
+            if (
+                revision
+                in {"038_add_declared_unit_maps", "039_add_signed_trigger_intake"}
+            ) != has_complete_units:
                 raise RuntimeError(
                     "Detected a partial infra unit migration history. Manual recovery is required."
+                )
+            if (revision == "039_add_signed_trigger_intake") != has_complete_triggers:
+                raise RuntimeError(
+                    "Detected a partial infra trigger migration history. Manual recovery is required."
                 )
             return
 
@@ -1631,6 +1656,12 @@ def _bootstrap_brownfield_revision() -> None:
                         "Detected a partial infra unit schema. Manual recovery is required."
                     )
                 revision = "038_add_declared_unit_maps"
+            if has_complete_triggers:
+                if not has_complete_units:
+                    raise RuntimeError(
+                        "Detected a partial infra trigger schema. Manual recovery is required."
+                    )
+                revision = "039_add_signed_trigger_intake"
             _write_alembic_revision(connection, revision)
             return
         if scoped_learning_columns_present and not has_complete_learning_context_scope:

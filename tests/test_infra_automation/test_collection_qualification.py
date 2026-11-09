@@ -61,6 +61,19 @@ class CollectionQualificationTests(unittest.TestCase):
                 "infra_automation/unit_contracts.py",
                 "services/infra_automation_units.py",
                 "models/repositories/infra_automation_units.py",
+                "infra_automation/trigger_contracts.py",
+                "infra_automation/trigger_signing.py",
+                "infra_automation/lifecycle.py",
+                "infra_automation/state.py",
+                "services/infra_automation_trigger_authority.py",
+                "services/infra_automation_triggers.py",
+                "services/infra_automation_policy.py",
+                "services/infra_automation_snapshots.py",
+                "services/infra_automation_engine_service.py",
+                "services/infra_automation_engine_support.py",
+                "services/project_service.py",
+                "models/repositories/infra_automation_triggers.py",
+                "config.py",
             }.issubset(self.record["source_hashes"])
         )
         for relative, expected in self.record["source_hashes"].items():

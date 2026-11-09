@@ -54,7 +54,7 @@ class IdentityMigrationTests(unittest.TestCase):
             )
             self.assertEqual(
                 db.execute("SELECT version_num FROM alembic_version").fetchone()[0],
-                "038_add_declared_unit_maps",
+                "039_add_signed_trigger_intake",
             )
             for table in ("identity_sessions", "identity_credentials"):
                 self.assertEqual(
@@ -113,7 +113,7 @@ class IdentityMigrationTests(unittest.TestCase):
         with closing(sqlite3.connect(self.path)) as db, db:
             self.assertEqual(
                 db.execute("SELECT version_num FROM alembic_version").fetchone()[0],
-                "038_add_declared_unit_maps",
+                "039_add_signed_trigger_intake",
             )
 
     def test_unversioned_partial_identity_fails_closed(self):

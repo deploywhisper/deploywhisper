@@ -1,0 +1,9 @@
+{
+  "workflow_id": "replace-with-workflow",
+  "revision_id": "replace-with-published-revision",
+  "workspace_id": 100,
+  "inputs": {},
+  "idempotency_key": "example-human-operation-001",
+  "total_timeout_seconds": 3600,
+  "reason": "Review the approved preflight scope"
+}

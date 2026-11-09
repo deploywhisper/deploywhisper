@@ -233,6 +233,7 @@ def list_runs(
     snapshot_sequence: int | None = None,
     before: tuple[datetime, str] | None = None,
     limit: int = 25,
+    predicate=None,
 ) -> list[InfraAutomationRun]:
     if type(limit) is not int or not 1 <= limit <= 100:
         raise ValueError("Invalid page size.")
@@ -241,6 +242,8 @@ def list_runs(
     )
     if workspace_id is not None:
         query = query.where(InfraAutomationRun.workspace_id == workspace_id)
+    if predicate is not None:
+        query = query.where(predicate)
     if workflow_id is not None:
         query = query.where(InfraAutomationRun.workflow_id == workflow_id)
     if snapshot_sequence is not None:
@@ -267,13 +270,19 @@ def list_runs(
 
 
 def run_max_sequence(
-    session: Session, *, project_id: int, workspace_id: int | None = None
+    session: Session,
+    *,
+    project_id: int,
+    workspace_id: int | None = None,
+    predicate=None,
 ) -> int:
     query = select(func.max(InfraAutomationRun.sequence)).where(
         InfraAutomationRun.project_id == project_id
     )
     if workspace_id is not None:
         query = query.where(InfraAutomationRun.workspace_id == workspace_id)
+    if predicate is not None:
+        query = query.where(predicate)
     return session.scalar(query) or 0
 
 

@@ -239,6 +239,8 @@ class Settings:
     collection_profiles_sha256: str = os.getenv(
         "DEPLOYWHISPER_COLLECTION_PROFILES_SHA256", ""
     )
+    trigger_keys_path: str = os.getenv("DEPLOYWHISPER_TRIGGER_KEYS_PATH", "")
+    trigger_keys_sha256: str = os.getenv("DEPLOYWHISPER_TRIGGER_KEYS_SHA256", "")
     identity_profile: str = os.getenv("DEPLOYWHISPER_IDENTITY_PROFILE", "disabled")
     identity_origin: str = os.getenv("DEPLOYWHISPER_IDENTITY_ORIGIN", "")
     authorization_profile: str = os.getenv(
@@ -379,3 +381,17 @@ def engine_bounds() -> EngineBounds:
             raise LifecycleError(503)
         values[field] = value
     return EngineBounds(**values)
+
+
+def trigger_secret(reference: str) -> bytes:
+    """Read a bounded operator key reference without returning its text in errors."""
+    import re
+
+    if type(reference) is not str or not re.fullmatch(
+        r"[A-Z][A-Z0-9_]{0,127}", reference
+    ):
+        raise ValueError("Signing key unavailable.")
+    value = os.environ.get(reference, "")
+    if not re.fullmatch(r"[0-9a-fA-F]{64}", value):
+        raise ValueError("Signing key unavailable.")
+    return bytes.fromhex(value)

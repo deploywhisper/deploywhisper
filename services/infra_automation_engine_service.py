@@ -9,7 +9,11 @@ from sqlalchemy import func, select, update
 from sqlalchemy.engine import CursorResult
 
 from infra_automation.contracts import RegistryContract, SAFE_INTEGER
-from infra_automation.lifecycle import LifecycleError, SnapshotDocument
+from infra_automation.lifecycle import (
+    LifecycleError,
+    SnapshotDocument,
+    MachineAuthorityStamp,
+)
 from infra_automation.state import AuditActor, EngineBounds, RunRequest, RunView
 from models.repositories import infra_automation_runs as repository
 from models.tables import InfraAutomationRun, InfraAutomationRunRequest
@@ -47,7 +51,10 @@ def _document(row) -> SnapshotDocument:
 
 def _view(row) -> dict:
     try:
+        from services.infra_automation_triggers import origin_view
+
         value = RunView(
+            origin=origin_view(row),
             id=row.id,
             workflow_id=row.workflow_id,
             revision_id=row.revision_id,
@@ -125,8 +132,10 @@ def request_run(
         raise LifecycleError(503)
     timestamp = timestamp.astimezone(timezone.utc)
     with authorization.authorized_session() as session:
-        workflow, _ = support.workflow(
-            session, request.workflow_id, "automation.request", mutation=True
+        from services.infra_automation_trigger_authority import admission_workflow
+
+        workflow, _ = admission_workflow(
+            session, request.workflow_id, request.workspace_id
         )
         grant = support.scope(
             session,
@@ -135,11 +144,9 @@ def request_run(
             "automation.request",
             mutation=True,
         )
-        if (
-            grant.principal.principal_type != "human"
-            or grant.principal.credential_audience != "human"
-        ):
-            raise authorization.TrustedAuthorizationError()
+        from services.infra_automation_trigger_authority import requester
+
+        requester(session, grant)
         support.screened_label(request.reason)
         key_digest = support.digest(request.idempotency_key.encode())
         existing = repository.get_request(
@@ -199,6 +206,10 @@ def request_run(
             timestamp + timedelta(seconds=request.total_timeout_seconds),
             captured + timedelta(seconds=document.policy.evidence_ttl_seconds),
         )
+        if isinstance(document.authority, MachineAuthorityStamp):
+            from infra_automation.decisions import instant
+
+            deadline = min(deadline, instant(document.authority.credential_expires_at))
         engine_support.ensure_engine_actor(session, grant)
         try:
             row = repository.create_run(
@@ -221,6 +232,9 @@ def request_run(
         from services.infra_automation_targets import capture_run_targets
 
         capture_run_targets(session, row, document, now=timestamp, bounds=bounds)
+        from services.infra_automation_triggers import capture_origin
+
+        capture_origin(session, row, document, grant, now=timestamp, bounds=bounds)
         # Reuse the worker accounting check after insertion; overflow rolls back the
         # run, idempotency binding, snapshot audit and lazy actor in this transaction.
         claims._charge(session, row, 0, timestamp, bounds)
@@ -234,6 +248,9 @@ def _authorized_run(session, run_id: str):
     grant = support.scope(
         session, row.project_id, row.workspace_id, "automation.read", mutation=False
     )
+    from services.infra_automation_trigger_authority import enforce_run_read
+
+    enforce_run_read(session, row)
     return row, grant
 
 
@@ -249,6 +266,8 @@ def list_runs(
     workspace_id: int | None = None,
     limit: int = 25,
     cursor: str | None = None,
+    *,
+    workflow_id: str | None = None,
 ) -> dict:
     from services.infra_automation_service import _binding, _page
 
@@ -256,15 +275,28 @@ def list_runs(
         grant = support.scope(
             session, project_id, workspace_id, "automation.read", mutation=False
         )
+        from services.infra_automation_trigger_authority import run_read_predicate
+
+        predicate = run_read_predicate()
         return _page(
-            binding=_binding(grant, workspace_id=workspace_id, family="runs"),
+            binding=_binding(
+                grant, workspace_id=workspace_id, family="runs", workflow_id=workflow_id
+            ),
             limit=limit,
             cursor=cursor,
             maximum=repository.run_max_sequence(
-                session, project_id=project_id, workspace_id=workspace_id
+                session,
+                project_id=project_id,
+                workspace_id=workspace_id,
+                predicate=predicate,
             ),
             fetch=lambda **values: repository.list_runs(
-                session, project_id=project_id, workspace_id=workspace_id, **values
+                session,
+                project_id=project_id,
+                workspace_id=workspace_id,
+                workflow_id=workflow_id,
+                predicate=predicate,
+                **values,
             ),
             render=_view,
         )

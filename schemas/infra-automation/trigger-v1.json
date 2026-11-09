@@ -1,0 +1,399 @@
+{
+  "$defs": {
+    "TriggerKeyDefinition": {
+      "additionalProperties": false,
+      "properties": {
+        "key_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.:-]*$",
+          "title": "Key Id",
+          "type": "string"
+        },
+        "principal_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.:-]*$",
+          "title": "Principal Id",
+          "type": "string"
+        },
+        "principal_type": {
+          "enum": [
+            "service",
+            "agent"
+          ],
+          "title": "Principal Type",
+          "type": "string"
+        },
+        "project_id": {
+          "maximum": 9007199254740991,
+          "minimum": 1,
+          "title": "Project Id",
+          "type": "integer"
+        },
+        "workspace_id": {
+          "maximum": 9007199254740991,
+          "minimum": 1,
+          "title": "Workspace Id",
+          "type": "integer"
+        },
+        "allowed_revision_ids": {
+          "items": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.:-]*$",
+            "type": "string"
+          },
+          "maxItems": 32,
+          "minItems": 1,
+          "title": "Allowed Revision Ids",
+          "type": "array"
+        },
+        "allowed_sources": {
+          "items": {
+            "$ref": "#/$defs/TriggerSourcePin"
+          },
+          "maxItems": 32,
+          "minItems": 1,
+          "title": "Allowed Sources",
+          "type": "array"
+        },
+        "allowed_origins": {
+          "items": {
+            "enum": [
+              "webhook",
+              "pull_request",
+              "cli"
+            ],
+            "type": "string"
+          },
+          "maxItems": 3,
+          "minItems": 1,
+          "title": "Allowed Origins",
+          "type": "array"
+        },
+        "authentication_version": {
+          "maximum": 9007199254740991,
+          "minimum": 1,
+          "title": "Authentication Version",
+          "type": "integer"
+        },
+        "membership_version": {
+          "maximum": 9007199254740991,
+          "minimum": 1,
+          "title": "Membership Version",
+          "type": "integer"
+        },
+        "restore_epoch": {
+          "maximum": 9007199254740991,
+          "minimum": 1,
+          "title": "Restore Epoch",
+          "type": "integer"
+        },
+        "expires_at": {
+          "maxLength": 20,
+          "minLength": 20,
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$",
+          "title": "Expires At",
+          "type": "string"
+        },
+        "secret_env_ref": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Z][A-Z0-9_]*$",
+          "title": "Secret Env Ref",
+          "type": "string"
+        }
+      },
+      "required": [
+        "key_id",
+        "principal_id",
+        "principal_type",
+        "project_id",
+        "workspace_id",
+        "allowed_revision_ids",
+        "allowed_sources",
+        "allowed_origins",
+        "authentication_version",
+        "membership_version",
+        "restore_epoch",
+        "expires_at",
+        "secret_env_ref"
+      ],
+      "title": "TriggerKeyDefinition",
+      "type": "object"
+    },
+    "TriggerKeyManifest": {
+      "additionalProperties": false,
+      "properties": {
+        "version": {
+          "maximum": 1,
+          "minimum": 1,
+          "title": "Version",
+          "type": "integer"
+        },
+        "keys": {
+          "items": {
+            "$ref": "#/$defs/TriggerKeyDefinition"
+          },
+          "maxItems": 32,
+          "minItems": 1,
+          "title": "Keys",
+          "type": "array"
+        }
+      },
+      "required": [
+        "version",
+        "keys"
+      ],
+      "title": "TriggerKeyManifest",
+      "type": "object"
+    },
+    "TriggerListRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "version": {
+          "maximum": 1,
+          "minimum": 1,
+          "title": "Version",
+          "type": "integer"
+        },
+        "workflow_id": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.:-]*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Workflow Id"
+        },
+        "limit": {
+          "default": 25,
+          "maximum": 100,
+          "minimum": 1,
+          "title": "Limit",
+          "type": "integer"
+        },
+        "cursor": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.:-]*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Cursor"
+        }
+      },
+      "required": [
+        "version"
+      ],
+      "title": "TriggerListRequest",
+      "type": "object"
+    },
+    "TriggerRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "version": {
+          "maximum": 1,
+          "minimum": 1,
+          "title": "Version",
+          "type": "integer"
+        },
+        "workflow_revision_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.:-]*$",
+          "title": "Workflow Revision Id",
+          "type": "string"
+        },
+        "project_id": {
+          "maximum": 9007199254740991,
+          "minimum": 1,
+          "title": "Project Id",
+          "type": "integer"
+        },
+        "workspace_id": {
+          "maximum": 9007199254740991,
+          "minimum": 1,
+          "title": "Workspace Id",
+          "type": "integer"
+        },
+        "source": {
+          "$ref": "#/$defs/TriggerSource"
+        },
+        "inputs": {
+          "maxProperties": 32,
+          "patternProperties": {
+            "^[a-zA-Z0-9][a-zA-Z0-9_.:-]*$": {
+              "anyOf": [
+                {
+                  "maxLength": 1024,
+                  "type": "string"
+                },
+                {
+                  "maximum": 9007199254740991,
+                  "minimum": -9007199254740991,
+                  "type": "integer"
+                },
+                {
+                  "type": "boolean"
+                }
+              ]
+            }
+          },
+          "propertyNames": {
+            "maxLength": 128,
+            "minLength": 1
+          },
+          "title": "Inputs",
+          "type": "object"
+        },
+        "idempotency_key": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.:-]*$",
+          "title": "Idempotency Key",
+          "type": "string"
+        }
+      },
+      "required": [
+        "version",
+        "workflow_revision_id",
+        "project_id",
+        "workspace_id",
+        "source",
+        "inputs",
+        "idempotency_key"
+      ],
+      "title": "TriggerRequest",
+      "type": "object"
+    },
+    "TriggerSource": {
+      "additionalProperties": false,
+      "properties": {
+        "repository_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.:-]*$",
+          "title": "Repository Id",
+          "type": "string"
+        },
+        "commit_sha": {
+          "maxLength": 40,
+          "minLength": 40,
+          "pattern": "^[0-9a-f]{40}$",
+          "title": "Commit Sha",
+          "type": "string"
+        },
+        "origin": {
+          "enum": [
+            "webhook",
+            "pull_request",
+            "cli"
+          ],
+          "title": "Origin",
+          "type": "string"
+        },
+        "pr_ref": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._/-]*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Pr Ref"
+        }
+      },
+      "required": [
+        "repository_id",
+        "commit_sha",
+        "origin"
+      ],
+      "title": "TriggerSource",
+      "type": "object"
+    },
+    "TriggerSourcePin": {
+      "additionalProperties": false,
+      "properties": {
+        "repository_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.:-]*$",
+          "title": "Repository Id",
+          "type": "string"
+        },
+        "commit_sha": {
+          "maxLength": 40,
+          "minLength": 40,
+          "pattern": "^[0-9a-f]{40}$",
+          "title": "Commit Sha",
+          "type": "string"
+        }
+      },
+      "required": [
+        "repository_id",
+        "commit_sha"
+      ],
+      "title": "TriggerSourcePin",
+      "type": "object"
+    },
+    "TriggerStatusRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "version": {
+          "maximum": 1,
+          "minimum": 1,
+          "title": "Version",
+          "type": "integer"
+        },
+        "run_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.:-]*$",
+          "title": "Run Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "version",
+        "run_id"
+      ],
+      "title": "TriggerStatusRequest",
+      "type": "object"
+    }
+  },
+  "anyOf": [
+    {
+      "$ref": "#/$defs/TriggerRequest"
+    },
+    {
+      "$ref": "#/$defs/TriggerStatusRequest"
+    },
+    {
+      "$ref": "#/$defs/TriggerListRequest"
+    },
+    {
+      "$ref": "#/$defs/TriggerKeyManifest"
+    }
+  ],
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Signed trigger v1 requests and protected key manifest"
+}

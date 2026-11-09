@@ -1,0 +1,31 @@
+{
+  "version": 1,
+  "keys": [
+    {
+      "key_id": "example-ci",
+      "principal_id": "replace-with-provisioned-principal",
+      "principal_type": "service",
+      "project_id": 100,
+      "workspace_id": 100,
+      "allowed_revision_ids": [
+        "replace-with-published-revision"
+      ],
+      "allowed_sources": [
+        {
+          "repository_id": "example-repository",
+          "commit_sha": "1111111111111111111111111111111111111111"
+        }
+      ],
+      "allowed_origins": [
+        "webhook",
+        "cli",
+        "pull_request"
+      ],
+      "authentication_version": 1,
+      "membership_version": 1,
+      "restore_epoch": 1,
+      "expires_at": "2000-01-01T00:00:00Z",
+      "secret_env_ref": "DEPLOYWHISPER_EXAMPLE_TRIGGER_SECRET"
+    }
+  ]
+}

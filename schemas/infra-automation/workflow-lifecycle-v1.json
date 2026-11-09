@@ -747,6 +747,143 @@
       "title": "IntegerInput",
       "type": "object"
     },
+    "MachineAuthorityStamp": {
+      "additionalProperties": false,
+      "properties": {
+        "advisory_policy_digest": {
+          "maxLength": 71,
+          "minLength": 71,
+          "pattern": "^sha256:[0-9a-f]{64}(?![\\s\\S])",
+          "title": "Advisory Policy Digest",
+          "type": "string"
+        },
+        "authentication_version": {
+          "maximum": 9007199254740991,
+          "minimum": 1,
+          "title": "Authentication Version",
+          "type": "integer"
+        },
+        "authorization_epoch": {
+          "maximum": 9007199254740991,
+          "minimum": 1,
+          "title": "Authorization Epoch",
+          "type": "integer"
+        },
+        "credential_audience": {
+          "const": "service-request-v1",
+          "default": "service-request-v1",
+          "title": "Credential Audience",
+          "type": "string"
+        },
+        "credential_expires_at": {
+          "maxLength": 20,
+          "minLength": 20,
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$",
+          "title": "Credential Expires At",
+          "type": "string"
+        },
+        "key_digest": {
+          "maxLength": 71,
+          "minLength": 71,
+          "pattern": "^sha256:[0-9a-f]{64}(?![\\s\\S])",
+          "title": "Key Digest",
+          "type": "string"
+        },
+        "key_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.:-]*(?![\\s\\S])",
+          "title": "Key Id",
+          "type": "string"
+        },
+        "membership_version": {
+          "maximum": 9007199254740991,
+          "minimum": 1,
+          "title": "Membership Version",
+          "type": "integer"
+        },
+        "policy_digest": {
+          "maxLength": 71,
+          "minLength": 71,
+          "pattern": "^sha256:[0-9a-f]{64}(?![\\s\\S])",
+          "title": "Policy Digest",
+          "type": "string"
+        },
+        "principal_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.:-]*(?![\\s\\S])",
+          "title": "Principal Id",
+          "type": "string"
+        },
+        "principal_type": {
+          "enum": [
+            "service",
+            "agent"
+          ],
+          "title": "Principal Type",
+          "type": "string"
+        },
+        "project_id": {
+          "maximum": 9007199254740991,
+          "minimum": 1,
+          "title": "Project Id",
+          "type": "integer"
+        },
+        "restore_epoch": {
+          "maximum": 9007199254740991,
+          "minimum": 1,
+          "title": "Restore Epoch",
+          "type": "integer"
+        },
+        "revision_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.:-]*(?![\\s\\S])",
+          "title": "Revision Id",
+          "type": "string"
+        },
+        "version": {
+          "default": 1,
+          "maximum": 1,
+          "minimum": 1,
+          "title": "Version",
+          "type": "integer"
+        },
+        "workflow_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.:-]*(?![\\s\\S])",
+          "title": "Workflow Id",
+          "type": "string"
+        },
+        "workspace_id": {
+          "maximum": 9007199254740991,
+          "minimum": 1,
+          "title": "Workspace Id",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "workflow_id",
+        "revision_id",
+        "project_id",
+        "workspace_id",
+        "principal_id",
+        "authentication_version",
+        "membership_version",
+        "authorization_epoch",
+        "restore_epoch",
+        "policy_digest",
+        "advisory_policy_digest",
+        "principal_type",
+        "key_id",
+        "key_digest",
+        "credential_expires_at"
+      ],
+      "title": "MachineAuthorityStamp",
+      "type": "object"
+    },
     "PolicyAdapterSettings": {
       "additionalProperties": false,
       "description": "Resolved project or integration defaults for policy interpretation.",
@@ -1281,7 +1418,15 @@
           "$ref": "#/$defs/PolicyAdapterSettings"
         },
         "authority": {
-          "$ref": "#/$defs/AuthorityStamp"
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AuthorityStamp"
+            },
+            {
+              "$ref": "#/$defs/MachineAuthorityStamp"
+            }
+          ],
+          "title": "Authority"
         },
         "captured_at": {
           "maxLength": 20,
