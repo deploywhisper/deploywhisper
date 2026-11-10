@@ -57,7 +57,15 @@
     "screenshots": 24,
     "axe_critical_serious": 0,
     "visual_score": 94,
-    "proof_branch": "feature/16-18-automation-settings-ui"
+    "proof_branch": "feature/16-18-automation-settings-ui",
+    "combined_workspace_recheck": {
+      "typecheck": "passed",
+      "unit_tests": 493,
+      "compatibility_checks": 2,
+      "build": "passed",
+      "fixture_guard_tests": 3,
+      "ruff_format_files": 613
+    }
   },
   "operator": {
     "actual_normal_checks": 28,
@@ -85,10 +93,15 @@
     "source_hashes_identical": true,
     "scope": "Current SQLite schema with configured bound operator recovery controls; ten active runs and at most two actual spawned synthetic analysis workers plus twenty persisted, enrolled, redeemed and polled local authenticated runner service ports. No remote HTTPS agent, collector, receiver, cloud or host-power-loss qualification."
   },
-  "remaining_gates": [
+  "publication": "Local Git Flow preparation only; no remote publication authorized",
+  "local_commits": {
+    "backend_implementation": "894af3b0308dacf157fe957f18998a02257b4416",
+    "ui_implementation": "2be59061ca6bd84564d1c8858c7e77b5270daaf7"
+  },
+  "remaining_story_gate": "Independent human self-service pilot; automated operator exercise does not substitute for it",
+  "unqualified_support_release_profiles": [
     "Independent human self-service pilot",
     "Production receiver/custody credential transfer and supported remote/HTTPS profile qualification",
     "Cold OS/Docker/dependency installation and original12.7/12.8 acceptance remain separate; not claimed by this bounded profile"
-  ],
-  "publication": "Local Git Flow preparation only; no remote publication authorized"
+  ]
 }

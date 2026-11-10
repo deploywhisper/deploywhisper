@@ -15,11 +15,10 @@ commands described by the evidence owners.
   completion-resume supplements, with private disposable stores and cleanup.
   [Operator evidence](operator-exercise.md) distinguishes real commands from
   synthetic custody and test-only interruption markers.
-- The `ui-results.md` UI evidence is currently in the separate UI worktree
-  `/tmp/deploywhisper-story16-18-ui`. The canonical location after branch
-  integration is `docs/verification/infra-automation/16-18/ui-results.md` on
-  `feature/16-18-automation-settings-ui`; the integration owner must preserve it
-  and its screenshot/source manifests when preparing the separate UI PR.
+- The `ui-results.md` evidence was prepared in an isolated UI worktree and
+  rebased onto the local backend dependency. Its integrated canonical location is `docs/verification/infra-automation/16-18/ui-results.md` on
+  `feature/16-18-automation-settings-ui`, together with its screenshot/source
+  manifests for the separate UI review unit.
   Its final results are 493 frontend tests, two compatibility checks, two composed
   browser journeys, 24 screenshots, zero serious/critical axe findings and visual
   verdict 94. These are browser proofs against the production-built image, not a
