@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from contextlib import closing
-from importlib import reload
+from importlib import import_module, reload
 import os
 from pathlib import Path
 import sqlite3
@@ -17,7 +17,7 @@ import config
 import models.database as database
 
 HEAD = "036_add_receiver_reconciliation"
-CURRENT_HEAD = "039_add_signed_trigger_intake"
+CURRENT_HEAD = "042_add_receiver_recovery"
 PREVIOUS = "035_add_infra_handoffs"
 
 
@@ -71,8 +71,18 @@ class ReceiverReconciliationMigrationTests(unittest.TestCase):
                     "SELECT name,sql FROM sqlite_master WHERE type='trigger' ORDER BY name"
                 ).fetchall()
             )
+            current = import_module(f"migrations.versions.{CURRENT_HEAD}")
+            overrides: dict[str, str] = {}
+            while current.revision != HEAD:
+                overrides = {**getattr(current, "OVERRIDES", {}), **overrides}
+                current = import_module(f"migrations.versions.{current.down_revision}")
             for name, sql in before:
-                self.assertEqual(after[name], sql)
+                expected = (
+                    f"CREATE TRIGGER {name} {overrides[name]}"
+                    if name in overrides
+                    else sql
+                )
+                self.assertEqual(after[name], expected)
 
     def test_partial_receiver_guard_denies_before_create_all(self):
         command.upgrade(self.config, HEAD)

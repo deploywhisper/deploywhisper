@@ -17,7 +17,7 @@ from alembic.config import Config
 import config
 import models.database as database
 
-HEAD = "039_add_signed_trigger_intake"
+HEAD = "042_add_receiver_recovery"
 PREVIOUS = "029_add_identity_lifecycle"
 
 

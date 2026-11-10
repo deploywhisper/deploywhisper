@@ -1,0 +1,27 @@
+{
+  "active": 10,
+  "active_by_workflow": {
+    "bd6d6bcac5254e1e3c6a8d41c3f1ce24f7675cb5ba15e7de": 5,
+    "dc960815f958d49bdbf5ad5e3f7f4e436ca5fd311a430908": 5
+  },
+  "analysis_inflight": 2,
+  "completed_attempts": 70,
+  "elapsed": 565.5091920490086,
+  "event": "progress",
+  "identity_refresh_count": 56,
+  "mode": "capacity",
+  "queued": 0,
+  "resources": {
+    "children_maxrss": 110856,
+    "cpu.max": "200000 100000",
+    "maxrss_units": "KiB",
+    "memory.current": "424992768",
+    "memory.events": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0",
+    "memory.max": "2147483648",
+    "self_maxrss": 110856
+  },
+  "sample_count": 1043,
+  "slots": 20,
+  "utc": "2026-11-10T07:44:34.119110+00:00",
+  "workers": 2
+}

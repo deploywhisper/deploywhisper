@@ -1,0 +1,21 @@
+{
+  "image_id": "sha256:27456d260221f1648b0d1ba1407943a3005c6a40045987aa46fd64d7225e01de",
+  "runtime": "production image Python3.11.17/Linux ARM64",
+  "cpu_limit": 2,
+  "memory_bytes": 2147483648,
+  "pids_limit": 128,
+  "network": "none",
+  "read_only_root": true,
+  "tmpfs_bytes": 268435456,
+  "uid": 999,
+  "gid": 999,
+  "source_mounts": [
+    "scripts (read-only)",
+    "tests (read-only)",
+    "api_server.py (read-only)",
+    "cli.py (read-only)"
+  ],
+  "environment": "image defaults plus PYTHONPATH/PYTHONDONTWRITEBYTECODE; no host credentials or .env mount",
+  "exit_code": 130,
+  "smoke": false
+}

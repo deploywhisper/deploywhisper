@@ -1,0 +1,4 @@
+{
+  "acceptance_qualified": false,
+  "reason": "Interrupted before source edits to repair expired-session deadlock in completion journal resume; partial Linux metrics preserved."
+}

@@ -13,6 +13,7 @@ from typing import Annotated, Literal
 from pydantic import Field, SecretStr, StrictStr, StrictBool, StrictInt
 from sqlalchemy import select
 from infra_automation.contracts import ClosedModel
+from infra_automation.operator_recovery import assert_effects_allowed
 from infra_automation.lifecycle import CursorEnvelope, LifecycleError, Positive, Reason
 from infra_automation.workflow_schema import Digest, Identifier
 from infra_automation.runner.protocol import Enrollment, RunnerCredential
@@ -205,6 +206,7 @@ def create_enrollment(request: EnrollmentRequest, *, now=None):
     with authorization.authorized_session() as session:
         timestamp = _now(now)
         grant = _human(session, request.project_id, request.workspace_id)
+        assert_effects_allowed(session)
         _screen(request.reason)
         for value in (*request.tags, request.tool, request.runner_version):
             _screen(value)
@@ -307,6 +309,7 @@ def redeem(
     with authorization.authorized_session() as session:
         timestamp = _now(now)
         item = repo.get_enrollment(session, enrollment_id)
+        assert_effects_allowed(session)
         if (
             item is None
             or not hmac.compare_digest(item.token_hash, supplied)
@@ -370,6 +373,7 @@ def rotate(runner_id, *, reason, now=None):
         if row is None:
             raise authorization.TrustedAuthorizationError()
         grant = _human(session, row.project_id, row.workspace_id)
+        assert_effects_allowed(session)
         _screen(reason)
         settings = _live(session, row, timestamp)
         if row.status != "active":

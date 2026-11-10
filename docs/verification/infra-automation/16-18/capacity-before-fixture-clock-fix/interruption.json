@@ -1,0 +1,4 @@
+{
+  "acceptance_qualified": false,
+  "reason": "Stopped before a test-only fixture clock correction so the complete source witness remains unchanged during the final measurement; production image/runtime unchanged."
+}

@@ -1,0 +1,12 @@
+{
+  "infra_automation/operator_recovery.py": "5d6d7f7154ee16ba7ebea440f8fa273354c536573876ed9711e92145a471a2ee",
+  "cli/automation_operations.py": "24aec4f0631060e1430d778d6fcf789bcaa2fd113cc112fbd1269f3e8bc66f35",
+  "models/operator_recovery.py": "9f2f04937062e62fdcdbf90032a17d736801285856a65ece87a59b06608a0693",
+  "migrations/versions/041_add_operator_recovery.py": "4a1747ea11ab6d996c5a3471cc51a3b836f4386e8cb4b1a5731d8e21f7cce139",
+  "tests/test_infra_automation/test_operator_backup.py": "358fa12e172faf6d631a8ae0cd72e9df89c6bb8680ad585585c132f36a460205",
+  "app.py": "65f25dced26d1ede2612b0605e929b8176a9ba8d8722e888defebb32f70b09f2",
+  "config.py": "64a8d5e918d87ec0ea5d446dd28953eb4a539254a5a42e0ee49c8b46c490dae5",
+  "services/project_service.py": "ef8789d01839642d749a7fcf04fb0c429e3367ecf036c1ff308a42b9ff57e372",
+  "models/database.py": "c5129d2f5759e7d748f87bb35ec35ef5109eb7ed5529af3ff09d5585d2e33ef5",
+  "models/tables.py": "cc6bf6fe336af1580ea240d43f63de567f691e89b159369e4db43aa2db5b0faa"
+}

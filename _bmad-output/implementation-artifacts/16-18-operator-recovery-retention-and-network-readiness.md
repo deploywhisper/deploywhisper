@@ -1,6 +1,6 @@
 # Story 16.18: Operator Recovery, Retention and Network Readiness
 
-Status: backlog
+Status: in-progress
 Preparation: refined
 Release: v1.5.0 | Priority: P0, highest-priority feature
 
@@ -45,19 +45,19 @@ Coverage intent: Delta against released v1.4.0; full canonical mappings below ar
 
 Execute one bounded packet at a time on the story feature branch. Each packet owns the named paths; coordinate shared paths and do not revert other edits. Re-estimate after 16.0 spikes; split packets into reviewable PRs without renumbering the canonical story.
 
-- [ ] Packet 18.1: Retention and bounded storage — owner: Persistence implementer.
+- [x] Packet 18.1: Retention and bounded storage — owner: Persistence implementer.
   - Owned write paths: `infra_automation/ retention service; models/repositories/ artifact manifests; config.py; tests/test_infra_automation/`.
   - Output: atomic upload/deletion staging, decision invalidation, digest tombstones and floors; no raw artifact in audit.
   - Acceptance proof: AC1,2: pending-evidence deletion races, abandoned upload/disk-full/quota corpus.
-- [ ] Packet 18.2: Quiesced backup, upgrade and restore epoch — owner: Persistence/operator implementer.
+- [x] Packet 18.2: Quiesced backup, upgrade and restore epoch — owner: Persistence/operator implementer.
   - Owned write paths: `scripts/ automation backup/restore tooling; migrations/versions/ next inspected head; tests/test_models/ and tests/test_infra_automation/`.
   - Output: coordinated manifest/checkpoint and epoch reset with credential/lease/grant invalidation; never assume copied SQLite alone is complete.
   - Acceptance proof: AC3: v1.4.0-copy migration, interrupted upgrade, restored consumed/unconsumed operation races.
-- [ ] Packet 18.3: Expiry and uncertain-operation recovery — owner: Domain implementer.
+- [x] Packet 18.3: Expiry and uncertain-operation recovery — owner: Domain implementer.
   - Owned write paths: `infra_automation/ reconciliation and existing target locks; tests/test_infra_automation/`.
   - Output: distinct content/authority/lease expiry, retained unknown locks and reasoned audited break.
   - Acceptance proof: AC3,4: no resurrection after restore/revoke/expiry; receiver receipts reconcile same operation.
-- [ ] Packet 18.4: Restricted network and tool caches — owner: Runner/operator implementer.
+- [x] Packet 18.4: Restricted network and tool caches — owner: Runner/operator implementer.
   - Owned write paths: `infra_automation/runner/ config; docs/infra-automation/network.md; tests/test_infra_automation/`.
   - Output: allowlisted DNS/egress, bounded pinned caches, separate identities and rotation procedures.
   - Acceptance proof: AC5: denied egress/DNS, offline cache install, rotation and recovery exercise.
@@ -66,7 +66,7 @@ Execute one bounded packet at a time on the story feature branch. Each packet ow
   - Output: bootstrap/account recovery, configuration, restore, incident, retention and unknown-lock runbooks; secret-free bounded metrics and original 12.7/12.8 contribution matrix.
   - Acceptance proof: AC1–6: self-service pilot, docs/drift checks, 30-minute capacity/resource/error record.
 
-- [ ] Packet 18.6: Automation settings browser integration — owner: Frontend/operator UI implementer (AC7 and AC1/4).
+- [x] Packet 18.6: Automation settings browser integration — owner: Frontend/operator UI implementer (AC7 and AC1/4).
   - Owned write paths: `frontend/src/screens/Settings.tsx` and scoped settings components/client adapters, `frontend/e2e`, and feature operator documentation.
   - Output: explicit admin feature-enablement, registered-target selection/details, quota/retention/TTL/credential-lifetime controls backed by earlier 16.4/16.10 APIs; receiver credentials remain configured by protected operator mechanisms, never pasted into reusable UI persistence.
   - Acceptance proof: composed API-backed admin save/validation/conflict, nonadmin denial, feature-off history/reconciliation, disable-after-approval and stale-scope cache cases; full keyboard/axe and 1440/760 screenshots. Register actual browser tests and record commands/results. Backend support gaps use their own labeled backend-for-UI PR; no Vite acceptance.
@@ -105,14 +105,210 @@ Execute one bounded packet at a time on the story feature branch. Each packet ow
 ## Dev Agent Record
 
 ### Agent Model Used
-Planning refinement only; implementation agent records its model at execution.
+Codex (GPT-6), with bounded native implementation and independent review lanes.
+
+### Implementation Plan
+- Reuse existing authorization, policy epochs, audit, target locks, shared analysis and receiver contracts; add no dependencies.
+- Preserve immutable evidence identity through tombstones and an exact one-use storage debit; protect pending decisions and uncertain external work.
+- Coordinate private database/artifact/custody backups under participating-writer locks and an outside-backup generation ledger; make interrupted publication and completion resumable without reviving authority.
+- Reconcile a consumed historical receiver operation using current-generation status/terminal-only credentials and completed local evidence; never repeat an action or restore a grant.
+- Bind the approved settings and registered-target inspection UI to real APIs in a separate dependent branch; verify the production-built composed app.
+- Keep unexecuted human and broader production-profile qualification explicit. Packet 18.5 remains open for its independent human self-service pilot.
 
 ### Debug Log References
-Not executed.
+- [Entry and concrete interface review](../../docs/verification/infra-automation/16-18/readiness.md).
+- [Independent findings and repairs](../../docs/verification/infra-automation/16-18/review.md).
+- [Retention proof](../../docs/verification/infra-automation/16-18/retention-results.md).
+- [Restore proof](../../docs/verification/infra-automation/16-18/restore-results.md).
+- [Receiver recovery proof](../../docs/verification/infra-automation/16-18/receiver-recovery-results.md) and [completed receiver/CLI proof](../../docs/verification/infra-automation/16-18/receiver-runtime-recovery-results.md).
+- [Actual operator exercise](../../docs/verification/infra-automation/16-18/operator-exercise.md):28 normal checks plus 2 completion-resume cases.
+- [Authentic v1.4.0-copy upgrade](../../docs/verification/infra-automation/16-18/upgrade-results.json): schema 028 → 042, 37 original report columns preserved, source unchanged, integrity OK/FK0.
+- [Offline archive installation and network-none recovery](../../docs/verification/infra-automation/16-18/offline-install-results.md), [cache](../../docs/verification/infra-automation/16-18/cache-results.json) and [DNS](../../docs/verification/infra-automation/16-18/network-results.md).
+- [Full capacity result](../../docs/verification/infra-automation/16-18/capacity-results.md) and [reproducible command](../../docs/verification/infra-automation/16-18/capacity-command.md).
+- [Composed browser proof](../../docs/verification/infra-automation/16-18/ui-results.md), source inventory, 24 screenshots and visual verdict 94 on the dependent UI branch.
+- [Final commands/log digests/results](../../docs/verification/infra-automation/16-18/validation-summary.json) and [acceptance audit](../../docs/verification/infra-automation/16-18/acceptance-audit.md).
 
 ### Completion Notes List
-- Story specification prepared; no feature implementation, qualification, public RFC acceptance, release publication or runtime tests performed.
-- Implementation and validation commands above are future obligations, not test results.
+- Backend branch: `feature/16-18-operator-recovery-retention`; dependent UI branch: `feature/16-18-automation-settings-ui`. Local preparation preserves separate backend and UI review units.
+- Implemented migrations040–042, typed scoped purge, immutable retention receipts, conservative quota reclamation, protected cache verification, coordinated backup/restore, generation invalidation and recovery barriers, completed-only receiver reconciliation, and approved settings/target-selection-details UI.
+- Reused existing services and wire contracts; no new dependency, infrastructure action, automatic approval, general machine issuer or target-editing form was introduced.
+- Independent reviews and composed/real operator exercises caught and repaired: full-schema debit rejection; exact retry after purge; lost post-backup external history; missing schema guards; raw SQLite descriptor lock loss; expired reconciliation-token revival; inert audit-identity generation assumption; and interrupted completion with expired sessions. Initial failures/interrupted measurements remain explicitly unqualified evidence.
+- Final root smoke: `./.venv/bin/python -m unittest discover -q` — 2048 tests, 3 skips, exit 0. Full `bash scripts/ci-local.sh` — 3523 tests across all 10 directories, exit 0; includes lint, repo-wide formatting 611 files, dependency consistency, Bandit, compile and skill/prompt checks. Exact API/CLI/infra pytest shard — 812 passed, 1 skipped, 2442 subtests.
+- Fresh real isolation 172 checks and collection 49 checks passed with source integrity. Final Linux/Python 3.11.17 production-image capacity ran 1800.767 real seconds: 3600 samples, 10 active runs throughout, 2 spawned synthetic analysis workers, 20 authenticated persisted runner ports, 72000 polls, 40 rotations, zero errors, explicit 429 backpressure and identical 338-file source witnesses.
+- UI validation APPLICABLE and passed: 493 frontend tests plus 2 compatibility checks, typecheck/build, 2 actual composed browser journeys, 24 screenshots at 1440/760, zero critical/serious axe findings, visual 94. Settings saves/409/422/403 and stale-scope cases, real purge/retained history, post-approval disable and feature-off reconciliation ran at root SPA routes on localhost8080. Original application was restored healthy; all disposable resources and credentials were removed.
+- Offline installation proof uses a complete verified 229869568-byte/21-layer current image archive on an already installed/cached Docker host, then fresh private schema 042 state and 28 CLI/API checks under network none. This is not cold OS/Docker/dependency installation or a production human pilot.
+- Remaining mandatory gate: independent human self-service pilot. Broader production HTTPS/remote receiver credential transfer, unmanaged writers, other tools/providers and host-power-loss qualification remain unclaimed support/release gates. Original 12.7/12.8 acceptance remains open. Story stays **in-progress**; Packet 18.5 is not falsely checked.
+- BMad Help recheck: complete the remaining operator qualification, then run formal `bmad-code-review` in fresh context before review/done advancement. Do not promote release readiness or close 12.7/12.8 from these bounded contributions.
 
 ### File List
-- `_bmad-output/implementation-artifacts/16-18-operator-recovery-retention-and-network-readiness.md` (story specification only).
+The following list covers the backend branch and dependent UI branch together;
+private databases, plans, credentials and image archives are excluded.
+
+- `README.md`
+- `_bmad-output/implementation-artifacts/16-18-operator-recovery-retention-and-network-readiness.md`
+- `_bmad-output/implementation-artifacts/sprint-status.yaml`
+- `_bmad-output/project-context.md`
+- `api/routes/infra_automation.py`
+- `api/schemas.py`
+- `app.py`
+- `cli/automation_operations.py`
+- `cli/identity.py`
+- `config.py`
+- `docs/infra-automation/network.md`
+- `docs/infra-automation/operations.md`
+- `docs/verification/infra-automation/16-13/results.json`
+- `docs/verification/infra-automation/16-14/results.json`
+- `docs/verification/infra-automation/16-18/acceptance-audit.md`
+- `docs/verification/infra-automation/16-18/cache-results.json`
+- `docs/verification/infra-automation/16-18/capacity-before-completion-resume/capacity-progress.json`
+- `docs/verification/infra-automation/16-18/capacity-before-completion-resume/capacity-start.json`
+- `docs/verification/infra-automation/16-18/capacity-before-completion-resume/container-profile.json`
+- `docs/verification/infra-automation/16-18/capacity-before-completion-resume/interruption.json`
+- `docs/verification/infra-automation/16-18/capacity-before-completion-resume/operator-capacity-failure.json`
+- `docs/verification/infra-automation/16-18/capacity-before-fixture-clock-fix/capacity-progress.json`
+- `docs/verification/infra-automation/16-18/capacity-before-fixture-clock-fix/capacity-start.json`
+- `docs/verification/infra-automation/16-18/capacity-before-fixture-clock-fix/container-profile.json`
+- `docs/verification/infra-automation/16-18/capacity-before-fixture-clock-fix/interruption.json`
+- `docs/verification/infra-automation/16-18/capacity-before-fixture-clock-fix/operator-capacity-failure.json`
+- `docs/verification/infra-automation/16-18/capacity-before-receiver-recovery/capacity-progress.json`
+- `docs/verification/infra-automation/16-18/capacity-before-receiver-recovery/capacity-start.json`
+- `docs/verification/infra-automation/16-18/capacity-before-receiver-recovery/interruption.json`
+- `docs/verification/infra-automation/16-18/capacity-before-receiver-recovery/operator-capacity-failure.json`
+- `docs/verification/infra-automation/16-18/capacity-command.md`
+- `docs/verification/infra-automation/16-18/capacity-interrupted/capacity-progress.json`
+- `docs/verification/infra-automation/16-18/capacity-interrupted/capacity-start.json`
+- `docs/verification/infra-automation/16-18/capacity-interrupted/interruption.json`
+- `docs/verification/infra-automation/16-18/capacity-interrupted/operator-capacity-failure.json`
+- `docs/verification/infra-automation/16-18/capacity-results.md`
+- `docs/verification/infra-automation/16-18/capacity/capacity-progress.json`
+- `docs/verification/infra-automation/16-18/capacity/capacity-start.json`
+- `docs/verification/infra-automation/16-18/capacity/capacity.json`
+- `docs/verification/infra-automation/16-18/capacity/container-profile.json`
+- `docs/verification/infra-automation/16-18/capacity/operator-capacity.json`
+- `docs/verification/infra-automation/16-18/changed-files.json`
+- `docs/verification/infra-automation/16-18/final-source-hashes.json`
+- `docs/verification/infra-automation/16-18/isolation-first-attempt.json`
+- `docs/verification/infra-automation/16-18/linux-smoke/capacity-progress.json`
+- `docs/verification/infra-automation/16-18/linux-smoke/capacity-start.json`
+- `docs/verification/infra-automation/16-18/linux-smoke/capacity.json`
+- `docs/verification/infra-automation/16-18/linux-smoke/container-profile.json`
+- `docs/verification/infra-automation/16-18/linux-smoke/operator-capacity.json`
+- `docs/verification/infra-automation/16-18/network-results.json`
+- `docs/verification/infra-automation/16-18/network-results.md`
+- `docs/verification/infra-automation/16-18/offline-install-results.json`
+- `docs/verification/infra-automation/16-18/offline-install-results.md`
+- `docs/verification/infra-automation/16-18/operator-exercise.json`
+- `docs/verification/infra-automation/16-18/operator-exercise.md`
+- `docs/verification/infra-automation/16-18/readiness.md`
+- `docs/verification/infra-automation/16-18/receiver-recovery-design.md`
+- `docs/verification/infra-automation/16-18/receiver-recovery-results.md`
+- `docs/verification/infra-automation/16-18/receiver-runtime-recovery-results.md`
+- `docs/verification/infra-automation/16-18/recovery-results.md`
+- `docs/verification/infra-automation/16-18/restore-design.md`
+- `docs/verification/infra-automation/16-18/restore-results.md`
+- `docs/verification/infra-automation/16-18/restore-source-hashes.json`
+- `docs/verification/infra-automation/16-18/retention-design.md`
+- `docs/verification/infra-automation/16-18/retention-results.md`
+- `docs/verification/infra-automation/16-18/review.md`
+- `docs/verification/infra-automation/16-18/screenshots.json`
+- `docs/verification/infra-automation/16-18/screenshots/settings-after-approval-disabled-1440.png`
+- `docs/verification/infra-automation/16-18/screenshots/settings-after-approval-disabled-760.png`
+- `docs/verification/infra-automation/16-18/screenshots/settings-conflict-1440.png`
+- `docs/verification/infra-automation/16-18/screenshots/settings-conflict-760.png`
+- `docs/verification/infra-automation/16-18/screenshots/settings-conflict-outcome-1440.png`
+- `docs/verification/infra-automation/16-18/screenshots/settings-conflict-outcome-760.png`
+- `docs/verification/infra-automation/16-18/screenshots/settings-disabled-1440.png`
+- `docs/verification/infra-automation/16-18/screenshots/settings-disabled-760.png`
+- `docs/verification/infra-automation/16-18/screenshots/settings-disabled-outcome-1440.png`
+- `docs/verification/infra-automation/16-18/screenshots/settings-disabled-outcome-760.png`
+- `docs/verification/infra-automation/16-18/screenshots/settings-feature-off-reconciled-1440.png`
+- `docs/verification/infra-automation/16-18/screenshots/settings-feature-off-reconciled-760.png`
+- `docs/verification/infra-automation/16-18/screenshots/settings-integrated-history-1440.png`
+- `docs/verification/infra-automation/16-18/screenshots/settings-integrated-history-760.png`
+- `docs/verification/infra-automation/16-18/screenshots/settings-nonadmin-1440.png`
+- `docs/verification/infra-automation/16-18/screenshots/settings-nonadmin-760.png`
+- `docs/verification/infra-automation/16-18/screenshots/settings-saved-1440.png`
+- `docs/verification/infra-automation/16-18/screenshots/settings-saved-760.png`
+- `docs/verification/infra-automation/16-18/screenshots/settings-saved-outcome-1440.png`
+- `docs/verification/infra-automation/16-18/screenshots/settings-saved-outcome-760.png`
+- `docs/verification/infra-automation/16-18/screenshots/settings-target-1440.png`
+- `docs/verification/infra-automation/16-18/screenshots/settings-target-760.png`
+- `docs/verification/infra-automation/16-18/screenshots/settings-target-outcome-1440.png`
+- `docs/verification/infra-automation/16-18/screenshots/settings-target-outcome-760.png`
+- `docs/verification/infra-automation/16-18/ui-integrated-sources.json`
+- `docs/verification/infra-automation/16-18/ui-results.md`
+- `docs/verification/infra-automation/16-18/upgrade-initial041-results.json`
+- `docs/verification/infra-automation/16-18/upgrade-results.json`
+- `docs/verification/infra-automation/16-18/validation-summary.json`
+- `docs/verification/infra-automation/16-18/visual-verdict.json`
+- `frontend/e2e/infra-automation-settings-outcomes.spec.ts`
+- `frontend/e2e/infra-automation-settings.spec.ts`
+- `frontend/src/api/infraAutomationSettings.test.ts`
+- `frontend/src/api/infraAutomationSettings.ts`
+- `frontend/src/api/schema.d.ts`
+- `frontend/src/screens/AutomationSettingsSection.test.tsx`
+- `frontend/src/screens/AutomationSettingsSection.tsx`
+- `frontend/src/screens/Settings.tsx`
+- `infra_automation/operator_recovery.py`
+- `infra_automation/receiver_recovery.py`
+- `infra_automation/receiver_runtime.py`
+- `infra_automation/retention.py`
+- `infra_automation/runner/cache.py`
+- `migrations/versions/040_add_manifest_retention.py`
+- `migrations/versions/041_add_operator_recovery.py`
+- `migrations/versions/042_add_receiver_recovery.py`
+- `models/database.py`
+- `models/operator_recovery.py`
+- `models/receiver_recovery.py`
+- `models/repositories/infra_automation_reports.py`
+- `models/tables.py`
+- `scripts/compose-story16-18-outcomes.yaml`
+- `scripts/compose-story16-18.yaml`
+- `scripts/qualify_collection.py`
+- `scripts/qualify_operator_capacity.py`
+- `scripts/settings_ui_fixture.py`
+- `services/content_security.py`
+- `services/identity_service.py`
+- `services/infra_automation_collection_views.py`
+- `services/infra_automation_engine_support.py`
+- `services/infra_automation_handoffs.py`
+- `services/infra_automation_policy.py`
+- `services/infra_automation_preflight.py`
+- `services/infra_automation_receiver_recovery.py`
+- `services/infra_automation_retention.py`
+- `services/infra_automation_runner_tasks.py`
+- `services/infra_automation_runners.py`
+- `services/infra_automation_snapshots.py`
+- `services/project_service.py`
+- `tests/test_api/test_infra_automation_retention.py`
+- `tests/test_cli/test_receiver_recovery.py`
+- `tests/test_docs/test_automation_operations_docs.py`
+- `tests/test_infra/test_container_contract.py`
+- `tests/test_infra/test_identity_migration.py`
+- `tests/test_infra/test_infra_automation_engine_migration.py`
+- `tests/test_infra/test_infra_automation_handoff_migration.py`
+- `tests/test_infra/test_infra_automation_workflow_migration.py`
+- `tests/test_infra/test_migrations.py`
+- `tests/test_infra/test_project_membership_migration.py`
+- `tests/test_infra/test_receiver_reconciliation_migration.py`
+- `tests/test_infra/test_runner_enrollment_migration.py`
+- `tests/test_infra/test_settings_ui_fixture_guard.py`
+- `tests/test_infra/test_trigger_migration.py`
+- `tests/test_infra_automation/test_collection_qualification.py`
+- `tests/test_infra_automation/test_engine_identity.py`
+- `tests/test_infra_automation/test_operator_backup.py`
+- `tests/test_infra_automation/test_operator_cache.py`
+- `tests/test_infra_automation/test_operator_capacity.py`
+- `tests/test_infra_automation/test_operator_recovery.py`
+- `tests/test_infra_automation/test_preflight_repository.py`
+- `tests/test_infra_automation/test_receiver_completed_recovery.py`
+- `tests/test_infra_automation/test_receiver_recovery.py`
+- `tests/test_infra_automation/test_receiver_recovery_redaction.py`
+- `tests/test_infra_automation/test_recovery_barrier.py`
+- `tests/test_infra_automation/test_retention.py`
+- `tests/test_models/test_receiver_recovery_migration.py`
+- `tests/test_models/test_retention_migration.py`
+
+## Change Log
+
+- 2026-11-10: Implemented and independently reviewed owned local contracts; completed unit/local CI, authentic upgrade, real isolation/collection, composed UI, offline installation and 30-minute configured Linux capacity proof. Preserved the independent human pilot and broader release/support gates; status remains in-progress.

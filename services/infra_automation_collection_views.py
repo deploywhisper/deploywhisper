@@ -314,9 +314,12 @@ def get_collection(run_id, *, project_id, workspace_id, now=None):
                 collection_state = "stale"
             uploaded = "not_observed"
             upload_time = None
-            manifest = reports.get_manifest_for_step(session, run.id, source.step_id)
+            manifest = reports.get_manifest_for_step(
+                session, run.id, source.step_id, include_removed=True
+            )
             if manifest:
-                reports.manifest_files(manifest)
+                if not reports.payload_removed(manifest):
+                    reports.manifest_files(manifest)
                 provenance = CollectionProvenance.model_validate_json(
                     manifest.collection_bytes
                 )
@@ -326,7 +329,7 @@ def get_collection(run_id, *, project_id, workspace_id, now=None):
                     provenance.profile_digest,
                 ) != (source.repository_id, source.commit_sha, source.profile_digest):
                     raise LifecycleError(503)
-                uploaded = "finalized"
+                uploaded = "stale" if reports.payload_removed(manifest) else "finalized"
                 upload_time = support.utc(manifest.created_at)
                 if (
                     attempt is None

@@ -1153,7 +1153,9 @@ def authorized_session(session_factory=None) -> Iterator[Session]:
     )
     commit_callbacks: list[Callable[[Callable[[], Session]], None]] = []
     observations: dict[str, Callable[[Session], None]] = {}
-    with factory() as session:
+    from infra_automation.operator_recovery import participating_operation
+
+    with participating_operation(), factory() as session:
         if session.get_bind().dialect.name != "sqlite":
             raise TrustedAuthorizationError()
         context_token = _operation_session.set(session)

@@ -1345,6 +1345,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/infra-automation/manifests/{manifest_id}/purge": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Purge Manifest */
+        post: operations["purge_manifest_api_v1_infra_automation_manifests__manifest_id__purge_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/infra-automation/handoffs/{operation_id}/receipt": {
         parameters: {
             query?: never;
@@ -3643,6 +3660,11 @@ export interface components {
         /** AutomationPreflightLinksResponse */
         AutomationPreflightLinksResponse: {
             data: components["schemas"]["AutomationPreflightLinks"];
+            meta: components["schemas"]["AutomationMeta"];
+        };
+        /** AutomationRetentionResponse */
+        AutomationRetentionResponse: {
+            data: components["schemas"]["RetentionReceipt"];
             meta: components["schemas"]["AutomationMeta"];
         };
         /** AutomationRevisionDetail */
@@ -7448,6 +7470,13 @@ export interface components {
             /** Idempotency Key */
             idempotency_key: string;
         };
+        /** PurgeManifestBody */
+        PurgeManifestBody: {
+            /** Reason */
+            reason: string;
+            /** Expected Run Version */
+            expected_run_version: number;
+        };
         /** ReadinessSource */
         ReadinessSource: {
             /** Step Id */
@@ -7686,6 +7715,39 @@ export interface components {
             expected_version: number;
             /** Revision Id */
             revision_id?: string | null;
+        };
+        /** RetentionReceipt */
+        RetentionReceipt: {
+            /**
+             * Version
+             * @default 1
+             * @constant
+             */
+            version: 1;
+            /** Manifest Id */
+            manifest_id: string;
+            /** Run Id */
+            run_id: string;
+            /** Project Id */
+            project_id: number;
+            /** Workspace Id */
+            workspace_id: number;
+            /** Original Digest */
+            original_digest: string;
+            /** Original Size */
+            original_size: number;
+            /** Actor Id */
+            actor_id: string;
+            /** Deleted At */
+            deleted_at: string;
+            /** Reason */
+            reason: string;
+            /**
+             * Content Status
+             * @default removed
+             * @constant
+             */
+            content_status: "removed";
         };
         /** ReviewBlastRadius */
         ReviewBlastRadius: {
@@ -16213,6 +16275,86 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AutomationExternalHandoffResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationErrorResponse"];
+                };
+            };
+        };
+    };
+    purge_manifest_api_v1_infra_automation_manifests__manifest_id__purge_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                manifest_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PurgeManifestBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationRetentionResponse"];
                 };
             };
             /** @description Unauthorized */

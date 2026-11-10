@@ -33,6 +33,9 @@ from api.schemas import (
     AutomationPreflightLinksResponse,
     AutomationCapabilitiesResponse,
 )
+from infra_automation.retention import PurgeManifestBody, PurgeManifestRequest
+from services import infra_automation_retention as retention
+from api.schemas import AutomationRetentionResponse
 from infra_automation.state import CancelRunRequest, RunRequest
 from infra_automation.preflight_contracts import PreflightRequest
 from infra_automation.contracts import SAFE_INTEGER
@@ -511,3 +514,14 @@ def list_run_handoffs(run_id: ObjectId, project_id: ScopeId, workspace_id: Scope
 )
 def reconcile_handoff(operation_id: ObjectId, payload: ReconcileRequest):
     return _response(handoffs._default_service.reconcile(operation_id, payload))
+
+
+@router.post(
+    "/manifests/{manifest_id}/purge", response_model=AutomationRetentionResponse
+)
+def purge_manifest(manifest_id: ObjectId, payload: PurgeManifestBody):
+    return _response(
+        retention.purge_manifest(
+            PurgeManifestRequest(manifest_id=manifest_id, **payload.model_dump())
+        )
+    )

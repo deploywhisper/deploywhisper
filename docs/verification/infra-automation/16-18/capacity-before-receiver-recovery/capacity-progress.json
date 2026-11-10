@@ -1,0 +1,23 @@
+{
+  "active": 10,
+  "active_by_workflow": {
+    "18f4a9006c2e9063fe03d0caaa3c2b07883028a00620638f": 5,
+    "4381ef44034891ea1434cbdcf1829aa67e0d4433ce9bd354": 5
+  },
+  "analysis_inflight": 2,
+  "completed_attempts": 44,
+  "elapsed": 276.67148120800266,
+  "event": "progress",
+  "identity_refresh_count": 28,
+  "mode": "capacity",
+  "queued": 0,
+  "resources": {
+    "children_maxrss": 120045568,
+    "maxrss_units": "bytes",
+    "self_maxrss": 158744576
+  },
+  "sample_count": 499,
+  "slots": 20,
+  "utc": "2026-11-10T06:27:54.924530+00:00",
+  "workers": 2
+}

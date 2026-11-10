@@ -76,6 +76,25 @@ class EngineIdentityTests(LifecycleCase):
                 session.get(IdentityAccount, engine_support.ENGINE_ACTOR_ID)
             )
 
+    def test_restore_generation_preserves_inert_audit_identity(self):
+        self.ensure_actor()
+        with self.factory.begin() as session:
+            row = session.get(IdentityAccount, engine_support.ENGINE_ACTOR_ID)
+            row.authentication_version = 12345
+        self.ensure_actor()
+        with authorization.authorized_session() as session:
+            actor = engine_support.engine_actor(session)
+            self.assertEqual(actor.principal_id, engine_support.ENGINE_ACTOR_ID)
+            row = session.get(IdentityAccount, engine_support.ENGINE_ACTOR_ID)
+            self.assertFalse(row.enabled)
+            self.assertFalse(row.is_admin)
+            self.assertTrue(engine_support._valid_actor(row))
+            for value in (0, -1, True, 1.5, 9007199254740992):
+                with self.subTest(value=value):
+                    row.authentication_version = value
+                    self.assertFalse(engine_support._valid_actor(row))
+            row.authentication_version = 12345
+
     def test_conflicting_identity_fails_closed_without_repurposing_human(self):
         with self.factory.begin() as session:
             session.add(

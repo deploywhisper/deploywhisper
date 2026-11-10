@@ -239,6 +239,7 @@ class Settings:
     collection_profiles_sha256: str = os.getenv(
         "DEPLOYWHISPER_COLLECTION_PROFILES_SHA256", ""
     )
+    recovery_control_path: str = os.getenv("DEPLOYWHISPER_RECOVERY_CONTROL_PATH", "")
     trigger_keys_path: str = os.getenv("DEPLOYWHISPER_TRIGGER_KEYS_PATH", "")
     trigger_keys_sha256: str = os.getenv("DEPLOYWHISPER_TRIGGER_KEYS_SHA256", "")
     identity_profile: str = os.getenv("DEPLOYWHISPER_IDENTITY_PROFILE", "disabled")

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from infra_automation.retention import RetentionReceipt
+
 from infra_automation.github_contracts import DispatchAcceptance, GithubRunObservation
 from infra_automation.review_contracts import (
     ApprovalReviewPacket as AutomationReviewPacket,
@@ -3228,4 +3230,9 @@ class AutomationExternalHandoffList(AutomationClosedModel):
 
 class AutomationExternalHandoffListResponse(AutomationClosedModel):
     data: AutomationExternalHandoffList
+    meta: AutomationMeta
+
+
+class AutomationRetentionResponse(AutomationClosedModel):
+    data: RetentionReceipt
     meta: AutomationMeta

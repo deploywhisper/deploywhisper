@@ -18,7 +18,7 @@ import config
 import models.database as database
 
 HEAD = "035_add_infra_handoffs"
-CURRENT_HEAD = "039_add_signed_trigger_intake"
+CURRENT_HEAD = "042_add_receiver_recovery"
 PREVIOUS = "034_add_infra_decisions"
 MIGRATION = import_module(f"migrations.versions.{HEAD}")
 
@@ -107,12 +107,20 @@ class InfraAutomationHandoffMigrationTests(unittest.TestCase):
                 ).fetchall()
             )
             previous = dict(before)
-            self.assertEqual({name: after[name] for name in previous}, previous)
             current = import_module(f"migrations.versions.{CURRENT_HEAD}")
             added_guards: set[str] = set()
+            overrides: dict[str, str] = {}
             while current.revision != HEAD:
                 added_guards.update(getattr(current, "GUARDS", {}))
+                overrides = {**getattr(current, "OVERRIDES", {}), **overrides}
                 current = import_module(f"migrations.versions.{current.down_revision}")
+            for name, sql in previous.items():
+                expected = (
+                    f"CREATE TRIGGER {name} {overrides[name]}"
+                    if name in overrides
+                    else sql
+                )
+                self.assertEqual(after[name], expected)
             self.assertEqual(set(after) - set(previous), added_guards)
 
     def test_partial_handoff_tables_and_guards_fail_before_create_all(self):

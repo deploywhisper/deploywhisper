@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 from infra_automation.contracts import RegistryContract
+from infra_automation.operator_recovery import assert_effects_allowed
 from infra_automation.lifecycle import (
     AuthorityStamp,
     MachineAuthorityStamp,
@@ -75,6 +76,7 @@ def export_run_snapshot(
             mutation=True,
         )
         policy_row, policy = support.policy_state(session, workflow.project_id)
+        assert_effects_allowed(session)
         if not policy.enabled or policy_row is None:
             raise LifecycleError(403)
         raw = revision.canonical_definition

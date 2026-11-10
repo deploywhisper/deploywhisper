@@ -1,5 +1,5 @@
 # generated: 2026-05-01
-# last_updated: 2026-11-09
+# last_updated: 2026-11-10
 # project: deploywhisper
 # project_key: NOKEY
 # tracking_system: file-system
@@ -28,7 +28,8 @@
 #   - done: Retrospective has been completed
 #
 # RECONCILIATION BASELINE: v1.4.0 published 2026-10-07; accepted through 12.4, plus 12.6 and 13.8
-# NEXT WORKFLOW: Story16.15 backend PR212 merged; UI PR213 open; positive HTTPS enrollment/real-run browser acceptance remains pending
+# NEXT WORKFLOW: Story16.18 implementation/automated qualification complete; independent human operator pilot remains open.
+# Story16.15 positive HTTPS/real-runner and broader production release qualifications remain separate gates.
 # RELEASE ENABLER: 12-5-sbom-and-release-checksums (SBOM remains unshipped)
 # EVIDENCE: story-implementation-status-map.md and planning-artifacts/sprint-change-proposal-2026-10-07-v1.4.0-status-reconciliation.md
 # WORKFLOW NOTES:
@@ -39,7 +40,7 @@
 # - Dev moves story to review, then runs code-review
 
 generated: 2026-05-01
-last_updated: 2026-11-09
+last_updated: 2026-11-10
 project: deploywhisper
 project_key: NOKEY
 tracking_system: file-system
@@ -228,7 +229,7 @@ development_status:
   16-15-runner-health-and-collection-ux: in-progress
   16-16-declared-multi-unit-preflight-planning: done
   16-17-signed-trigger-intake-and-cli: done
-  16-18-operator-recovery-retention-and-network-readiness: backlog
+  16-18-operator-recovery-retention-and-network-readiness: in-progress
   16-19-production-qualification-and-v1-5-0-release: backlog
   epic-16-retrospective: optional
 

@@ -156,21 +156,25 @@ def _issue_to_file(path: str, issue: Callable[[], IssuedCredential]) -> None:
 def main(argv: Sequence[str] | None = None) -> int:
     try:
         args = build_parser().parse_args(argv)
-        init_db()
-        service = IdentityService()
-        if args.command == "setup":
-            _issue_to_file(args.output, service.issue_setup_credential)
-        elif args.command == "recovery-issue":
-            _issue_to_file(
-                args.output, lambda: service.issue_recovery_credential(args.username)
-            )
-        else:
-            token = _private_input(args.credential_file, 128)
-            password = _password(args.password_file)
-            if args.command == "bootstrap":
-                service.bootstrap(token, args.username, password)
+        from infra_automation.operator_recovery import participating_operation
+
+        with participating_operation():
+            init_db()
+            service = IdentityService()
+            if args.command == "setup":
+                _issue_to_file(args.output, service.issue_setup_credential)
+            elif args.command == "recovery-issue":
+                _issue_to_file(
+                    args.output,
+                    lambda: service.issue_recovery_credential(args.username),
+                )
             else:
-                service.recover(token, password)
+                token = _private_input(args.credential_file, 128)
+                password = _password(args.password_file)
+                if args.command == "bootstrap":
+                    service.bootstrap(token, args.username, password)
+                else:
+                    service.recover(token, password)
         print("Identity operation completed.")
         return 0
     except (Exception, KeyboardInterrupt):

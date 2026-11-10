@@ -2065,3 +2065,45 @@ if "InfraAutomationRunOrigin" not in globals():
             String(128), nullable=True
         )
         source_commit_sha: Mapped[str | None] = mapped_column(String(40), nullable=True)
+
+
+if "InfraAutomationRetentionTombstone" not in globals():
+
+    class InfraAutomationRetentionTombstone(Base):
+        """Immutable removal receipt; original manifest identity remains retained."""
+
+        __tablename__ = "infra_automation_retention_tombstones"
+        __table_args__ = (
+            CheckConstraint(
+                "typeof(original_size)='integer' AND typeof(reclaimed_bytes)='integer' AND original_size BETWEEN 1 AND 50331648 AND reclaimed_bytes BETWEEN 1 AND original_size-1 AND length(original_digest)=71 AND length(receipt_digest)=71 AND length(request_digest)=71 AND length(receipt_bytes) BETWEEN 1 AND 4096 AND expected_run_version > 0 AND length(reason) BETWEEN 1 AND 256",
+                name="ck_retention_receipt_bounds",
+            ),
+        )
+        manifest_id: Mapped[str] = mapped_column(
+            ForeignKey("infra_automation_artifact_manifests.id", ondelete="RESTRICT"),
+            primary_key=True,
+        )
+        run_id: Mapped[str] = mapped_column(
+            ForeignKey("infra_automation_runs.id", ondelete="RESTRICT"), nullable=False
+        )
+        project_id: Mapped[int] = mapped_column(Integer, nullable=False)
+        workspace_id: Mapped[int] = mapped_column(Integer, nullable=False)
+        original_digest: Mapped[str] = mapped_column(String(71), nullable=False)
+        original_size: Mapped[int] = mapped_column(Integer, nullable=False)
+        reclaimed_bytes: Mapped[int] = mapped_column(Integer, nullable=False)
+        actor_id: Mapped[str] = mapped_column(
+            ForeignKey("identity_accounts.id", ondelete="RESTRICT"), nullable=False
+        )
+        reason: Mapped[str] = mapped_column(String(256), nullable=False)
+        deleted_at: Mapped[datetime] = mapped_column(
+            DateTime(timezone=True), nullable=False
+        )
+        expected_run_version: Mapped[int] = mapped_column(Integer, nullable=False)
+        request_digest: Mapped[str] = mapped_column(String(71), nullable=False)
+        receipt_bytes: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+        receipt_digest: Mapped[str] = mapped_column(String(71), nullable=False)
+
+
+# Recovery metadata has no coupling to immutable workflow/receiver bindings.
+from models.operator_recovery import RecoveryState, RestoreEvent  # noqa: E402,F401
+from models.receiver_recovery import ReceiverRecoveryCredential  # noqa: E402,F401

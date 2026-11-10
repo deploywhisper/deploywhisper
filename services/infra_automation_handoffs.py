@@ -278,7 +278,9 @@ class HandoffService:
             raise authorization.TrustedAuthorizationError()
         return grant
 
-    def _receiver(self, session, row, snapshot, credential):
+    def _receiver(
+        self, session, row, snapshot, credential, *, reconciliation_only=False
+    ):
         authorization._require_operation(session)
         if (
             type(credential) is not ReceiverCredential
@@ -289,6 +291,18 @@ class HandoffService:
             or credential.receiver_id != row.receiver_id
         ):
             raise authorization.TrustedAuthorizationError()
+        from services import infra_automation_receiver_recovery as recovery
+
+        if recovery.is_recovery(credential):
+            if not reconciliation_only:
+                raise authorization.TrustedAuthorizationError()
+            return recovery.authenticate(
+                session,
+                row,
+                repository.get_grant(session, row.id),
+                credential.secret,
+                operation="status",
+            )
         try:
             expected = config.handoff_credentials("receiver").get(
                 snapshot.definition.receiver_credential_ref
@@ -1058,7 +1072,7 @@ class HandoffService:
             session_factory=self.session_factory
         ) as session:
             row, grant, _, snapshot = self._load(session, operation_id)
-            self._receiver(session, row, snapshot, credential)
+            self._receiver(session, row, snapshot, credential, reconciliation_only=True)
             if (
                 message is not None
                 and receiver_binding_bytes(message.binding)
@@ -1076,6 +1090,12 @@ class HandoffService:
                     "nonce": latest.nonce,
                     "envelope_digest": support.digest(latest.payload_bytes),
                 }
+            from services import infra_automation_receiver_recovery as recovery
+
+            if recovery.is_recovery(credential):
+                recovery.authenticate(
+                    session, row, grant, credential.secret, operation="status"
+                )
             return view
 
     def authorize_action(self, operation_id, credential: ReceiverCredential) -> dict:
@@ -1132,73 +1152,81 @@ class HandoffService:
         ) as session:
             row, grant, _, snapshot = self._load(session, message.operation_id)
             self._receiver(session, row, snapshot, credential)
-            if (
-                row.broken
-                or grant.status != "consumed"
-                or row.state
-                not in {"consumed", "accepted", "running", "delivery_unknown"}
-                or receiver_message_bytes(message)
-                != receiver_message_bytes(
-                    _message(row, operation="outcome", state=message.state, sequence=2)
-                )
-            ):
-                raise LifecycleError(409)
-            capture, _ = targets.captured_target(
-                session, row.run_id, row.step_id, live=False
-            )
-            lock = target_repository.get_lock(session, capture.lock_id)
-            if lock is None or lock.status != "held" or lock.run_id != row.run_id:
-                raise LifecycleError(409)
-            parent = runs.get_run(session, row.run_id)
-            if parent is None:
-                raise LifecycleError(503)
-            now = self._now(
-                row.last_observed_at,
-                grant.consumed_at,
-                lock.updated_at,
-                parent.last_observed_at,
-            )
-            before_digest = self._state_digest(session, row)
-            row = repository.transition(session, row, state=message.state, now=now)
-            outbox = repository.get_outbox(session, row.id)
-            if outbox.state in {"sending", "delivery_unknown"}:
-                repository.transition_outbox(
-                    session, outbox, state="delivered", now=now
-                )
-            operations = [
-                repository.by_run_step(session, capture.run_id, capture.handoff_step_id)
-                for capture in target_repository.list_run_targets(session, row.run_id)
-                if capture.lock_id == lock.id
-            ]
-            if operations and all(
-                operation is not None
-                and operation.state in {"succeeded", "failed"}
-                and not operation.broken
-                for operation in operations
-            ):
-                if (
-                    target_repository.resolve_lock(
-                        session,
-                        lock_id=lock.id,
-                        expected_version=lock.version,
-                        status="resolved",
-                        reason="Verified terminal receiver outcome",
-                        now=now,
-                    )
-                    is None
-                ):
-                    raise LifecycleError(409)
-            from infra_automation.reconciliation import reconcile_parent
+            return self._resolve_terminal_verified(session, row, grant, message)
 
-            reconcile_parent(session, row, now)
-            self._audit(
-                session,
-                row,
-                event="handoff_terminal_verified",
-                reason="Verified sequenced receiver terminal outcome",
-                before_digest=before_digest,
+    def _resolve_terminal_verified(
+        self, session, row, grant, message, *, recovery_auth=None
+    ):
+        if (
+            row.broken
+            or grant.status != "consumed"
+            or row.state not in {"consumed", "accepted", "running", "delivery_unknown"}
+            or receiver_message_bytes(message)
+            != receiver_message_bytes(
+                _message(row, operation="outcome", state=message.state, sequence=2)
             )
-            return _view(row, grant)
+        ):
+            raise LifecycleError(409)
+        capture, _ = targets.captured_target(
+            session, row.run_id, row.step_id, live=False
+        )
+        lock = target_repository.get_lock(session, capture.lock_id)
+        if lock is None or lock.status != "held" or lock.run_id != row.run_id:
+            raise LifecycleError(409)
+        parent = runs.get_run(session, row.run_id)
+        if parent is None:
+            raise LifecycleError(503)
+        now = self._now(
+            row.last_observed_at,
+            grant.consumed_at,
+            lock.updated_at,
+            parent.last_observed_at,
+        )
+        before_digest = self._state_digest(session, row)
+        row = repository.transition(session, row, state=message.state, now=now)
+        outbox = repository.get_outbox(session, row.id)
+        if outbox.state in {"sending", "delivery_unknown"}:
+            repository.transition_outbox(session, outbox, state="delivered", now=now)
+        operations = [
+            repository.by_run_step(session, capture.run_id, capture.handoff_step_id)
+            for capture in target_repository.list_run_targets(session, row.run_id)
+            if capture.lock_id == lock.id
+        ]
+        if operations and all(
+            operation is not None
+            and operation.state in {"succeeded", "failed"}
+            and not operation.broken
+            for operation in operations
+        ):
+            if (
+                target_repository.resolve_lock(
+                    session,
+                    lock_id=lock.id,
+                    expected_version=lock.version,
+                    status="resolved",
+                    reason="Verified terminal receiver outcome",
+                    now=now,
+                )
+                is None
+            ):
+                raise LifecycleError(409)
+        from infra_automation.reconciliation import reconcile_parent
+
+        reconcile_parent(session, row, now)
+        self._audit(
+            session,
+            row,
+            event="handoff_recovery_terminal_verified"
+            if recovery_auth is not None
+            else "handoff_terminal_verified",
+            reason=(
+                f"Recovery-authenticated terminal outcome; issuer {recovery_auth.issuer_id}; generation {recovery_auth.generation}"
+                if recovery_auth is not None
+                else "Verified sequenced receiver terminal outcome"
+            ),
+            before_digest=before_digest,
+        )
+        return _view(row, grant)
 
     @staticmethod
     def _check_carrier(row, snapshot, fact):
@@ -1259,7 +1287,23 @@ class HandoffService:
             session_factory=self.session_factory
         ) as session:
             row, grant, _, snapshot = self._load(session, envelope.operation_id)
-            self._receiver(session, row, snapshot, credential)
+            from services import infra_automation_receiver_recovery as recovery
+
+            recovery_auth = None
+            if recovery.is_recovery(credential):
+                if (
+                    envelope.message.operation != "outcome"
+                    or envelope.message.state not in {"succeeded", "failed"}
+                ):
+                    raise authorization.TrustedAuthorizationError()
+                self._receiver(
+                    session, row, snapshot, credential, reconciliation_only=True
+                )
+                recovery_auth = recovery.authenticate(
+                    session, row, grant, credential.secret, operation="terminal"
+                )
+            else:
+                self._receiver(session, row, snapshot, credential)
             expected = (
                 "sha256:"
                 + hmac.new(
@@ -1298,6 +1342,12 @@ class HandoffService:
                 raise LifecycleError(409)
             if message.state == "accepted" and "running" in prior_states:
                 raise LifecycleError(409)
+            if recovery_auth is not None:
+                current_auth = recovery.authenticate(
+                    session, row, grant, credential.secret, operation="terminal"
+                )
+                if current_auth != recovery_auth:
+                    raise LifecycleError(409)
             reconciliation.retain(
                 session,
                 row,
@@ -1310,6 +1360,21 @@ class HandoffService:
             if message.state in {"succeeded", "failed"}:
                 if message.operation != "outcome" or message.sequence != 2:
                     raise LifecycleError(409)
+                if recovery_auth is not None:
+                    current_auth = recovery.authenticate(
+                        session, row, grant, credential.secret, operation="terminal"
+                    )
+                    if current_auth != recovery_auth:
+                        raise LifecycleError(409)
+                    result = self._resolve_terminal_verified(
+                        session, row, grant, message, recovery_auth=recovery_auth
+                    )
+                    final_auth = recovery.authenticate(
+                        session, row, grant, credential.secret, operation="status"
+                    )
+                    if final_auth != recovery_auth:
+                        raise LifecycleError(409)
+                    return result
                 return self.resolve_terminal(message, credential)
             if message.operation not in {"status", "outcome"} or message.state not in {
                 "accepted",

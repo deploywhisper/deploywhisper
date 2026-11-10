@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "date": "2026-11-10",
+  "released_source": "v1.4.0@935f3bbc88907948de8ae25bd2a361d04044ebc6",
+  "source_schema": "028_add_narrative_guidance_payload",
+  "destination_schema": "042_add_receiver_recovery",
+  "source_unchanged": true,
+  "retained_report_columns": 37,
+  "report_preserved_exactly": true,
+  "integrity_check": "ok",
+  "foreign_key_violations": 0,
+  "command": "./.venv/bin/python -m cli.automation_operations --control <private-control> upgrade-copy --source <private-readonly-v140-copy> --output <new-private-copy>",
+  "exit_code": 0,
+  "scope": "Released-source migration with a synthetic report; no customer-data or host-power-loss qualification",
+  "source_db_sha256": "sha256:de491a956482e64601d056eb1396b2c67393422b924e668d907f611de3550511"
+}
