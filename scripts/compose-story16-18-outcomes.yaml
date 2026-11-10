@@ -1,0 +1,53 @@
+# Disposable Story16.18 disable/reconciliation proof with existing synthetic outcome ports.
+name: deploywhisper-story16-18-outcomes
+services:
+  deploywhisper:
+    image: deploywhisper-story16-18:ui-proof
+    build:
+      context: ..
+      target: runtime
+    user: appuser
+    working_dir: /app
+    command: [python, /tmp/outcome_fixture.py, --serve]
+    init: true
+    restart: "no"
+    ports:
+      - "127.0.0.1:8080:8080"
+    environment:
+      APPROVAL_UI_DISPOSABLE: "1"
+      OUTCOME_UI_DISPOSABLE: "1"
+      APP_HOST: 0.0.0.0
+      APP_PORT: "8080"
+      APP_BASE_URL: http://localhost:8080
+      DATABASE_URL: sqlite:////app/data/deploywhisper.db
+      DEPLOYWHISPER_IDENTITY_PROFILE: local-development
+      DEPLOYWHISPER_IDENTITY_ORIGIN: http://localhost:8080
+      DEPLOYWHISPER_AUTHORIZATION_PROFILE: verified
+      DEPLOYWHISPER_IDENTITY_DECISION_MODE: shared
+      NARRATOR_ENABLED: "false"
+      LLM_PROVIDER: ollama
+      LLM_API_BASE: http://127.0.0.1:9
+      LLM_API_KEY: ""
+      OPENAI_API_KEY: ""
+      ANTHROPIC_API_KEY: ""
+      GEMINI_API_KEY: ""
+      GOOGLE_API_KEY: ""
+      OPENROUTER_API_KEY: ""
+      GROQ_API_KEY: ""
+      XAI_API_KEY: ""
+      DEPLOYWHISPER_SHARE_TOKEN: ""
+      LOG_LEVEL: WARNING
+    # Dockerfile USER is symbolic appuser, created with useradd --system; the
+    # file does not freeze a numeric UID/GID. Do not guess IDs. mode1777 allows
+    # that nonroot image user to create files with the launcher's umask0077.
+    tmpfs:
+      - /app/data:rw,noexec,nosuid,nodev,mode=1777,size=256m
+    volumes:
+      - type: bind
+        source: ./approval_ui_fixture.py
+        target: /tmp/approval_fixture.py
+        read_only: true
+      - type: bind
+        source: ./outcome_ui_fixture.py
+        target: /tmp/outcome_fixture.py
+        read_only: true
