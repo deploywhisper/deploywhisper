@@ -77,3 +77,14 @@ interprets analysis or dispatch acceptance as verified deployment completion.
 
 [Implementation proof and screenshots](../verification/infra-automation/16-7/results.md)
 record the composed browser journeys at 1440px and 760px.
+
+
+## Authenticated request origin
+
+Run history shows the recorded channel and principal type. Run details retain the
+exact principal ID, public signing key ID/PR reference when applicable, and every
+requested source pin. Requested source identity is separate from collected
+provenance and approval. Older runs without an origin record remain explicitly
+unavailable; the UI never infers an actor from headers or the current reader.
+A human decision does not rewrite a service or agent request's origin.
+See [signed triggers and the authenticated CLI](triggers.md).

@@ -1,0 +1,90 @@
+{
+  "story": "16-17",
+  "status": "review",
+  "backend_base": "5ee1ded",
+  "results": {
+    "root": {
+      "tests": 1921,
+      "skipped": 3,
+      "exit_code": 0
+    },
+    "api_cli_infra": {
+      "passed": 797,
+      "skipped": 1,
+      "subtests": 2423,
+      "exit_code": 0
+    },
+    "automation": {
+      "passed": 1099,
+      "skipped": 1,
+      "subtests": 3236,
+      "exit_code": 0
+    },
+    "frontend": {
+      "tests": 479,
+      "compatibility": 2,
+      "typecheck": "pass",
+      "build": "pass"
+    },
+    "browser": {
+      "passed": 1,
+      "seconds": 27.7,
+      "screenshots": 12,
+      "critical_serious_axe": 0,
+      "visual_score": 94
+    },
+    "qualification": {
+      "collection_checks": 49,
+      "integrity_tests": 9,
+      "integrity_subtests": 86
+    },
+    "mypy": {
+      "existing_code_diagnostics": 317,
+      "changed_line_diagnostics": 0
+    }
+  },
+  "initial_failures_preserved": true,
+  "live_limits": [
+    "No productionTLS/realrunnerbrowser qualification claimed",
+    "Collectedorigin browsercases proveadmission andfailclosedrunnerunavailability",
+    "Handoff proof explicitlyusescollector/material/delivery doubles"
+  ],
+  "logs": {
+    "ci_initial": {
+      "path": "/tmp/story16-17-ci-local.log",
+      "sha256": "f53f7a647a5a4e54b5b37a4b487331001c784c01edd22032f7008d59ba3d4db9"
+    },
+    "ci_tail": {
+      "path": "/tmp/story16-17-ci-tail.log",
+      "sha256": "83e3200fc61ce78a2dc00db9ed74df5b4d889c2e06c6e4f788dbc5847981df9a"
+    },
+    "root": {
+      "path": "/tmp/story16-17-root-final.log",
+      "sha256": "dff2a038d8633d6553c21d24239b44b9c0f3905ca9606ac7b34e581aabc096d6"
+    },
+    "api_cli_infra": {
+      "path": "/tmp/story16-17-api-cli-infra.log",
+      "sha256": "a033ecff677d90bd047c9f1ba7188f78d9102d20156f96f0fcaf6005e1c77ec2"
+    },
+    "automation": {
+      "path": "/tmp/story16-17-automation-final.log",
+      "sha256": "e6371a2737e702856c3d22380da82ed29a90a6fdddf87d42e6df63e6edc2f236"
+    },
+    "qualification": {
+      "path": "/tmp/story16-17-collection-qualification.log",
+      "sha256": "3083206218f8265eff0c7318662243a952ffef43e453dec21c697178788a19f3"
+    },
+    "mypy": {
+      "path": "/tmp/story16-17-mypy-final.log",
+      "sha256": "cdb829981de9c231459e47033ec0324e85d742e060ad40c4404b796966b6ec57"
+    },
+    "CLI_repairs": {
+      "path": "/tmp/story16-17-cli-repairs-settled.log",
+      "sha256": "1084ffcda9045b9d0cbf284cc369d7d8eb791200ba22fff0282f74b77098165d"
+    },
+    "ui": {
+      "path": "/tmp/story16-17-origin-compact-all.log",
+      "sha256": "6757ce05e4a8d4934118ddd46a36aea6642cdc48d7fbed92d909ffa4bed714aa"
+    }
+  }
+}

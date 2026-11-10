@@ -1,0 +1,23 @@
+{
+  "image": "sha256:a4b01e0c775614afdb6b14269e26a5387d9af784b3fcd3c97fc5711bd1f15b1a",
+  "head_at_verification": "43859b03e2662e94aa1ef6ad9ed08d9d1b805603",
+  "runtime": {
+    "python": "3.11.17",
+    "playwright": "1.63.0"
+  },
+  "source_sha256": {
+    "services/infra_automation_trigger_authority.py": "556ae754a165800763b8d8abde80c3c372ad8ce3defcdc4a3b716b6b03a2c9c6",
+    "services/infra_automation_triggers.py": "8e8519fa5d754211bdd053109b79b31babf3ce551c220c8bb4b88966e7607f56",
+    "api/routes/infra_automation_triggers.py": "03ca19a85906e7a14866419ccf0b610ff3f438acb8e4a152370084497b09d48c",
+    "infra_automation/trigger_contracts.py": "e5391cf5e247aa9744e01fc353c1061b6ecf26c59e52459579bf1fabd42596cc",
+    "infra_automation/trigger_signing.py": "2ac2e3fb8aa7e8d16152d538b1193875b5c82503604226ea46543c6fd66ad5e7",
+    "cli/automation.py": "fb2a58579adcb1f525ab3c063571f0520637b4d3510a69ee802fb6c8a8462976",
+    "cli/analyze.py": "92940ead6c0a25226c96c90d8df4a3ea48941e8e9285c7c38e5edc7eca617172",
+    "frontend/src/api/infraAutomation.ts": "ce9c61f885d33eb522aa55b5dfb1923ed143cb3bb70215470bb77f334e63aa94",
+    "frontend/src/screens/InfraAutomationOrigin.tsx": "31ef3c0bb79b5c20870b8d1e8f443a8882dee227ef668ec2b4c99b3d8bd3a2ce",
+    "frontend/src/screens/InfraAutomation.tsx": "bcc15f933bd43db7bda889b8b1eaf161fe7ae245fc8e8bafc8e53793a7d2c86e",
+    "frontend/src/screens/InfraAutomationRun.tsx": "d8e0082fc367da4d978a35222ba3f1609c7fc1f6bf5c082ab8b21e9c8d75aab2",
+    "scripts/trigger_ui_fixture.py": "e90c03cd7632dc262add50969a1aaee2f35f8be490d46b87a46073d59e36d559",
+    "frontend/e2e/infra-automation-triggers.spec.ts": "c5cd2e5186cef9a3aa6afc29b12c0bc356768ec4790c7f6a50618c338ccd8cc5"
+  }
+}

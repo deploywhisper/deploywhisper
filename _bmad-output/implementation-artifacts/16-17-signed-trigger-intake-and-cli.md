@@ -1,6 +1,6 @@
 # Story 16.17: Signed Trigger Intake and CLI
 
-Status: in-progress
+Status: done
 Preparation: refined
 Release: v1.5.0 | Priority: P0, highest-priority feature
 
@@ -38,22 +38,36 @@ Coverage intent: Delta against released v1.4.0; full canonical mappings below ar
 
 Execute one bounded packet at a time on the story feature branch. Each packet owns the named paths; coordinate shared paths and do not revert other edits. Re-estimate after 16.0 spikes; split packets into reviewable PRs without renumbering the canonical story.
 
-- [ ] Packet 17.1: Raw-byte signing and replay — owner: API/security implementer.
+- [x] Packet 17.1: Raw-byte signing and replay — owner: API/security implementer.
   - Owned write paths: `api/routes/infra_automation.py; infra_automation/ trigger contract; tests/test_api/`.
   - Output: versioned canonical signing input, bounded body/time/nonce, key-reference lookup and constant-time validation.
   - Acceptance proof: AC1,2,6: altered/reencoded bytes, skew, nonce race/restart and denial-before-scheduling.
-- [ ] Packet 17.2: Typed intake and idempotency — owner: Service implementer.
+- [x] Packet 17.2: Typed intake and idempotency — owner: Service implementer.
   - Owned write paths: `services/infra_automation_service.py; models/repositories/ existing request records; tests/test_infra_automation/`.
   - Output: scoped revision/source allowlists, atomic request digest and origin audit.
   - Acceptance proof: AC2,3,5: cross-scope/unpinned/oversize/quota/conflicting-replay tests.
-- [ ] Packet 17.3: CLI adapter and authority parity — owner: CLI implementer.
+- [x] Packet 17.3: CLI adapter and authority parity — owner: CLI implementer.
   - Owned write paths: `cli/ automation command group; cli.py wiring; tests/test_cli/`.
   - Output: validate/run/status/list/decision commands over shared authenticated service/API contract.
   - Acceptance proof: AC4,6: envelope/pagination/exit-code tests, denied nonhuman publish/decision and permitted human exact-bound decision.
-- [ ] Packet 17.4: Types, origins and examples — owner: Frontend/documentation implementer.
+- [x] Packet 17.4: Types, origins and examples — owner: Frontend/documentation implementer.
   - Owned write paths: `frontend/src/api/schema.d.ts generated; frontend/src/ run origin rendering; docs/infra-automation/triggers.md; examples/infra-automation/`.
   - Output: OpenAPI-derived types, sender signing recipe, origin UI and version-matched CLI examples.
   - Acceptance proof: AC5,6: generation drift, origin visibility and Compose/browser checks for changed UI.
+
+### Review Findings
+
+- [x] [Review][Patch][P1][CR17-1] Advance durable clock observations at machine-effect boundaries and prove rollback cannot revive stale authority without a later signed request. `_check_clock` only reads the floor; only nonce reservation advances it. See formal review for isolated expiry/rollback and actual engine cross-run probes. [services/infra_automation_trigger_authority.py:169]
+- [x] [Review][Patch][P2][CR17-2] Describe all four required signing headers and authentication semantics on every signed OpenAPI operation, regenerate client types, and add header-contract parity assertions while retaining authentication before parsing. Current operations have no parameters/security and generated clients declare `header?: never`. [api/routes/infra_automation_triggers.py:140]
+
+
+- [x] [Review][Patch] Enforce durable clock high-water at machine credential and effect revalidation.
+- [x] [Review][Patch] Bind project-scoped publication admission to the concrete authorized machine workspace.
+- [x] [Review][Patch] Reject known signing-key reflection in decoded inputs, snapshots and validation outputs.
+- [x] [Review][Patch] Bind service models and operation paths to exact authenticated bytes.
+- [x] [Review][Patch] Bound the entire CLI transport and prevent late sends; retain worker ownership after ambiguous startup interruption.
+- [x] [Review][Patch] Reject noncanonical scheme casing and keep history origin summaries compact.
+- [x] [Review][Patch] Update migration-head/guard and origin-accounting fixtures without weakening their invariants.
 
 ## Dev Notes
 
@@ -89,33 +103,118 @@ Execute one bounded packet at a time on the story feature branch. Each packet ow
 ## Dev Agent Record
 
 ### Agent Model Used
-Codex with bounded native implementation and independent review agents.
+Codex with bounded native protocol, backend, CLI, privilege-proof, UI, browser,
+documentation and independent review lanes.
 
 ### Debug Log References
-- [Independent entry/interface review](../../docs/verification/infra-automation/16-17/readiness.md).
-- 2026-11-05 independent readiness/interface review verified16.0/16.4/16.11 evidence and the implemented16.15 scoped history/UI dependency. The separate16.15 HTTPS enrollment/real-runner browser gates remain open.
-- Current qualification integrity: `./.venv/bin/python -m pytest tests/test_infra_automation/test_collection_qualification.py tests/test_infra_automation/test_runner_isolation_qualification.py -q` — 9 tests/73 subtests pass.
-- Reviewed interfaces: raw-byte signed route before JSON; protected manifest/environment key references; bounded durable nonce/clock reservation; distinct service-request credential context and machine authority stamp with unchanged human snapshot bytes; server-selected origin channels; thin authenticated HTTP CLI. Account/membership/key versions, expiry and restore state remain live at every effect.
-- Packet estimates: signing/replay2–3; machine authority/admission4–5; CLI2–3; origins/types/docs/browser2–3 review units. No calendar/production-throughput claim.
+- [PR217 conflict and CI repair](../../docs/verification/infra-automation/16-17/pr217-ci-repair.md): base refreshed after backend squash; stale test request clock repaired without weakening runtime fences.
+- [Publication browser proof](../../docs/verification/infra-automation/16-17/closeout-browser-proof.md) and [backend closeout](../../docs/verification/infra-automation/16-17/backend-closeout.md).
+- [Entry review](../../docs/verification/infra-automation/16-17/readiness.md).
+- [Implementation, commands and validation](../../docs/verification/infra-automation/16-17/results.md).
+- [Independent review and repairs](../../docs/verification/infra-automation/16-17/review.md).
+- [Composed browser proof](../../docs/verification/infra-automation/16-17/browser-proof.md), [screenshots](../../docs/verification/infra-automation/16-17/screenshots.json) and [visual verdict](../../docs/verification/infra-automation/16-17/visual-verdict.json).
+- [Structured results and log hashes](../../docs/verification/infra-automation/16-17/validation-summary.json).
 
 ### Completion Notes List
-- Backend/CLI checkpoint: pure signing12tests63subtests; combinedbackend77tests161subtests; schema13tests20subtests; realcredential/effectproof9tests68subtests; actualAPInegativeparity10tests43subtests. CLI120tests17subtests and18focused5subtests pass; Ruff/Bandit/scopedtyping checks pass. Broader verification and UI remain pending.
-- Independent review found clock-high-water, project-wide execution-scope, signing-key reflection and post-authenticated payload/operation-binding issues. These are repaired with red/green regressions; final review and source qualification remain obligations.
-- Migration verification:72tests89subtests passed with one stale added-guard expectation; repaired guard-chain check and trigger migration rerun8tests38subtests pass. Full affected shard will be run after integration.
-- Implementation started after independent preparation review. Full story acceptance remains pending.
-- Only explicitly recorded executed checks are proof; remaining validation commands are obligations.
+- PR217 CI repair: retained complete UI story/sprint records while merging backend squash48a9a9a from develop; resolved tree equals9947f8e before the test repair. Decision-matrix request time now refreshes at signing; deterministic red/green regression verifies real403 denials for all four principal/role pairs after slow setup. Entire privilege module10tests72subtests passes. Production code and negative-clock guards unchanged; UI validation not applicable. Fresh exact-head CI must pass before repair closure.
+- 2026-11-09 GitHub analysis follow-up: explicit TLS1.2 minimum added to CLI and TLS fixtures after two CodeQL protocol-default alerts. WholeCLI127/17subtests, automationCLI25/5subtests and productionPython3.11 TLS2tests pass; no certificate/hostname checks disabled. Fresh Compose rerun on corrected CLI1test28.7s/12screens/axe0/visual94; original5970 restored healthy. Final GitHub checks and root smoke validate the publication head; no suppression or support expansion.
+- 2026-11-09 Git Flow closeout: both formal findings are resolved and the exact tested runtime/source hashes remain current. Fresh standalone backend51tests/65subtests and generated-contract frontend typecheck pass. Fresh production Compose browser1test28.7s,12screenshots1440/760,zeroaxecritical/serious andvisual94 pass; original container5970d092 restored healthy and private fixtures removed. Separate backend-for-UI and dependent origin-UI PRs target develop, backend first. Story-owned contract is complete; existing production-qualification gates remain with their owning stories. Publication is explicitly authorized; no merge, deployment or release is requested.
+- 2026-11-07 review follow-up: CR17-1/CR17-2 resolved. Nine clock regressions plus project/report authorization prove successful-effect clock retention, rollback-only observations under the same SQLite reservation, storage failure, released-savepoint COMMIT failure and lost-driver-reservation replacement preservation. Signed OpenAPI declares all four headers on all five operations; regenerated types and pre-parser denial assertions pass.
+- Final review-fix verification: root 1932/3skips; localCI 3402 across ten directories; exactAPI/CLI/infra799pass1skip2433subtests; automation1108pass1skip3236subtests; Python3.11.17 container27; frontend479+2compat/typecheck/build; qualification49 and integrity9tests86subtests; lint/format584/scopedBandit pass. Existing317mypy diagnostics unchanged, none in changed runtime files. Initial date/lost-reservation failures are preserved; all final broad commands passed on the final source.
+- UI validation not applicable: generated API types only; no rendered UI/interaction/semantics changed. Existing production qualification gates remain open. See [review-fixes.md](../../docs/verification/infra-automation/16-17/review-fixes.md) and structured results. No public push/PR/release performed. BMad help routes the completed dev-story fix back to code review.
+- Independent preparation review cleared the implemented16.0/16.4/16.11 and scoped16.15 history dependencies. The separate16.15 positive HTTPS/real-runner browser gates remain open.
+- AC1–3: exact-byte versioned HMAC, fixed paths, bounded skew/body, durable nonce-before-parse reservation, monotonic clock, protected environment key references, typed source/revision allowlists and exact operation idempotency are implemented. Replay survives process restart; invalid/unauthorized input schedules nothing.
+- AC4/6: real service/agent credentials remain read/request only. Human session/publication/decision boundaries are preserved. CLI uses actual API/envelopes, private credentials, bounded pagination and total transport deadlines; human decisions remain exact-bound and separate. Human snapshot bytes are unchanged.
+- AC5: immutable origin preserves actual principal and server-selected manual/CLI/webhook/PR channel. API/history/detail rendering uses real source data; requested pins are not labelled collected proof. Legacy origins remain unavailable.
+- Real privilege/effect proof9tests68subtests uses actual HMAC admission, engine claims, separate human decision and handoff dispatch/consume. Collector/material/custody/delivery ports are explicitly synthetic. Real offline collection qualification49checks and current integrity9tests86subtests pass; production profile coverage is not widened.
+- Browser: actual manual andhumanCLI reports plus servicewebhook/agentCLI/PR admissions;1test27.7s,12screenshots1440/760,zeroaxecritical/serious andvisual94/100. Collectedrequests failclosedwithouta runner; this provesadmission/origin only. Originalapp restoredhealthy; privatecredentials/disposable resources removed.
+- Fullverification: root1,921tests/3skips; exactAPI/CLI/infra797passed/1skip/2,423subtests; automation1,099passed/1skip/3,236subtests. All ten local-CI targets verified after recorded fixture repairs; initial failures and interrupted stale runs are retained.
+- UI479tests+2compatibilitychecks, typecheck/build and current APIgeneration pass. Ruff/repositoryformat and scopedBandit pass. CI mypy retains317existing-code diagnostics, zeroonchangedlines.
+- Independent reviews and red/green repairs closed clock, scope, secret-reflection, raw-operation, CLI deadline/interruption/scheme and compact-origin issues. No introduced findings remain open.
+- BMad help handoff: code-review closure on separate local backend/CLI and UI branches. No public push, PR, credential setup or release was performed by this development task.
 
 ### File List
+- `docs/verification/infra-automation/16-17/pr217-ci-repair.md`
+- `docs/verification/infra-automation/16-17/backend-closeout.md`
+- `docs/verification/infra-automation/16-17/closeout-browser-output.txt`
+- `docs/verification/infra-automation/16-17/closeout-browser-proof.json`
+- `docs/verification/infra-automation/16-17/closeout-browser-proof.md`
+- `docs/verification/infra-automation/16-17/closeout-build.txt`
+- `docs/verification/infra-automation/16-17/closeout-compose-down.txt`
+- `docs/verification/infra-automation/16-17/closeout-compose-up.txt`
+- `docs/verification/infra-automation/16-17/closeout-screenshots/origin-agent-cli-1440.png`
+- `docs/verification/infra-automation/16-17/closeout-screenshots/origin-agent-cli-760.png`
+- `docs/verification/infra-automation/16-17/closeout-screenshots/origin-history-1440.png`
+- `docs/verification/infra-automation/16-17/closeout-screenshots/origin-history-760.png`
+- `docs/verification/infra-automation/16-17/closeout-screenshots/origin-human-cli-1440.png`
+- `docs/verification/infra-automation/16-17/closeout-screenshots/origin-human-cli-760.png`
+- `docs/verification/infra-automation/16-17/closeout-screenshots/origin-manual-1440.png`
+- `docs/verification/infra-automation/16-17/closeout-screenshots/origin-manual-760.png`
+- `docs/verification/infra-automation/16-17/closeout-screenshots/origin-service-pr-1440.png`
+- `docs/verification/infra-automation/16-17/closeout-screenshots/origin-service-pr-760.png`
+- `docs/verification/infra-automation/16-17/closeout-screenshots/origin-service-webhook-1440.png`
+- `docs/verification/infra-automation/16-17/closeout-screenshots/origin-service-webhook-760.png`
+- `docs/verification/infra-automation/16-17/closeout-visual-verdict.json`
+- `docs/verification/infra-automation/16-17/git-flow-closeout.md`
+- `tests/test_infra_automation/test_trigger_clock.py`
+- `docs/verification/infra-automation/16-17/formal-code-review.md`
+- `docs/verification/infra-automation/16-17/review-fixes.md`
+- `docs/verification/infra-automation/16-17/review-fixes-results.json`
+- `README.md`
 - `_bmad-output/implementation-artifacts/16-17-signed-trigger-intake-and-cli.md`
 - `_bmad-output/implementation-artifacts/sprint-status.yaml`
+- `_bmad-output/project-context.md`
 - `api/routes/infra_automation_triggers.py`
 - `api/schemas.py`
 - `app.py`
 - `cli/analyze.py`
 - `cli/automation.py`
 - `config.py`
+- `docs/infra-automation/browser-ui.md`
+- `docs/infra-automation/triggers.md`
+- `docs/verification/infra-automation/16-14/results.json`
+- `docs/verification/infra-automation/16-17/browser-cli-invocation-failure.txt`
+- `docs/verification/infra-automation/16-17/browser-navigation-wait-failure.txt`
+- `docs/verification/infra-automation/16-17/browser-prior-success.txt`
+- `docs/verification/infra-automation/16-17/browser-proof.md`
+- `docs/verification/infra-automation/16-17/browser-roving-tab-failure.txt`
+- `docs/verification/infra-automation/16-17/browser-source.json`
+- `docs/verification/infra-automation/16-17/browser-verified.txt`
+- `docs/verification/infra-automation/16-17/initial-origin-history-760.png`
 - `docs/verification/infra-automation/16-17/readiness.md`
+- `docs/verification/infra-automation/16-17/results.md`
+- `docs/verification/infra-automation/16-17/review.md`
+- `docs/verification/infra-automation/16-17/screenshots.json`
+- `docs/verification/infra-automation/16-17/screenshots/origin-agent-cli-1440.png`
+- `docs/verification/infra-automation/16-17/screenshots/origin-agent-cli-760.png`
+- `docs/verification/infra-automation/16-17/screenshots/origin-history-1440.png`
+- `docs/verification/infra-automation/16-17/screenshots/origin-history-760.png`
+- `docs/verification/infra-automation/16-17/screenshots/origin-human-cli-1440.png`
+- `docs/verification/infra-automation/16-17/screenshots/origin-human-cli-760.png`
+- `docs/verification/infra-automation/16-17/screenshots/origin-manual-1440.png`
+- `docs/verification/infra-automation/16-17/screenshots/origin-manual-760.png`
+- `docs/verification/infra-automation/16-17/screenshots/origin-service-pr-1440.png`
+- `docs/verification/infra-automation/16-17/screenshots/origin-service-pr-760.png`
+- `docs/verification/infra-automation/16-17/screenshots/origin-service-webhook-1440.png`
+- `docs/verification/infra-automation/16-17/screenshots/origin-service-webhook-760.png`
+- `docs/verification/infra-automation/16-17/validation-summary.json`
+- `docs/verification/infra-automation/16-17/visual-initial.json`
+- `docs/verification/infra-automation/16-17/visual-verdict.json`
+- `examples/infra-automation/triggers/README.md`
+- `examples/infra-automation/triggers/cli-run.example.json`
+- `examples/infra-automation/triggers/human-run.example.json`
+- `examples/infra-automation/triggers/key-manifest.example.json`
+- `examples/infra-automation/triggers/signed-credentials.example.json`
+- `examples/infra-automation/triggers/signing_recipe.py`
+- `examples/infra-automation/triggers/webhook-request.example.json`
+- `frontend/e2e/infra-automation-triggers.spec.ts`
+- `frontend/src/api/infraAutomation.ts`
+- `frontend/src/api/infraAutomationOrigins.test.ts`
 - `frontend/src/api/schema.d.ts`
+- `frontend/src/screens/InfraAutomation.tsx`
+- `frontend/src/screens/InfraAutomationOrigin.test.tsx`
+- `frontend/src/screens/InfraAutomationOrigin.tsx`
+- `frontend/src/screens/InfraAutomationRun.tsx`
 - `infra_automation/claims.py`
 - `infra_automation/lifecycle.py`
 - `infra_automation/state.py`
@@ -129,6 +228,9 @@ Codex with bounded native implementation and independent review agents.
 - `schemas/infra-automation/engine-v1.json`
 - `schemas/infra-automation/trigger-v1.json`
 - `schemas/infra-automation/workflow-lifecycle-v1.json`
+- `scripts/compose-story16-17.yaml`
+- `scripts/qualify_collection.py`
+- `scripts/trigger_ui_fixture.py`
 - `services/infra_automation_engine_service.py`
 - `services/infra_automation_engine_support.py`
 - `services/infra_automation_policy.py`
@@ -150,11 +252,21 @@ Codex with bounded native implementation and independent review agents.
 - `tests/test_infra/test_receiver_reconciliation_migration.py`
 - `tests/test_infra/test_runner_enrollment_migration.py`
 - `tests/test_infra/test_trigger_migration.py`
+- `tests/test_infra_automation/test_collection_qualification.py`
+- `tests/test_infra_automation/test_preflight_evidence.py`
 - `tests/test_infra_automation/test_preflight_repository.py`
+- `tests/test_infra_automation/test_target_capacity.py`
 - `tests/test_infra_automation/test_trigger_authority.py`
 - `tests/test_infra_automation/test_trigger_intake.py`
 - `tests/test_infra_automation/test_trigger_privileges.py`
 - `tests/test_infra_automation/test_trigger_signing.py`
 
 ## Change Log
-- 2026-11-06: Implemented signing, replay/authority, intake/origin and CLI packets; final UI and full verification in progress.
+- 2026-11-09: Refreshed PR217 from develop after backend squash; corrected stale decision-matrix fixture time and added deterministic regression for coverage-loaded CI.
+- 2026-11-09: Verified unchanged tested source and fresh production Compose proof; accepted story closeout and separate backend/UI publication layout; marked done.
+- 2026-11-07: Resolved both formal review findings; repaired loss-of-SQLite-reservation cleanup compatibility; completed full final validation and returned to review.
+- 2026-11-06: Implemented all four packets, repaired independent review and verification findings, completed required checks and advanced to review.
+
+### Formal Code Review — 2026-11-07
+
+The initial formal review covered baseline `2fef718` through `51bb952` with blind adversarial, edge-case and acceptance layers. It recorded two actionable findings and returned the story to `in-progress`; that initial task changed review records only. The follow-up resolved both findings and completed full final validation, as recorded in the Dev Agent Record and [review-fixes.md](../../docs/verification/infra-automation/16-17/review-fixes.md). Story is now `review`. No public push, PR or release was performed.

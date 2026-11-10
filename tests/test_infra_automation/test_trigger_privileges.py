@@ -388,6 +388,57 @@ def signed_handoff_case(principal_type="service"):
 
 
 class TriggerPrivilegeTests(unittest.TestCase):
+    def test_decision_matrix_refreshes_time_after_slow_handoff_setup(self):
+        from services.infra_automation_trigger_authority import live_machine_stamp
+
+        original_fixture = signed_handoff_case
+        denied = []
+
+        @contextmanager
+        def later_handoff_case(principal_type):
+            with original_fixture(principal_type) as case:
+                # Simulate setup crossing the fixture's next-second instant.
+                # A real policy check advances the durable clock, while the
+                # fixture's injected request clock deliberately remains stale.
+                later = max(case.now, datetime.now(timezone.utc)) + timedelta(seconds=2)
+                with auth.authorized_session(case.factory) as db:
+                    self.assertTrue(
+                        live_machine_stamp(db, case.document.authority, now=later)
+                    )
+                original_decide = case.service.decide
+
+                def decide(*args, **kwargs):
+                    try:
+                        return original_decide(*args, **kwargs)
+                    except auth.TrustedAuthorizationError as exc:
+                        self.assertEqual(exc.status_code, 403)
+                        with case.factory() as db:
+                            membership = project_memberships.get_membership(
+                                db,
+                                principal_id=case.machine["principal_id"],
+                                project_id=100,
+                            )
+                            denied.append((principal_type, membership.role))
+                        raise
+
+                with (
+                    patch(__name__ + ".datetime", wraps=datetime) as wall_clock,
+                    patch.object(case.service, "decide", side_effect=decide),
+                ):
+                    wall_clock.now.return_value = later
+                    yield case
+
+        with patch(__name__ + ".signed_handoff_case", later_handoff_case):
+            self.test_real_decision_entrypoint_denies_each_machine_kind_and_role()
+        self.assertEqual(
+            denied,
+            [
+                (kind, role)
+                for kind in ("service", "agent")
+                for role in ("contributor", "read-only")
+            ],
+        )
+
     def test_real_issuer_matrix_never_grants_human_authority(self):
         for principal_type in ("service", "agent"):
             for role in ("contributor", "read-only"):
@@ -785,10 +836,11 @@ class TriggerPrivilegeTests(unittest.TestCase):
                             ).authentication_version
                         case.key["membership_version"] = member.authorization_version
                         intake_fixture.TriggerIntakeTests.write_key(case)
-                    time.sleep(
-                        max(0, (case.now - datetime.now(timezone.utc)).total_seconds())
-                        + 0.01
-                    )
+                    # Handoff setup can advance the durable machine clock
+                    # beyond its injected fixture time on a slower CI runner.
+                    # Refresh only this new request; clock-denial fixtures keep
+                    # the shared signing helper's exact supplied time.
+                    case.now = max(case.now, datetime.now(timezone.utc))
                     proof = intake_fixture.TriggerIntakeTests.signed(case, body=b"{}")
                     with proof.credentials():
                         with auth.authorized_session() as db:

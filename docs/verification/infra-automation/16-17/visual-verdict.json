@@ -1,0 +1,8 @@
+{
+  "score": 94,
+  "verdict": "pass",
+  "category_match": true,
+  "differences": [],
+  "suggestions": [],
+  "reasoning": "The compact history preserves the existing InfraFlow table style. Exact principal identity and requested source pins remain readable in the detail view at desktop and tablet widths."
+}

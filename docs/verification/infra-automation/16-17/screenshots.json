@@ -1,0 +1,74 @@
+[
+  {
+    "path": "docs/verification/infra-automation/16-17/screenshots/origin-agent-cli-1440.png",
+    "width": 1440,
+    "height": 1000,
+    "sha256": "7f94ada6d71bda69a7307827490145341395a8668bc7085348fe8e366d3a7f41"
+  },
+  {
+    "path": "docs/verification/infra-automation/16-17/screenshots/origin-agent-cli-760.png",
+    "width": 760,
+    "height": 1000,
+    "sha256": "ab6655094b8be8735f37f9776655071fb103d2d2e0f52656753b6360fba3a9f4"
+  },
+  {
+    "path": "docs/verification/infra-automation/16-17/screenshots/origin-history-1440.png",
+    "width": 1440,
+    "height": 1000,
+    "sha256": "1279be71c3ee49b44f8a1a758b0b52f956d72631536cf042ff5c833f24d1e819"
+  },
+  {
+    "path": "docs/verification/infra-automation/16-17/screenshots/origin-history-760.png",
+    "width": 760,
+    "height": 1000,
+    "sha256": "eaf5478cb354f1184bf64ed6860f3fc264a8cbd869716f26b3f3c8005dd30bce"
+  },
+  {
+    "path": "docs/verification/infra-automation/16-17/screenshots/origin-human-cli-1440.png",
+    "width": 1440,
+    "height": 1000,
+    "sha256": "3d3c8187a70cb036f351187797c4a4d1db8f2db156fe28dbab32a1ad9a8cdafb"
+  },
+  {
+    "path": "docs/verification/infra-automation/16-17/screenshots/origin-human-cli-760.png",
+    "width": 760,
+    "height": 1000,
+    "sha256": "2497728c2c29094ae0f860510e0070ff6f45f545d1a2658ab6d1ffc1deeb152e"
+  },
+  {
+    "path": "docs/verification/infra-automation/16-17/screenshots/origin-manual-1440.png",
+    "width": 1440,
+    "height": 1000,
+    "sha256": "26ad0d5617c758fee3958ffdb2e9cfbc717bbed8902378f7af7761b24915361b"
+  },
+  {
+    "path": "docs/verification/infra-automation/16-17/screenshots/origin-manual-760.png",
+    "width": 760,
+    "height": 1000,
+    "sha256": "7262abc3bec2648eb7804a12c9e0396a6825ac59e6bccf8b8210bc3b62fa2c72"
+  },
+  {
+    "path": "docs/verification/infra-automation/16-17/screenshots/origin-service-pr-1440.png",
+    "width": 1440,
+    "height": 1000,
+    "sha256": "2be46e45f9afe84a84710ec8714c5bc333a7ae40cc3c6d4eec24e1c529864bfd"
+  },
+  {
+    "path": "docs/verification/infra-automation/16-17/screenshots/origin-service-pr-760.png",
+    "width": 760,
+    "height": 1000,
+    "sha256": "9139603ba1a2a2218014bfbe0a3ad00a6468b6e8364644e9b2af77bd5da6a94e"
+  },
+  {
+    "path": "docs/verification/infra-automation/16-17/screenshots/origin-service-webhook-1440.png",
+    "width": 1440,
+    "height": 1000,
+    "sha256": "6b74dc682ee95e7e20d74110bf36fb7cfadf57de9dabf4df0a9fd7c6d17eb6bf"
+  },
+  {
+    "path": "docs/verification/infra-automation/16-17/screenshots/origin-service-webhook-760.png",
+    "width": 760,
+    "height": 1000,
+    "sha256": "c7bcd5f7d5e00752fc044e951ebb9f41767b3c04a89e9e206048a75c7a399df3"
+  }
+]

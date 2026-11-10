@@ -1,0 +1,43 @@
+
+> deploywhisper-ui-a11y@0.0.0 test:ui-review
+> npm --prefix frontend exec -- playwright test --config=frontend/playwright.config.ts infra-automation-triggers.spec.ts
+
+
+Running 1 test using 1 worker
+
+(node:2669) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✘  1 [chromium] › frontend/e2e/infra-automation-triggers.spec.ts:153:3 › signed trigger origin using real composed APIs › manual, CLI, service and agent origins remain distinct and source-pinned (34.4s)
+
+
+  1) [chromium] › frontend/e2e/infra-automation-triggers.spec.ts:153:3 › signed trigger origin using real composed APIs › manual, CLI, service and agent origins remain distinct and source-pinned
+
+    Error: expect(locator).toBeFocused() failed
+
+    Locator:  getByRole('tab', { name: 'Runs', exact: true })
+    Expected: focused
+    Received: inactive
+    Timeout:  15000ms
+
+    Call log:
+      - Expect "toBeFocused" getByRole('tab', { name: 'Runs', exact: true }) with timeout 15000ms
+      - waiting for getByRole('tab', { name: 'Runs', exact: true })
+        34 × locator resolved to <button role="tab" tabindex="-1" type="button" class="dw-tab" aria-selected="false" id="automation-index-tab-runs" aria-controls="automation-index-panel-runs">Runs</button>
+           - unexpected value "inactive"
+
+
+      64 |     await page.keyboard.press(reverse ? "Shift+Tab" : "Tab");
+      65 |   }
+    > 66 |   await expect(control).toBeFocused();
+         |                         ^
+      67 | }
+      68 | async function keyboardActivate(page: Page, control: Locator, key = "Enter") {
+      69 |   await tabTo(page, control);
+        at tabTo (/private/tmp/deploywhisper-story16-17-ui/frontend/e2e/infra-automation-triggers.spec.ts:66:25)
+        at keyboardActivate (/private/tmp/deploywhisper-story16-17-ui/frontend/e2e/infra-automation-triggers.spec.ts:69:3)
+        at /private/tmp/deploywhisper-story16-17-ui/frontend/e2e/infra-automation-triggers.spec.ts:177:5
+
+    Error Context: frontend/test-results/infra-automation-triggers--1cd6b--distinct-and-source-pinned-chromium/error-context.md
+
+  1 failed
+    [chromium] › frontend/e2e/infra-automation-triggers.spec.ts:153:3 › signed trigger origin using real composed APIs › manual, CLI, service and agent origins remain distinct and source-pinned

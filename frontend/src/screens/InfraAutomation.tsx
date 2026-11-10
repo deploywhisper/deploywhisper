@@ -11,6 +11,8 @@ import { getCollectionReadiness, startCollectedRun, validCollectionReason, isCon
 import { Button, SegmentedTabs } from "../components/ui";
 import { AutomationFrame, AccountLink, automationError, scopeQuery, type AutomationContext } from "./InfraAutomationShared";
 
+import { RunOriginSummary } from "./InfraAutomationOrigin";
+
 const denied = (error: unknown) => error instanceof ApiClientError && [401, 403].includes(error.status);
 // Keep an unknown mutation outcome guarded across same-session route remounts.
 // Identity changes use a different epoch; no credential is persisted.
@@ -65,7 +67,7 @@ export function RunHistory({ context }: { context: AutomationContext }) {
     <div className="dw-automation-actions"><h2>Run history</h2><Button disabled={query.isFetching} onClick={() => { void query.refetch(); }}>Refresh runs</Button></div>
     {query.isPending && <p role="status">Loading runs…</p>}{query.isError && <p role="alert">{automationError(query.error)}</p>}
     {!denied(query.error) && <>{!query.isPending && !query.isError && !items.length && <p>No preflight runs in this scope.</p>}
-      {items.length > 0 && <div className="dw-automation-table-wrap" role="region" aria-label="Run history table" tabIndex={0}><table><caption>Immutable runs in the selected scope</caption><thead><tr><th scope="col">Run</th><th scope="col">Recorded state</th><th scope="col">Revision</th><th scope="col">Created at</th></tr></thead><tbody>{items.map((run) => <tr key={run.id}><td><Link to={`/infra-automation/runs/${encodeURIComponent(run.id)}${scopeQuery(context.scope)}`}>{run.id}</Link></td><td><span className="dw-automation-status">{run.state}</span></td><td><code>{run.revision_id}</code></td><td>{run.created_at}</td></tr>)}</tbody></table></div>}
+      {items.length > 0 && <div className="dw-automation-table-wrap" role="region" aria-label="Run history table" tabIndex={0}><table><caption>Immutable runs in the selected scope</caption><thead><tr><th scope="col">Run</th><th scope="col">Recorded state</th><th scope="col">Request origin</th><th scope="col">Revision</th><th scope="col">Created at</th></tr></thead><tbody>{items.map((run) => <tr key={run.id}><td><Link to={`/infra-automation/runs/${encodeURIComponent(run.id)}${scopeQuery(context.scope)}`}>{run.id}</Link></td><td><span className="dw-automation-status">{run.state}</span></td><td><RunOriginSummary origin={run.origin} /></td><td><code>{run.revision_id}</code></td><td>{run.created_at}</td></tr>)}</tbody></table></div>}
       {query.data?.pages.some((page) => page.cursor.gap) && <p role="status">The retained run list has a gap. Refresh to read current history.</p>}
       {query.hasNextPage && <Button disabled={query.isFetchingNextPage} onClick={() => { void query.fetchNextPage(); }}>More runs</Button>}
     </>}
