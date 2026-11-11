@@ -176,9 +176,22 @@ The paths below are illustrative; use the exact deployed database and domains:
 ./.venv/bin/python -m cli.automation_operations --control /private/deploywhisper/control initialize --database /private/deploywhisper/app.db --root artifacts=/private/deploywhisper/artifacts --root custody=/private/deploywhisper/custody --root receiver_journal=/private/deploywhisper/receiver-journal
 ```
 
-`artifacts` and `custody` roles are mandatory. Initialization binds one
-installation ID and generation; it does not authorize execution or bootstrap an
-account. Configure the app and participating service processes with:
+`artifacts` and `custody` roles are mandatory. The role name `database` is
+reserved for the coordinated SQLite copy and is rejected before any binding or
+restore reservation. Initialization binds one installation ID and generation;
+it does not authorize execution or bootstrap an account.
+
+Initialization first publishes a private, durable `initializing` intent and its
+permanent lifecycle lock, then binds the database. Normal startup and effects
+remain blocked in this phase. If interrupted, inspect `status` and use `resume`,
+or repeat `initialize` with the identical database and root arguments. Recovery
+checks that exact intent, database device/inode, schema, generation and binding;
+it never recreates a missing deployed ledger or replaces the lifecycle lock.
+An interruption before control publication leaves no database binding, so a new
+initialization attempt remains safe. An already `ready` result can be inspected
+through `status` or the idempotent readiness check in `resume` after a lost reply.
+
+Configure the app and participating service processes with:
 
 ```text
 DEPLOYWHISPER_RECOVERY_CONTROL_PATH=/private/deploywhisper/control
@@ -206,7 +219,11 @@ private output path outside the control, database and captured roots:
 Backup requires phase `ready`. It uses SQLite's backup API for a consistent copy,
 checks integrity/foreign keys and effective schema/triggers, copies private roots
 including empty directories/modes, records exact file digests and publishes the
-snapshot directory atomically. It does not assume that copying the main `.db`
+snapshot directory atomically. Before publication it verifies the complete
+candidate using the same limits as restore, including `manifest.json`, directory
+entries, role-prefix depth, total bytes and the manifest's own metadata bound.
+A candidate that cannot be restored is not published as a successful backup.
+It does not assume that copying the main `.db`
 without WAL/artifact/custody coordination is complete. Retain the returned
 manifest digest, source/build versions and the operator's quiescence record.
 
@@ -223,8 +240,12 @@ The snapshot must belong to this installation and have exactly the declared
 roles, valid private files, digests and current schema. Restore compares current
 external history before reserving a generation. If **any** current handoff,
 grant, target-lock or external-fact row is absent or different in the backup,
-or an external-possible run tuple differs, it conservatively refuses. This also
-protects work accepted after the snapshot: an older backup cannot erase it.
+or an external-possible run tuple differs, it conservatively refuses. It also
+requires current retention tombstones, removal audit events and the matching
+removed-payload identities. An older snapshot cannot resurrect purged content
+or remove those receipts from active history. These checks precede generation
+reservation and preserve the current stores on refusal. This also protects work
+accepted after the snapshot: an older backup cannot erase it.
 Obtain a sufficiently new consistent backup or separately reviewed manual
 recovery. Do not erase the newer rows, fabricate a terminal receipt or silently
 break/unlock a target to get an old backup accepted.
@@ -420,11 +441,18 @@ use a new output path. The command upgrades that copy, never the source/live DB:
 
 The [released-source exercise](../verification/infra-automation/16-18/upgrade-results.json)
 used `v1.4.0@935f3bb` and a synthetic report: source unchanged, 37 report columns
-preserved exactly, destination schema 041, integrity `ok` and no foreign-key
+preserved exactly, destination schema 042, integrity `ok` and no foreign-key
 violations. This is a real released-schema migration exercise, not a live
 installation or power-loss qualification. A destructive downgrade is not a safe
 rollback for immutable audit and operation history. Preserve the coordinated
 snapshot and separately investigated recovery plan instead.
+
+Ordinary failed `upgrade-copy` attempts remove only their positively owned,
+unpublished staging database and private SQLite sidecars. Existing outputs,
+foreign replacement inodes and an ambiguously published output are preserved.
+SIGKILL or power loss cannot execute process cleanup and can leave private
+`.upgrade-*` files for operator inspection; no automatic startup scavenger is
+claimed. Never delete the source or a possibly published result to retry.
 
 The [restore implementation/results](../verification/infra-automation/16-18/restore-results.md)
 and [handoff source hashes](../verification/infra-automation/16-18/restore-source-hashes.json)

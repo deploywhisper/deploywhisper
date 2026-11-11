@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import json
 import re
 import unittest
 from urllib.parse import unquote, urlsplit
@@ -38,6 +39,17 @@ def table_values(content: str, heading: str) -> dict[str, str]:
 
 
 class AutomationOperationsDocumentationTests(unittest.TestCase):
+    def test_documented_upgrade_result_matches_linked_evidence(self):
+        content = GUIDES[0].read_text(encoding="utf-8")
+        evidence = json.loads(
+            (
+                ROOT / "docs/verification/infra-automation/16-18/upgrade-results.json"
+            ).read_text()
+        )
+        match = re.search(r"destination schema (\d{3})", content)
+        self.assertIsNotNone(match)
+        self.assertEqual(match[1], evidence["destination_schema"].split("_", 1)[0])
+
     def test_local_links_resolve_inside_repository(self):
         parser = MarkdownIt()
         for guide in GUIDES:

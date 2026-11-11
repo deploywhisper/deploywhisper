@@ -514,6 +514,7 @@ class RecoveryStore:
             or not 1 <= value["generation"] <= SAFE
             or value["phase"]
             not in {
+                "initializing",
                 "ready",
                 "restore_reserved",
                 "publishing",
@@ -534,6 +535,7 @@ class RecoveryStore:
             type(roots) is not dict
             or not {"artifacts", "custody"} <= set(roots)
             or len(roots) > 8
+            or "database" in roots
             or any(re.fullmatch(r"[a-z][a-z_]{0,31}", role) is None for role in roots)
         ):
             raise RecoveryError()
@@ -556,37 +558,125 @@ class RecoveryStore:
         for root in roots.values():
             fd = _private(root, directory=True)
             os.close(fd)
-        self.control.mkdir(mode=0o700)
-        _write(self.control / "lifecycle.lock", b"")
-        with self._lock(exclusive=True), _connect(database) as connection:
+        if self.control.exists():
+            # Never replace a participating lock inode or reconstruct a lost ledger.
+            with self._lock(exclusive=True):
+                value = self._ledger()
+                if (
+                    value["phase"] != "initializing"
+                    or value["database"] != str(database)
+                    or value["roots"] != roots
+                ):
+                    raise RecoveryError()
+                return self._finish_initialize(value)
+        with _connect(database) as connection:
+            self._integrity(connection)
             self._schema(connection)
             if connection.execute(
                 "SELECT 1 FROM infra_automation_recovery_state"
             ).fetchone():
                 raise RecoveryError()
             generation = _ceiling(connection)
-            installation_id = uuid4().hex
-            now = _timestamp(connection)
-            connection.execute(
-                "INSERT INTO infra_automation_recovery_state VALUES(1,?,?, 'ready',NULL,?)",
-                (installation_id, generation, now),
-            )
-            connection.commit()
-            self._save(
-                dict(
-                    version=1,
-                    installation_id=installation_id,
-                    generation=generation,
-                    phase="ready",
-                    database=str(database),
-                    roots=roots,
-                    operation_id=None,
-                    backup=None,
-                    manifest_digest=None,
-                    publication={},
+            identity = self._database_identity(database)
+        value = dict(
+            version=1,
+            installation_id=uuid4().hex,
+            generation=generation,
+            phase="initializing",
+            database=str(database),
+            roots=roots,
+            operation_id=None,
+            backup=None,
+            manifest_digest=None,
+            publication={"initialization": identity},
+        )
+        # Publish a complete, durable intent and its permanent lock before binding
+        # the database. An unpublished sibling can never authorize a DB mutation.
+        staging = self.control.with_name(".initialize-" + uuid4().hex)
+        staging.mkdir(mode=0o700)
+        try:
+            _write(staging / "lifecycle.lock", b"")
+            _write(staging / "ledger.json", _canonical(value))
+            _sync_dir(staging)
+            from infra_automation.receiver_custody import _publish_directory
+
+            parent = _private(self.control.parent, directory=True)
+            try:
+                _publish_directory(parent, staging.name, self.control.name)
+                os.fsync(parent)
+            finally:
+                os.close(parent)
+        finally:
+            if staging.exists():
+                shutil.rmtree(staging)
+        with self._lock(exclusive=True):
+            return self._finish_initialize(self._ledger())
+
+    @staticmethod
+    def _database_identity(database):
+        """Read identity through a held parent, without opening a live SQLite fd."""
+        from infra_automation.runner.catalog import protected_directory
+
+        database = Path(database)
+        parent = protected_directory(database.parent, private=True)
+        try:
+            info = os.stat(database.name, dir_fd=parent, follow_symlinks=False)
+            if (
+                not stat.S_ISREG(info.st_mode)
+                or info.st_uid != os.getuid()
+                or stat.S_IMODE(info.st_mode) != 0o600
+                or info.st_nlink != 1
+            ):
+                raise RecoveryError()
+            return {"device": info.st_dev, "inode": info.st_ino}
+        finally:
+            os.close(parent)
+
+    def _finish_initialize(self, value):
+        """Only the exact published initialization intent may finish its binding."""
+        if (
+            value["phase"] != "initializing"
+            or value["operation_id"] is not None
+            or value["backup"] is not None
+            or value["manifest_digest"] is not None
+            or set(value["publication"]) != {"initialization"}
+            or value["publication"]["initialization"]
+            != self._database_identity(value["database"])
+        ):
+            raise RecoveryError()
+        self._layout(value["database"], value["roots"])
+        for root in value["roots"].values():
+            descriptor = _private(root, directory=True)
+            os.close(descriptor)
+        with _connect(value["database"]) as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            self._integrity(connection)
+            self._schema(connection)
+            if (
+                self._database_identity(value["database"])
+                != value["publication"]["initialization"]
+                or _ceiling(connection) != value["generation"]
+            ):
+                raise RecoveryError()
+            rows = connection.execute(
+                "SELECT installation_id,generation,phase,manifest_digest FROM infra_automation_recovery_state"
+            ).fetchall()
+            if not rows:
+                connection.execute(
+                    "INSERT INTO infra_automation_recovery_state VALUES(1,?,?, 'ready',NULL,?)",
+                    (
+                        value["installation_id"],
+                        value["generation"],
+                        _timestamp(connection),
+                    ),
                 )
-            )
-        return self.status()
+            elif rows != [
+                (value["installation_id"], value["generation"], "ready", None)
+            ]:
+                raise RecoveryError()
+        value.update(phase="ready", publication={})
+        self._save(value)
+        return self.assert_ready()
 
     @_guarded
     def status(self):
@@ -675,11 +765,6 @@ class RecoveryStore:
                 files[role] = {"kind": "directory", "mode": 0o700}
                 for relative, record in _copy_tree(Path(root), staging / role).items():
                     files[role + "/" + relative] = record
-            if (
-                len(files) > MAX_FILES
-                or sum(record.get("size", 0) for record in files.values()) > MAX_BYTES
-            ):
-                raise RecoveryError()
             manifest = dict(
                 version=1,
                 schema_revision=REVISION,
@@ -689,6 +774,9 @@ class RecoveryStore:
                 roles=sorted(value["roots"]),
             )
             _write(staging / "manifest.json", _canonical(manifest))
+            # Creation and restore share the exact package budget, including the
+            # manifest's entry/bytes/metadata and the extra root-role depth.
+            self._verify_backup(staging, value)
             _sync_dir(staging)
             from infra_automation.receiver_custody import _publish_directory
 
@@ -790,18 +878,25 @@ class RecoveryStore:
 
     @staticmethod
     def _preserve_external_history(current, incoming):
-        """An older snapshot cannot erase current known external work.
+        """An older snapshot cannot erase external work or committed removals.
 
         Conservatively require current handoff/grant/lock/fact rows in the input
         with identical bytes. Reconciliation or a break is never synthesized by
         restoring an older snapshot; operator must use a sufficiently new backup
         or a separately reviewed manual recovery if current storage is corrupt.
+        Retention receipts, removal audits and removed payload identities must
+        also survive exactly; restoring data never reverses a committed purge.
         """
-        for table in (
-            "infra_automation_handoffs",
-            "infra_automation_grants",
-            "infra_automation_target_locks",
-            "infra_automation_external_facts",
+        for table, condition in (
+            ("infra_automation_handoffs", None),
+            ("infra_automation_grants", None),
+            ("infra_automation_target_locks", None),
+            ("infra_automation_external_facts", None),
+            ("infra_automation_retention_tombstones", None),
+            (
+                "infra_automation_audit",
+                "automation_manifest_content_removed",
+            ),
         ):
             columns = [
                 row[1] for row in current.execute(f'PRAGMA table_info("{table}")')
@@ -809,7 +904,14 @@ class RecoveryStore:
             if not columns:
                 raise RecoveryError()
             relation = sql_table(table, *(sql_column(name) for name in columns))
-            current_sql = str(sql_select(*relation.c).compile(dialect=sqlite_dialect()))
+            statement = sql_select(*relation.c)
+            if condition is not None:
+                statement = statement.where(relation.c.event_type == condition)
+            current_sql = str(
+                statement.compile(
+                    dialect=sqlite_dialect(), compile_kwargs={"literal_binds": True}
+                )
+            )
             predicate = [
                 column.is_(sql_bind("p" + str(index)))
                 for index, column in enumerate(relation.c)
@@ -822,6 +924,30 @@ class RecoveryStore:
             for record in current.execute(current_sql):
                 if incoming.execute(match_sql, record).fetchone() is None:
                     raise RecoveryError()
+        # A matching receipt alone cannot permit bytes to reappear. Bind the
+        # removed marker to the original immutable manifest identity/digest.
+        removed = """SELECT m.id,m.run_id,m.project_id,m.workspace_id,m.requested_by,
+            m.digest,m.artifacts_bytes FROM infra_automation_artifact_manifests m
+            JOIN infra_automation_retention_tombstones t ON t.manifest_id=m.id
+            WHERE m.digest=t.original_digest"""
+        current_removed = current.execute(removed).fetchall()
+        if (
+            len(current_removed)
+            != current.execute(
+                "SELECT count(*) FROM infra_automation_retention_tombstones"
+            ).fetchone()[0]
+        ):
+            raise RecoveryError()
+        for record in current_removed:
+            if (
+                record[-1] != b"[]"
+                or incoming.execute(
+                    "SELECT id,run_id,project_id,workspace_id,requested_by,digest,artifacts_bytes FROM infra_automation_artifact_manifests WHERE id=?",
+                    (record[0],),
+                ).fetchone()
+                != record
+            ):
+                raise RecoveryError()
         for record in current.execute(
             "SELECT id,version,state,external_possible FROM infra_automation_runs WHERE external_possible=1"
         ):
@@ -871,6 +997,11 @@ class RecoveryStore:
     def resume(self):
         with self._lock(exclusive=True):
             value = self._ledger()
+            if value["phase"] == "initializing":
+                return self._finish_initialize(value)
+            if value["phase"] == "ready":
+                # Includes a lost response after initialization's ready publish.
+                return self.assert_ready()
             if value["phase"] == "completing":
                 # Resume only publication of an already recorded completion, or
                 # reopen read-only recovery after its business transaction rolled
@@ -1362,43 +1493,80 @@ def upgrade_database_copy(source, output):
             raise RecoveryError()
     finally:
         os.close(source_fd)
-    input_connection = sqlite3.connect(
-        source.as_uri() + "?mode=ro", uri=True, timeout=0
-    )
+    staging = output.with_name(".upgrade-" + uuid4().hex)
+    owned = None
     try:
-        if input_connection.execute(
-            "SELECT version_num FROM alembic_version"
-        ).fetchall() != [("028_add_narrative_guidance_payload",)]:
-            raise RecoveryError()
-        RecoveryStore._integrity(input_connection)
-        staging = output.with_name(".upgrade-" + uuid4().hex)
-        _write(staging, b"")
-        with _connect(staging) as destination:
-            input_connection.backup(destination)
+        input_connection = sqlite3.connect(
+            source.as_uri() + "?mode=ro", uri=True, timeout=0
+        )
+        try:
+            if input_connection.execute(
+                "SELECT version_num FROM alembic_version"
+            ).fetchall() != [("028_add_narrative_guidance_payload",)]:
+                raise RecoveryError()
+            RecoveryStore._integrity(input_connection)
+            descriptor = os.open(
+                staging, os.O_RDWR | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600
+            )
+            try:
+                info = os.fstat(descriptor)
+                owned = (info.st_dev, info.st_ino)
+                os.fsync(descriptor)
+            finally:
+                os.close(descriptor)
+            with _connect(staging) as destination:
+                input_connection.backup(destination)
+        finally:
+            input_connection.close()
+        cfg = Config(str(Path(__file__).resolve().parents[1] / "alembic.ini"))
+        previous = os.environ.get("DATABASE_URL")
+        try:
+            # Alembic's env.py gives DATABASE_URL precedence. This is an offline
+            # single-process operator command, never an HTTP handler.
+            os.environ["DATABASE_URL"] = "sqlite:///" + str(staging)
+            cfg.set_main_option("sqlalchemy.url", os.environ["DATABASE_URL"])
+            command.upgrade(cfg, "head")
+        finally:
+            if previous is None:
+                os.environ.pop("DATABASE_URL", None)
+            else:
+                os.environ["DATABASE_URL"] = previous
+        with _connect(staging) as connection:
+            RecoveryStore._integrity(connection)
+            RecoveryStore._schema(connection)
+        fd = _private(staging)
+        try:
+            os.fsync(fd)
+        finally:
+            os.close(fd)
+        os.link(staging, output, follow_symlinks=False)
+        staging.unlink()
+        _sync_dir(output.parent)
+        return {"schema_revision": REVISION}
     finally:
-        input_connection.close()
-    cfg = Config(str(Path(__file__).resolve().parents[1] / "alembic.ini"))
-    previous = os.environ.get("DATABASE_URL")
-    try:
-        # Alembic's existing env.py takes DATABASE_URL over Config. This helper
-        # is an offline single-process operator command, never an HTTP handler.
-        os.environ["DATABASE_URL"] = "sqlite:///" + str(staging)
-        cfg.set_main_option("sqlalchemy.url", os.environ["DATABASE_URL"])
-        command.upgrade(cfg, "head")
-    finally:
-        if previous is None:
-            os.environ.pop("DATABASE_URL", None)
-        else:
-            os.environ["DATABASE_URL"] = previous
-    with _connect(staging) as connection:
-        RecoveryStore._integrity(connection)
-        RecoveryStore._schema(connection)
-    fd = _private(staging)
-    try:
-        os.fsync(fd)
-    finally:
-        os.close(fd)
-    os.link(staging, output, follow_symlinks=False)
-    staging.unlink()
-    _sync_dir(output.parent)
-    return {"schema_revision": REVISION}
+        if owned is not None and staging.exists():
+            info = staging.lstat()
+            published = output.lstat() if output.exists() else None
+            if (
+                (info.st_dev, info.st_ino) == owned
+                and info.st_uid == os.getuid()
+                and stat.S_ISREG(info.st_mode)
+                and info.st_nlink == 1
+                and (published is None or (published.st_dev, published.st_ino) != owned)
+            ):
+                # Only this attempt's unpublished SQLite inode and its private
+                # sidecars are disposable. An ambiguous published copy is retained.
+                for suffix in ("-journal", "-wal", "-shm"):
+                    sidecar = Path(str(staging) + suffix)
+                    if sidecar.exists():
+                        side = sidecar.lstat()
+                        if (
+                            side.st_uid != os.getuid()
+                            or not stat.S_ISREG(side.st_mode)
+                            or side.st_nlink != 1
+                            or stat.S_IMODE(side.st_mode) not in (0o400, 0o600)
+                        ):
+                            raise RecoveryError()
+                        sidecar.unlink()
+                staging.unlink()
+                _sync_dir(staging.parent)
