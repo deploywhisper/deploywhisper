@@ -29,6 +29,24 @@ describe("optional verified report context", () => {
     expect(html).toContain("Review original artifacts");
     expect(html).toContain("Repository and immutable commit were not verified");
   });
+  it("identifies collected provenance without granting approval authority", () => {
+    const digest = "sha256:" + "a".repeat(64);
+    const collected: RunReports["items"][number] = { ...link, provenance: {
+      version: 1, kind: "collected", repository_id: "synthetic-repo", commit_sha: "b".repeat(40), profile_digest: digest,
+      tool: "opentofu", tool_version: "1.13.1", command_digest: digest, argv_digest: digest, raw_local_digest: digest, sanitized_digest: digest,
+      redaction_version: 1, exit_code: 2, collected_at: "2026-10-28T00:00:00Z", source_deadline: "2026-10-28T01:00:00Z",
+      custody: { version: 1, handle: "synthetic-custody", raw_local_digest: digest, expires_at: "2026-10-28T01:00:00Z" },
+      scope: { version: 1, runner_id: "runner-one", project_id: "1", workspace_id: "2", run_id: "run-one", step_id: "collect", attempt: 1, fence: 1, coordinator_generation: 1, authorization_epoch: 1, restore_epoch: 1, lease_deadline: "2026-10-28T00:01:00Z", audience: "runner-task-v1" },
+      limitation: "Collected provenance does not establish completeness or authorize an action."
+    } };
+    const html = renderToStaticMarkup(<MemoryRouter><ReportAutomationProvenance link={collected} evidence={reports.evidence_status} /></MemoryRouter>);
+    expect(html).toContain("Collected preflight context");
+    expect(html).toContain("Reports remain advisory");
+    expect(html).toContain("Approval eligibility is checked separately");
+    expect(html).not.toContain("Uploaded preflight context");
+    expect(html).not.toContain("Uploaded evidence is advisory");
+    expect(collected.approval_eligible).toBe(false);
+  });
   it("suppresses optional context for public and absent links without requiring protected providers", () => {
     expect(renderToStaticMarkup(<MemoryRouter initialEntries={["/reports/77?automation_run=run-one"]}><ReportAutomationContext reportId={77} projectId={1} publicView /></MemoryRouter>)).toBe("");
     expect(renderToStaticMarkup(<MemoryRouter><ReportAutomationContext reportId={77} projectId={1} /></MemoryRouter>)).toBe("");

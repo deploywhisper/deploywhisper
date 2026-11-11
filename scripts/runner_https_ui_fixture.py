@@ -133,6 +133,36 @@ def main():
             )
         )
     )
+    # Observe only bounded public outcome categories; never alter results or
+    # expose exception text, payloads, credentials or handler inputs.
+    from infra_automation.local_workers import SpawnProcessWorkers
+
+    original_poll = SpawnProcessWorkers.poll
+    observations = []
+
+    def observed_poll(workers):
+        exitcodes = {key: item.process.exitcode for key, item in workers._owned.items()}
+        completed = original_poll(workers)
+        for item in completed:
+            if len(observations) < 128:
+                observations.append(
+                    {
+                        "attempt_id": item.handle.attempt_id,
+                        "outcome": item.result.outcome,
+                        "crashed": item.crashed,
+                        "exitcode_at_poll_entry": exitcodes.get(item.handle.attempt_id),
+                    }
+                )
+        if completed:
+            try:
+                (profile_root / "worker-observations.json").write_text(
+                    json.dumps({"observations": observations}, sort_keys=True)
+                )
+            except OSError:
+                print("Worker observation unavailable", flush=True)
+        return completed
+
+    SpawnProcessWorkers.poll = observed_poll
     import app
     import uvicorn
 

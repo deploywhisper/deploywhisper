@@ -57,7 +57,7 @@ test("actual TLS administration enrolls, polls, rotates and revokes without reta
   await context.setOffline(true);
   await page.getByRole("button", { name: "Refresh runner health", exact: true }).click();
   await expect(page.getByRole("alert").first()).toBeVisible();
-  await expect(page.getByRole("button", { name: `Rotate credential for ${credential.runner_id}`, exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: `Rotate credential for ${credential.runner_id}`, exact: true })).toBeDisabled();
   await context.setOffline(false);
   await page.getByRole("button", { name: "Refresh runner health", exact: true }).click();
   await expect(page.getByLabel("Administration reason")).toBeEnabled();
@@ -118,6 +118,8 @@ test("actual isolated TLS collection opens its same permanent briefing", async (
   await reportLink.focus();
   await page.keyboard.press("Enter");
   await expect(page).toHaveURL(new RegExp(`/reports/${run.report_id}\\?`));
+  await expect(page.getByRole("heading", { name: "Collected preflight context", exact: true })).toBeVisible();
+  await expect(page.getByText("Uploaded evidence is advisory and not eligible for approval.", { exact: true })).toHaveCount(0);
   for (const width of [1440, 760]) {
     await page.setViewportSize({ width, height: 1000 });
     await expect(page.getByRole("main")).toBeVisible();
@@ -152,6 +154,9 @@ test("actual enrollment expiry clears the one-time reveal and denies redemption"
   const remaining = Date.parse(enrollment.expires_at) - Date.now();
   expect(remaining > 0 && remaining <= 65_000).toBe(true);
   await expect(page.getByLabel("One-time enrollment token", { exact: true })).toHaveCount(0, { timeout: 70_000 });
+  // The reveal uses a conservative read-start deadline and may clear early.
+  // Wait beyond the actual server-published expiry before checking redemption.
+  await new Promise(resolve => setTimeout(resolve, Math.max(0, Date.parse(enrollment.expires_at) - Date.now()) + 1100));
   const rejected = await context.request.post(`/api/v1/infra-automation/runners/enrollments/${enrollment.enrollment_id}/redeem`, { headers: { authorization: `Bearer ${token}` }, data: enrollment });
   expect(rejected.status()).toBe(401);
   expect(await page.evaluate(() => [document.body.innerText, location.href, ...Object.values(localStorage), ...Object.values(sessionStorage)].every(value => !/enroll-v1-|runner-v1-/.test(value)))).toBe(true);
