@@ -1,0 +1,125 @@
+{
+  "core_cli": {
+    "advisory_only": true,
+    "narrative_degraded": true,
+    "findings": [
+      {
+        "finding_id": "finding-1dd6962f2ffd",
+        "analysis_id": 1,
+        "title": "CRITICAL: aws_security_group.checkout_admin",
+        "description": "Terraform aws_security_group.checkout_admin is a modify change in the networking/ingress category targeting production. unknown downstream impact \u2014 no topology context available. Security flags: Open security group rule detected (protocol -1 / 0.0.0.0/0).",
+        "explanation": "Terraform aws_security_group.checkout_admin is a modify change in the networking/ingress category targeting production. unknown downstream impact \u2014 no topology context available. Security flags: Open security group rule detected (protocol -1 / 0.0.0.0/0).",
+        "guidance": [
+          "Review the linked evidence before deployment.",
+          "Verify the intended network exposure and ingress rules.",
+          "Require human review before applying the change."
+        ],
+        "severity": "critical",
+        "category": "networking/ingress",
+        "deterministic": true,
+        "confidence": 1.0,
+        "uncertainty_note": null,
+        "evidence_classification": "deterministic",
+        "evidence_refs": [
+          "evidence-91371cfac4d3"
+        ],
+        "evidence_label": null,
+        "skill_id": null
+      }
+    ],
+    "evidence": [
+      {
+        "evidence_id": "evidence-91371cfac4d3",
+        "analysis_id": 1,
+        "finding_id": "finding-1dd6962f2ffd",
+        "source_type": "artifact",
+        "source_ref": "terraform://plan.json#aws_security_group.checkout_admin?action=modify",
+        "artifact": "plan.json",
+        "location": "plan.json#aws_security_group.checkout_admin",
+        "resource": "aws_security_group.checkout_admin",
+        "operation": "modify",
+        "project_id": 2,
+        "project_key": "offline",
+        "workspace_id": null,
+        "workspace_key": null,
+        "source_kind": "artifact",
+        "determinism_level": "deterministic",
+        "redaction_status": "none",
+        "summary": "Security group aws_security_group.checkout_admin changes network access rules and should be reviewed for exposure before deploy.",
+        "severity_hint": "high",
+        "deterministic": true,
+        "confidence": 1.0,
+        "evidence_label": null,
+        "related_change_ids": [
+          "chg-759b8a32cd6e"
+        ],
+        "context_source": {
+          "source_id": "artifact:plan.json",
+          "source_type": "artifact",
+          "source_ref": "plan.json",
+          "scope": "project:2",
+          "freshness_status": "current",
+          "last_observed_at": null,
+          "age_days": null,
+          "confidence": 1.0,
+          "conflicts": [],
+          "limitations": []
+        }
+      }
+    ],
+    "evidence_law": {
+      "status": "Reconciled",
+      "detail": "Evidence Law adjusted unsupported or inconsistent severe claims."
+    }
+  },
+  "database_roundtrip": {
+    "report_count": 1,
+    "report_rows_sha256": "26a42503cbf3505914cfb3fe8b4782540605063576117cfec3b595e7eafbc97e",
+    "schema": "042_add_receiver_recovery",
+    "integrity": "ok",
+    "foreign_key_violations": 0
+  },
+  "source_unchanged": true,
+  "backup_and_restored_rows_identical": true,
+  "network": "none",
+  "date": "2026-11-11",
+  "image": "sha256:2c652ba689e6c6d6e02d7be7dc054ea4cbc093c46bb87341846824acc1a5c3e8",
+  "exit_code": 0,
+  "fixture": "One synthetic Terraform security-group modify change from the public UI-demo sample; no-op baseline retained separately below",
+  "assertions": [
+    "Actual CLI returned exit0 and persisted report1",
+    "At least one deterministic finding links to deterministic artifact evidence for aws_security_group.checkout_admin modify",
+    "Advisory-only true, deployment approval false, human decision required true",
+    "Narrative degradation explicit with unavailable local provider",
+    "SQLite backup/restored rows identical, original source unchanged, integrityok and FK0"
+  ],
+  "command": "docker run --rm -i --network none --entrypoint python -e DATABASE_URL=sqlite:////tmp/core.db -e DEPLOYWHISPER_AUTHORIZATION_PROFILE=legacy-evaluation -e PYTHONDONTWRITEBYTECODE=1 sha256:2c652ba689e6c6d6e02d7be7dc054ea4cbc093c46bb87341846824acc1a5c3e8 - < docs/verification/operations/core-offline-exercise.txt",
+  "log_sha256": "92df5ff3e17047296dc049b53801a6556ed82a827a7967d31c313ab997fb1e61",
+  "exercise_sha256": "630708217928591cd076acc5e634bc0db841db84a83a84c5f57ab1f24cdeb744",
+  "limits": [
+    "Existing image and Docker host, not cold OS installation",
+    "Legacy-evaluation synthetic project, not independent human pilot",
+    "Synthetic public fixture only; no production infrastructure or actions"
+  ],
+  "cleanup": "--rm container, no volumes or host data mounts",
+  "preceding_empty_case": {
+    "date": "2026-11-11",
+    "image": "sha256:2c652ba689e6c6d6e02d7be7dc054ea4cbc093c46bb87341846824acc1a5c3e8",
+    "network": "none",
+    "fixture": "synthetic empty Terraform resource_changes",
+    "migration": "042_add_receiver_recovery",
+    "command": "docker run --rm --network none --entrypoint python -e DATABASE_URL=sqlite:////tmp/offline.db IMAGE -c [migrate head; create synthetic offline project; invoke cli.analyze.main with analyze --project offline --agent-json /tmp/plan.json]",
+    "exit_code": 0,
+    "report_id": 1,
+    "advisory_only": true,
+    "narrative_degraded": true,
+    "external_provider_used": false,
+    "log_sha256": "7d8fd0a2dbc18cee9e90dbd950fc8caa6b7e0a96b10741e5ad3809ccb93b35cd",
+    "limitations": [
+      "Existing image and Docker installation; no cold-host installation proof",
+      "Synthetic project on legacy-evaluation default, not production identity/pilot qualification",
+      "No PostgreSQL exercise or independent human self-service acceptance"
+    ],
+    "cleanup": "--rm disposable container; database and artifact only in container /tmp, no host data mounts"
+  }
+}

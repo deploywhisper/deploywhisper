@@ -1,0 +1,2739 @@
+{
+  "timestamp": "2026-11-11T08:59:26.377797+00:00",
+  "image_id": "sha256:49a6523abb3867631692d3ac1ebf09cfe02a21c0725ae2039859703289988875",
+  "image_architecture": "arm64",
+  "image_source_pin_checks": {
+    "/opt/deploywhisper/bootstrap.py": true,
+    "/opt/deploywhisper/probe.py": true,
+    "/opt/deploywhisper/provider_probe.py": true,
+    "/opt/deploywhisper/tofurc": true,
+    "/opt/deploywhisper/source/main.tf": true,
+    "/opt/deploywhisper/source/.terraform.lock.hcl": true,
+    "/opt/deploywhisper/source/source.lock": true
+  },
+  "image_python_version": "3.11.17",
+  "operator_python_version": "3.14.3",
+  "docker_version": {
+    "Platform": {
+      "Name": "Docker Desktop 4.56.0 (214940)"
+    },
+    "Version": "29.1.3",
+    "ApiVersion": "1.52",
+    "MinAPIVersion": "1.44",
+    "Os": "linux",
+    "Arch": "arm64",
+    "Components": [
+      {
+        "Name": "Engine",
+        "Version": "29.1.3",
+        "Details": {
+          "ApiVersion": "1.52",
+          "Arch": "arm64",
+          "BuildTime": "Fri Dec 12 14:50:40 2025",
+          "Experimental": "false",
+          "GitCommit": "fbf3ed2",
+          "GoVersion": "go1.25.5",
+          "KernelVersion": "6.12.54-linuxkit",
+          "MinAPIVersion": "1.44",
+          "Os": "linux"
+        }
+      },
+      {
+        "Name": "containerd",
+        "Version": "v2.2.1",
+        "Details": {
+          "GitCommit": "dea7da592f5d1d2b7755e3a161be07f43fad8f75"
+        }
+      },
+      {
+        "Name": "runc",
+        "Version": "1.3.4",
+        "Details": {
+          "GitCommit": "v1.3.4-0-gd6d73eb8"
+        }
+      },
+      {
+        "Name": "docker-init",
+        "Version": "0.19.0",
+        "Details": {
+          "GitCommit": "de40ad0"
+        }
+      }
+    ],
+    "GitCommit": "fbf3ed2",
+    "GoVersion": "go1.25.5",
+    "KernelVersion": "6.12.54-linuxkit",
+    "BuildTime": "2025-12-12T14:50:40.000000000+00:00"
+  },
+  "source_commit": "4235ea38cc4ac4ceef4a3a8299d3144b62a407b1",
+  "source_files": {
+    "main.tf": "sha256:9c86769848a67230bff9fd46368d601563b1f19064f2f0c9d65fc6667bed398d",
+    ".terraform.lock.hcl": "sha256:3071bf1f71db45e51751c8b66ac866134e1fff1c40dbad3e3b22b6664ba5b729",
+    "source.lock": "sha256:81b56767fec06d7e3fb8cbb335f4c61983525b25f9e477b8a1f9b2d735aa5e6c"
+  },
+  "catalog": {
+    "version": 1,
+    "image_id": "sha256:49a6523abb3867631692d3ac1ebf09cfe02a21c0725ae2039859703289988875",
+    "files": [
+      {
+        "path": "/opt/deploywhisper/bootstrap.py",
+        "sha256": "sha256:68fa8b5f6be256ff083a6536954b14c4013d91679788d14de1b58ef7aea53c50",
+        "kind": "probe"
+      },
+      {
+        "path": "/opt/deploywhisper/probe.py",
+        "sha256": "sha256:777f35694b0ead117470704b191a14091ad204749c2b1aaec7f20d9084ad8336",
+        "kind": "probe"
+      },
+      {
+        "path": "/opt/deploywhisper/provider_probe.py",
+        "sha256": "sha256:029e9204bcadfbc29a8933b1507b744883ae4c443c530b93d50e3d0a2ef27ca2",
+        "kind": "probe"
+      },
+      {
+        "path": "/opt/deploywhisper/source/.terraform.lock.hcl",
+        "sha256": "sha256:3071bf1f71db45e51751c8b66ac866134e1fff1c40dbad3e3b22b6664ba5b729",
+        "kind": "lock"
+      },
+      {
+        "path": "/opt/deploywhisper/source/main.tf",
+        "sha256": "sha256:9c86769848a67230bff9fd46368d601563b1f19064f2f0c9d65fc6667bed398d",
+        "kind": "module"
+      },
+      {
+        "path": "/opt/deploywhisper/source/source.lock",
+        "sha256": "sha256:81b56767fec06d7e3fb8cbb335f4c61983525b25f9e477b8a1f9b2d735aa5e6c",
+        "kind": "lock"
+      },
+      {
+        "path": "/opt/deploywhisper/tofurc",
+        "sha256": "sha256:6ca5b0f7e983ec1862a5779209b6477ba1e7431d9f3a57cdfc23e4e720287dcb",
+        "kind": "lock"
+      },
+      {
+        "path": "/opt/mirror/registry.opentofu.org/hashicorp/external/2.3.5.json",
+        "sha256": "sha256:f71e931dba63654caaae85b4f31a5c05314807e7ab01b2a07be26bb70da424b8",
+        "kind": "module"
+      },
+      {
+        "path": "/opt/mirror/registry.opentofu.org/hashicorp/external/2.3.5/linux_arm64/CHANGELOG.md",
+        "sha256": "sha256:2573f7e6eb9ca75615f0f75cccc42843334c99cce6644b9951bd129789102749",
+        "kind": "module"
+      },
+      {
+        "path": "/opt/mirror/registry.opentofu.org/hashicorp/external/2.3.5/linux_arm64/LICENSE",
+        "sha256": "sha256:4e2bb185ebd706f76329206869ccb348b92b6236100cfb07775fe31530dab0d5",
+        "kind": "module"
+      },
+      {
+        "path": "/opt/mirror/registry.opentofu.org/hashicorp/external/2.3.5/linux_arm64/README.md",
+        "sha256": "sha256:4233eb135859b806701d0f3ee25730af3f33d039f0e5c88f9e757a4605f8b709",
+        "kind": "module"
+      },
+      {
+        "path": "/opt/mirror/registry.opentofu.org/hashicorp/external/2.3.5/linux_arm64/terraform-provider-external",
+        "sha256": "sha256:f9994ee228b86d34c289d858af46f758921f34393a27a1bb5677761c08228f50",
+        "kind": "provider"
+      },
+      {
+        "path": "/opt/mirror/registry.opentofu.org/hashicorp/external/index.json",
+        "sha256": "sha256:96f7d8c14feaff8962f4d0054eff532e08284b581770680925cc348d3541436d",
+        "kind": "module"
+      },
+      {
+        "path": "/usr/local/bin/python",
+        "sha256": "sha256:3e83cdfa4cdb93afd114c2b5742d48d653621fbbd7468ecd6e482e5143d1d4c4",
+        "kind": "tool"
+      },
+      {
+        "path": "/usr/local/bin/tofu",
+        "sha256": "sha256:d5c690023baebe8bf2cfb2062e292186f4797a173db22c973bd9de45cb68a62f",
+        "kind": "tool"
+      }
+    ],
+    "tool_versions": []
+  },
+  "catalog_digest": "sha256:bfe87ec0126558fc0e1473cccb7d4543d939f9b34631c4a1251032ec133628c6",
+  "source_hashes": {
+    "infra_automation/runner/catalog.py": "sha256:6ac7999df14df6cd154922d3471796e705a3b05d5af2db0eeab15d0f476e32d0",
+    "infra_automation/runner/bootstrap.py": "sha256:68fa8b5f6be256ff083a6536954b14c4013d91679788d14de1b58ef7aea53c50",
+    "infra_automation/runner/execution.py": "sha256:e93f6b2831e28afdfc7acaf8eb4d02f69bf01c01ea08afb99b904dcbf0e6b7d2",
+    "infra_automation/runner/collection_output.py": "sha256:e85f5a8fb6f6de1b2f3abaf3ebd5af7eae913e7c11ce2a5e5ca9c35249b8010b",
+    "infra_automation/runner/protocol.py": "sha256:fdc1365097e394570f215edb2a8f0e412745a2ce45820f163d07513219719b68",
+    "infra_automation/runner/client.py": "sha256:f5da0b3c8f3f56d9982345c3df4a6df9a8ad17ce96d49ed21c4c1943eba7ef11",
+    "infra_automation/runner/collector.py": "sha256:05d35ba13cd699e50227c65e26699f54b2412db0d07b4326c528beba2a6fcfb2",
+    "infra_automation/runner/claims.py": "sha256:1828639d1c35a90dc7b48c683f2fafb774bfb0f65bbdaef2989acf0e6f1b3731",
+    "infra_automation/runner/cache.py": "sha256:afab6fc343541360e36b7cb04a5dd63cd55f94e9b584ff30cb4630057d7cac65",
+    "infra_automation/runner/__init__.py": "sha256:d86185aafd32b31c003eb44a210e3e1885d156ede80963a2912a4d2ddb6cc68e",
+    "infra_automation/runner/execution_profile.py": "sha256:55f61d74527fbcf7827bb352bfc4f6a0f78b8565b17400a0c4c3a0fa474bc872",
+    "infra_automation/runner/sandbox.py": "sha256:e4b37d0118d57167cf8dd8a0c92fa6e6974f5b4d599a9696ef216cb347687b0d",
+    "infra_automation/runner/collection_client.py": "sha256:24b71d20012b2a91265116b5b7dced794c338f683dc9375a44b1a599b8591fa6",
+    "infra_automation/runner/source.py": "sha256:e4bf635846eef26f3c287a354808c79f514a401a741f9a827fedafc375e2bc13",
+    "scripts/qualify_runner_isolation.py": "sha256:a1bcba1d46ccd4f0470a301f9c3d30b280a2a5b9308ed572fe4118807706f80d",
+    "tests/fixtures/infra_automation/qualification/16_13/Dockerfile.dockerignore": "sha256:6cf228f394c2f13457f701a7455e6e2d6442e695e08c83f68045f160a11c2b03",
+    "tests/fixtures/infra_automation/qualification/16_13/tofurc": "sha256:6ca5b0f7e983ec1862a5779209b6477ba1e7431d9f3a57cdfc23e4e720287dcb",
+    "tests/fixtures/infra_automation/qualification/16_13/Dockerfile": "sha256:acf02a49364cfcf53087b0ee2748f63ea150c7d46abfe1b1d23999107d98b41f",
+    "tests/fixtures/infra_automation/qualification/16_13/provider_probe.py": "sha256:029e9204bcadfbc29a8933b1507b744883ae4c443c530b93d50e3d0a2ef27ca2",
+    "tests/fixtures/infra_automation/qualification/16_13/probe.py": "sha256:777f35694b0ead117470704b191a14091ad204749c2b1aaec7f20d9084ad8336",
+    "tests/fixtures/infra_automation/qualification/16_13/source/main.tf": "sha256:9c86769848a67230bff9fd46368d601563b1f19064f2f0c9d65fc6667bed398d",
+    "tests/fixtures/infra_automation/qualification/16_13/source/source.lock": "sha256:81b56767fec06d7e3fb8cbb335f4c61983525b25f9e477b8a1f9b2d735aa5e6c",
+    "tests/fixtures/infra_automation/qualification/16_13/source/.terraform.lock.hcl": "sha256:3071bf1f71db45e51751c8b66ac866134e1fff1c40dbad3e3b22b6664ba5b729"
+  },
+  "source_hashes_unchanged": true,
+  "cases": [
+    {
+      "case": "invalid-image-pin",
+      "mode": "environment",
+      "command": "qualification_probe",
+      "source_digest": "sha256:15c2dc831ffe59640c71bf6b3c78818679f9ca393829b33ab6e984246d4083b4",
+      "result": {
+        "state": "unsupported_profile",
+        "exit_code": null,
+        "output_digest": null,
+        "container_id": "dw-isolated-cf4bf5cbbbe64581b198a403db6abf98",
+        "cleanup_complete": true,
+        "profile_digest": "sha256:23d498228a78be1459e0026e63e8f9d5ebd9931f305cd19afb00ea00f2db0faf",
+        "collection": null,
+        "finalizable": false
+      },
+      "evidence": null,
+      "output_size": 0,
+      "elapsed_seconds": 0.8502563750080299,
+      "resolver_calls": 0,
+      "controls": {
+        "ReadonlyRootfs": true,
+        "Privileged": false,
+        "CapDrop": [
+          "ALL"
+        ],
+        "CapAdd": null,
+        "SecurityOpt": [
+          "no-new-privileges:true"
+        ],
+        "NetworkMode": "none",
+        "IpcMode": "none",
+        "PidMode": "",
+        "CgroupnsMode": "private",
+        "Memory": 536870912,
+        "MemorySwap": 536870912,
+        "NanoCpus": 500000000,
+        "PidsLimit": 64,
+        "Tmpfs": {
+          "/tmp": "rw,noexec,nosuid,nodev,size=8388608,uid=10001,gid=10001,mode=0700",
+          "/work": "rw,noexec,nosuid,nodev,size=67108864,uid=10001,gid=10001,mode=0700"
+        },
+        "LogConfig": {
+          "Type": "none",
+          "Config": {}
+        },
+        "Devices": [],
+        "Binds": null,
+        "user": "10001:10001",
+        "mounts": [
+          {
+            "Type": "bind",
+            "Destination": "/source",
+            "RW": false,
+            "Propagation": "rprivate"
+          }
+        ]
+      },
+      "last_state": {
+        "Status": "exited",
+        "Running": false,
+        "Paused": false,
+        "Restarting": false,
+        "OOMKilled": false,
+        "Dead": false,
+        "Pid": 0,
+        "ExitCode": 122,
+        "Error": "",
+        "StartedAt": "2026-11-11T08:58:35.072162797Z",
+        "FinishedAt": "2026-11-11T08:58:35.303920672Z"
+      },
+      "process_tree": null,
+      "cancel_persisted_before_kill": null,
+      "cancel_persisted_before_removal": false,
+      "metadata_secret_free": true,
+      "container_removed": true,
+      "profile": {
+        "image_id": "sha256:49a6523abb3867631692d3ac1ebf09cfe02a21c0725ae2039859703289988875",
+        "architecture": "arm64",
+        "docker_version": "29.1.3",
+        "kernel_version": "6.12.54-linuxkit",
+        "uid": 10001,
+        "gid": 10001,
+        "network": "none",
+        "memory_bytes": 536870912,
+        "nano_cpus": 500000000,
+        "pids_limit": 64,
+        "work_bytes": 67108864,
+        "tmp_bytes": 8388608,
+        "timeout_seconds": 60,
+        "output_bytes": 65536,
+        "cleanup_seconds": 5,
+        "collector_identity": "qualification-collector",
+        "credential_names": [
+          "COLLECTOR_TOKEN"
+        ]
+      }
+    },
+    {
+      "case": "unsupported-host-profile",
+      "mode": "environment",
+      "result": {
+        "state": "preflight_denied",
+        "finalizable": false
+      },
+      "exception_type": "ValidationError",
+      "resolver_calls": 0,
+      "container_created": false
+    },
+    {
+      "case": "receiver-identity-denied",
+      "mode": "environment",
+      "command": "qualification_probe",
+      "source_digest": "sha256:15c2dc831ffe59640c71bf6b3c78818679f9ca393829b33ab6e984246d4083b4",
+      "result": {
+        "state": "credential_denied",
+        "exit_code": null,
+        "output_digest": null,
+        "container_id": "dw-isolated-ba4cb55b6351412f90bde79c021030ac",
+        "cleanup_complete": true,
+        "profile_digest": "sha256:c7bc6344d718256431ac9c79df03d582e9e0b29b44a905e0bdc3a1ee1970a7eb",
+        "collection": null,
+        "finalizable": false
+      },
+      "evidence": null,
+      "output_size": 0,
+      "elapsed_seconds": 1.14513300001272,
+      "resolver_calls": 1,
+      "controls": {
+        "ReadonlyRootfs": true,
+        "Privileged": false,
+        "CapDrop": [
+          "ALL"
+        ],
+        "CapAdd": null,
+        "SecurityOpt": [
+          "no-new-privileges:true"
+        ],
+        "NetworkMode": "none",
+        "IpcMode": "none",
+        "PidMode": "",
+        "CgroupnsMode": "private",
+        "Memory": 536870912,
+        "MemorySwap": 536870912,
+        "NanoCpus": 500000000,
+        "PidsLimit": 64,
+        "Tmpfs": {
+          "/tmp": "rw,noexec,nosuid,nodev,size=8388608,uid=10001,gid=10001,mode=0700",
+          "/work": "rw,noexec,nosuid,nodev,size=67108864,uid=10001,gid=10001,mode=0700"
+        },
+        "LogConfig": {
+          "Type": "none",
+          "Config": {}
+        },
+        "Devices": [],
+        "Binds": null,
+        "user": "10001:10001",
+        "mounts": [
+          {
+            "Type": "bind",
+            "Destination": "/source",
+            "RW": false,
+            "Propagation": "rprivate"
+          }
+        ]
+      },
+      "last_state": {
+        "Status": "exited",
+        "Running": false,
+        "Paused": false,
+        "Restarting": false,
+        "OOMKilled": false,
+        "Dead": false,
+        "Pid": 0,
+        "ExitCode": 137,
+        "Error": "",
+        "StartedAt": "2026-11-11T08:58:35.860226922Z",
+        "FinishedAt": "2026-11-11T08:58:36.356311797Z"
+      },
+      "process_tree": null,
+      "cancel_persisted_before_kill": false,
+      "cancel_persisted_before_removal": false,
+      "metadata_secret_free": true,
+      "container_removed": true,
+      "profile": {
+        "image_id": "sha256:49a6523abb3867631692d3ac1ebf09cfe02a21c0725ae2039859703289988875",
+        "architecture": "arm64",
+        "docker_version": "29.1.3",
+        "kernel_version": "6.12.54-linuxkit",
+        "uid": 10001,
+        "gid": 10001,
+        "network": "none",
+        "memory_bytes": 536870912,
+        "nano_cpus": 500000000,
+        "pids_limit": 64,
+        "work_bytes": 67108864,
+        "tmp_bytes": 8388608,
+        "timeout_seconds": 60,
+        "output_bytes": 65536,
+        "cleanup_seconds": 5,
+        "collector_identity": "qualification-collector",
+        "credential_names": [
+          "COLLECTOR_TOKEN"
+        ]
+      }
+    },
+    {
+      "case": "receiver-environment-denied",
+      "mode": "environment",
+      "command": "qualification_probe",
+      "source_digest": "sha256:15c2dc831ffe59640c71bf6b3c78818679f9ca393829b33ab6e984246d4083b4",
+      "result": {
+        "state": "credential_denied",
+        "exit_code": null,
+        "output_digest": null,
+        "container_id": "dw-isolated-13e18b81bfe941d39afbd867ee9dae28",
+        "cleanup_complete": true,
+        "profile_digest": "sha256:c7bc6344d718256431ac9c79df03d582e9e0b29b44a905e0bdc3a1ee1970a7eb",
+        "collection": null,
+        "finalizable": false
+      },
+      "evidence": null,
+      "output_size": 0,
+      "elapsed_seconds": 1.179690125019988,
+      "resolver_calls": 1,
+      "controls": {
+        "ReadonlyRootfs": true,
+        "Privileged": false,
+        "CapDrop": [
+          "ALL"
+        ],
+        "CapAdd": null,
+        "SecurityOpt": [
+          "no-new-privileges:true"
+        ],
+        "NetworkMode": "none",
+        "IpcMode": "none",
+        "PidMode": "",
+        "CgroupnsMode": "private",
+        "Memory": 536870912,
+        "MemorySwap": 536870912,
+        "NanoCpus": 500000000,
+        "PidsLimit": 64,
+        "Tmpfs": {
+          "/tmp": "rw,noexec,nosuid,nodev,size=8388608,uid=10001,gid=10001,mode=0700",
+          "/work": "rw,noexec,nosuid,nodev,size=67108864,uid=10001,gid=10001,mode=0700"
+        },
+        "LogConfig": {
+          "Type": "none",
+          "Config": {}
+        },
+        "Devices": [],
+        "Binds": null,
+        "user": "10001:10001",
+        "mounts": [
+          {
+            "Type": "bind",
+            "Destination": "/source",
+            "RW": false,
+            "Propagation": "rprivate"
+          }
+        ]
+      },
+      "last_state": {
+        "Status": "exited",
+        "Running": false,
+        "Paused": false,
+        "Restarting": false,
+        "OOMKilled": false,
+        "Dead": false,
+        "Pid": 0,
+        "ExitCode": 137,
+        "Error": "",
+        "StartedAt": "2026-11-11T08:58:37.093885798Z",
+        "FinishedAt": "2026-11-11T08:58:37.58467034Z"
+      },
+      "process_tree": null,
+      "cancel_persisted_before_kill": false,
+      "cancel_persisted_before_removal": false,
+      "metadata_secret_free": true,
+      "container_removed": true,
+      "profile": {
+        "image_id": "sha256:49a6523abb3867631692d3ac1ebf09cfe02a21c0725ae2039859703289988875",
+        "architecture": "arm64",
+        "docker_version": "29.1.3",
+        "kernel_version": "6.12.54-linuxkit",
+        "uid": 10001,
+        "gid": 10001,
+        "network": "none",
+        "memory_bytes": 536870912,
+        "nano_cpus": 500000000,
+        "pids_limit": 64,
+        "work_bytes": 67108864,
+        "tmp_bytes": 8388608,
+        "timeout_seconds": 60,
+        "output_bytes": 65536,
+        "cleanup_seconds": 5,
+        "collector_identity": "qualification-collector",
+        "credential_names": [
+          "COLLECTOR_TOKEN"
+        ]
+      }
+    },
+    {
+      "case": "real-provider",
+      "mode": "plan",
+      "command": "qualification_probe",
+      "source_digest": "sha256:15c2dc831ffe59640c71bf6b3c78818679f9ca393829b33ab6e984246d4083b4",
+      "result": {
+        "state": "succeeded",
+        "exit_code": 0,
+        "output_digest": "sha256:e4ffd1d7cf3e07545d319a7b48e322c8c7b3a5c4e7c24ea9fb8b957a0b943ff4",
+        "container_id": "dw-isolated-7e8c431232824b1b9e210f525193e0c1",
+        "cleanup_complete": true,
+        "profile_digest": "sha256:c7bc6344d718256431ac9c79df03d582e9e0b29b44a905e0bdc3a1ee1970a7eb",
+        "collection": null,
+        "finalizable": true
+      },
+      "evidence": {
+        "module_resources": [],
+        "plan_created": true,
+        "provider_probe": {
+          "activation_denied": "True",
+          "capabilities_dropped": "True",
+          "catalog_readonly": "True",
+          "collector_present": "True",
+          "dormant_interfaces_down": "True",
+          "egress_denied": "True",
+          "gid": "10001",
+          "git_config_absent": "True",
+          "host_secret_absent": "True",
+          "interface_flags": "{'erspan0': 4098, 'gre0': 128, 'gretap0': 4098, 'ip6_vti0': 128, 'ip6gre0': 128, 'ip6tnl0': 128, 'ip_vti0': 128, 'lo': 73, 'sit0': 128, 'tunl0': 128}",
+          "metadata_denied": "True",
+          "namespace_interfaces": "['erspan0', 'gre0', 'gretap0', 'ip6_vti0', 'ip6gre0', 'ip6tnl0', 'ip_vti0', 'lo', 'sit0', 'tunl0']",
+          "no_new_privileges": "True",
+          "no_nonloopback_ipv4_address": "True",
+          "no_nonloopback_ipv4_route": "True",
+          "no_nonloopback_ipv6_address": "True",
+          "no_nonloopback_ipv6_route": "True",
+          "receiver_secret_absent": "True",
+          "root_readonly": "True",
+          "seccomp_enforced": "True",
+          "seccomp_filter_count": "2",
+          "socket_absent": "True",
+          "source_readonly": "True",
+          "uid": "10001"
+        },
+        "python_version": "3.11.17",
+        "raw_digest": "e65e9000e7f5144f62dffe7433a13765e5c9f530048e903a2ca194be5fe65dd4",
+        "tool_version": "1.13.1"
+      },
+      "output_size": 1147,
+      "elapsed_seconds": 1.6606145420228131,
+      "resolver_calls": 1,
+      "controls": {
+        "ReadonlyRootfs": true,
+        "Privileged": false,
+        "CapDrop": [
+          "ALL"
+        ],
+        "CapAdd": null,
+        "SecurityOpt": [
+          "no-new-privileges:true"
+        ],
+        "NetworkMode": "none",
+        "IpcMode": "none",
+        "PidMode": "",
+        "CgroupnsMode": "private",
+        "Memory": 536870912,
+        "MemorySwap": 536870912,
+        "NanoCpus": 500000000,
+        "PidsLimit": 64,
+        "Tmpfs": {
+          "/tmp": "rw,noexec,nosuid,nodev,size=8388608,uid=10001,gid=10001,mode=0700",
+          "/work": "rw,noexec,nosuid,nodev,size=67108864,uid=10001,gid=10001,mode=0700"
+        },
+        "LogConfig": {
+          "Type": "none",
+          "Config": {}
+        },
+        "Devices": [],
+        "Binds": null,
+        "user": "10001:10001",
+        "mounts": [
+          {
+            "Type": "bind",
+            "Destination": "/source",
+            "RW": false,
+            "Propagation": "rprivate"
+          }
+        ]
+      },
+      "last_state": {
+        "Status": "exited",
+        "Running": false,
+        "Paused": false,
+        "Restarting": false,
+        "OOMKilled": false,
+        "Dead": false,
+        "Pid": 0,
+        "ExitCode": 0,
+        "Error": "",
+        "StartedAt": "2026-11-11T08:58:38.177931965Z",
+        "FinishedAt": "2026-11-11T08:58:39.150472049Z"
+      },
+      "process_tree": null,
+      "cancel_persisted_before_kill": null,
+      "cancel_persisted_before_removal": false,
+      "metadata_secret_free": true,
+      "container_removed": true,
+      "profile": {
+        "image_id": "sha256:49a6523abb3867631692d3ac1ebf09cfe02a21c0725ae2039859703289988875",
+        "architecture": "arm64",
+        "docker_version": "29.1.3",
+        "kernel_version": "6.12.54-linuxkit",
+        "uid": 10001,
+        "gid": 10001,
+        "network": "none",
+        "memory_bytes": 536870912,
+        "nano_cpus": 500000000,
+        "pids_limit": 64,
+        "work_bytes": 67108864,
+        "tmp_bytes": 8388608,
+        "timeout_seconds": 60,
+        "output_bytes": 65536,
+        "cleanup_seconds": 5,
+        "collector_identity": "qualification-collector",
+        "credential_names": [
+          "COLLECTOR_TOKEN"
+        ]
+      }
+    },
+    {
+      "case": "vendored-tofu-provider",
+      "mode": "plan",
+      "command": "qualification_probe",
+      "source_digest": "sha256:9f5b50f647b566021c23c08d77eab0bcdb517004ba68e562cd47727e7d7803d5",
+      "result": {
+        "state": "succeeded",
+        "exit_code": 0,
+        "output_digest": "sha256:d0ab139d7e2656b472582ad62ba4495b1c0285dbed1dd60a723e9ed458bd1971",
+        "container_id": "dw-isolated-bf623c7140454f41be7930824b0944de",
+        "cleanup_complete": true,
+        "profile_digest": "sha256:c7bc6344d718256431ac9c79df03d582e9e0b29b44a905e0bdc3a1ee1970a7eb",
+        "collection": null,
+        "finalizable": true
+      },
+      "evidence": {
+        "module_resources": [
+          "module.local.terraform_data.vendored"
+        ],
+        "plan_created": true,
+        "provider_probe": {
+          "activation_denied": "True",
+          "capabilities_dropped": "True",
+          "catalog_readonly": "True",
+          "collector_present": "True",
+          "dormant_interfaces_down": "True",
+          "egress_denied": "True",
+          "gid": "10001",
+          "git_config_absent": "True",
+          "host_secret_absent": "True",
+          "interface_flags": "{'erspan0': 4098, 'gre0': 128, 'gretap0': 4098, 'ip6_vti0': 128, 'ip6gre0': 128, 'ip6tnl0': 128, 'ip_vti0': 128, 'lo': 73, 'sit0': 128, 'tunl0': 128}",
+          "metadata_denied": "True",
+          "namespace_interfaces": "['erspan0', 'gre0', 'gretap0', 'ip6_vti0', 'ip6gre0', 'ip6tnl0', 'ip_vti0', 'lo', 'sit0', 'tunl0']",
+          "no_new_privileges": "True",
+          "no_nonloopback_ipv4_address": "True",
+          "no_nonloopback_ipv4_route": "True",
+          "no_nonloopback_ipv6_address": "True",
+          "no_nonloopback_ipv6_route": "True",
+          "receiver_secret_absent": "True",
+          "root_readonly": "True",
+          "seccomp_enforced": "True",
+          "seccomp_filter_count": "2",
+          "socket_absent": "True",
+          "source_readonly": "True",
+          "uid": "10001"
+        },
+        "python_version": "3.11.17",
+        "raw_digest": "94331018401d4bf9f9d84f49cdfd8c8d150cd915da7f55bb27a547992a83ceb2",
+        "tool_version": "1.13.1"
+      },
+      "output_size": 1185,
+      "elapsed_seconds": 1.6149994590086862,
+      "resolver_calls": 1,
+      "controls": {
+        "ReadonlyRootfs": true,
+        "Privileged": false,
+        "CapDrop": [
+          "ALL"
+        ],
+        "CapAdd": null,
+        "SecurityOpt": [
+          "no-new-privileges:true"
+        ],
+        "NetworkMode": "none",
+        "IpcMode": "none",
+        "PidMode": "",
+        "CgroupnsMode": "private",
+        "Memory": 536870912,
+        "MemorySwap": 536870912,
+        "NanoCpus": 500000000,
+        "PidsLimit": 64,
+        "Tmpfs": {
+          "/tmp": "rw,noexec,nosuid,nodev,size=8388608,uid=10001,gid=10001,mode=0700",
+          "/work": "rw,noexec,nosuid,nodev,size=67108864,uid=10001,gid=10001,mode=0700"
+        },
+        "LogConfig": {
+          "Type": "none",
+          "Config": {}
+        },
+        "Devices": [],
+        "Binds": null,
+        "user": "10001:10001",
+        "mounts": [
+          {
+            "Type": "bind",
+            "Destination": "/source",
+            "RW": false,
+            "Propagation": "rprivate"
+          }
+        ]
+      },
+      "last_state": {
+        "Status": "exited",
+        "Running": false,
+        "Paused": false,
+        "Restarting": false,
+        "OOMKilled": false,
+        "Dead": false,
+        "Pid": 0,
+        "ExitCode": 0,
+        "Error": "",
+        "StartedAt": "2026-11-11T08:58:39.843096882Z",
+        "FinishedAt": "2026-11-11T08:58:40.795947716Z"
+      },
+      "process_tree": null,
+      "cancel_persisted_before_kill": null,
+      "cancel_persisted_before_removal": false,
+      "metadata_secret_free": true,
+      "container_removed": true,
+      "profile": {
+        "image_id": "sha256:49a6523abb3867631692d3ac1ebf09cfe02a21c0725ae2039859703289988875",
+        "architecture": "arm64",
+        "docker_version": "29.1.3",
+        "kernel_version": "6.12.54-linuxkit",
+        "uid": 10001,
+        "gid": 10001,
+        "network": "none",
+        "memory_bytes": 536870912,
+        "nano_cpus": 500000000,
+        "pids_limit": 64,
+        "work_bytes": 67108864,
+        "tmp_bytes": 8388608,
+        "timeout_seconds": 60,
+        "output_bytes": 65536,
+        "cleanup_seconds": 5,
+        "collector_identity": "qualification-collector",
+        "credential_names": [
+          "COLLECTOR_TOKEN"
+        ]
+      }
+    },
+    {
+      "case": "tool-version",
+      "mode": null,
+      "command": "tool_version",
+      "source_digest": "sha256:15c2dc831ffe59640c71bf6b3c78818679f9ca393829b33ab6e984246d4083b4",
+      "result": {
+        "state": "succeeded",
+        "exit_code": 0,
+        "output_digest": "sha256:7d173417e29f2167df0acde0e3b4062aa4a6214822549cd936d34eb3273d11a9",
+        "container_id": "dw-isolated-7a17c43eb16d4d5bb1fa1c9a05aaa86f",
+        "cleanup_complete": true,
+        "profile_digest": "sha256:c7bc6344d718256431ac9c79df03d582e9e0b29b44a905e0bdc3a1ee1970a7eb",
+        "collection": null,
+        "finalizable": true
+      },
+      "evidence": {
+        "terraform_version": "1.13.1",
+        "platform": "linux_arm64",
+        "provider_selections": {}
+      },
+      "output_size": 94,
+      "elapsed_seconds": 1.7844911249994766,
+      "resolver_calls": 1,
+      "controls": {
+        "ReadonlyRootfs": true,
+        "Privileged": false,
+        "CapDrop": [
+          "ALL"
+        ],
+        "CapAdd": null,
+        "SecurityOpt": [
+          "no-new-privileges:true"
+        ],
+        "NetworkMode": "none",
+        "IpcMode": "none",
+        "PidMode": "",
+        "CgroupnsMode": "private",
+        "Memory": 536870912,
+        "MemorySwap": 536870912,
+        "NanoCpus": 500000000,
+        "PidsLimit": 64,
+        "Tmpfs": {
+          "/tmp": "rw,noexec,nosuid,nodev,size=8388608,uid=10001,gid=10001,mode=0700",
+          "/work": "rw,noexec,nosuid,nodev,size=67108864,uid=10001,gid=10001,mode=0700"
+        },
+        "LogConfig": {
+          "Type": "none",
+          "Config": {}
+        },
+        "Devices": [],
+        "Binds": null,
+        "user": "10001:10001",
+        "mounts": [
+          {
+            "Type": "bind",
+            "Destination": "/source",
+            "RW": false,
+            "Propagation": "rprivate"
+          }
+        ]
+      },
+      "last_state": {
+        "Status": "exited",
+        "Running": false,
+        "Paused": false,
+        "Restarting": false,
+        "OOMKilled": false,
+        "Dead": false,
+        "Pid": 0,
+        "ExitCode": 0,
+        "Error": "",
+        "StartedAt": "2026-11-11T08:58:41.525557966Z",
+        "FinishedAt": "2026-11-11T08:58:42.4469943Z"
+      },
+      "process_tree": null,
+      "cancel_persisted_before_kill": null,
+      "cancel_persisted_before_removal": false,
+      "metadata_secret_free": true,
+      "container_removed": true,
+      "profile": {
+        "image_id": "sha256:49a6523abb3867631692d3ac1ebf09cfe02a21c0725ae2039859703289988875",
+        "architecture": "arm64",
+        "docker_version": "29.1.3",
+        "kernel_version": "6.12.54-linuxkit",
+        "uid": 10001,
+        "gid": 10001,
+        "network": "none",
+        "memory_bytes": 536870912,
+        "nano_cpus": 500000000,
+        "pids_limit": 64,
+        "work_bytes": 67108864,
+        "tmp_bytes": 8388608,
+        "timeout_seconds": 60,
+        "output_bytes": 65536,
+        "cleanup_seconds": 5,
+        "collector_identity": "qualification-collector",
+        "credential_names": [
+          "COLLECTOR_TOKEN"
+        ]
+      }
+    },
+    {
+      "case": "environment",
+      "mode": "environment",
+      "command": "qualification_probe",
+      "source_digest": "sha256:15c2dc831ffe59640c71bf6b3c78818679f9ca393829b33ab6e984246d4083b4",
+      "result": {
+        "state": "succeeded",
+        "exit_code": 0,
+        "output_digest": "sha256:cbd4d976abfa4b27b21a91e1f0e5cb8d9fcfaa5a8a6b06d6ee4e4a4c67c43a38",
+        "container_id": "dw-isolated-c9e5da57847844728b1709edb93f67a5",
+        "cleanup_complete": true,
+        "profile_digest": "sha256:c7bc6344d718256431ac9c79df03d582e9e0b29b44a905e0bdc3a1ee1970a7eb",
+        "collection": null,
+        "finalizable": true
+      },
+      "evidence": {
+        "activation_denied": true,
+        "capabilities_dropped": true,
+        "catalog_readonly": true,
+        "collector_present": true,
+        "dormant_interfaces_down": true,
+        "egress_denied": true,
+        "gid": 10001,
+        "git_config_absent": true,
+        "host_secret_absent": true,
+        "interface_flags": {
+          "erspan0": 4098,
+          "gre0": 128,
+          "gretap0": 4098,
+          "ip6_vti0": 128,
+          "ip6gre0": 128,
+          "ip6tnl0": 128,
+          "ip_vti0": 128,
+          "lo": 73,
+          "sit0": 128,
+          "tunl0": 128
+        },
+        "metadata_denied": true,
+        "namespace_interfaces": [
+          "erspan0",
+          "gre0",
+          "gretap0",
+          "ip6_vti0",
+          "ip6gre0",
+          "ip6tnl0",
+          "ip_vti0",
+          "lo",
+          "sit0",
+          "tunl0"
+        ],
+        "no_new_privileges": true,
+        "no_nonloopback_ipv4_address": true,
+        "no_nonloopback_ipv4_route": true,
+        "no_nonloopback_ipv6_address": true,
+        "no_nonloopback_ipv6_route": true,
+        "receiver_secret_absent": true,
+        "root_readonly": true,
+        "seccomp_enforced": true,
+        "seccomp_filter_count": 2,
+        "socket_absent": true,
+        "source_readonly": true,
+        "uid": 10001
+      },
+      "output_size": 896,
+      "elapsed_seconds": 1.1322427080012858,
+      "resolver_calls": 1,
+      "controls": {
+        "ReadonlyRootfs": true,
+        "Privileged": false,
+        "CapDrop": [
+          "ALL"
+        ],
+        "CapAdd": null,
+        "SecurityOpt": [
+          "no-new-privileges:true"
+        ],
+        "NetworkMode": "none",
+        "IpcMode": "none",
+        "PidMode": "",
+        "CgroupnsMode": "private",
+        "Memory": 536870912,
+        "MemorySwap": 536870912,
+        "NanoCpus": 500000000,
+        "PidsLimit": 64,
+        "Tmpfs": {
+          "/tmp": "rw,noexec,nosuid,nodev,size=8388608,uid=10001,gid=10001,mode=0700",
+          "/work": "rw,noexec,nosuid,nodev,size=67108864,uid=10001,gid=10001,mode=0700"
+        },
+        "LogConfig": {
+          "Type": "none",
+          "Config": {}
+        },
+        "Devices": [],
+        "Binds": null,
+        "user": "10001:10001",
+        "mounts": [
+          {
+            "Type": "bind",
+            "Destination": "/source",
+            "RW": false,
+            "Propagation": "rprivate"
+          }
+        ]
+      },
+      "last_state": {
+        "Status": "exited",
+        "Running": false,
+        "Paused": false,
+        "Restarting": false,
+        "OOMKilled": false,
+        "Dead": false,
+        "Pid": 0,
+        "ExitCode": 0,
+        "Error": "",
+        "StartedAt": "2026-11-11T08:58:43.244982134Z",
+        "FinishedAt": "2026-11-11T08:58:43.772037676Z"
+      },
+      "process_tree": null,
+      "cancel_persisted_before_kill": null,
+      "cancel_persisted_before_removal": false,
+      "metadata_secret_free": true,
+      "container_removed": true,
+      "profile": {
+        "image_id": "sha256:49a6523abb3867631692d3ac1ebf09cfe02a21c0725ae2039859703289988875",
+        "architecture": "arm64",
+        "docker_version": "29.1.3",
+        "kernel_version": "6.12.54-linuxkit",
+        "uid": 10001,
+        "gid": 10001,
+        "network": "none",
+        "memory_bytes": 536870912,
+        "nano_cpus": 500000000,
+        "pids_limit": 64,
+        "work_bytes": 67108864,
+        "tmp_bytes": 8388608,
+        "timeout_seconds": 60,
+        "output_bytes": 65536,
+        "cleanup_seconds": 5,
+        "collector_identity": "qualification-collector",
+        "credential_names": [
+          "COLLECTOR_TOKEN"
+        ]
+      }
+    },
+    {
+      "case": "watchdog-defenses",
+      "mode": "watchdog",
+      "command": "qualification_probe",
+      "source_digest": "sha256:15c2dc831ffe59640c71bf6b3c78818679f9ca393829b33ab6e984246d4083b4",
+      "result": {
+        "state": "succeeded",
+        "exit_code": 0,
+        "output_digest": "sha256:c0487c966508a126a4ac69e09bd032ab2cb26688a2b63dbf6adaf0f6fbe63f73",
+        "container_id": "dw-isolated-29eade30358f4ce7aba15f7322a3f4f9",
+        "cleanup_complete": true,
+        "profile_digest": "sha256:c7bc6344d718256431ac9c79df03d582e9e0b29b44a905e0bdc3a1ee1970a7eb",
+        "collection": null,
+        "finalizable": true
+      },
+      "evidence": {
+        "affinity_denied": true,
+        "affinity_errno": 1,
+        "priority_denied": true,
+        "priority_errno": 1,
+        "proc_memory_denied": true,
+        "ptrace_denied": true,
+        "scheduler_denied": true,
+        "scheduler_errno": 1,
+        "separate_pid1": true,
+        "signal_stop_and_kill_attempted": true,
+        "watchdog_not_stopped": true
+      },
+      "output_size": 285,
+      "elapsed_seconds": 0.9984094999963418,
+      "resolver_calls": 1,
+      "controls": {
+        "ReadonlyRootfs": true,
+        "Privileged": false,
+        "CapDrop": [
+          "ALL"
+        ],
+        "CapAdd": null,
+        "SecurityOpt": [
+          "no-new-privileges:true"
+        ],
+        "NetworkMode": "none",
+        "IpcMode": "none",
+        "PidMode": "",
+        "CgroupnsMode": "private",
+        "Memory": 536870912,
+        "MemorySwap": 536870912,
+        "NanoCpus": 500000000,
+        "PidsLimit": 64,
+        "Tmpfs": {
+          "/tmp": "rw,noexec,nosuid,nodev,size=8388608,uid=10001,gid=10001,mode=0700",
+          "/work": "rw,noexec,nosuid,nodev,size=67108864,uid=10001,gid=10001,mode=0700"
+        },
+        "LogConfig": {
+          "Type": "none",
+          "Config": {}
+        },
+        "Devices": [],
+        "Binds": null,
+        "user": "10001:10001",
+        "mounts": [
+          {
+            "Type": "bind",
+            "Destination": "/source",
+            "RW": false,
+            "Propagation": "rprivate"
+          }
+        ]
+      },
+      "last_state": {
+        "Status": "exited",
+        "Running": false,
+        "Paused": false,
+        "Restarting": false,
+        "OOMKilled": false,
+        "Dead": false,
+        "Pid": 0,
+        "ExitCode": 0,
+        "Error": "",
+        "StartedAt": "2026-11-11T08:58:44.337222093Z",
+        "FinishedAt": "2026-11-11T08:58:44.78613551Z"
+      },
+      "process_tree": null,
+      "cancel_persisted_before_kill": null,
+      "cancel_persisted_before_removal": false,
+      "metadata_secret_free": true,
+      "container_removed": true,
+      "profile": {
+        "image_id": "sha256:49a6523abb3867631692d3ac1ebf09cfe02a21c0725ae2039859703289988875",
+        "architecture": "arm64",
+        "docker_version": "29.1.3",
+        "kernel_version": "6.12.54-linuxkit",
+        "uid": 10001,
+        "gid": 10001,
+        "network": "none",
+        "memory_bytes": 536870912,
+        "nano_cpus": 500000000,
+        "pids_limit": 64,
+        "work_bytes": 67108864,
+        "tmp_bytes": 8388608,
+        "timeout_seconds": 60,
+        "output_bytes": 65536,
+        "cleanup_seconds": 5,
+        "collector_identity": "qualification-collector",
+        "credential_names": [
+          "COLLECTOR_TOKEN"
+        ]
+      }
+    },
+    {
+      "case": "cancel-at-finalization",
+      "mode": "success",
+      "command": "qualification_probe",
+      "source_digest": "sha256:15c2dc831ffe59640c71bf6b3c78818679f9ca393829b33ab6e984246d4083b4",
+      "result": {
+        "state": "cancelled",
+        "exit_code": 0,
+        "output_digest": null,
+        "container_id": "dw-isolated-8a2af9471bcb4ff9887b010c1e3bca79",
+        "cleanup_complete": true,
+        "profile_digest": "sha256:c7bc6344d718256431ac9c79df03d582e9e0b29b44a905e0bdc3a1ee1970a7eb",
+        "collection": null,
+        "finalizable": false
+      },
+      "evidence": null,
+      "output_size": 0,
+      "elapsed_seconds": 1.0151365000056103,
+      "resolver_calls": 1,
+      "controls": {
+        "ReadonlyRootfs": true,
+        "Privileged": false,
+        "CapDrop": [
+          "ALL"
+        ],
+        "CapAdd": null,
+        "SecurityOpt": [
+          "no-new-privileges:true"
+        ],
+        "NetworkMode": "none",
+        "IpcMode": "none",
+        "PidMode": "",
+        "CgroupnsMode": "private",
+        "Memory": 536870912,
+        "MemorySwap": 536870912,
+        "NanoCpus": 500000000,
+        "PidsLimit": 64,
+        "Tmpfs": {
+          "/tmp": "rw,noexec,nosuid,nodev,size=8388608,uid=10001,gid=10001,mode=0700",
+          "/work": "rw,noexec,nosuid,nodev,size=67108864,uid=10001,gid=10001,mode=0700"
+        },
+        "LogConfig": {
+          "Type": "none",
+          "Config": {}
+        },
+        "Devices": [],
+        "Binds": null,
+        "user": "10001:10001",
+        "mounts": [
+          {
+            "Type": "bind",
+            "Destination": "/source",
+            "RW": false,
+            "Propagation": "rprivate"
+          }
+        ]
+      },
+      "last_state": {
+        "Status": "exited",
+        "Running": false,
+        "Paused": false,
+        "Restarting": false,
+        "OOMKilled": false,
+        "Dead": false,
+        "Pid": 0,
+        "ExitCode": 0,
+        "Error": "",
+        "StartedAt": "2026-11-11T08:58:45.360614552Z",
+        "FinishedAt": "2026-11-11T08:58:45.775167885Z"
+      },
+      "process_tree": null,
+      "cancel_persisted_before_kill": null,
+      "cancel_persisted_before_removal": true,
+      "metadata_secret_free": true,
+      "container_removed": true,
+      "profile": {
+        "image_id": "sha256:49a6523abb3867631692d3ac1ebf09cfe02a21c0725ae2039859703289988875",
+        "architecture": "arm64",
+        "docker_version": "29.1.3",
+        "kernel_version": "6.12.54-linuxkit",
+        "uid": 10001,
+        "gid": 10001,
+        "network": "none",
+        "memory_bytes": 536870912,
+        "nano_cpus": 500000000,
+        "pids_limit": 64,
+        "work_bytes": 67108864,
+        "tmp_bytes": 8388608,
+        "timeout_seconds": 60,
+        "output_bytes": 65536,
+        "cleanup_seconds": 5,
+        "collector_identity": "qualification-collector",
+        "credential_names": [
+          "COLLECTOR_TOKEN"
+        ]
+      }
+    },
+    {
+      "case": "cpu-cap",
+      "mode": "cpu",
+      "command": "qualification_probe",
+      "source_digest": "sha256:15c2dc831ffe59640c71bf6b3c78818679f9ca393829b33ab6e984246d4083b4",
+      "result": {
+        "state": "succeeded",
+        "exit_code": 0,
+        "output_digest": "sha256:a8b59f92692c82235d9dd62107ddd02a0e386c66c2b45e41c1923988a5447d28",
+        "container_id": "dw-isolated-d1d93ece1a4b4b879105f2bd864e3145",
+        "cleanup_complete": true,
+        "profile_digest": "sha256:c7bc6344d718256431ac9c79df03d582e9e0b29b44a905e0bdc3a1ee1970a7eb",
+        "collection": null,
+        "finalizable": true
+      },
+      "evidence": {
+        "cpu_max": "50000 100000",
+        "cpu_stat": "usage_usec 1711903\nuser_usec 1671941\nsystem_usec 39962\nnice_usec 0\nnr_periods 34\nnr_throttled 34\nthrottled_usec 1685273\nnr_bursts 0\nburst_usec 0\n"
+      },
+      "output_size": 198,
+      "elapsed_seconds": 4.068648624990601,
+      "resolver_calls": 1,
+      "controls": {
+        "ReadonlyRootfs": true,
+        "Privileged": false,
+        "CapDrop": [
+          "ALL"
+        ],
+        "CapAdd": null,
+        "SecurityOpt": [
+          "no-new-privileges:true"
+        ],
+        "NetworkMode": "none",
+        "IpcMode": "none",
+        "PidMode": "",
+        "CgroupnsMode": "private",
+        "Memory": 536870912,
+        "MemorySwap": 536870912,
+        "NanoCpus": 500000000,
+        "PidsLimit": 64,
+        "Tmpfs": {
+          "/tmp": "rw,noexec,nosuid,nodev,size=8388608,uid=10001,gid=10001,mode=0700",
+          "/work": "rw,noexec,nosuid,nodev,size=67108864,uid=10001,gid=10001,mode=0700"
+        },
+        "LogConfig": {
+          "Type": "none",
+          "Config": {}
+        },
+        "Devices": [],
+        "Binds": null,
+        "user": "10001:10001",
+        "mounts": [
+          {
+            "Type": "bind",
+            "Destination": "/source",
+            "RW": false,
+            "Propagation": "rprivate"
+          }
+        ]
+      },
+      "last_state": {
+        "Status": "exited",
+        "Running": false,
+        "Paused": false,
+        "Restarting": false,
+        "OOMKilled": false,
+        "Dead": false,
+        "Pid": 0,
+        "ExitCode": 0,
+        "Error": "",
+        "StartedAt": "2026-11-11T08:58:46.379013385Z",
+        "FinishedAt": "2026-11-11T08:58:49.843664804Z"
+      },
+      "process_tree": null,
+      "cancel_persisted_before_kill": null,
+      "cancel_persisted_before_removal": false,
+      "metadata_secret_free": true,
+      "container_removed": true,
+      "profile": {
+        "image_id": "sha256:49a6523abb3867631692d3ac1ebf09cfe02a21c0725ae2039859703289988875",
+        "architecture": "arm64",
+        "docker_version": "29.1.3",
+        "kernel_version": "6.12.54-linuxkit",
+        "uid": 10001,
+        "gid": 10001,
+        "network": "none",
+        "memory_bytes": 536870912,
+        "nano_cpus": 500000000,
+        "pids_limit": 64,
+        "work_bytes": 67108864,
+        "tmp_bytes": 8388608,
+        "timeout_seconds": 60,
+        "output_bytes": 65536,
+        "cleanup_seconds": 5,
+        "collector_identity": "qualification-collector",
+        "credential_names": [
+          "COLLECTOR_TOKEN"
+        ]
+      }
+    },
+    {
+      "case": "memory-cap",
+      "mode": "memory",
+      "command": "qualification_probe",
+      "source_digest": "sha256:15c2dc831ffe59640c71bf6b3c78818679f9ca393829b33ab6e984246d4083b4",
+      "result": {
+        "state": "memory_limit",
+        "exit_code": 125,
+        "output_digest": null,
+        "container_id": "dw-isolated-590fa347d07e4038ab8d5ec85326d71f",
+        "cleanup_complete": true,
+        "profile_digest": "sha256:03ee4985b0148247a91faadbffe3707ab63f0e7fd94320964e4dfc1817287220",
+        "collection": null,
+        "finalizable": false
+      },
+      "evidence": null,
+      "output_size": 0,
+      "elapsed_seconds": 0.9987497919937596,
+      "resolver_calls": 1,
+      "controls": {
+        "ReadonlyRootfs": true,
+        "Privileged": false,
+        "CapDrop": [
+          "ALL"
+        ],
+        "CapAdd": null,
+        "SecurityOpt": [
+          "no-new-privileges:true"
+        ],
+        "NetworkMode": "none",
+        "IpcMode": "none",
+        "PidMode": "",
+        "CgroupnsMode": "private",
+        "Memory": 67108864,
+        "MemorySwap": 67108864,
+        "NanoCpus": 500000000,
+        "PidsLimit": 64,
+        "Tmpfs": {
+          "/tmp": "rw,noexec,nosuid,nodev,size=8388608,uid=10001,gid=10001,mode=0700",
+          "/work": "rw,noexec,nosuid,nodev,size=67108864,uid=10001,gid=10001,mode=0700"
+        },
+        "LogConfig": {
+          "Type": "none",
+          "Config": {}
+        },
+        "Devices": [],
+        "Binds": null,
+        "user": "10001:10001",
+        "mounts": [
+          {
+            "Type": "bind",
+            "Destination": "/source",
+            "RW": false,
+            "Propagation": "rprivate"
+          }
+        ]
+      },
+      "last_state": {
+        "Status": "exited",
+        "Running": false,
+        "Paused": false,
+        "Restarting": false,
+        "OOMKilled": true,
+        "Dead": false,
+        "Pid": 0,
+        "ExitCode": 125,
+        "Error": "",
+        "StartedAt": "2026-11-11T08:58:50.423320846Z",
+        "FinishedAt": "2026-11-11T08:58:50.841087971Z"
+      },
+      "process_tree": null,
+      "cancel_persisted_before_kill": null,
+      "cancel_persisted_before_removal": false,
+      "metadata_secret_free": true,
+      "container_removed": true,
+      "profile": {
+        "image_id": "sha256:49a6523abb3867631692d3ac1ebf09cfe02a21c0725ae2039859703289988875",
+        "architecture": "arm64",
+        "docker_version": "29.1.3",
+        "kernel_version": "6.12.54-linuxkit",
+        "uid": 10001,
+        "gid": 10001,
+        "network": "none",
+        "memory_bytes": 67108864,
+        "nano_cpus": 500000000,
+        "pids_limit": 64,
+        "work_bytes": 67108864,
+        "tmp_bytes": 8388608,
+        "timeout_seconds": 60,
+        "output_bytes": 65536,
+        "cleanup_seconds": 5,
+        "collector_identity": "qualification-collector",
+        "credential_names": [
+          "COLLECTOR_TOKEN"
+        ]
+      }
+    },
+    {
+      "case": "pid-cap",
+      "mode": "pids",
+      "command": "qualification_probe",
+      "source_digest": "sha256:15c2dc831ffe59640c71bf6b3c78818679f9ca393829b33ab6e984246d4083b4",
+      "result": {
+        "state": "succeeded",
+        "exit_code": 0,
+        "output_digest": "sha256:a7dcf5f176a72719aa7bd1d8a5f7f39cf1431eff3f74aaf253f51e9fd129edae",
+        "container_id": "dw-isolated-7ee98a3e82a84d23a27f6f6bf3097996",
+        "cleanup_complete": true,
+        "profile_digest": "sha256:a63d6f1769d506232975d693de0ad597fea7caeb027f34e999be01b177d718e1",
+        "collection": null,
+        "finalizable": true
+      },
+      "evidence": {
+        "children_created": 13,
+        "pids_denied": true,
+        "pids_max": "16"
+      },
+      "output_size": 64,
+      "elapsed_seconds": 1.2456801250227727,
+      "resolver_calls": 1,
+      "controls": {
+        "ReadonlyRootfs": true,
+        "Privileged": false,
+        "CapDrop": [
+          "ALL"
+        ],
+        "CapAdd": null,
+        "SecurityOpt": [
+          "no-new-privileges:true"
+        ],
+        "NetworkMode": "none",
+        "IpcMode": "none",
+        "PidMode": "",
+        "CgroupnsMode": "private",
+        "Memory": 536870912,
+        "MemorySwap": 536870912,
+        "NanoCpus": 500000000,
+        "PidsLimit": 16,
+        "Tmpfs": {
+          "/tmp": "rw,noexec,nosuid,nodev,size=8388608,uid=10001,gid=10001,mode=0700",
+          "/work": "rw,noexec,nosuid,nodev,size=67108864,uid=10001,gid=10001,mode=0700"
+        },
+        "LogConfig": {
+          "Type": "none",
+          "Config": {}
+        },
+        "Devices": [],
+        "Binds": null,
+        "user": "10001:10001",
+        "mounts": [
+          {
+            "Type": "bind",
+            "Destination": "/source",
+            "RW": false,
+            "Propagation": "rprivate"
+          }
+        ]
+      },
+      "last_state": {
+        "Status": "exited",
+        "Running": false,
+        "Paused": false,
+        "Restarting": false,
+        "OOMKilled": false,
+        "Dead": false,
+        "Pid": 0,
+        "ExitCode": 0,
+        "Error": "",
+        "StartedAt": "2026-11-11T08:58:51.447737305Z",
+        "FinishedAt": "2026-11-11T08:58:51.974229638Z"
+      },
+      "process_tree": null,
+      "cancel_persisted_before_kill": null,
+      "cancel_persisted_before_removal": false,
+      "metadata_secret_free": true,
+      "container_removed": true,
+      "profile": {
+        "image_id": "sha256:49a6523abb3867631692d3ac1ebf09cfe02a21c0725ae2039859703289988875",
+        "architecture": "arm64",
+        "docker_version": "29.1.3",
+        "kernel_version": "6.12.54-linuxkit",
+        "uid": 10001,
+        "gid": 10001,
+        "network": "none",
+        "memory_bytes": 536870912,
+        "nano_cpus": 500000000,
+        "pids_limit": 16,
+        "work_bytes": 67108864,
+        "tmp_bytes": 8388608,
+        "timeout_seconds": 60,
+        "output_bytes": 65536,
+        "cleanup_seconds": 5,
+        "collector_identity": "qualification-collector",
+        "credential_names": [
+          "COLLECTOR_TOKEN"
+        ]
+      }
+    },
+    {
+      "case": "disk-cap",
+      "mode": "disk",
+      "command": "qualification_probe",
+      "source_digest": "sha256:15c2dc831ffe59640c71bf6b3c78818679f9ca393829b33ab6e984246d4083b4",
+      "result": {
+        "state": "succeeded",
+        "exit_code": 0,
+        "output_digest": "sha256:375744af6850e2110596576dfdd871a63f7a2ddc6874c09ea03689dbc557e7be",
+        "container_id": "dw-isolated-ec5abe561a1f47aea3d0f3e3b2d9d260",
+        "cleanup_complete": true,
+        "profile_digest": "sha256:3bce61b2d7cb100fcf8e88565143370cb44d541bc888b5b7dce7d3b375f7263c",
+        "collection": null,
+        "finalizable": true
+      },
+      "evidence": {
+        "disk_denied": true,
+        "failure_errno": 28,
+        "partial_removed": true
+      },
+      "output_size": 68,
+      "elapsed_seconds": 1.1245988330047112,
+      "resolver_calls": 1,
+      "controls": {
+        "ReadonlyRootfs": true,
+        "Privileged": false,
+        "CapDrop": [
+          "ALL"
+        ],
+        "CapAdd": null,
+        "SecurityOpt": [
+          "no-new-privileges:true"
+        ],
+        "NetworkMode": "none",
+        "IpcMode": "none",
+        "PidMode": "",
+        "CgroupnsMode": "private",
+        "Memory": 536870912,
+        "MemorySwap": 536870912,
+        "NanoCpus": 500000000,
+        "PidsLimit": 64,
+        "Tmpfs": {
+          "/tmp": "rw,noexec,nosuid,nodev,size=8388608,uid=10001,gid=10001,mode=0700",
+          "/work": "rw,noexec,nosuid,nodev,size=8388608,uid=10001,gid=10001,mode=0700"
+        },
+        "LogConfig": {
+          "Type": "none",
+          "Config": {}
+        },
+        "Devices": [],
+        "Binds": null,
+        "user": "10001:10001",
+        "mounts": [
+          {
+            "Type": "bind",
+            "Destination": "/source",
+            "RW": false,
+            "Propagation": "rprivate"
+          }
+        ]
+      },
+      "last_state": {
+        "Status": "exited",
+        "Running": false,
+        "Paused": false,
+        "Restarting": false,
+        "OOMKilled": false,
+        "Dead": false,
+        "Pid": 0,
+        "ExitCode": 0,
+        "Error": "",
+        "StartedAt": "2026-11-11T08:58:52.73136143Z",
+        "FinishedAt": "2026-11-11T08:58:53.199239597Z"
+      },
+      "process_tree": null,
+      "cancel_persisted_before_kill": null,
+      "cancel_persisted_before_removal": false,
+      "metadata_secret_free": true,
+      "container_removed": true,
+      "profile": {
+        "image_id": "sha256:49a6523abb3867631692d3ac1ebf09cfe02a21c0725ae2039859703289988875",
+        "architecture": "arm64",
+        "docker_version": "29.1.3",
+        "kernel_version": "6.12.54-linuxkit",
+        "uid": 10001,
+        "gid": 10001,
+        "network": "none",
+        "memory_bytes": 536870912,
+        "nano_cpus": 500000000,
+        "pids_limit": 64,
+        "work_bytes": 8388608,
+        "tmp_bytes": 8388608,
+        "timeout_seconds": 60,
+        "output_bytes": 65536,
+        "cleanup_seconds": 5,
+        "collector_identity": "qualification-collector",
+        "credential_names": [
+          "COLLECTOR_TOKEN"
+        ]
+      }
+    },
+    {
+      "case": "output-cap",
+      "mode": "output",
+      "command": "qualification_probe",
+      "source_digest": "sha256:15c2dc831ffe59640c71bf6b3c78818679f9ca393829b33ab6e984246d4083b4",
+      "result": {
+        "state": "output_limit",
+        "exit_code": 126,
+        "output_digest": null,
+        "container_id": "dw-isolated-31cfe5622d5045a78cc5a265120bfa7f",
+        "cleanup_complete": true,
+        "profile_digest": "sha256:c3bd5644b97499aa23e8c3103b6141aa82642b59f40d061b71e8219bcb8126f2",
+        "collection": null,
+        "finalizable": false
+      },
+      "evidence": null,
+      "output_size": 0,
+      "elapsed_seconds": 0.9452505420194939,
+      "resolver_calls": 1,
+      "controls": {
+        "ReadonlyRootfs": true,
+        "Privileged": false,
+        "CapDrop": [
+          "ALL"
+        ],
+        "CapAdd": null,
+        "SecurityOpt": [
+          "no-new-privileges:true"
+        ],
+        "NetworkMode": "none",
+        "IpcMode": "none",
+        "PidMode": "",
+        "CgroupnsMode": "private",
+        "Memory": 536870912,
+        "MemorySwap": 536870912,
+        "NanoCpus": 500000000,
+        "PidsLimit": 64,
+        "Tmpfs": {
+          "/tmp": "rw,noexec,nosuid,nodev,size=8388608,uid=10001,gid=10001,mode=0700",
+          "/work": "rw,noexec,nosuid,nodev,size=67108864,uid=10001,gid=10001,mode=0700"
+        },
+        "LogConfig": {
+          "Type": "none",
+          "Config": {}
+        },
+        "Devices": [],
+        "Binds": null,
+        "user": "10001:10001",
+        "mounts": [
+          {
+            "Type": "bind",
+            "Destination": "/source",
+            "RW": false,
+            "Propagation": "rprivate"
+          }
+        ]
+      },
+      "last_state": {
+        "Status": "exited",
+        "Running": false,
+        "Paused": false,
+        "Restarting": false,
+        "OOMKilled": false,
+        "Dead": false,
+        "Pid": 0,
+        "ExitCode": 126,
+        "Error": "",
+        "StartedAt": "2026-11-11T08:58:53.779704625Z",
+        "FinishedAt": "2026-11-11T08:58:54.16955275Z"
+      },
+      "process_tree": null,
+      "cancel_persisted_before_kill": null,
+      "cancel_persisted_before_removal": false,
+      "metadata_secret_free": true,
+      "container_removed": true,
+      "profile": {
+        "image_id": "sha256:49a6523abb3867631692d3ac1ebf09cfe02a21c0725ae2039859703289988875",
+        "architecture": "arm64",
+        "docker_version": "29.1.3",
+        "kernel_version": "6.12.54-linuxkit",
+        "uid": 10001,
+        "gid": 10001,
+        "network": "none",
+        "memory_bytes": 536870912,
+        "nano_cpus": 500000000,
+        "pids_limit": 64,
+        "work_bytes": 67108864,
+        "tmp_bytes": 8388608,
+        "timeout_seconds": 60,
+        "output_bytes": 4096,
+        "cleanup_seconds": 5,
+        "collector_identity": "qualification-collector",
+        "credential_names": [
+          "COLLECTOR_TOKEN"
+        ]
+      }
+    },
+    {
+      "case": "partial-evidence",
+      "mode": "partial",
+      "command": "qualification_probe",
+      "source_digest": "sha256:15c2dc831ffe59640c71bf6b3c78818679f9ca393829b33ab6e984246d4083b4",
+      "result": {
+        "state": "failed",
+        "exit_code": 2,
+        "output_digest": null,
+        "container_id": "dw-isolated-61b11863116542eea8e51e09880b4cd8",
+        "cleanup_complete": true,
+        "profile_digest": "sha256:c7bc6344d718256431ac9c79df03d582e9e0b29b44a905e0bdc3a1ee1970a7eb",
+        "collection": null,
+        "finalizable": false
+      },
+      "evidence": null,
+      "output_size": 0,
+      "elapsed_seconds": 0.992765708011575,
+      "resolver_calls": 1,
+      "controls": {
+        "ReadonlyRootfs": true,
+        "Privileged": false,
+        "CapDrop": [
+          "ALL"
+        ],
+        "CapAdd": null,
+        "SecurityOpt": [
+          "no-new-privileges:true"
+        ],
+        "NetworkMode": "none",
+        "IpcMode": "none",
+        "PidMode": "",
+        "CgroupnsMode": "private",
+        "Memory": 536870912,
+        "MemorySwap": 536870912,
+        "NanoCpus": 500000000,
+        "PidsLimit": 64,
+        "Tmpfs": {
+          "/tmp": "rw,noexec,nosuid,nodev,size=8388608,uid=10001,gid=10001,mode=0700",
+          "/work": "rw,noexec,nosuid,nodev,size=67108864,uid=10001,gid=10001,mode=0700"
+        },
+        "LogConfig": {
+          "Type": "none",
+          "Config": {}
+        },
+        "Devices": [],
+        "Binds": null,
+        "user": "10001:10001",
+        "mounts": [
+          {
+            "Type": "bind",
+            "Destination": "/source",
+            "RW": false,
+            "Propagation": "rprivate"
+          }
+        ]
+      },
+      "last_state": {
+        "Status": "exited",
+        "Running": false,
+        "Paused": false,
+        "Restarting": false,
+        "OOMKilled": false,
+        "Dead": false,
+        "Pid": 0,
+        "ExitCode": 2,
+        "Error": "",
+        "StartedAt": "2026-11-11T08:58:54.7623735Z",
+        "FinishedAt": "2026-11-11T08:58:55.164296584Z"
+      },
+      "process_tree": null,
+      "cancel_persisted_before_kill": null,
+      "cancel_persisted_before_removal": false,
+      "metadata_secret_free": true,
+      "container_removed": true,
+      "profile": {
+        "image_id": "sha256:49a6523abb3867631692d3ac1ebf09cfe02a21c0725ae2039859703289988875",
+        "architecture": "arm64",
+        "docker_version": "29.1.3",
+        "kernel_version": "6.12.54-linuxkit",
+        "uid": 10001,
+        "gid": 10001,
+        "network": "none",
+        "memory_bytes": 536870912,
+        "nano_cpus": 500000000,
+        "pids_limit": 64,
+        "work_bytes": 67108864,
+        "tmp_bytes": 8388608,
+        "timeout_seconds": 60,
+        "output_bytes": 65536,
+        "cleanup_seconds": 5,
+        "collector_identity": "qualification-collector",
+        "credential_names": [
+          "COLLECTOR_TOKEN"
+        ]
+      }
+    },
+    {
+      "case": "cancel-descendants",
+      "mode": "descendants",
+      "command": "qualification_probe",
+      "source_digest": "sha256:15c2dc831ffe59640c71bf6b3c78818679f9ca393829b33ab6e984246d4083b4",
+      "result": {
+        "state": "cancelled",
+        "exit_code": null,
+        "output_digest": null,
+        "container_id": "dw-isolated-044da59753314962813f70a1f67618a4",
+        "cleanup_complete": true,
+        "profile_digest": "sha256:c7bc6344d718256431ac9c79df03d582e9e0b29b44a905e0bdc3a1ee1970a7eb",
+        "collection": null,
+        "finalizable": false
+      },
+      "evidence": null,
+      "output_size": 0,
+      "elapsed_seconds": 2.7137959169922397,
+      "resolver_calls": 1,
+      "controls": {
+        "ReadonlyRootfs": true,
+        "Privileged": false,
+        "CapDrop": [
+          "ALL"
+        ],
+        "CapAdd": null,
+        "SecurityOpt": [
+          "no-new-privileges:true"
+        ],
+        "NetworkMode": "none",
+        "IpcMode": "none",
+        "PidMode": "",
+        "CgroupnsMode": "private",
+        "Memory": 536870912,
+        "MemorySwap": 536870912,
+        "NanoCpus": 500000000,
+        "PidsLimit": 64,
+        "Tmpfs": {
+          "/tmp": "rw,noexec,nosuid,nodev,size=8388608,uid=10001,gid=10001,mode=0700",
+          "/work": "rw,noexec,nosuid,nodev,size=67108864,uid=10001,gid=10001,mode=0700"
+        },
+        "LogConfig": {
+          "Type": "none",
+          "Config": {}
+        },
+        "Devices": [],
+        "Binds": null,
+        "user": "10001:10001",
+        "mounts": [
+          {
+            "Type": "bind",
+            "Destination": "/source",
+            "RW": false,
+            "Propagation": "rprivate"
+          }
+        ]
+      },
+      "last_state": {
+        "Status": "exited",
+        "Running": false,
+        "Paused": false,
+        "Restarting": false,
+        "OOMKilled": false,
+        "Dead": false,
+        "Pid": 0,
+        "ExitCode": 137,
+        "Error": "",
+        "StartedAt": "2026-11-11T08:58:55.723440542Z",
+        "FinishedAt": "2026-11-11T08:58:57.928562377Z"
+      },
+      "process_tree": "PID                 PPID                SID                 COMMAND\n20367               20344               20367               python\n20422               20367               20422               python\n20423               20422               20423               python\n20424               20423               20423               python\n",
+      "cancel_persisted_before_kill": true,
+      "cancel_persisted_before_removal": true,
+      "metadata_secret_free": true,
+      "container_removed": true,
+      "profile": {
+        "image_id": "sha256:49a6523abb3867631692d3ac1ebf09cfe02a21c0725ae2039859703289988875",
+        "architecture": "arm64",
+        "docker_version": "29.1.3",
+        "kernel_version": "6.12.54-linuxkit",
+        "uid": 10001,
+        "gid": 10001,
+        "network": "none",
+        "memory_bytes": 536870912,
+        "nano_cpus": 500000000,
+        "pids_limit": 64,
+        "work_bytes": 67108864,
+        "tmp_bytes": 8388608,
+        "timeout_seconds": 60,
+        "output_bytes": 65536,
+        "cleanup_seconds": 5,
+        "collector_identity": "qualification-collector",
+        "credential_names": [
+          "COLLECTOR_TOKEN"
+        ]
+      }
+    },
+    {
+      "case": "lease-descendants",
+      "mode": "descendants",
+      "command": "qualification_probe",
+      "source_digest": "sha256:15c2dc831ffe59640c71bf6b3c78818679f9ca393829b33ab6e984246d4083b4",
+      "result": {
+        "state": "lease_lost",
+        "exit_code": null,
+        "output_digest": null,
+        "container_id": "dw-isolated-c5617013716e4bacac9d85e9007a4b1a",
+        "cleanup_complete": true,
+        "profile_digest": "sha256:c7bc6344d718256431ac9c79df03d582e9e0b29b44a905e0bdc3a1ee1970a7eb",
+        "collection": null,
+        "finalizable": false
+      },
+      "evidence": null,
+      "output_size": 0,
+      "elapsed_seconds": 2.5876372499915306,
+      "resolver_calls": 1,
+      "controls": {
+        "ReadonlyRootfs": true,
+        "Privileged": false,
+        "CapDrop": [
+          "ALL"
+        ],
+        "CapAdd": null,
+        "SecurityOpt": [
+          "no-new-privileges:true"
+        ],
+        "NetworkMode": "none",
+        "IpcMode": "none",
+        "PidMode": "",
+        "CgroupnsMode": "private",
+        "Memory": 536870912,
+        "MemorySwap": 536870912,
+        "NanoCpus": 500000000,
+        "PidsLimit": 64,
+        "Tmpfs": {
+          "/tmp": "rw,noexec,nosuid,nodev,size=8388608,uid=10001,gid=10001,mode=0700",
+          "/work": "rw,noexec,nosuid,nodev,size=67108864,uid=10001,gid=10001,mode=0700"
+        },
+        "LogConfig": {
+          "Type": "none",
+          "Config": {}
+        },
+        "Devices": [],
+        "Binds": null,
+        "user": "10001:10001",
+        "mounts": [
+          {
+            "Type": "bind",
+            "Destination": "/source",
+            "RW": false,
+            "Propagation": "rprivate"
+          }
+        ]
+      },
+      "last_state": {
+        "Status": "exited",
+        "Running": false,
+        "Paused": false,
+        "Restarting": false,
+        "OOMKilled": false,
+        "Dead": false,
+        "Pid": 0,
+        "ExitCode": 137,
+        "Error": "",
+        "StartedAt": "2026-11-11T08:58:58.446619669Z",
+        "FinishedAt": "2026-11-11T08:59:00.512746961Z"
+      },
+      "process_tree": "PID                 PPID                SID                 COMMAND\n20537               20514               20537               python\n20551               20537               20551               python\n20552               20551               20552               python\n20553               20552               20552               python\n",
+      "cancel_persisted_before_kill": true,
+      "cancel_persisted_before_removal": true,
+      "metadata_secret_free": true,
+      "container_removed": true,
+      "profile": {
+        "image_id": "sha256:49a6523abb3867631692d3ac1ebf09cfe02a21c0725ae2039859703289988875",
+        "architecture": "arm64",
+        "docker_version": "29.1.3",
+        "kernel_version": "6.12.54-linuxkit",
+        "uid": 10001,
+        "gid": 10001,
+        "network": "none",
+        "memory_bytes": 536870912,
+        "nano_cpus": 500000000,
+        "pids_limit": 64,
+        "work_bytes": 67108864,
+        "tmp_bytes": 8388608,
+        "timeout_seconds": 60,
+        "output_bytes": 65536,
+        "cleanup_seconds": 5,
+        "collector_identity": "qualification-collector",
+        "credential_names": [
+          "COLLECTOR_TOKEN"
+        ]
+      }
+    },
+    {
+      "case": "timeout-descendants",
+      "mode": "descendants",
+      "command": "qualification_probe",
+      "source_digest": "sha256:15c2dc831ffe59640c71bf6b3c78818679f9ca393829b33ab6e984246d4083b4",
+      "result": {
+        "state": "timed_out",
+        "exit_code": null,
+        "output_digest": null,
+        "container_id": "dw-isolated-da7b35043f724fb1a4068e148ee9df78",
+        "cleanup_complete": true,
+        "profile_digest": "sha256:7565c9e82e2ee922fd5aa6b0f913d6b85cfcadd2a996fce0ff21e3d1368fa4e6",
+        "collection": null,
+        "finalizable": false
+      },
+      "evidence": null,
+      "output_size": 0,
+      "elapsed_seconds": 3.325560958008282,
+      "resolver_calls": 1,
+      "controls": {
+        "ReadonlyRootfs": true,
+        "Privileged": false,
+        "CapDrop": [
+          "ALL"
+        ],
+        "CapAdd": null,
+        "SecurityOpt": [
+          "no-new-privileges:true"
+        ],
+        "NetworkMode": "none",
+        "IpcMode": "none",
+        "PidMode": "",
+        "CgroupnsMode": "private",
+        "Memory": 536870912,
+        "MemorySwap": 536870912,
+        "NanoCpus": 500000000,
+        "PidsLimit": 64,
+        "Tmpfs": {
+          "/tmp": "rw,noexec,nosuid,nodev,size=8388608,uid=10001,gid=10001,mode=0700",
+          "/work": "rw,noexec,nosuid,nodev,size=67108864,uid=10001,gid=10001,mode=0700"
+        },
+        "LogConfig": {
+          "Type": "none",
+          "Config": {}
+        },
+        "Devices": [],
+        "Binds": null,
+        "user": "10001:10001",
+        "mounts": [
+          {
+            "Type": "bind",
+            "Destination": "/source",
+            "RW": false,
+            "Propagation": "rprivate"
+          }
+        ]
+      },
+      "last_state": {
+        "Status": "exited",
+        "Running": false,
+        "Paused": false,
+        "Restarting": false,
+        "OOMKilled": false,
+        "Dead": false,
+        "Pid": 0,
+        "ExitCode": 124,
+        "Error": "",
+        "StartedAt": "2026-11-11T08:59:01.019431878Z",
+        "FinishedAt": "2026-11-11T08:59:03.731383796Z"
+      },
+      "process_tree": "PID                 PPID                SID                 COMMAND\n20707               20684               20707               python\n20722               20707               20722               python\n20723               20722               20723               python\n20724               20723               20723               python\n",
+      "cancel_persisted_before_kill": null,
+      "cancel_persisted_before_removal": true,
+      "metadata_secret_free": true,
+      "container_removed": true,
+      "profile": {
+        "image_id": "sha256:49a6523abb3867631692d3ac1ebf09cfe02a21c0725ae2039859703289988875",
+        "architecture": "arm64",
+        "docker_version": "29.1.3",
+        "kernel_version": "6.12.54-linuxkit",
+        "uid": 10001,
+        "gid": 10001,
+        "network": "none",
+        "memory_bytes": 536870912,
+        "nano_cpus": 500000000,
+        "pids_limit": 64,
+        "work_bytes": 67108864,
+        "tmp_bytes": 8388608,
+        "timeout_seconds": 3,
+        "output_bytes": 65536,
+        "cleanup_seconds": 5,
+        "collector_identity": "qualification-collector",
+        "credential_names": [
+          "COLLECTOR_TOKEN"
+        ]
+      }
+    }
+  ],
+  "admission": [
+    {
+      "case": "catalog-option-0",
+      "denied": true,
+      "credential_resolver_calls": 0
+    },
+    {
+      "case": "catalog-option-1",
+      "denied": true,
+      "credential_resolver_calls": 0
+    },
+    {
+      "case": "catalog-option-2",
+      "denied": true,
+      "credential_resolver_calls": 0
+    },
+    {
+      "case": "untrusted-pr",
+      "denied": true,
+      "credential_resolver_calls": 0
+    },
+    {
+      "case": "commit-option",
+      "denied": true,
+      "credential_resolver_calls": 0
+    },
+    {
+      "case": "catalog-mutated",
+      "denied": true,
+      "credential_resolver_calls": 0
+    },
+    {
+      "case": "catalog-symlink",
+      "denied": true,
+      "credential_resolver_calls": 0
+    },
+    {
+      "case": "hostile-hooks-config-helpers",
+      "denied": true,
+      "snapshot_verified": true
+    },
+    {
+      "case": "snapshot-symlink-escape",
+      "denied": true,
+      "credential_resolver_calls": 0
+    },
+    {
+      "case": "tofu-outside",
+      "denied": true,
+      "credential_resolver_calls": 0
+    },
+    {
+      "case": "tofu-remote",
+      "denied": true,
+      "credential_resolver_calls": 0
+    },
+    {
+      "case": "tofu-oversize",
+      "denied": true,
+      "credential_resolver_calls": 0
+    },
+    {
+      "case": "tofu-json-outside",
+      "denied": true,
+      "credential_resolver_calls": 0
+    },
+    {
+      "case": "tofu-json-remote",
+      "denied": true,
+      "credential_resolver_calls": 0
+    },
+    {
+      "case": "tofu-json-oversize",
+      "denied": true,
+      "credential_resolver_calls": 0
+    },
+    {
+      "case": "public-staging-parent",
+      "denied": true,
+      "credential_resolver_calls": 0,
+      "staging_empty_after_denial": true,
+      "staging_mode": "0755"
+    },
+    {
+      "case": "removed-provider-command",
+      "denied": true,
+      "credential_resolver_calls": 0
+    }
+  ],
+  "source_case_inputs": [
+    {
+      "case": "tofu-outside",
+      "commit": "3377bc6467bc345bb8a9b2e0769da97043c4854c",
+      "tree_digest": "sha256:412efc2aedb756e329e8061efaac7c139afb9f29ae07486ad480d0289bce04c7",
+      "configuration_bytes": {
+        "main.tofu": 57
+      },
+      "files": {
+        "main.tf": "sha256:9c86769848a67230bff9fd46368d601563b1f19064f2f0c9d65fc6667bed398d",
+        ".terraform.lock.hcl": "sha256:3071bf1f71db45e51751c8b66ac866134e1fff1c40dbad3e3b22b6664ba5b729",
+        "source.lock": "sha256:81b56767fec06d7e3fb8cbb335f4c61983525b25f9e477b8a1f9b2d735aa5e6c",
+        "main.tofu": "sha256:3cc6b5cd320867871c0c4e15b13aec36c31e7437c5b79449639aaeb92b4dea51"
+      }
+    },
+    {
+      "case": "tofu-remote",
+      "commit": "73191108c7044134bc2d2b301a737895ac458a10",
+      "tree_digest": "sha256:007d0088caa50061cd1894983182c542039ab37da055e70db91d19ac576228e4",
+      "configuration_bytes": {
+        "main.tofu": 70
+      },
+      "files": {
+        "main.tf": "sha256:9c86769848a67230bff9fd46368d601563b1f19064f2f0c9d65fc6667bed398d",
+        ".terraform.lock.hcl": "sha256:3071bf1f71db45e51751c8b66ac866134e1fff1c40dbad3e3b22b6664ba5b729",
+        "source.lock": "sha256:81b56767fec06d7e3fb8cbb335f4c61983525b25f9e477b8a1f9b2d735aa5e6c",
+        "main.tofu": "sha256:ebf7828d3ffe1e5921ee14b070945eda97b7fb72e08153bb8fcd8343e4904803"
+      }
+    },
+    {
+      "case": "tofu-oversize",
+      "commit": "7a6b1950eb131dffbda0fe3ef2e167bb025622cc",
+      "tree_digest": "sha256:5e426ec742665d69d631f398427c449d5e496826a1c198b3c66f5c1e1cb93979",
+      "configuration_bytes": {
+        "main.tofu": 131075
+      },
+      "files": {
+        "main.tf": "sha256:9c86769848a67230bff9fd46368d601563b1f19064f2f0c9d65fc6667bed398d",
+        ".terraform.lock.hcl": "sha256:3071bf1f71db45e51751c8b66ac866134e1fff1c40dbad3e3b22b6664ba5b729",
+        "source.lock": "sha256:81b56767fec06d7e3fb8cbb335f4c61983525b25f9e477b8a1f9b2d735aa5e6c",
+        "main.tofu": "sha256:9733236d7cfa23a74520b227b8cccab83e770345978ce0057bdc1bf06e35d91d"
+      }
+    },
+    {
+      "case": "tofu-json-outside",
+      "commit": "8d2d5c6c53a70bfe710c2439f017ccf67e55e9e7",
+      "tree_digest": "sha256:d0c19bbde1fa3726d98baa54faa75d6a19671c1cd8d3f27d301df92b000024f7",
+      "configuration_bytes": {
+        "main.tofu.json": 61
+      },
+      "files": {
+        "main.tf": "sha256:9c86769848a67230bff9fd46368d601563b1f19064f2f0c9d65fc6667bed398d",
+        ".terraform.lock.hcl": "sha256:3071bf1f71db45e51751c8b66ac866134e1fff1c40dbad3e3b22b6664ba5b729",
+        "source.lock": "sha256:81b56767fec06d7e3fb8cbb335f4c61983525b25f9e477b8a1f9b2d735aa5e6c",
+        "main.tofu.json": "sha256:638d55559534277de5d435e2fec74fa9f371a160c4fe0df4bdf5810d198d75c5"
+      }
+    },
+    {
+      "case": "tofu-json-remote",
+      "commit": "7092ad3d34c1a9908adf8bbcb03d281408d343aa",
+      "tree_digest": "sha256:0aa8379e3687b72469abc358f547c1ca7b218835245ae2b129756c70cb789303",
+      "configuration_bytes": {
+        "main.tofu.json": 74
+      },
+      "files": {
+        "main.tf": "sha256:9c86769848a67230bff9fd46368d601563b1f19064f2f0c9d65fc6667bed398d",
+        ".terraform.lock.hcl": "sha256:3071bf1f71db45e51751c8b66ac866134e1fff1c40dbad3e3b22b6664ba5b729",
+        "source.lock": "sha256:81b56767fec06d7e3fb8cbb335f4c61983525b25f9e477b8a1f9b2d735aa5e6c",
+        "main.tofu.json": "sha256:850617ba569c9a3b1bf5091f7dc94bce9f24d583d16b651da7b672b0a1c71667"
+      }
+    },
+    {
+      "case": "tofu-json-oversize",
+      "commit": "10cf91e9b1002788c7e4f186955e84a6c34b4d74",
+      "tree_digest": "sha256:5bd24744fc7feff08e6baa24a57c4e75e4f72ded37ae6a5f7d4690fd9a2680e1",
+      "configuration_bytes": {
+        "main.tofu.json": 131098
+      },
+      "files": {
+        "main.tf": "sha256:9c86769848a67230bff9fd46368d601563b1f19064f2f0c9d65fc6667bed398d",
+        ".terraform.lock.hcl": "sha256:3071bf1f71db45e51751c8b66ac866134e1fff1c40dbad3e3b22b6664ba5b729",
+        "source.lock": "sha256:81b56767fec06d7e3fb8cbb335f4c61983525b25f9e477b8a1f9b2d735aa5e6c",
+        "main.tofu.json": "sha256:53103dcb2784dddd2da0363e142bc6f8d8e5dc5518f5c136f31b0ce75c9092fe"
+      }
+    },
+    {
+      "case": "vendored-tofu",
+      "commit": "cdbd2b848d100895110157c44eed6ae512506965",
+      "tree_digest": "sha256:9f5b50f647b566021c23c08d77eab0bcdb517004ba68e562cd47727e7d7803d5",
+      "configuration_bytes": {
+        "modules.tofu": 45,
+        "modules/child/main.tofu.json": 77,
+        "source.lock": 392
+      },
+      "files": {
+        "main.tf": "sha256:9c86769848a67230bff9fd46368d601563b1f19064f2f0c9d65fc6667bed398d",
+        ".terraform.lock.hcl": "sha256:3071bf1f71db45e51751c8b66ac866134e1fff1c40dbad3e3b22b6664ba5b729",
+        "source.lock": "sha256:952486395a8d3c08a750a0033d5afc897353ed45ca12f212f3015f9477785a72",
+        "modules.tofu": "sha256:79f5fb4e55c77acb468e9ce7d32598e649916724fc9c75e3c771a39b2385b10f",
+        "modules/child/main.tofu.json": "sha256:13509f771449a41eab343d135c562a74372366fac3293f8efc0eb0d540ddd68e"
+      }
+    }
+  ],
+  "advertised_commands": [
+    "qualification_probe",
+    "tool_version"
+  ],
+  "command_scope": "Commands admitted by this qualification catalog; collect_plan requires its separate pinned collector and tool-version manifest and is qualified by Story16.14.",
+  "r4_ambiguous_creation": {
+    "evidence_level": "controlled transport/fault-double regression tests",
+    "real_late_daemon_commit_reproduced": false,
+    "qualification_claim": "No live Docker late-commit timing qualification is claimed."
+  },
+  "source_cleanup_complete": true,
+  "operator_death": {
+    "qualified": true,
+    "create_delay_seconds": 0,
+    "lease_seconds": 25,
+    "timings": {
+      "create_entered_monotonic": 259556.814019291,
+      "credential_resolver_calls": 1,
+      "execute_entered_monotonic": 259556.742345833
+    },
+    "original_deadline_anchor": "Host execute call entry, conservatively before runtime preflight and setup",
+    "original_deadline_monotonic": 259562.742345833,
+    "observation_tolerance_seconds": 0.75,
+    "stop_observed_monotonic": 259562.790966916,
+    "stopped_within_original_deadline": true,
+    "running_beyond_original_bound": false,
+    "credential_resolver_calls": 1,
+    "controller_killed_seconds_after_original_start": 0.7232845420076046,
+    "controller_exit": -9,
+    "controller_error": null,
+    "container_state_before_recovery": {
+      "Status": "exited",
+      "Running": false,
+      "Paused": false,
+      "Restarting": false,
+      "OOMKilled": false,
+      "Dead": false,
+      "Pid": 0,
+      "ExitCode": 124,
+      "Error": "",
+      "StartedAt": "2026-11-11T08:59:05.45943713Z",
+      "FinishedAt": "2026-11-11T08:59:11.16848005Z"
+    },
+    "process_tree_before_controller_kill": "PID                 PPID                SID                 COMMAND\n20839               20816               20839               python\n20851               20839               20851               python\n20852               20851               20852               python\n20853               20852               20852               python\n",
+    "expired_without_host": true,
+    "elapsed_seconds": 7.362073084019357,
+    "seconds_after_controller_death": 5.533293957996648,
+    "recovery": [
+      {
+        "task_digest": "9eba5e3e79853f7918e6e486077513ddcdf2879a75182ef0d7eb98787c5e7ff2",
+        "cleanup_complete": true
+      }
+    ],
+    "container_removed": true,
+    "journal_states": [
+      [
+        "interrupted",
+        1,
+        1
+      ]
+    ],
+    "profile": {
+      "image_id": "sha256:49a6523abb3867631692d3ac1ebf09cfe02a21c0725ae2039859703289988875",
+      "architecture": "arm64",
+      "docker_version": "29.1.3",
+      "kernel_version": "6.12.54-linuxkit",
+      "uid": 10001,
+      "gid": 10001,
+      "network": "none",
+      "memory_bytes": 268435456,
+      "nano_cpus": 500000000,
+      "pids_limit": 64,
+      "work_bytes": 67108864,
+      "tmp_bytes": 8388608,
+      "timeout_seconds": 6,
+      "output_bytes": 65536,
+      "cleanup_seconds": 5,
+      "collector_identity": "qualification-collector",
+      "credential_names": [
+        "COLLECTOR_TOKEN"
+      ]
+    }
+  },
+  "operator_death_under_load": {
+    "qualified": true,
+    "create_delay_seconds": 0,
+    "lease_seconds": 25,
+    "timings": {
+      "create_entered_monotonic": 259564.280663958,
+      "credential_resolver_calls": 1,
+      "execute_entered_monotonic": 259564.208297875
+    },
+    "original_deadline_anchor": "Host execute call entry, conservatively before runtime preflight and setup",
+    "original_deadline_monotonic": 259570.208297875,
+    "observation_tolerance_seconds": 0.75,
+    "stop_observed_monotonic": 259570.273723041,
+    "stopped_within_original_deadline": true,
+    "running_beyond_original_bound": false,
+    "credential_resolver_calls": 1,
+    "controller_killed_seconds_after_original_start": 0.82531208297587,
+    "controller_exit": -9,
+    "controller_error": null,
+    "container_state_before_recovery": {
+      "Status": "exited",
+      "Running": false,
+      "Paused": false,
+      "Restarting": false,
+      "OOMKilled": false,
+      "Dead": false,
+      "Pid": 0,
+      "ExitCode": 124,
+      "Error": "",
+      "StartedAt": "2026-11-11T08:59:12.919839759Z",
+      "FinishedAt": "2026-11-11T08:59:18.627297928Z"
+    },
+    "process_tree_before_controller_kill": "PID                 PPID                SID                 COMMAND\n20967               20944               20967               python\n20980               20967               20980               python\n20988               20980               20988               python\n20989               20980               20989               python\n20990               20980               20990               python\n20991               20980               20991               python\n20992               20980               20992               python\n20993               20980               20993               python\n",
+    "expired_without_host": true,
+    "elapsed_seconds": 7.460968416999094,
+    "seconds_after_controller_death": 5.431955875013955,
+    "recovery": [
+      {
+        "task_digest": "7a5024b1c3c7da2657c9726e16e7f2784edf3af908ec2069fffe426a836653d1",
+        "cleanup_complete": true
+      }
+    ],
+    "container_removed": true,
+    "journal_states": [
+      [
+        "interrupted",
+        1,
+        1
+      ]
+    ],
+    "profile": {
+      "image_id": "sha256:49a6523abb3867631692d3ac1ebf09cfe02a21c0725ae2039859703289988875",
+      "architecture": "arm64",
+      "docker_version": "29.1.3",
+      "kernel_version": "6.12.54-linuxkit",
+      "uid": 10001,
+      "gid": 10001,
+      "network": "none",
+      "memory_bytes": 268435456,
+      "nano_cpus": 500000000,
+      "pids_limit": 64,
+      "work_bytes": 67108864,
+      "tmp_bytes": 8388608,
+      "timeout_seconds": 6,
+      "output_bytes": 65536,
+      "cleanup_seconds": 5,
+      "collector_identity": "qualification-collector",
+      "credential_names": [
+        "COLLECTOR_TOKEN"
+      ]
+    }
+  },
+  "operator_death_delayed_setup": {
+    "qualified": true,
+    "create_delay_seconds": 3,
+    "lease_seconds": 60,
+    "timings": {
+      "create_entered_monotonic": 259571.686324125,
+      "credential_resolver_calls": 1,
+      "execute_entered_monotonic": 259571.606750958
+    },
+    "original_deadline_anchor": "Host execute call entry, conservatively before runtime preflight and setup",
+    "original_deadline_monotonic": 259577.606750958,
+    "observation_tolerance_seconds": 0.75,
+    "stop_observed_monotonic": 259577.73279325,
+    "stopped_within_original_deadline": true,
+    "running_beyond_original_bound": false,
+    "credential_resolver_calls": 1,
+    "controller_killed_seconds_after_original_start": 3.7883761250122916,
+    "controller_exit": -9,
+    "controller_error": null,
+    "container_state_before_recovery": {
+      "Status": "exited",
+      "Running": false,
+      "Paused": false,
+      "Restarting": false,
+      "OOMKilled": false,
+      "Dead": false,
+      "Pid": 0,
+      "ExitCode": 124,
+      "Error": "",
+      "StartedAt": "2026-11-11T08:59:23.355675055Z",
+      "FinishedAt": "2026-11-11T08:59:26.040414167Z"
+    },
+    "process_tree_before_controller_kill": "PID                 PPID                SID                 COMMAND\n21090               21068               21090               python\n21105               21090               21105               python\n21113               21105               21113               python\n21114               21113               21113               python\n",
+    "expired_without_host": true,
+    "elapsed_seconds": 7.491381708008703,
+    "seconds_after_controller_death": 2.5653317499964032,
+    "recovery": [
+      {
+        "task_digest": "8d5ba523fe5e373dacb1bfa0cd7fe3ec5648cda1b313e1c08bb8afff52730bf5",
+        "cleanup_complete": true
+      }
+    ],
+    "container_removed": true,
+    "journal_states": [
+      [
+        "interrupted",
+        1,
+        1
+      ]
+    ],
+    "profile": {
+      "image_id": "sha256:49a6523abb3867631692d3ac1ebf09cfe02a21c0725ae2039859703289988875",
+      "architecture": "arm64",
+      "docker_version": "29.1.3",
+      "kernel_version": "6.12.54-linuxkit",
+      "uid": 10001,
+      "gid": 10001,
+      "network": "none",
+      "memory_bytes": 268435456,
+      "nano_cpus": 500000000,
+      "pids_limit": 64,
+      "work_bytes": 67108864,
+      "tmp_bytes": 8388608,
+      "timeout_seconds": 6,
+      "output_bytes": 65536,
+      "cleanup_seconds": 5,
+      "collector_identity": "qualification-collector",
+      "credential_names": [
+        "COLLECTOR_TOKEN"
+      ]
+    }
+  },
+  "journal_summary": [
+    {
+      "state": "cancelled",
+      "cancel_requested": true,
+      "cleanup_complete": true,
+      "count": 2
+    },
+    {
+      "state": "credential_denied",
+      "cancel_requested": false,
+      "cleanup_complete": true,
+      "count": 2
+    },
+    {
+      "state": "failed",
+      "cancel_requested": false,
+      "cleanup_complete": true,
+      "count": 1
+    },
+    {
+      "state": "lease_lost",
+      "cancel_requested": true,
+      "cleanup_complete": true,
+      "count": 1
+    },
+    {
+      "state": "memory_limit",
+      "cancel_requested": false,
+      "cleanup_complete": true,
+      "count": 1
+    },
+    {
+      "state": "output_limit",
+      "cancel_requested": false,
+      "cleanup_complete": true,
+      "count": 1
+    },
+    {
+      "state": "succeeded",
+      "cancel_requested": false,
+      "cleanup_complete": true,
+      "count": 8
+    },
+    {
+      "state": "timed_out",
+      "cancel_requested": true,
+      "cleanup_complete": true,
+      "count": 1
+    },
+    {
+      "state": "unsupported_profile",
+      "cancel_requested": false,
+      "cleanup_complete": true,
+      "count": 1
+    }
+  ],
+  "journal_secret_free": true,
+  "qualified": true,
+  "limitations": [
+    "Only declared Linux ARM64 Docker daemon profile; Darwin host is an operator control host, not a sandbox.",
+    "No production collector/provider credentials or custody admission; Story16.14 owns integration.",
+    "No internet or additional local network allowed; only offline profile exercised."
+  ],
+  "checks": {
+    "complete_corpus": true,
+    "stable_sources": true,
+    "hostile_admission": true,
+    "invalid-image-pin:state": true,
+    "invalid-image-pin:cleanup": true,
+    "invalid-image-pin:metadata": true,
+    "invalid-image-pin:no_partial_publication": true,
+    "invalid-image-pin:precredential": true,
+    "unsupported-host-profile:state": true,
+    "unsupported-host-profile:precredential": true,
+    "receiver-identity-denied:state": true,
+    "receiver-identity-denied:cleanup": true,
+    "receiver-identity-denied:metadata": true,
+    "receiver-identity-denied:no_partial_publication": true,
+    "receiver-environment-denied:state": true,
+    "receiver-environment-denied:cleanup": true,
+    "receiver-environment-denied:metadata": true,
+    "receiver-environment-denied:no_partial_publication": true,
+    "real-provider:state": true,
+    "real-provider:cleanup": true,
+    "real-provider:metadata": true,
+    "vendored-tofu-provider:state": true,
+    "vendored-tofu-provider:cleanup": true,
+    "vendored-tofu-provider:metadata": true,
+    "tool-version:state": true,
+    "tool-version:cleanup": true,
+    "tool-version:metadata": true,
+    "environment:state": true,
+    "environment:cleanup": true,
+    "environment:metadata": true,
+    "watchdog-defenses:state": true,
+    "watchdog-defenses:cleanup": true,
+    "watchdog-defenses:metadata": true,
+    "cancel-at-finalization:state": true,
+    "cancel-at-finalization:cleanup": true,
+    "cancel-at-finalization:metadata": true,
+    "cancel-at-finalization:no_partial_publication": true,
+    "cpu-cap:state": true,
+    "cpu-cap:cleanup": true,
+    "cpu-cap:metadata": true,
+    "memory-cap:state": true,
+    "memory-cap:cleanup": true,
+    "memory-cap:metadata": true,
+    "memory-cap:no_partial_publication": true,
+    "pid-cap:state": true,
+    "pid-cap:cleanup": true,
+    "pid-cap:metadata": true,
+    "disk-cap:state": true,
+    "disk-cap:cleanup": true,
+    "disk-cap:metadata": true,
+    "output-cap:state": true,
+    "output-cap:cleanup": true,
+    "output-cap:metadata": true,
+    "output-cap:no_partial_publication": true,
+    "partial-evidence:state": true,
+    "partial-evidence:cleanup": true,
+    "partial-evidence:metadata": true,
+    "partial-evidence:no_partial_publication": true,
+    "cancel-descendants:state": true,
+    "cancel-descendants:cleanup": true,
+    "cancel-descendants:metadata": true,
+    "cancel-descendants:no_partial_publication": true,
+    "cancel-descendants:escaped_descendants_observed": true,
+    "cancel-descendants:durable_cancellation": true,
+    "lease-descendants:state": true,
+    "lease-descendants:cleanup": true,
+    "lease-descendants:metadata": true,
+    "lease-descendants:no_partial_publication": true,
+    "lease-descendants:escaped_descendants_observed": true,
+    "lease-descendants:durable_cancellation": true,
+    "timeout-descendants:state": true,
+    "timeout-descendants:cleanup": true,
+    "timeout-descendants:metadata": true,
+    "timeout-descendants:no_partial_publication": true,
+    "timeout-descendants:escaped_descendants_observed": true,
+    "timeout-descendants:durable_cancellation": true,
+    "environment:stacked_seccomp": true,
+    "environment:nonroot": true,
+    "environment:seccomp_enforced": true,
+    "environment:no_new_privileges": true,
+    "environment:capabilities_dropped": true,
+    "environment:host_secret_absent": true,
+    "environment:receiver_secret_absent": true,
+    "environment:git_config_absent": true,
+    "environment:collector_present": true,
+    "environment:socket_absent": true,
+    "environment:metadata_denied": true,
+    "environment:egress_denied": true,
+    "environment:root_readonly": true,
+    "environment:source_readonly": true,
+    "environment:catalog_readonly": true,
+    "environment:dormant_interfaces_down": true,
+    "environment:activation_denied": true,
+    "environment:no_nonloopback_ipv4_address": true,
+    "environment:no_nonloopback_ipv6_address": true,
+    "environment:no_nonloopback_ipv4_route": true,
+    "environment:no_nonloopback_ipv6_route": true,
+    "real-provider:actual_plan": true,
+    "real-provider:stacked_seccomp": true,
+    "real-provider:nonroot": true,
+    "real-provider:seccomp_enforced": true,
+    "real-provider:no_new_privileges": true,
+    "real-provider:capabilities_dropped": true,
+    "real-provider:host_secret_absent": true,
+    "real-provider:receiver_secret_absent": true,
+    "real-provider:git_config_absent": true,
+    "real-provider:collector_present": true,
+    "real-provider:socket_absent": true,
+    "real-provider:metadata_denied": true,
+    "real-provider:egress_denied": true,
+    "real-provider:root_readonly": true,
+    "real-provider:source_readonly": true,
+    "real-provider:catalog_readonly": true,
+    "real-provider:dormant_interfaces_down": true,
+    "real-provider:activation_denied": true,
+    "real-provider:no_nonloopback_ipv4_address": true,
+    "real-provider:no_nonloopback_ipv6_address": true,
+    "real-provider:no_nonloopback_ipv4_route": true,
+    "real-provider:no_nonloopback_ipv6_route": true,
+    "vendored-tofu-provider:actual_plan": true,
+    "vendored-tofu-provider:stacked_seccomp": true,
+    "vendored-tofu-provider:nonroot": true,
+    "vendored-tofu-provider:seccomp_enforced": true,
+    "vendored-tofu-provider:no_new_privileges": true,
+    "vendored-tofu-provider:capabilities_dropped": true,
+    "vendored-tofu-provider:host_secret_absent": true,
+    "vendored-tofu-provider:receiver_secret_absent": true,
+    "vendored-tofu-provider:git_config_absent": true,
+    "vendored-tofu-provider:collector_present": true,
+    "vendored-tofu-provider:socket_absent": true,
+    "vendored-tofu-provider:metadata_denied": true,
+    "vendored-tofu-provider:egress_denied": true,
+    "vendored-tofu-provider:root_readonly": true,
+    "vendored-tofu-provider:source_readonly": true,
+    "vendored-tofu-provider:catalog_readonly": true,
+    "vendored-tofu-provider:dormant_interfaces_down": true,
+    "vendored-tofu-provider:activation_denied": true,
+    "vendored-tofu-provider:no_nonloopback_ipv4_address": true,
+    "vendored-tofu-provider:no_nonloopback_ipv6_address": true,
+    "vendored-tofu-provider:no_nonloopback_ipv4_route": true,
+    "vendored-tofu-provider:no_nonloopback_ipv6_route": true,
+    "cpu:quota_and_throttle": true,
+    "memory:actual_oom": true,
+    "pids:actual_limit": true,
+    "disk:actual_enospc_cleanup": true,
+    "catalog:tool_version_executed": true,
+    "source:vendored_tofu_module_executed": true,
+    "review:required_admission_cases": true,
+    "tofu-outside:precredential": true,
+    "tofu-remote:precredential": true,
+    "tofu-oversize:precredential": true,
+    "tofu-json-outside:precredential": true,
+    "tofu-json-remote:precredential": true,
+    "tofu-json-oversize:precredential": true,
+    "public-staging-parent:precredential": true,
+    "removed-provider-command:precredential": true,
+    "public_staging_no_partial_source": true,
+    "watchdog:separate_pid1": true,
+    "watchdog:watchdog_not_stopped": true,
+    "watchdog:ptrace_denied": true,
+    "watchdog:proc_memory_denied": true,
+    "watchdog:signal_stop_and_kill_attempted": true,
+    "watchdog:priority_denied": true,
+    "watchdog:scheduler_denied": true,
+    "watchdog:affinity_denied": true,
+    "operator_death_watchdog_and_recovery": true,
+    "operator_death_under_cpu_load": true,
+    "delayed_setup_original_deadline": true,
+    "catalog_all_advertised_commands_executed": true,
+    "image_source_pins": true,
+    "source_cleanup": true,
+    "journal_secret_free": true
+  },
+  "failed_checks": []
+}

@@ -405,6 +405,7 @@ class ExecutionRunner:
             source_snapshot.verify()
             self.sandbox.create(source_snapshot.path, name=name, task_digest=key)
             created = True
+            self.journal.acknowledge_creation(key, self.sandbox.owned_id(name))
             if datetime.now(timezone.utc) >= lease:
                 raise _Stop("lease_lost")
             if (

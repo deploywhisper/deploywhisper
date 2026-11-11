@@ -1,6 +1,6 @@
 # Story 12.5: SBOM and Release Checksums
 
-Status: ready-for-dev
+Status: in-progress
 
 <!-- Generated from updated PRD/architecture/epics plus implementation-readiness-report-2026-05-01.md. -->
 
@@ -83,14 +83,23 @@ So that I can evaluate self-hosted deployment trust.
 _To be filled during implementation._
 
 ### Debug Log References
+- `docs/verification/12-5/source-preview-results.json`: actual 215-package source SPDX generation, official schema validation and exact regeneration verification.
 
 _To be filled during implementation._
 
 ### Completion Notes List
+- 2026-11-11: Implemented source-lock SPDX2.3 SBOM, checksum/attestation/upload wiring and regeneration verification without dependencies.29 focused release tests/34 subtests passed; independent review cleared tooling and legacyv1.4.0 guidance. Full integration validation pending. Actual signed/public verification remains a release-event gate under16.19; no publication is claimed, and installed OS/runner inventories remain separate.
 
 _To be filled during implementation._
 
 ### File List
+- `scripts/release_artifacts.py`
+- `.github/workflows/release-artifacts.yml`
+- `.github/workflows/release.yml`
+- `tests/test_infra/test_release_artifacts.py`
+- `docs/security/release-artifacts.md`
+- `docs/verification/12-5/source-preview.spdx.json`
+- `docs/verification/12-5/source-preview-results.json`
 
 _To be filled during implementation._
 

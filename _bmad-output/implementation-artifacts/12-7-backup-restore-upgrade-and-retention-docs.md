@@ -80,19 +80,26 @@ So that I can run DeployWhisper safely.
 
 ### Agent Model Used
 
-_To be filled during implementation._
+Codex (GPT-6 Astra), bounded operations prerequisite work.
 
 ### Debug Log References
 
-_To be filled during implementation._
+- `docs/operations/data-lifecycle.md`
+- `docs/verification/operations/core-offline-results.json`
+- Local docs-test log: `/tmp/story12-operations-docs.log`.
 
 ### Completion Notes List
+- 2026-11-11 scope correction: [independent contract audit](../../docs/verification/operations/scope-and-verification.md) distinguishes the documentation/offline-core ACs from separate16.18/16.19 human-pilot and future PostgreSQL qualification. Fresh network-none core analysis and SQLite backup/restore passed; implementation review is pending, with no broader profile claim. Earlier mandatory PostgreSQL/cold-host wording below is superseded by this scope audit.
 
-_To be filled during implementation._
+- 2026-11-11: Added core inventory/quiescence, SQLite backup/restore, upgrade/rollback, retention/logging/maintenance and conditional PostgreSQL guidance. PostgreSQL is not qualified: no driver is present in current locks and no supported deployment exercise was available. Full acceptance remains open.
+- Existing documentation suite:60 tests passed. UI validation not applicable: documentation and disposable CLI verification only. No application code/dependency/public-release change.
+- Scope remains incomplete; no acceptance/task checkbox is marked complete.
 
 ### File List
 
-_To be filled during implementation._
+- `docs/operations/data-lifecycle.md`
+- `docs/verification/operations/core-offline-results.json`
+- `_bmad-output/implementation-artifacts/12-7-backup-restore-upgrade-and-retention-docs.md`
 
 ## Change Log
 

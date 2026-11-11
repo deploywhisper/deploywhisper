@@ -108,6 +108,7 @@ Codex (GPT-6 Astra), entry assessment with an independent native readiness revie
 - [Entry readiness audit](../../docs/verification/infra-automation/16-19/entry-readiness.md).
 
 ### Completion Notes List
+- 2026-11-11 user-authorized prerequisite remediation: integrated settings UI locally at a6d59ec; implemented source SBOM and operations/network guides; prepared Packet19.1 manifest validator covering72 requirements and9 mandatory gates. Independent review found and repaired missing runner container acknowledgment; genuineTLS integration exposed and repaired post-commit ORM access in task assignment. Focused regression suites pass; final immutable-tree qualification and broad CI pending. Human-pilot record remains unexecuted; keep backlog and qualification checkboxes open until entry acceptance.
 - 2026-11-11: Entry assessment completed; independent review confirms NOT READY. Story16.0 gate is closed, but12.5/12.7/12.8,16.13/16.14 acceptance,16.15 positive HTTPS/runner proof and16.18 human pilot remain open. PR219 merged into the backend feature branch; its settings UI is absent from develop at e4d6b50. Kept backlog and all packets unchecked. No runtime or release work executed.
 - Story specification prepared; no feature implementation, qualification, public RFC acceptance, release publication or runtime tests performed.
 - Implementation and validation commands above are future obligations, not test results.

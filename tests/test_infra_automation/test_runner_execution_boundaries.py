@@ -261,6 +261,46 @@ class RunnerExecutionBoundaryTests(unittest.TestCase):
                     wall=wall,
                 )
 
+    def test_restart_after_remove_before_finish_recovers_acknowledged_creation(self):
+        with self.fixture() as case:
+            with (
+                patch.object(case.runner.journal, "finish", side_effect=SystemExit),
+                self.assertRaises(SystemExit),
+            ):
+                case.run()
+            self.assertFalse(case.sandbox.created)
+            self.assertEqual(len(case.runner.journal.pending()), 1)
+
+            sandbox = object.__new__(DockerSandbox)
+            sandbox.profile = case.sandbox.profile
+            sandbox._owned, sandbox._reservations, sandbox._attempted = {}, {}, set()
+            calls = []
+
+            def control(*args, **kwargs):
+                calls.append(args)
+                if args[0] == "inspect":
+                    raise IsolationError()
+                if args[0] == "ps":
+                    return b""
+                raise AssertionError(args)
+
+            sandbox.control = control
+            restarted = ExecutionRunner(
+                sandbox,
+                case.runner.catalog_path,
+                case.runner.catalog_digest,
+                case.runner.journal.root,
+            )
+            result = restarted.recover_pending()
+            self.assertTrue(result[0]["cleanup_complete"])
+            self.assertEqual(restarted.journal.pending(), [])
+            reference = case.sandbox.owned_id(None)
+            self.assertEqual(
+                restarted.journal.creation_reference(scope_key(case.scope)), reference
+            )
+            self.assertEqual(calls[0], ("inspect", reference))
+            self.assertFalse(any(call[0] in ("kill", "rm") for call in calls))
+
     def test_delayed_setup_frame_preserves_original_execution_budget(self):
         with self.fixture("create", "setup", capture_config=True) as case:
             result = case.run()
@@ -620,6 +660,8 @@ class RunnerContainerOwnershipTests(unittest.TestCase):
             # A fresh host port has only the durable journal; an empty query is
             # still insufficient to resolve an outstanding create operation.
             runner.sandbox = host_port()
+            self.assertFalse(runner.recover_pending()[0]["cleanup_complete"])
+            self.assertIsNone(runner.journal.creation_reference(key))
             self.assertFalse(runner.recover_pending()[0]["cleanup_complete"])
             self.assertEqual(len(runner.journal.pending()), 1)
             state["row"] = {

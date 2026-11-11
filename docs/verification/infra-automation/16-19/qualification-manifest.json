@@ -1,0 +1,418 @@
+{
+  "version": 1,
+  "release": "v1.5.0",
+  "catalog_sha256": "dbbfc52cbec9faff148b774c08c942f03817fb688936dff2833f67def746d693",
+  "build": {
+    "source_commit": "a6d59ecd44adacebc02809d80f9355d6e56b9242",
+    "image_digest": null
+  },
+  "requirements": [
+    {
+      "id": "IAU15-FR-001",
+      "status": "not-run",
+      "evidence": []
+    },
+    {
+      "id": "IAU15-FR-002",
+      "status": "not-run",
+      "evidence": []
+    },
+    {
+      "id": "IAU15-FR-003",
+      "status": "not-run",
+      "evidence": []
+    },
+    {
+      "id": "IAU15-FR-004",
+      "status": "not-run",
+      "evidence": []
+    },
+    {
+      "id": "IAU15-FR-005",
+      "status": "not-run",
+      "evidence": []
+    },
+    {
+      "id": "IAU15-FR-006",
+      "status": "not-run",
+      "evidence": []
+    },
+    {
+      "id": "IAU15-FR-007",
+      "status": "not-run",
+      "evidence": []
+    },
+    {
+      "id": "IAU15-FR-008",
+      "status": "not-run",
+      "evidence": []
+    },
+    {
+      "id": "IAU15-FR-009",
+      "status": "not-run",
+      "evidence": []
+    },
+    {
+      "id": "IAU15-FR-010",
+      "status": "not-run",
+      "evidence": []
+    },
+    {
+      "id": "IAU15-FR-011",
+      "status": "not-run",
+      "evidence": []
+    },
+    {
+      "id": "IAU15-FR-012",
+      "status": "not-run",
+      "evidence": []
+    },
+    {
+      "id": "IAU15-FR-013",
+      "status": "not-run",
+      "evidence": []
+    },
+    {
+      "id": "IAU15-FR-014",
+      "status": "not-run",
+      "evidence": []
+    },
+    {
+      "id": "IAU15-FR-015",
+      "status": "not-run",
+      "evidence": []
+    },
+    {
+      "id": "IAU15-FR-016",
+      "status": "not-run",
+      "evidence": []
+    },
+    {
+      "id": "IAU15-FR-017",
+      "status": "not-run",
+      "evidence": []
+    },
+    {
+      "id": "IAU15-FR-018",
+      "status": "not-run",
+      "evidence": []
+    },
+    {
+      "id": "IAU15-FR-019",
+      "status": "not-run",
+      "evidence": []
+    },
+    {
+      "id": "IAU15-FR-020",
+      "status": "not-run",
+      "evidence": []
+    },
+    {
+      "id": "IAU15-FR-021",
+      "status": "not-run",
+      "evidence": []
+    },
+    {
+      "id": "IAU15-FR-022",
+      "status": "not-run",
+      "evidence": []
+    },
+    {
+      "id": "IAU15-FR-023",
+      "status": "not-run",
+      "evidence": []
+    },
+    {
+      "id": "IAU15-FR-024",
+      "status": "not-run",
+      "evidence": []
+    },
+    {
+      "id": "IAU15-FR-025",
+      "status": "not-run",
+      "evidence": []
+    },
+    {
+      "id": "IAU15-FR-026",
+      "status": "not-run",
+      "evidence": []
+    },
+    {
+      "id": "IAU15-FR-027",
+      "status": "not-run",
+      "evidence": []
+    },
+    {
+      "id": "IAU15-FR-028",
+      "status": "not-run",
+      "evidence": []
+    },
+    {
+      "id": "IAU15-FR-029",
+      "status": "not-run",
+      "evidence": []
+    },
+    {
+      "id": "IAU15-FR-030",
+      "status": "not-run",
+      "evidence": []
+    },
+    {
+      "id": "IAU15-FR-031",
+      "status": "not-run",
+      "evidence": []
+    },
+    {
+      "id": "IAU15-FR-032",
+      "status": "not-run",
+      "evidence": []
+    },
+    {
+      "id": "IAU15-FR-033",
+      "status": "not-run",
+      "evidence": []
+    },
+    {
+      "id": "IAU15-FR-034",
+      "status": "not-run",
+      "evidence": []
+    },
+    {
+      "id": "IAU15-FR-035",
+      "status": "not-run",
+      "evidence": []
+    },
+    {
+      "id": "IAU15-FR-036",
+      "status": "not-run",
+      "evidence": []
+    },
+    {
+      "id": "IAU15-FR-037",
+      "status": "not-run",
+      "evidence": []
+    },
+    {
+      "id": "IAU15-FR-038",
+      "status": "not-run",
+      "evidence": []
+    },
+    {
+      "id": "IAU15-FR-039",
+      "status": "not-run",
+      "evidence": []
+    },
+    {
+      "id": "IAU15-FR-040",
+      "status": "not-run",
+      "evidence": []
+    },
+    {
+      "id": "IAU15-FR-041",
+      "status": "not-run",
+      "evidence": []
+    },
+    {
+      "id": "IAU15-FR-042",
+      "status": "not-run",
+      "evidence": []
+    },
+    {
+      "id": "IAU15-FR-043",
+      "status": "not-run",
+      "evidence": []
+    },
+    {
+      "id": "IAU15-FR-044",
+      "status": "not-run",
+      "evidence": []
+    },
+    {
+      "id": "IAU15-FR-045",
+      "status": "not-run",
+      "evidence": []
+    },
+    {
+      "id": "IAU15-FR-046",
+      "status": "not-run",
+      "evidence": []
+    },
+    {
+      "id": "IAU15-FR-047",
+      "status": "not-run",
+      "evidence": []
+    },
+    {
+      "id": "IAU15-FR-048",
+      "status": "not-run",
+      "evidence": []
+    },
+    {
+      "id": "IAU15-FR-049",
+      "status": "not-run",
+      "evidence": []
+    },
+    {
+      "id": "IAU15-FR-050",
+      "status": "not-run",
+      "evidence": []
+    },
+    {
+      "id": "IAU15-FR-051",
+      "status": "not-run",
+      "evidence": []
+    },
+    {
+      "id": "IAU15-FR-052",
+      "status": "not-run",
+      "evidence": []
+    },
+    {
+      "id": "IAU15-FR-053",
+      "status": "not-run",
+      "evidence": []
+    },
+    {
+      "id": "IAU15-FR-054",
+      "status": "not-run",
+      "evidence": []
+    },
+    {
+      "id": "IAU15-FR-055",
+      "status": "not-run",
+      "evidence": []
+    },
+    {
+      "id": "IAU15-FR-056",
+      "status": "not-run",
+      "evidence": []
+    },
+    {
+      "id": "IAU15-FR-057",
+      "status": "not-run",
+      "evidence": []
+    },
+    {
+      "id": "IAU15-FR-058",
+      "status": "not-run",
+      "evidence": []
+    },
+    {
+      "id": "IAU15-FR-059",
+      "status": "not-run",
+      "evidence": []
+    },
+    {
+      "id": "IAU15-FR-060",
+      "status": "not-run",
+      "evidence": []
+    },
+    {
+      "id": "IAU15-NFR-001",
+      "status": "not-run",
+      "evidence": []
+    },
+    {
+      "id": "IAU15-NFR-002",
+      "status": "not-run",
+      "evidence": []
+    },
+    {
+      "id": "IAU15-NFR-003",
+      "status": "not-run",
+      "evidence": []
+    },
+    {
+      "id": "IAU15-NFR-004",
+      "status": "not-run",
+      "evidence": []
+    },
+    {
+      "id": "IAU15-NFR-005",
+      "status": "not-run",
+      "evidence": []
+    },
+    {
+      "id": "IAU15-NFR-006",
+      "status": "not-run",
+      "evidence": []
+    },
+    {
+      "id": "IAU15-NFR-007",
+      "status": "not-run",
+      "evidence": []
+    },
+    {
+      "id": "IAU15-NFR-008",
+      "status": "not-run",
+      "evidence": []
+    },
+    {
+      "id": "IAU15-NFR-009",
+      "status": "not-run",
+      "evidence": []
+    },
+    {
+      "id": "IAU15-NFR-010",
+      "status": "not-run",
+      "evidence": []
+    },
+    {
+      "id": "IAU15-NFR-011",
+      "status": "not-run",
+      "evidence": []
+    },
+    {
+      "id": "IAU15-NFR-012",
+      "status": "not-run",
+      "evidence": []
+    }
+  ],
+  "gates": [
+    {
+      "id": "accepted-prerequisites",
+      "status": "not-run",
+      "evidence": []
+    },
+    {
+      "id": "independent-human-pilot",
+      "status": "not-run",
+      "evidence": []
+    },
+    {
+      "id": "integrated-real-profile",
+      "status": "not-run",
+      "evidence": []
+    },
+    {
+      "id": "safety-and-authorization",
+      "status": "not-run",
+      "evidence": []
+    },
+    {
+      "id": "reference-performance",
+      "status": "not-run",
+      "evidence": []
+    },
+    {
+      "id": "composed-browser",
+      "status": "not-run",
+      "evidence": []
+    },
+    {
+      "id": "operations-and-docs",
+      "status": "not-run",
+      "evidence": []
+    },
+    {
+      "id": "independent-code-security-review",
+      "status": "not-run",
+      "evidence": []
+    },
+    {
+      "id": "signed-artifacts-sbom-provenance",
+      "status": "not-run",
+      "evidence": []
+    }
+  ]
+}

@@ -1,0 +1,33 @@
+import contextlib,hashlib,io,json,sqlite3,sys
+from pathlib import Path
+from alembic import command
+from alembic.config import Config
+command.upgrade(Config("alembic.ini"),"head")
+from services.project_service import create_project
+create_project(project_key="offline",display_name="Offline")
+Path("/tmp/plan.json").write_text('{"format_version": "1.2", "terraform_version": "1.7.5", "resource_changes": [{"address": "aws_security_group.checkout_admin", "mode": "managed", "type": "aws_security_group", "name": "checkout_admin", "provider_name": "registry.terraform.io/hashicorp/aws", "change": {"actions": ["update"], "before": {"name": "demo-checkout-admin", "ingress": [{"description": "Admin access from office VPN", "from_port": 22, "to_port": 22, "protocol": "tcp", "cidr_blocks": ["203.0.113.10/32"]}]}, "after": {"name": "demo-checkout-admin", "ingress": [{"description": "Temporary SSH access for release troubleshooting", "from_port": 22, "to_port": 22, "protocol": "tcp", "cidr_blocks": ["0.0.0.0/0"]}], "egress": [{"description": "Allow all outbound traffic", "from_port": 0, "to_port": 0, "protocol": "-1", "cidr_blocks": ["0.0.0.0/0"]}], "tags": {"Service": "checkout-api", "Environment": "demo-prod", "Owner": "platform-demo"}}}}]}')
+sys.argv=["deploywhisper","analyze","--project","offline","--agent-json","/tmp/plan.json"]
+from cli.analyze import main
+output=io.StringIO()
+with contextlib.redirect_stdout(output):
+ try: main()
+ except SystemExit as error: assert error.code in (None,0)
+report=json.loads(output.getvalue());assert report["advisory_only"] and report["report_id"]==1
+findings=report["findings"]
+evidence=report["evidence"]
+assert findings and evidence
+assert any(f["deterministic"] is True and f["evidence_classification"]=="deterministic" and f["evidence_refs"] for f in findings)
+ids={e["evidence_id"] for e in evidence if e["deterministic"] is True and e["resource"]=="aws_security_group.checkout_admin" and e["operation"]=="modify"}
+assert ids and any(set(f["evidence_refs"]) & ids for f in findings)
+assert report["deployment_approval"] is False and report["human_decision_required"] is True
+from models.database import engine
+engine.dispose()
+def facts(path):
+ with sqlite3.connect(path) as db:
+  rows=db.execute("SELECT * FROM analysis_reports ORDER BY id").fetchall()
+  return {"report_count":len(rows),"report_rows_sha256":hashlib.sha256(repr(rows).encode()).hexdigest(),"schema":db.execute("SELECT version_num FROM alembic_version").fetchone()[0],"integrity":db.execute("PRAGMA integrity_check").fetchone()[0],"foreign_key_violations":len(db.execute("PRAGMA foreign_key_check").fetchall())}
+before=facts("/tmp/core.db")
+for source,target in [("/tmp/core.db","/tmp/backup.db"),("/tmp/backup.db","/tmp/restored.db")]:
+ with sqlite3.connect("file:"+source+"?mode=ro",uri=True) as src,sqlite3.connect(target) as dst: src.backup(dst)
+assert before==facts("/tmp/backup.db")==facts("/tmp/restored.db")==facts("/tmp/core.db")
+print(json.dumps({"core_cli":{"advisory_only":report["advisory_only"],"narrative_degraded":"narrative_degraded" in report["uncertainty"]["flags"],"findings":report["findings"],"evidence":report["evidence"],"evidence_law":report["evidence_law"]},"database_roundtrip":before,"source_unchanged":True,"backup_and_restored_rows_identical":True,"network":"none"}))

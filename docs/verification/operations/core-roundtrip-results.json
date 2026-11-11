@@ -1,0 +1,27 @@
+{
+  "core_cli": {
+    "advisory_only": true,
+    "narrative_degraded": true
+  },
+  "database_roundtrip": {
+    "report_count": 1,
+    "report_rows_sha256": "52fc0203373f19677bb767fe39fe710b5fec687c2937b3b74cfa5db3ab6f9a26",
+    "schema": "042_add_receiver_recovery",
+    "integrity": "ok",
+    "foreign_key_violations": 0
+  },
+  "source_unchanged": true,
+  "backup_and_restored_rows_identical": true,
+  "network": "none",
+  "image": "sha256:2c652ba689e6c6d6e02d7be7dc054ea4cbc093c46bb87341846824acc1a5c3e8",
+  "date": "2026-11-11",
+  "log_sha256": "c0454b047a22355f5d87e6545cd4d026fdac2b3e67ce0609865b6857ea60410c",
+  "exercise_sha256": "155b7494570cfc8cbc08af082db0c6cb770158def075bee1a325ff0a6bcba41f",
+  "command": "docker run --rm -i --network none --entrypoint python -e DATABASE_URL=sqlite:////tmp/core.db -e DEPLOYWHISPER_AUTHORIZATION_PROFILE=legacy-evaluation -e PYTHONDONTWRITEBYTECODE=1 IMAGE - < /tmp/story12-core-roundtrip.py",
+  "exit_code": 0,
+  "limits": [
+    "Synthetic core report on unbound SQLite database",
+    "Existing image/Docker host; no PostgreSQL or cold-OS qualification",
+    "--rm container, no host data mounts"
+  ]
+}
