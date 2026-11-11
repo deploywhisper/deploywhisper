@@ -11,6 +11,8 @@ from infra_automation.handoff import ReceiverCredential
 from infra_automation.lifecycle import LifecycleError
 from infra_automation.operator_recovery import RecoveryStore
 from models.database import Base
+from models.operator_recovery import RecoveryState
+from models.repositories.infra_automation_runs import utc
 from services import infra_automation_receiver_recovery as recovery
 from services import project_service as auth
 from tests.test_infra_automation.lifecycle_support import LifecycleCase
@@ -82,13 +84,21 @@ class ReceiverRecoveryTests(LifecycleCase):
         if not getattr(self, "defer_consumption", False):
             self.handoffs.consume(sent.message_bytes, sent.grant_token, self.receiver)
 
+    def advance_past_restore_clock(self):
+        # Offline recovery uses the wall clock; the shared service fixture uses
+        # self.now. Advance beyond the durable floor rather than assuming that
+        # migration, backup and restore finish within a fixed two seconds.
+        with self.factory() as db:
+            restored_at = utc(db.get(RecoveryState, 1).updated_at)
+        self.now = max(self.now, restored_at) + timedelta(seconds=2)
+
     def restored(self):
         self.engine.dispose()
         backup = self.base / "snapshot"
         self.store.backup(backup)
         self.store.restore(backup)
+        self.advance_past_restore_clock()
         # Use actual one-use host recovery and fresh session issuance.
-        self.now += timedelta(seconds=2)
         recovery_credential = self.identity.issue_recovery_credential("human-a")
         self.identity.recover(
             recovery_credential.token.get_secret_value(), "synthetic-fresh-password"
@@ -127,6 +137,19 @@ class ReceiverRecoveryTests(LifecycleCase):
             ).hexdigest()
         )
         return envelope.model_copy(update={"signature": signature})
+
+    def test_restore_clock_advances_past_slow_operator_publication(self):
+        # Model slow filesystem/migration work without a timing-sensitive sleep.
+        with patch(
+            "infra_automation.operator_recovery.datetime", wraps=datetime
+        ) as clock:
+            clock.now.return_value = self.now + timedelta(seconds=30)
+            self.restored()
+        credential = self.credential()
+        self.assertEqual(
+            self.handoffs.receiver_status(self.operation["id"], credential)["state"],
+            "consumed",
+        )
 
     def test_actual_restore_fresh_reconciliation_never_restores_action_authority(self):
         self.restored()
@@ -313,6 +336,7 @@ class ReceiverRecoveryTests(LifecycleCase):
         backup = self.base / "second-snapshot"
         self.store.backup(backup)
         self.store.restore(backup)
+        self.advance_past_restore_clock()
         with self.assertRaises(auth.TrustedAuthorizationError):
             self.handoffs.receiver_status(self.operation["id"], credential)
 
@@ -480,6 +504,7 @@ class ReceiverCompletedRestoreTests(LifecycleCase):
     prepare = ReceiverRecoveryTests.prepare
     dispatch = ReceiverRecoveryTests.dispatch
     restored = ReceiverRecoveryTests.restored
+    advance_past_restore_clock = ReceiverRecoveryTests.advance_past_restore_clock
     issue = ReceiverRecoveryTests.issue
 
     def setUp(self):
