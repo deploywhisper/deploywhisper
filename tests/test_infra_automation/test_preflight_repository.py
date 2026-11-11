@@ -393,7 +393,9 @@ class PreflightRepositoryTests(LifecycleCase):
         from models import database
 
         with self.engine.begin() as db:
-            tables = set(inspect(db).get_table_names())
+            tables = set(inspect(db).get_table_names()) - {
+                "infra_automation_retention_tombstones"
+            }
             self.assertTrue(
                 database._infra_automation_schema_complete(
                     db, tables, "033_add_infra_preflight"
@@ -478,7 +480,7 @@ class PreflightRepositoryTests(LifecycleCase):
                     ).scalar()
                     self.assertEqual(
                         revision,
-                        target if target != "head" else "039_add_signed_trigger_intake",
+                        target if target != "head" else "042_add_receiver_recovery",
                     )
                     if target == "head":
                         self.assertTrue(

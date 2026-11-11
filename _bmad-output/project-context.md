@@ -129,6 +129,8 @@ The owner adopted the bounded preflight/handoff plan on 2026-10-07. This is futu
 
 - Story16.17 signed requests use `trigger_signing.py`, `trigger_contracts.py`, `services/infra_automation_trigger_authority.py` and `infra_automation_triggers.py`. Authenticate bounded exact raw bytes and reserve the durable nonce before parsing; a fresh nonce may recover only the exact authenticated operation. Keep machine authority as the closed subtype of the existing human stamp, with live key/config/account/membership/restore/expiry and durable clock fences at every effect. Preserve the outer SQLite reservation and operation savepoint: rejected business writes roll back before deny-only clock observations commit; never replace this with a second transaction after releasing the lock. Reject known signing-key reflection in decoded inputs, resolved snapshots and validation output. Machine reads filter own key/requester and current revision/source scope before pagination. Global-human/project-admin provisioning creates inert nonhuman accounts, never human sessions. Preserve origin independently from later human decisions. CLI credentials are private, transport has a bounded total deadline, and ambiguous outcomes require the same body/idempotency key. See `docs/infra-automation/triggers.md`.
 
+- Story16.18 retention uses immutable tombstones and a one-use migration040 run-counter exception; preserve every other engine immutability clause and test against full Alembic guards. Recovery uses an outside-backup generation ledger and participating-writer locks; never open/close a raw live SQLite database descriptor while pooled connections exist, because that can release process locks. Restore invalidates all imported account generations, including the disabled audit-only engine identity, whose inert checks must accept valid advanced generations. Current-generation receiver reconciliation credentials are issued only through the protected operator CLI for one consumed historical operation. They permit status or signed terminal receipts, never bootstrap/consume/action authorization or unsigned terminal resolution. Preserve immutable original bindings, current issuer/receiver/restore fences and deny-only clock observations after failed expiry checks. Completed receiver recovery checks exact durable acknowledgements and never repeats an action. See `docs/infra-automation/operations.md` and the Story16.18 verification records; unmanaged remote writers, human pilots and production-profile qualification remain separate gates.
+
 ---
 
 ## Usage Guidelines
@@ -146,4 +148,4 @@ The owner adopted the bounded preflight/handoff plan on 2026-10-07. This is futu
 - Update it when tooling, validation commands, or architecture boundaries materially change.
 - Remove rules that become obsolete or are contradicted by the current codebase.
 
-Last Updated: 2026-11-07
+Last Updated: 2026-11-10

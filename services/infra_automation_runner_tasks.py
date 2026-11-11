@@ -140,6 +140,9 @@ def poll(credential, *, now=None):
     with _LOCK, authorization.authorized_session() as session:
         now = engine._now(now)
         runner = runners.authenticate(session, credential, now=now)
+        from infra_automation.operator_recovery import assert_effects_allowed
+
+        assert_effects_allowed(session)
         runner.last_seen_at = now
         for key in list(_MAILBOX):
             deadline, runner_id, generation, assignment = _MAILBOX[key]

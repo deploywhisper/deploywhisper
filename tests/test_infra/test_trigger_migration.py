@@ -50,7 +50,7 @@ class TriggerMigrationTests(unittest.TestCase):
         with closing(sqlite3.connect(self.path)) as db:
             self.assertEqual(
                 db.execute("SELECT version_num FROM alembic_version").fetchone()[0],
-                "039_add_signed_trigger_intake",
+                "042_add_receiver_recovery",
             )
             self.assertEqual(
                 db.execute("SELECT count(*) FROM identity_accounts").fetchone()[0], 0

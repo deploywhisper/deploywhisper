@@ -64,14 +64,16 @@ _TOKEN = re.compile(
     r"|github_pat_[A-Za-z0-9_]{20,}|sk-(?:proj-|ant-)?[A-Za-z0-9_-]{12,})\b"
 )
 _HANDOFF_GRANT = re.compile(r"handoff-v1\.[0-9a-f]{64}", re.IGNORECASE)
+_RECEIVER_RECOVERY_TOKEN = re.compile(
+    r"receiver-reconcile-v1-[0-9a-f]{64}", re.IGNORECASE
+)
 
 
-def _encoded_handoff_pattern() -> re.Pattern[str]:
-    # Receiver grants have a fixed75-byte ASCII form. Reserve its recognizable
+def _encoded_handoff_pattern(prefix="handoff-v1.", size=75) -> re.Pattern[str]:
+    # Reserve each fixed-size credential family's recognizable
     # encoded namespace too, including case-normalized identifiers and the four
     # base64 layers that fit a bounded retained reason. URL decoding is handled
     # by the existing bounded reference/text walkers below.
-    prefix, size = "handoff-v1.", 75
     patterns = []
     for level in range(4):
         prefix = base64.b64encode(prefix.encode()).decode()[: len(prefix) * 8 // 6]
@@ -87,6 +89,9 @@ def _encoded_handoff_pattern() -> re.Pattern[str]:
 
 
 _ENCODED_HANDOFF_GRANT = _encoded_handoff_pattern()
+_ENCODED_RECEIVER_RECOVERY_TOKEN = _encoded_handoff_pattern(
+    "receiver-reconcile-v1-", len("receiver-reconcile-v1-") + 64
+)
 _AUTHORIZATION = re.compile(
     # Whitespace before an optional quote is consumed once. Separate repeats
     # on both sides of an absent quote would repartition failing whitespace.
@@ -276,6 +281,8 @@ def _lexical_sensitive_values(text: str) -> set[str]:
         (_TOKEN, 0),
         (_HANDOFF_GRANT, 0),
         (_ENCODED_HANDOFF_GRANT, 0),
+        (_RECEIVER_RECOVERY_TOKEN, 0),
+        (_ENCODED_RECEIVER_RECOVERY_TOKEN, 0),
         (_PRIVATE_KEY, 0),
         (_AUTHORIZATION, "credential"),
         (_URL_CREDENTIAL, "credential"),
@@ -399,6 +406,8 @@ def _redact_lexical_text(value: str, *, sensitive_values: Iterable[str] = ()) ->
     text = _TOKEN.sub(REDACTED, text)
     text = _HANDOFF_GRANT.sub(REDACTED, text)
     text = _ENCODED_HANDOFF_GRANT.sub(REDACTED, text)
+    text = _RECEIVER_RECOVERY_TOKEN.sub(REDACTED, text)
+    text = _ENCODED_RECEIVER_RECOVERY_TOKEN.sub(REDACTED, text)
     text = _AUTHORIZATION.sub(lambda match: match.group(1) + REDACTED, text)
     text = _URL_CREDENTIAL.sub(lambda match: match.group(1) + REDACTED + "@", text)
 

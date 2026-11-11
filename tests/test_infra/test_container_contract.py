@@ -53,6 +53,9 @@ class ContainerContractTests(unittest.TestCase):
                 "037_add_runner_enrollment.py",
                 "038_add_declared_unit_maps.py",
                 "039_add_signed_trigger_intake.py",
+                "040_add_manifest_retention.py",
+                "041_add_operator_recovery.py",
+                "042_add_receiver_recovery.py",
             ],
         )
         baseline_content = migrations[0].read_text(encoding="utf-8")

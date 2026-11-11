@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "date": "2026-11-10",
+  "source_image": "sha256:4794e840e57dbf5167bbf40e03b6c74eca54455283b28358799efdf9656c42be",
+  "binary_digest": "sha256:d5c690023baebe8bf2cfb2062e292186f4797a173db22c973bd9de45cb68a62f",
+  "valid_cache": true,
+  "lowered_limit_denied": true,
+  "tamper_denied": true,
+  "network_during_verification": "no network/download/execute code path",
+  "qualification": "prepared local artifact verification only; does not qualify fresh air-gapped installation or runner admission"
+}

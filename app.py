@@ -157,26 +157,37 @@ async def _start_engine_coordinator():
 @asynccontextmanager
 async def lifespan(app):
     """Initialize local storage and background maintenance for the app."""
-    init_db()
-    stop_event = asyncio.Event()
-    drift_scheduler_task = asyncio.create_task(
-        _topology_drift_scheduler_loop(stop_event)
+    from infra_automation.operator_recovery import (
+        participating_operation,
+        assert_startup_allowed,
     )
-    coordinator = None
-    try:
-        coordinator = await _start_engine_coordinator()
-        app.state.infra_automation_coordinator = coordinator
-        yield
-    finally:
+
+    with participating_operation():
+        startup_state = assert_startup_allowed()
+        recovering = startup_state is not None and startup_state["phase"] != "ready"
+        init_db()
+        stop_event = asyncio.Event()
+        drift_scheduler_task = (
+            None
+            if recovering
+            else asyncio.create_task(_topology_drift_scheduler_loop(stop_event))
+        )
+        coordinator = None
         try:
-            if coordinator is not None:
-                await coordinator.stop()
+            coordinator = None if recovering else await _start_engine_coordinator()
+            app.state.infra_automation_coordinator = coordinator
+            yield
         finally:
-            app.state.infra_automation_coordinator = None
-            stop_event.set()
-            drift_scheduler_task.cancel()
-            with contextlib.suppress(asyncio.CancelledError):
-                await drift_scheduler_task
+            try:
+                if coordinator is not None:
+                    await coordinator.stop()
+            finally:
+                app.state.infra_automation_coordinator = None
+                stop_event.set()
+                if drift_scheduler_task is not None:
+                    drift_scheduler_task.cancel()
+                    with contextlib.suppress(asyncio.CancelledError):
+                        await drift_scheduler_task
 
 
 fastapi_app = FastAPI(

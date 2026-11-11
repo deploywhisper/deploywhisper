@@ -747,6 +747,8 @@ Project documentation currently lives in a few places:
 - [Online Receiver and Outcome Reconciliation](./docs/infra-automation/receiver-online-v1.md)
 - [Local Plan Collection, Provenance and Custody](./docs/infra-automation/collection.md)
 - [Runner Health and Collection Recovery](./docs/infra-automation/runners.md)
+- [Operator Backup, Restore, Retention and Recovery](./docs/infra-automation/operations.md)
+- [Restricted Networks and Pinned Offline Caches](./docs/infra-automation/network.md)
 - [Declared Unit Scope and Preflight Waves](./docs/infra-automation/units.md)
 - [Signed Trigger Intake and Authenticated Automation CLI](./docs/infra-automation/triggers.md)
 - [Workflow Editor, Account Access, and Run History](./docs/infra-automation/browser-ui.md)

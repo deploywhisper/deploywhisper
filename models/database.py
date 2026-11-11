@@ -70,6 +70,9 @@ _KNOWN_ALEMBIC_REVISIONS = {
     "037_add_runner_enrollment",
     "038_add_declared_unit_maps",
     "039_add_signed_trigger_intake",
+    "040_add_manifest_retention",
+    "041_add_operator_recovery",
+    "042_add_receiver_recovery",
 }
 _BASELINE_TABLES = {"analysis_reports", "app_settings"}
 _EVIDENCE_TABLES = {
@@ -1167,7 +1170,32 @@ def _infra_automation_schema_complete(
             != normalized("status = 'held'")
         ):
             incomplete()
-    for name, body in migration.GUARDS.items():
+    guards = dict(migration.GUARDS)
+    if migration_name == "040_add_manifest_retention":
+        guards.update(migration.OVERRIDES)
+    elif (
+        migration_name in {"032_add_infra_automation_engine", "033_add_infra_preflight"}
+        and "infra_automation_retention_tombstones" in tables
+    ):
+        if not _infra_automation_schema_complete(
+            connection, tables, "040_add_manifest_retention"
+        ):
+            incomplete()
+        overrides = import_module(
+            "migrations.versions.040_add_manifest_retention"
+        ).OVERRIDES
+        guards.update(
+            {name: body for name, body in overrides.items() if name in guards}
+        )
+    if guards.keys() - actual_triggers.keys():
+        actual_triggers.update(
+            dict(
+                connection.exec_driver_sql(
+                    "SELECT name, sql FROM sqlite_master WHERE type='trigger'"
+                ).all()
+            )
+        )
+    for name, body in guards.items():
         if normalized(actual_triggers.get(name, "")) != normalized(
             f"CREATE TRIGGER {name} {body}"
         ):
@@ -1202,6 +1230,15 @@ def _bootstrap_brownfield_revision() -> None:
         )
         has_complete_triggers = _infra_automation_schema_complete(
             connection, tables, "039_add_signed_trigger_intake"
+        )
+        has_complete_retention = _infra_automation_schema_complete(
+            connection, tables, "040_add_manifest_retention"
+        )
+        has_complete_recovery = _infra_automation_schema_complete(
+            connection, tables, "041_add_operator_recovery"
+        )
+        has_complete_receiver_recovery = _infra_automation_schema_complete(
+            connection, tables, "042_add_receiver_recovery"
         )
         tables = _repair_partial_evidence_schema(connection, tables)
 
@@ -1245,6 +1282,9 @@ def _bootstrap_brownfield_revision() -> None:
                 "037_add_runner_enrollment",
                 "038_add_declared_unit_maps",
                 "039_add_signed_trigger_intake",
+                "040_add_manifest_retention",
+                "041_add_operator_recovery",
+                "042_add_receiver_recovery",
             } and not _identity_schema_complete(connection, tables):
                 raise RuntimeError(
                     "Detected a partial identity schema. Manual recovery is required."
@@ -1262,6 +1302,9 @@ def _bootstrap_brownfield_revision() -> None:
                     "037_add_runner_enrollment",
                     "038_add_declared_unit_maps",
                     "039_add_signed_trigger_intake",
+                    "040_add_manifest_retention",
+                    "041_add_operator_recovery",
+                    "042_add_receiver_recovery",
                 }
                 and not has_complete_authorization
             ):
@@ -1280,6 +1323,9 @@ def _bootstrap_brownfield_revision() -> None:
                     "037_add_runner_enrollment",
                     "038_add_declared_unit_maps",
                     "039_add_signed_trigger_intake",
+                    "040_add_manifest_retention",
+                    "041_add_operator_recovery",
+                    "042_add_receiver_recovery",
                 }
                 and not has_complete_automation
             ):
@@ -1296,6 +1342,9 @@ def _bootstrap_brownfield_revision() -> None:
                 "037_add_runner_enrollment",
                 "038_add_declared_unit_maps",
                 "039_add_signed_trigger_intake",
+                "040_add_manifest_retention",
+                "041_add_operator_recovery",
+                "042_add_receiver_recovery",
             }:
                 raise RuntimeError(
                     "Detected a partial infra automation migration history. Manual recovery is required."
@@ -1311,6 +1360,9 @@ def _bootstrap_brownfield_revision() -> None:
                     "037_add_runner_enrollment",
                     "038_add_declared_unit_maps",
                     "039_add_signed_trigger_intake",
+                    "040_add_manifest_retention",
+                    "041_add_operator_recovery",
+                    "042_add_receiver_recovery",
                 }
             ) != has_complete_engine:
                 raise RuntimeError(
@@ -1326,6 +1378,9 @@ def _bootstrap_brownfield_revision() -> None:
                     "037_add_runner_enrollment",
                     "038_add_declared_unit_maps",
                     "039_add_signed_trigger_intake",
+                    "040_add_manifest_retention",
+                    "041_add_operator_recovery",
+                    "042_add_receiver_recovery",
                 }
             ) != has_complete_preflight:
                 raise RuntimeError(
@@ -1340,6 +1395,9 @@ def _bootstrap_brownfield_revision() -> None:
                     "037_add_runner_enrollment",
                     "038_add_declared_unit_maps",
                     "039_add_signed_trigger_intake",
+                    "040_add_manifest_retention",
+                    "041_add_operator_recovery",
+                    "042_add_receiver_recovery",
                 }
             ) != has_complete_decisions:
                 raise RuntimeError(
@@ -1353,6 +1411,9 @@ def _bootstrap_brownfield_revision() -> None:
                     "037_add_runner_enrollment",
                     "038_add_declared_unit_maps",
                     "039_add_signed_trigger_intake",
+                    "040_add_manifest_retention",
+                    "041_add_operator_recovery",
+                    "042_add_receiver_recovery",
                 }
             ) != has_complete_handoffs:
                 raise RuntimeError(
@@ -1365,6 +1426,9 @@ def _bootstrap_brownfield_revision() -> None:
                     "037_add_runner_enrollment",
                     "038_add_declared_unit_maps",
                     "039_add_signed_trigger_intake",
+                    "040_add_manifest_retention",
+                    "041_add_operator_recovery",
+                    "042_add_receiver_recovery",
                 }
             ) != has_complete_receiver:
                 raise RuntimeError(
@@ -1376,6 +1440,9 @@ def _bootstrap_brownfield_revision() -> None:
                     "037_add_runner_enrollment",
                     "038_add_declared_unit_maps",
                     "039_add_signed_trigger_intake",
+                    "040_add_manifest_retention",
+                    "041_add_operator_recovery",
+                    "042_add_receiver_recovery",
                 }
             ) != has_complete_runners:
                 raise RuntimeError(
@@ -1383,14 +1450,51 @@ def _bootstrap_brownfield_revision() -> None:
                 )
             if (
                 revision
-                in {"038_add_declared_unit_maps", "039_add_signed_trigger_intake"}
+                in {
+                    "038_add_declared_unit_maps",
+                    "039_add_signed_trigger_intake",
+                    "040_add_manifest_retention",
+                    "041_add_operator_recovery",
+                    "042_add_receiver_recovery",
+                }
             ) != has_complete_units:
                 raise RuntimeError(
                     "Detected a partial infra unit migration history. Manual recovery is required."
                 )
-            if (revision == "039_add_signed_trigger_intake") != has_complete_triggers:
+            if (
+                revision
+                in {
+                    "039_add_signed_trigger_intake",
+                    "040_add_manifest_retention",
+                    "041_add_operator_recovery",
+                    "042_add_receiver_recovery",
+                }
+            ) != has_complete_triggers:
                 raise RuntimeError(
                     "Detected a partial infra trigger migration history. Manual recovery is required."
+                )
+            if (
+                revision
+                in {
+                    "040_add_manifest_retention",
+                    "041_add_operator_recovery",
+                    "042_add_receiver_recovery",
+                }
+            ) != has_complete_retention:
+                raise RuntimeError(
+                    "Detected a partial infra retention migration history. Manual recovery is required."
+                )
+            if (
+                revision in {"041_add_operator_recovery", "042_add_receiver_recovery"}
+            ) != has_complete_recovery:
+                raise RuntimeError(
+                    "Detected a partial operator recovery schema. Manual recovery is required."
+                )
+            if (
+                revision == "042_add_receiver_recovery"
+            ) != has_complete_receiver_recovery:
+                raise RuntimeError(
+                    "Detected a partial receiver recovery schema. Manual recovery is required."
                 )
             return
 
@@ -1662,6 +1766,24 @@ def _bootstrap_brownfield_revision() -> None:
                         "Detected a partial infra trigger schema. Manual recovery is required."
                     )
                 revision = "039_add_signed_trigger_intake"
+            if has_complete_retention:
+                if not has_complete_triggers:
+                    raise RuntimeError(
+                        "Detected a partial infra retention schema. Manual recovery is required."
+                    )
+                revision = "040_add_manifest_retention"
+            if has_complete_recovery:
+                if not has_complete_retention:
+                    raise RuntimeError(
+                        "Detected a partial operator recovery schema. Manual recovery is required."
+                    )
+                revision = "041_add_operator_recovery"
+            if has_complete_receiver_recovery:
+                if not has_complete_recovery:
+                    raise RuntimeError(
+                        "Detected a partial receiver recovery schema. Manual recovery is required."
+                    )
+                revision = "042_add_receiver_recovery"
             _write_alembic_revision(connection, revision)
             return
         if scoped_learning_columns_present and not has_complete_learning_context_scope:

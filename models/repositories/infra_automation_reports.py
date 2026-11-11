@@ -7,6 +7,7 @@ import json
 from uuid import uuid4
 
 from sqlalchemy import select
+from sqlalchemy.orm import object_session
 
 from infra_automation.collection_contracts import CollectionProvenance
 from infra_automation import claims
@@ -24,6 +25,7 @@ from models.tables import (
     AnalysisReport,
     InfraAutomationArtifactManifest,
     InfraAutomationReportLink,
+    InfraAutomationRetentionTombstone,
     Project,
 )
 from services import infra_automation_support as support
@@ -85,9 +87,9 @@ def create_manifest(session, run, step_id, files, *, now=None, bounds=None):
     )
     payload = _manifest_payload(files, maximum)
     digest = support.digest(payload)
-    existing = get_manifest_for_step(session, current.id, step_id)
+    existing = get_manifest_for_step(session, current.id, step_id, include_removed=True)
     if existing is not None:
-        if existing.digest != digest or existing.artifacts_bytes != payload:
+        if not _matches_manifest_payload(session, existing, payload):
             raise LifecycleError(409)
         return existing
     if (
@@ -113,7 +115,70 @@ def create_manifest(session, run, step_id, files, *, now=None, bounds=None):
     return row
 
 
+def payload_removed(row):
+    """Validate the explicit one-way removal receipt, not an empty manifest."""
+    session = object_session(row) if hasattr(row, "_sa_instance_state") else None
+    tombstone = (
+        session.get(InfraAutomationRetentionTombstone, row.id) if session else None
+    )
+    if row.artifacts_bytes != b"[]":
+        if tombstone is not None:
+            raise LifecycleError(503)
+        return False
+    if (
+        tombstone is None
+        or (
+            tombstone.run_id,
+            tombstone.project_id,
+            tombstone.workspace_id,
+            tombstone.original_digest,
+        )
+        != (row.run_id, row.project_id, row.workspace_id, row.digest)
+        or support.digest(tombstone.receipt_bytes) != tombstone.receipt_digest
+    ):
+        raise LifecycleError(503)
+    try:
+        receipt = json.loads(tombstone.receipt_bytes)
+        from infra_automation.retention import RetentionReceipt
+
+        receipt = RetentionReceipt.model_validate(receipt).model_dump(mode="json")
+        expected = dict(
+            version=1,
+            manifest_id=row.id,
+            run_id=row.run_id,
+            project_id=row.project_id,
+            workspace_id=row.workspace_id,
+            original_digest=row.digest,
+            original_size=tombstone.original_size,
+            actor_id=tombstone.actor_id,
+            reason=tombstone.reason,
+            deleted_at=support.utc(tombstone.deleted_at),
+            content_status="removed",
+        )
+        if receipt != expected:
+            raise ValueError
+    except (ValueError, TypeError, AttributeError):
+        raise LifecycleError(503) from None
+    return True
+
+
+def _matches_manifest_payload(session, row, payload):
+    """Recognize original admitted bytes without restoring a removed payload.
+
+    The original collision-resistant digest plus exact retained size supplies
+    replay identity only. It neither returns content nor grants new execution.
+    """
+    if row.digest != support.digest(payload):
+        return False
+    if payload_removed(row):
+        tombstone = session.get(InfraAutomationRetentionTombstone, row.id)
+        return tombstone.original_size == len(payload)
+    return row.artifacts_bytes == payload
+
+
 def manifest_files(row):
+    if payload_removed(row):
+        raise LifecycleError(409)
     try:
         if (
             type(row.artifacts_bytes) is not bytes
@@ -196,7 +261,7 @@ def get_manifest(session, manifest_id):
     return row
 
 
-def get_manifest_for_step(session, run_id, step_id):
+def get_manifest_for_step(session, run_id, step_id, *, include_removed=False):
     authorization._require_operation(session)
     row = session.scalar(
         select(InfraAutomationArtifactManifest).where(
@@ -204,7 +269,7 @@ def get_manifest_for_step(session, run_id, step_id):
             InfraAutomationArtifactManifest.step_id == step_id,
         )
     )
-    if row is not None:
+    if row is not None and not (include_removed and payload_removed(row)):
         manifest_files(row)
     return row
 
@@ -547,6 +612,9 @@ def create_collected_manifest(
     bounds=None,
 ):
     """Retain authenticated synthetic provenance without admitting a real collector."""
+    # Unlike an original human intake retry, a collector retry still requires
+    # its current private fence/lease and live envelope before looking up history.
+    # A purged terminal attempt must not regain task authority through a receipt.
     timestamp = _now(now)
     envelope = verify_collected_envelope(
         session,
@@ -561,10 +629,12 @@ def create_collected_manifest(
     run, document = claims._run(session, handle.run_id, timestamp)
     payload = _manifest_payload(files, document.policy.max_artifact_bytes)
     collection = support.canonical(envelope.model_dump(mode="json"))
-    existing = get_manifest_for_step(session, run.id, handle.step_id)
+    existing = get_manifest_for_step(
+        session, run.id, handle.step_id, include_removed=True
+    )
     if existing is not None:
         if (
-            existing.artifacts_bytes != payload
+            not _matches_manifest_payload(session, existing, payload)
             or existing.collection_bytes != collection
         ):
             raise LifecycleError(409)

@@ -8,6 +8,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from infra_automation.contracts import SAFE_INTEGER
+from infra_automation.operator_recovery import assert_effects_allowed
 from infra_automation.lifecycle import (
     AdvanceEpochRequest,
     AuthorityStamp,
@@ -115,6 +116,8 @@ def update_settings(request: UpdateSettingsRequest) -> dict:
         grant = support.scope(
             session, request.project_id, None, "automation.admin", mutation=True
         )
+        if request.settings.enabled:
+            assert_effects_allowed(session)
         support.screened_label(request.reason)
         row, current = support.policy_state(session, request.project_id)
         if request.expected_version != (row.version if row else 0):
@@ -360,6 +363,7 @@ def check_live_policy(session: Session, stamp: AuthorityStamp, operation: str) -
             mutation=False,
         )
         return
+    assert_effects_allowed(session)
     current, _ = _current_authority(session, stamp)
     if not current or (operation == "start" and workflow.archived):
         raise authorization.TrustedAuthorizationError()

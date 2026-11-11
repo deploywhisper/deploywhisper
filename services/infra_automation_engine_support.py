@@ -9,6 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from infra_automation.lifecycle import LifecycleError
+from infra_automation.contracts import SAFE_INTEGER
 from models.tables import IdentityAccount
 from services import infra_automation_support as support
 from services import project_service as authorization
@@ -31,7 +32,10 @@ def _valid_actor(row: IdentityAccount | None) -> bool:
         and not row.enabled
         and not row.is_admin
         and row.password_verifier == _INERT_VERIFIER
-        and row.authentication_version == 1
+        # Restore advances every account generation. This disabled audit-only
+        # identity still has no credential or human-compatible username.
+        and type(row.authentication_version) is int
+        and 1 <= row.authentication_version <= SAFE_INTEGER
     )
 
 

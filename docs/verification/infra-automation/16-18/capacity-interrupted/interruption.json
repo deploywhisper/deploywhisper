@@ -1,0 +1,5 @@
+{
+  "acceptance_qualified": false,
+  "reason": "Interrupted to fix full-schema retention run-counter guard defect discovered by composed browser proof; source changed after interruption.",
+  "log": "/tmp/story16-18-capacity.log"
+}

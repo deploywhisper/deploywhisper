@@ -1,0 +1,4 @@
+{
+  "acceptance_qualified": false,
+  "reason": "Stopped to implement required current-generation same-operation receiver reconciliation contract; schema advances from041 to042."
+}

@@ -1,0 +1,94 @@
+{
+  "version": 1,
+  "date": "2026-11-10",
+  "story_status": "in-progress",
+  "product_image": "sha256:363f797bb98e1ca90f549892b28802d6589000e776505a6f21cefdc7e61c41df",
+  "schema_revision": "042_add_receiver_recovery",
+  "checks": {
+    "root": {
+      "command": "./.venv/bin/python -m unittest discover -q",
+      "result": "2048 tests; 3 skipped; exit0",
+      "log_sha256": "sha256:975ab923fb884260b107737fd1ea07df4bf7c898c87f8bc551e96398f44bed16",
+      "local_log": "/tmp/story16-18-root-final42-green.log"
+    },
+    "local_ci": {
+      "command": "bash scripts/ci-local.sh",
+      "result": "3523 tests across10 targets; exit0; lint/format/pip/Bandit/compile/skill checks passed",
+      "log_sha256": "sha256:9dbf0ef71db706270173b57d2ada4188bd4ab4accef16a084c3843764a7247b8",
+      "local_log": "/tmp/story16-18-ci-local-final42-green.log"
+    },
+    "api_cli_infra": {
+      "command": "./.venv/bin/python -m pytest tests/test_api tests/test_cli tests/test_infra -v --tb=short",
+      "result": "812 passed;1 skipped;2442 subtests",
+      "log_sha256": "sha256:b5a58211bcd3f249256829405149d60a4cf23dfa768c154ae8b6327100c791ec",
+      "local_log": "/tmp/story16-18-ci-shard-42-final.log"
+    },
+    "isolation": {
+      "command": "./.venv/bin/python scripts/qualify_runner_isolation.py",
+      "result": "172 checks passed",
+      "log_sha256": "sha256:3083206218f8265eff0c7318662243a952ffef43e453dec21c697178788a19f3",
+      "local_log": "/tmp/story16-18-isolation-42.log"
+    },
+    "collection": {
+      "command": "./.venv/bin/python scripts/qualify_collection.py",
+      "result": "49 checks passed",
+      "log_sha256": "sha256:3083206218f8265eff0c7318662243a952ffef43e453dec21c697178788a19f3",
+      "local_log": "/tmp/story16-18-collection-resume-final.log"
+    }
+  },
+  "ci_target_counts": [
+    69,
+    382,
+    131,
+    59,
+    300,
+    1201,
+    76,
+    30,
+    43,
+    1232
+  ],
+  "frontend": {
+    "unit_tests": 493,
+    "compatibility_checks": 2,
+    "typecheck": "passed",
+    "build": "passed",
+    "browser_journeys": 2,
+    "screenshots": 24,
+    "axe_critical_serious": 0,
+    "visual_score": 94,
+    "proof_branch": "feature/16-18-automation-settings-ui"
+  },
+  "operator": {
+    "actual_normal_checks": 28,
+    "completion_interruption_cli_cases": 2,
+    "proof": "operator-exercise.json"
+  },
+  "offline_install": {
+    "archive_bytes": 229869568,
+    "layer_digests": 21,
+    "fresh_network_none_checks": 28,
+    "proof": "offline-install-results.json"
+  },
+  "capacity": {
+    "acceptance_qualified": true,
+    "elapsed_seconds": 1800.767069485999,
+    "sample_count": 3600,
+    "max_active": 10,
+    "max_workers": 2,
+    "max_analysis_inflight": 2,
+    "max_authenticated_online_runners": 20,
+    "runner_poll_authentications": 72000,
+    "runner_credential_rotations": 40,
+    "error_count": 0,
+    "queue_backpressure_checked": true,
+    "source_hashes_identical": true,
+    "scope": "Current SQLite schema with configured bound operator recovery controls; ten active runs and at most two actual spawned synthetic analysis workers plus twenty persisted, enrolled, redeemed and polled local authenticated runner service ports. No remote HTTPS agent, collector, receiver, cloud or host-power-loss qualification."
+  },
+  "remaining_gates": [
+    "Independent human self-service pilot",
+    "Production receiver/custody credential transfer and supported remote/HTTPS profile qualification",
+    "Cold OS/Docker/dependency installation and original12.7/12.8 acceptance remain separate; not claimed by this bounded profile"
+  ],
+  "publication": "Local Git Flow preparation only; no remote publication authorized"
+}

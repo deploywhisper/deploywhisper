@@ -88,6 +88,20 @@ def list_run_reports(run_id, *, now: datetime | None = None):
             links=items,
             now=now or datetime.now(timezone.utc),
         )
+        from models.tables import InfraAutomationRetentionTombstone
+
+        removed = session.scalar(
+            select(InfraAutomationRetentionTombstone.manifest_id)
+            .where(InfraAutomationRetentionTombstone.run_id == run.id)
+            .limit(1)
+        )
+        if removed:
+            evidence_status.limitations.append(
+                "Screened manifest content was removed under retention; retained report and provenance remain advisory."
+            )
+            evidence_status.context_todos.append(
+                "Submit a new preflight for current evidence; retained metadata cannot restore removed content."
+            )
         return support.bounded_payload(
             {"items": items, "evidence_status": evidence_status.model_dump(mode="json")}
         )

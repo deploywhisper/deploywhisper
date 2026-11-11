@@ -8,7 +8,7 @@ Identity does not confer project membership or automation capabilities.
 from __future__ import annotations
 
 from collections.abc import Callable
-from contextlib import contextmanager
+from contextlib import ExitStack, contextmanager
 from datetime import datetime, timedelta, timezone
 import hashlib
 import hmac
@@ -186,9 +186,17 @@ class IdentityService:
 
     @contextmanager
     def _transaction(self):
+        from infra_automation.lifecycle import LifecycleError
+        from infra_automation.operator_recovery import participating_operation
+
         try:
-            with transaction(self.session_factory) as db:
-                yield db
+            with ExitStack() as stack:
+                try:
+                    stack.enter_context(participating_operation())
+                except LifecycleError:
+                    raise IdentityError(503, "authentication_unavailable") from None
+                with transaction(self.session_factory) as db:
+                    yield db
         except SQLAlchemyError:
             # Driver messages can contain bound credential material. Do not leak
             # or chain them into API errors/logs.
