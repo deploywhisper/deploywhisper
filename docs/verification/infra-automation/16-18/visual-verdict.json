@@ -1,0 +1,11 @@
+{
+  "score": 94,
+  "verdict": "pass",
+  "category_match": true,
+  "differences": [
+    "Automation controls extend Settings with existing primitives and section spacing; existing run cards display the actual post-purge and reconciled-operation states."
+  ],
+  "suggestions": [],
+  "reasoning": "The composed1440px/760px captures retain the approved shell, typography, palette, field spacing and clear focus. Actual removed-content guidance and accepted-operation uncertainty remain readable without layout overlap.",
+  "next_actions": []
+}

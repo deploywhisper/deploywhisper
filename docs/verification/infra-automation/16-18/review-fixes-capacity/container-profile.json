@@ -1,0 +1,35 @@
+{
+  "image_id": "sha256:2c652ba689e6c6d6e02d7be7dc054ea4cbc093c46bb87341846824acc1a5c3e8",
+  "runtime": "production image Python3.11.17/Linux ARM64",
+  "cpu_limit": 2,
+  "memory_bytes": 2147483648,
+  "pids_limit": 128,
+  "network": "none",
+  "read_only_root": true,
+  "tmpfs_bytes": 268435456,
+  "uid": 999,
+  "gid": 999,
+  "source_mounts": [
+    "scripts (read-only)",
+    "tests (read-only)",
+    "api_server.py (read-only)",
+    "cli.py (read-only)"
+  ],
+  "environment": "image defaults plus PYTHONPATH/PYTHONDONTWRITEBYTECODE; no host credentials or .env mount",
+  "exit_code": 0,
+  "container_name": "dw16-18-review-fixes-capacity-a5b981a60afd",
+  "volume_name": "dw16-18-review-fixes-capacity-a5b981a60afd-evidence",
+  "host_idle_sleep_prevention": "caffeinate -dimsu for the lifetime of this wrapper",
+  "smoke": false,
+  "cleanup": {
+    "owned_resources_confirmed_absent": {
+      "dw16-18-review-fixes-capacity-a5b981a60afd": true,
+      "dw16-18-review-fixes-capacity-a5b981a60afd-evidence": true
+    },
+    "original_container": "5970d092f40105574b40ba43996b4af1b770a85697f085318d1fb4360c83b31f",
+    "original_running": true,
+    "original_docker_health": "healthy",
+    "original_http_health": 200
+  },
+  "healthcheck_scope": "The inherited web-app healthcheck has no HTTP server under this CLI harness entrypoint. Qualification uses the completed workload assertions and exit0; the separate original application remains healthy."
+}

@@ -1,0 +1,10 @@
+{
+  "score": 97,
+  "verdict": "pass",
+  "category_match": true,
+  "differences": [
+    "Required changed-policy and temporary-unavailability status paragraphs add vertical space above the existing controls."
+  ],
+  "suggestions": [],
+  "reasoning": "Final composed 1440px/760px captures preserve the inspected baseline shell, typography, approved grid, field spacing and controls. Draft values and reason remain present while save is paused, without overlap; axe reports no critical/serious violations."
+}
