@@ -28,7 +28,8 @@
 #   - done: Retrospective has been completed
 #
 # RECONCILIATION BASELINE: v1.4.0 published 2026-10-07; accepted through 12.4, plus 12.6 and 13.8
-# NEXT WORKFLOW: Story16.18 implementation/automated qualification complete; independent human operator pilot remains open.
+# NEXT WORKFLOW: Story16.18 R1-R7 fixed and all automated validation passed; fresh three-layer review clean; independent human operator pilot remains before closure.
+# Independent human operator pilot remains open.
 # Story16.15 positive HTTPS/real-runner and broader production release qualifications remain separate gates.
 # RELEASE ENABLER: 12-5-sbom-and-release-checksums (SBOM remains unshipped)
 # EVIDENCE: story-implementation-status-map.md and planning-artifacts/sprint-change-proposal-2026-10-07-v1.4.0-status-reconciliation.md

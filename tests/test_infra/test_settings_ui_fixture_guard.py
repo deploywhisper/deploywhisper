@@ -54,3 +54,14 @@ class SettingsUIFixtureGuardTests(unittest.TestCase):
         ):
             self.module.main()
         load.assert_not_called()
+
+    def test_read_failure_installer_rejects_host_before_registering_middleware(self):
+        from unittest.mock import Mock
+
+        application = Mock()
+        with (
+            patch.dict(self.module.os.environ, {}, clear=True),
+            self.assertRaises(RuntimeError),
+        ):
+            self.module.install_read_failures(application, {})
+        application.middleware.assert_not_called()

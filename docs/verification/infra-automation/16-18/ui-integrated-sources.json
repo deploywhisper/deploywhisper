@@ -912,5 +912,10 @@
     "No collected-provenance post-purge timeline fixture",
     "No post-restore recovery credential UI; issuance remains protected CLI-only",
     "No live receiver/runner orHTTPS qualification by these browser fixtures"
-  ]
+  ],
+  "historical_evidence": {
+    "valid_for_commit": "0716460356571aa6c5267238c910cb2adbdf3337",
+    "superseded_by": "review-fixes-validation-summary.json",
+    "note": "Original measured source hashes and results are preserved; they are not witnesses for later review fixes. Current screenshots were recaptured; see screenshots.json and review-fixes-ui-results.json."
+  }
 }

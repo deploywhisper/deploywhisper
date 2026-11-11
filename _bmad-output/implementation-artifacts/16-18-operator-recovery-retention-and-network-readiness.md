@@ -71,6 +71,18 @@ Execute one bounded packet at a time on the story feature branch. Each packet ow
   - Output: explicit admin feature-enablement, registered-target selection/details, quota/retention/TTL/credential-lifetime controls backed by earlier 16.4/16.10 APIs; receiver credentials remain configured by protected operator mechanisms, never pasted into reusable UI persistence.
   - Acceptance proof: composed API-backed admin save/validation/conflict, nonadmin denial, feature-off history/reconciliation, disable-after-approval and stale-scope cache cases; full keyboard/axe and 1440/760 screenshots. Register actual browser tests and record commands/results. Backend support gaps use their own labeled backend-for-UI PR; no Vite acceptance.
 
+### Review Findings
+
+- [x] [Review][Patch][HIGH] R1: Make initial recovery binding recoverable after ledger-publication failure [infra_automation/operator_recovery.py:574]
+- [x] [Review][Patch][HIGH] R2: Reject the reserved database root role before binding or restore reservation [infra_automation/operator_recovery.py:532]
+- [x] [Review][Patch][MEDIUM] R3: Validate the complete generated backup against restore limits before publication [infra_automation/operator_recovery.py:678]
+- [x] [Review][Patch][MEDIUM] R4: Preserve committed retention tombstones when restoring an older snapshot [infra_automation/operator_recovery.py:800]
+- [x] [Review][Patch][MEDIUM] R5: Clean up or durably track failed upgrade-copy staging databases [infra_automation/operator_recovery.py:1374]
+- [x] [Review][Patch][LOW] R6: Preserve or explicitly warn before discarding same-scope settings drafts [frontend/src/screens/AutomationSettingsSection.tsx:38]
+- [x] [Review][Patch][LOW] R7: Update the operator upgrade runbook to the verified schema042 result [docs/infra-automation/operations.md:423]
+
+Full reproduced conditions, consequences and required follow-up: [formal review](../../docs/verification/infra-automation/16-18/formal-code-review.md).
+
 ## Dev Notes
 
 - Reuse: Reuse models/database.py, existing Alembic/migrations and configuration patterns; tests/test_models temp-database isolation and existing operator docs. Restore and receiver admission must reuse shared epoch/authority services from 16.4/10/11. Do not introduce HA, PostgreSQL or another backup framework.
@@ -116,6 +128,10 @@ Codex (GPT-6), with bounded native implementation and independent review lanes.
 - Keep unexecuted human and broader production-profile qualification explicit. Packet 18.5 remains open for its independent human self-service pilot.
 
 ### Debug Log References
+- [Fresh three-layer review: clean](../../docs/verification/infra-automation/16-18/code-review-rerun.md).
+- [Final review-fix capacity qualification](../../docs/verification/infra-automation/16-18/review-fixes-capacity-results.md).
+- [R1–R7 fixes and final validation](../../docs/verification/infra-automation/16-18/review-fixes.md); [structured current-source results](../../docs/verification/infra-automation/16-18/review-fixes-validation-summary.json).
+- [Formal BMad review — changes requested](../../docs/verification/infra-automation/16-18/formal-code-review.md).
 - [Entry and concrete interface review](../../docs/verification/infra-automation/16-18/readiness.md).
 - [Independent findings and repairs](../../docs/verification/infra-automation/16-18/review.md).
 - [Retention proof](../../docs/verification/infra-automation/16-18/retention-results.md).
@@ -129,6 +145,11 @@ Codex (GPT-6), with bounded native implementation and independent review lanes.
 - [Final commands/log digests/results](../../docs/verification/infra-automation/16-18/validation-summary.json) and [acceptance audit](../../docs/verification/infra-automation/16-18/acceptance-audit.md).
 
 ### Completion Notes List
+- Final review-fix evidence supersedes pre-fix aggregate/source/screenshot claims. Original measurements and request-changes reproductions are retained as historical. BMad Help recheck: use fresh-context `bmad-code-review` for final handoff and complete the independent human pilot before story closure; do not close original12.7/12.8 or broader production gates from local fixture proof.
+- 2026-11-10 review-fix continuation: resolved R1–R7 with durable exact-intent initialization resume, reserved-role rejection, complete-package validation, retained purge/audit-history checks, owned upgrade-stage cleanup, immutable-base UI draft preservation and schema042 runbook drift coverage. Independent backend/UI/completion reviewers found no residual defect. Reused existing lifecycle, verifier, authorization and reload mechanisms; no dependency or schema migration added.
+- Review-fix validation: root unittest2079/3 skips; exact API/CLI/infra pytest816 passed/1 skip/2442 subtests; full local CI3554 tests across10 directories, exit0; repo-wide Ruff614 files, dependency/Bandit/compile/skill checks passed. Backend review26 tests/12 subtests and independent combined53/12 passed; the final Linux/Python3.11.17 image also passed all26 new recovery regressions. Documentation60 and collection49 passed.
+- UI validation APPLICABLE: `npm run ui:test`512 tests plus2 compatibility checks, `npm run ui:typecheck`, `npm run ui:build`; final composed settings/outcome Playwright3 journeys,36 screenshots1440/760,axe0 serious/critical,visual97. Real native visibility refetch and policy/membership503 retain drafts; actual PATCH403 clears controls until explicit fresh membership/policy checks. Final-image network-none operator CLI/API exercise31 checks passed,209 runtime hashes matched, resources removed and original app restored healthy200. Final capacity passed: 1800.440 actual seconds, 3587 samples, 71740 authenticated polls, 40 rotations and zero errors; configured recovery,10 runs/2 spawned synthetic workers/20 authenticated local runner ports, unchanged source witnesses and confirmed resource cleanup.
+- 2026-11-10 formal review of `262f47b..0716460`: REQUEST CHANGES; 7 patch findings (2 high/3 medium/2 low), 6 dismissed, no failed layers. Temporary-store reproductions exposed initialization, reserved-role, backup-boundary, retention-restore and interrupted-upgrade gaps. Packet 18.2 reopened; implementation unchanged, human gate and in-progress status retained.
 - Backend branch: `feature/16-18-operator-recovery-retention`; dependent UI branch: `feature/16-18-automation-settings-ui`. Local preparation preserves separate backend and UI review units.
 - Implemented migrations040–042, typed scoped purge, immutable retention receipts, conservative quota reclamation, protected cache verification, coordinated backup/restore, generation invalidation and recovery barriers, completed-only receiver reconciliation, and approved settings/target-selection-details UI.
 - Reused existing services and wire contracts; no new dependency, infrastructure action, automatic approval, general machine issuer or target-editing form was introduced.
@@ -142,6 +163,10 @@ Codex (GPT-6), with bounded native implementation and independent review lanes.
 - BMad Help recheck: complete the remaining operator qualification, then run formal `bmad-code-review` in fresh context before review/done advancement. Do not promote release readiness or close 12.7/12.8 from these bounded contributions.
 
 ### File List
+- `docs/verification/infra-automation/16-18/code-review-rerun.md`
+- `docs/verification/infra-automation/16-18/code-review-rerun.json`
+- `docs/verification/infra-automation/16-18/formal-code-review.md` (formal review).
+- `docs/verification/infra-automation/16-18/formal-code-review.json` (structured triage).
 The following list covers the backend branch and dependent UI branch together;
 private databases, plans, credentials and image archives are excluded.
 
@@ -310,6 +335,47 @@ private databases, plans, credentials and image archives are excluded.
 - `tests/test_models/test_receiver_recovery_migration.py`
 - `tests/test_models/test_retention_migration.py`
 
+- `docs/verification/infra-automation/16-18/review-fixes-capacity-clock-interruption/capacity-progress.json`
+- `docs/verification/infra-automation/16-18/review-fixes-capacity-clock-interruption/capacity-start.json`
+- `docs/verification/infra-automation/16-18/review-fixes-capacity-clock-interruption/container-profile.json`
+- `docs/verification/infra-automation/16-18/review-fixes-capacity-clock-interruption/interruption.json`
+- `docs/verification/infra-automation/16-18/review-fixes-capacity-clock-interruption/operator-capacity-failure.json`
+- `docs/verification/infra-automation/16-18/review-fixes-capacity-command.md`
+- `docs/verification/infra-automation/16-18/review-fixes-capacity-results.md`
+- `docs/verification/infra-automation/16-18/review-fixes-capacity/capacity-progress.json`
+- `docs/verification/infra-automation/16-18/review-fixes-capacity/capacity-start.json`
+- `docs/verification/infra-automation/16-18/review-fixes-capacity/capacity.json`
+- `docs/verification/infra-automation/16-18/review-fixes-capacity/container-profile.json`
+- `docs/verification/infra-automation/16-18/review-fixes-capacity/operator-capacity.json`
+- `docs/verification/infra-automation/16-18/review-fixes-operator-results.json`
+- `docs/verification/infra-automation/16-18/review-fixes-operator-results.md`
+- `docs/verification/infra-automation/16-18/review-fixes-ui-results.json`
+- `docs/verification/infra-automation/16-18/review-fixes-ui-results.md`
+- `docs/verification/infra-automation/16-18/review-fixes-ui-visual-verdict.json`
+- `docs/verification/infra-automation/16-18/review-fixes-validation-summary.json`
+- `docs/verification/infra-automation/16-18/review-fixes.md`
+- `docs/verification/infra-automation/16-18/screenshots/settings-draft-changed-1440.png`
+- `docs/verification/infra-automation/16-18/screenshots/settings-draft-changed-760.png`
+- `docs/verification/infra-automation/16-18/screenshots/settings-draft-changed-outcome-1440.png`
+- `docs/verification/infra-automation/16-18/screenshots/settings-draft-changed-outcome-760.png`
+- `docs/verification/infra-automation/16-18/screenshots/settings-draft-membership-unavailable-1440.png`
+- `docs/verification/infra-automation/16-18/screenshots/settings-draft-membership-unavailable-760.png`
+- `docs/verification/infra-automation/16-18/screenshots/settings-draft-membership-unavailable-outcome-1440.png`
+- `docs/verification/infra-automation/16-18/screenshots/settings-draft-membership-unavailable-outcome-760.png`
+- `docs/verification/infra-automation/16-18/screenshots/settings-draft-policy-unavailable-1440.png`
+- `docs/verification/infra-automation/16-18/screenshots/settings-draft-policy-unavailable-760.png`
+- `docs/verification/infra-automation/16-18/screenshots/settings-draft-policy-unavailable-outcome-1440.png`
+- `docs/verification/infra-automation/16-18/screenshots/settings-draft-policy-unavailable-outcome-760.png`
+- `tests/test_infra_automation/test_operator_recovery_review.py`
+
 ## Change Log
+
+- 2026-11-11: Fresh three-layer BMad review clean after triage; no actionable findings, two documented behaviors dismissed. Focused53 tests/12 subtests passed; evidence hashes verified. Human-pilot gate and in-progress status retained.
+
+- 2026-11-11: Final capacity retry passed 1800.440 seconds with zero errors and unchanged 340-file source witnesses. Retained the clock-interrupted attempt as unqualified evidence; verified owned-resource removal and original-app health200. Final documentation60 tests and repo-wide Ruff614 files passed.
+
+- 2026-11-10: Addressed code-review findings — all7 resolved, regression-tested and independently checked; Packet18.2 reclosed. Full CI and composed browser/operator validation passed. Retained in-progress status for the human-pilot gate; final capacity refresh passed on 2026-11-11 and is recorded separately.
+
+- 2026-11-10: Formal three-layer BMad review requested changes; recorded 7 unchecked review actions, reopened Packet 18.2 and retained in-progress status. No implementation fixes or remote publication.
 
 - 2026-11-10: Implemented and independently reviewed owned local contracts; completed unit/local CI, authentic upgrade, real isolation/collection, composed UI, offline installation and 30-minute configured Linux capacity proof. Preserved the independent human pilot and broader release/support gates; status remains in-progress.

@@ -4,149 +4,228 @@
     "deploywhisper-story16-18",
     "deploywhisper-story16-18-outcomes"
   ],
-  "image": "sha256:363f797bb98e1ca90f549892b28802d6589000e776505a6f21cefdc7e61c41df",
+  "image": "sha256:2c652ba689e6c6d6e02d7be7dc054ea4cbc093c46bb87341846824acc1a5c3e8",
+  "verification": "review-fixes-ui-results.json",
+  "replaces": {
+    "commit": "0716460356571aa6c5267238c910cb2adbdf3337",
+    "image": "sha256:363f797bb98e1ca90f549892b28802d6589000e776505a6f21cefdc7e61c41df",
+    "count": 24,
+    "note": "The original captures and manifest remain available at this Git commit; current paths contain the repeated final-image captures."
+  },
   "images": [
     {
       "path": "docs/verification/infra-automation/16-18/screenshots/settings-after-approval-disabled-1440.png",
-      "sha256": "ab1bb6e587c6a889ea57c90462a3ce43622312ae902eca1b8ddeb65cbdb813e1",
+      "sha256": "dfbd18fa1fdfc015a0145181d1d6fe284afa9a20cb29474e51e5e450ba672244",
       "width": 1440,
       "height": 1000
     },
     {
       "path": "docs/verification/infra-automation/16-18/screenshots/settings-after-approval-disabled-760.png",
-      "sha256": "2ff74e65960469c2984756b25b9957ad4d5c2787ee1db0344164aae7d696d397",
+      "sha256": "07396a0531f38f7ab016629475b0e8b116537910ba29b0d7ee4036fbdb2f9669",
       "width": 760,
       "height": 1000
     },
     {
       "path": "docs/verification/infra-automation/16-18/screenshots/settings-conflict-1440.png",
-      "sha256": "712bdce95a7396cebe765ad7e16bfeaf6461fa027a0eead36916ae0dd5eaa00c",
+      "sha256": "9136f9f32477ed4baaabd2f4f9a277d58136063f6d578493e8942a9381363de8",
       "width": 1440,
       "height": 1000
     },
     {
       "path": "docs/verification/infra-automation/16-18/screenshots/settings-conflict-760.png",
-      "sha256": "6ec86eb5f477f619b302f636c8531835f5cfb40b1403940a36e65e2021df8c8d",
+      "sha256": "ddc75b66d9bf122fd6e47f0485e68c9a7781f409d06f48e545c5c9b7f3237efe",
       "width": 760,
       "height": 1000
     },
     {
       "path": "docs/verification/infra-automation/16-18/screenshots/settings-conflict-outcome-1440.png",
-      "sha256": "58827bf34c3f89b77e7742fc2f96231922e7c7418c012f4a60d5ff4c13f8267e",
+      "sha256": "485f632c930e942b8fba3a0afe1466ea8befd2e35cda127fad51bf71b03942b8",
       "width": 1440,
       "height": 1000
     },
     {
       "path": "docs/verification/infra-automation/16-18/screenshots/settings-conflict-outcome-760.png",
-      "sha256": "533c02079855d72edd03f5f0546101bc4409f41419dcfdec7a02cefaa3fb424a",
+      "sha256": "ba2f6ffe65b509d733ff161506eba5d8e6830b8267b234c2675538b606ed5292",
       "width": 760,
       "height": 1000
     },
     {
       "path": "docs/verification/infra-automation/16-18/screenshots/settings-disabled-1440.png",
-      "sha256": "eb54c5c7f6225176b061dc993f201874766512055f96e30cad7af3ed6b507348",
+      "sha256": "f4cb6d1f9e2b8eb74bd7ffe4c53971ee79690ff3e88bdb2c7e428c0f69969426",
       "width": 1440,
       "height": 1000
     },
     {
       "path": "docs/verification/infra-automation/16-18/screenshots/settings-disabled-760.png",
-      "sha256": "50366bca0e9e3f1091eeeafdedd03868c1a991459dca09fbf9330490f533eebf",
+      "sha256": "0a3bfaa4b222c97ea468a6deaf29200805a7b8994114de3c08268263f00165c7",
       "width": 760,
       "height": 1000
     },
     {
       "path": "docs/verification/infra-automation/16-18/screenshots/settings-disabled-outcome-1440.png",
-      "sha256": "62b464349ead85ab375193a9db3a648e24e3219ba64d27901fd0ffa231b71ba4",
+      "sha256": "a05c387f2e487c1188014e6a19854fa069aff60450cf316e65a6fd91746ddc30",
       "width": 1440,
       "height": 1000
     },
     {
       "path": "docs/verification/infra-automation/16-18/screenshots/settings-disabled-outcome-760.png",
-      "sha256": "a27713ae807a271174b3239a166dfec8fe79a479c11612abdce5e6393fb25476",
+      "sha256": "f58794f1db1a84910519694d5ccf92868f25ac86a829139b05fbd2d68d9ed00a",
+      "width": 760,
+      "height": 1000
+    },
+    {
+      "path": "docs/verification/infra-automation/16-18/screenshots/settings-draft-changed-1440.png",
+      "sha256": "2936b9f928024154576083a8905186027c3f6ac9e873322c8bb424b8ba6cad55",
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "path": "docs/verification/infra-automation/16-18/screenshots/settings-draft-changed-760.png",
+      "sha256": "608ebac6426c35c20bbbaa5379b30a134404a9e8142f08c9ffafd1106a2f5b73",
+      "width": 760,
+      "height": 1000
+    },
+    {
+      "path": "docs/verification/infra-automation/16-18/screenshots/settings-draft-changed-outcome-1440.png",
+      "sha256": "03adc783e39665d65ee30c8d728d80b8812a5fb034e263070f1a79d6db2ce49d",
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "path": "docs/verification/infra-automation/16-18/screenshots/settings-draft-changed-outcome-760.png",
+      "sha256": "92c37d15d3e28b3a075719cb0b2797fcf00ea0ae04de29f7e5e3cb91a4e480f8",
+      "width": 760,
+      "height": 1000
+    },
+    {
+      "path": "docs/verification/infra-automation/16-18/screenshots/settings-draft-membership-unavailable-1440.png",
+      "sha256": "944bf8cabb0d0838a60bd3dd51a5ce33246bf4c7ce13c098c99d8af13741cdc2",
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "path": "docs/verification/infra-automation/16-18/screenshots/settings-draft-membership-unavailable-760.png",
+      "sha256": "165764bf285ccf28ebedf44a69f53111f8eb1d33c3c6f74b9330729222e4f776",
+      "width": 760,
+      "height": 1000
+    },
+    {
+      "path": "docs/verification/infra-automation/16-18/screenshots/settings-draft-membership-unavailable-outcome-1440.png",
+      "sha256": "39c85502a38431aec23639cbdd0f8d10d289d979ca46716b49b4c850583c423d",
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "path": "docs/verification/infra-automation/16-18/screenshots/settings-draft-membership-unavailable-outcome-760.png",
+      "sha256": "8c6994a356e8861ac81a958ab9b739c1b1d566bb464e196e055296bc59fa2bab",
+      "width": 760,
+      "height": 1000
+    },
+    {
+      "path": "docs/verification/infra-automation/16-18/screenshots/settings-draft-policy-unavailable-1440.png",
+      "sha256": "fca86f8f8735b829e22de6aa229fa604fafd93ed5657eb533d26fc443a1db974",
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "path": "docs/verification/infra-automation/16-18/screenshots/settings-draft-policy-unavailable-760.png",
+      "sha256": "be01444f03b33422a2cc25bfc944742eedc7af05d23303f795485d8c85eedb69",
+      "width": 760,
+      "height": 1000
+    },
+    {
+      "path": "docs/verification/infra-automation/16-18/screenshots/settings-draft-policy-unavailable-outcome-1440.png",
+      "sha256": "110b84d8177b3ff9ca53493b2b1165092fd8fd4cd3cc9e6165fec1e44eb79d08",
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "path": "docs/verification/infra-automation/16-18/screenshots/settings-draft-policy-unavailable-outcome-760.png",
+      "sha256": "8c6994a356e8861ac81a958ab9b739c1b1d566bb464e196e055296bc59fa2bab",
       "width": 760,
       "height": 1000
     },
     {
       "path": "docs/verification/infra-automation/16-18/screenshots/settings-feature-off-reconciled-1440.png",
-      "sha256": "329cce1f332d725ba17ff77b57798c9f4adf6f5f42533b638ac86a121de8673f",
+      "sha256": "1d51c9397b2e905bef5fa59d6769d10e2d9165775fdc8e97c67017d55d8da82b",
       "width": 1440,
       "height": 1000
     },
     {
       "path": "docs/verification/infra-automation/16-18/screenshots/settings-feature-off-reconciled-760.png",
-      "sha256": "01c227106b7f5d364fe481e480d1b204372ea8f95de9d96c78eba53056406315",
+      "sha256": "248d3ba69994a9b55fac8713931ac0851e0f5c23279850ecb4ca476fcb03d57a",
       "width": 760,
       "height": 1000
     },
     {
       "path": "docs/verification/infra-automation/16-18/screenshots/settings-integrated-history-1440.png",
-      "sha256": "b2b09968e5a5f0d182756839e8ab90f3a78de7172497f469caf1b5848cb38955",
+      "sha256": "530fd500b98af018e151c982ea42307fea8b699fec931971a213e8fa079a6b9a",
       "width": 1440,
       "height": 1000
     },
     {
       "path": "docs/verification/infra-automation/16-18/screenshots/settings-integrated-history-760.png",
-      "sha256": "abd54092c31a6ee98ffb25dd47ed5345bbf6b30a36baccd568d2555004570026",
+      "sha256": "32c83a4b789636f6dc49275ca9e9ee84a279cc4c10a14cbb22fdd12e0292b90c",
       "width": 760,
       "height": 1000
     },
     {
       "path": "docs/verification/infra-automation/16-18/screenshots/settings-nonadmin-1440.png",
-      "sha256": "38c87e9286eb6127e7863e9ee4772a540f3c3a90815c607075b877c24c65c85e",
+      "sha256": "5998052463c7cb5d8154b3ca07183d5a23aca9011299e4da5c2f132339de0d60",
       "width": 1440,
       "height": 1000
     },
     {
       "path": "docs/verification/infra-automation/16-18/screenshots/settings-nonadmin-760.png",
-      "sha256": "78631acc354ea64ee8faa731779b21869a5eaaf221b3d37d940f55ee752b57f5",
+      "sha256": "9d31d42b5cb6212981269daaca52f0d39a4644b7f7aefd342213117ea34fb073",
       "width": 760,
       "height": 1000
     },
     {
       "path": "docs/verification/infra-automation/16-18/screenshots/settings-saved-1440.png",
-      "sha256": "6ee695ccc0c5bfdaa067b2a25ad98259ddc7ce90bc12bf07876c28ca0922166e",
+      "sha256": "c1b3d30cb398f5d27083dbacfff6217d847593897f7526891602cf01683a08ea",
       "width": 1440,
       "height": 1000
     },
     {
       "path": "docs/verification/infra-automation/16-18/screenshots/settings-saved-760.png",
-      "sha256": "b7b05ec9c4de3601b49515e012d772fa4e6bbee913bc8596ea31dd9fc1814cf8",
+      "sha256": "e52bfb2edf1b98858281bab0f3d39876d7da005e046241bb408e3bca68f6b4a2",
       "width": 760,
       "height": 1000
     },
     {
       "path": "docs/verification/infra-automation/16-18/screenshots/settings-saved-outcome-1440.png",
-      "sha256": "3c8113f4b0a2e732217e6e358f455e845eee6dad1aa11f435ad97cfce41086e0",
+      "sha256": "49e1399e2688e533a2e11996d7aa393906a8b5a8c954e75708ad597cbd7c355d",
       "width": 1440,
       "height": 1000
     },
     {
       "path": "docs/verification/infra-automation/16-18/screenshots/settings-saved-outcome-760.png",
-      "sha256": "599edaa1591135c47533cadbbb824d1196e3e0425e39bfa574629560d6841d95",
+      "sha256": "630dfba2283ac51f1584baf00ec8d018e0b23e72aa2d82a2ef9d458fc0e334ec",
       "width": 760,
       "height": 1000
     },
     {
       "path": "docs/verification/infra-automation/16-18/screenshots/settings-target-1440.png",
-      "sha256": "2ef4422b634480416987ebf3ef83e1b502ea1f2f9b56d2fd69c514187c2fa75a",
+      "sha256": "0246c4ebfdf0e71e46f61db3dfb6228cfb6c6b4c4c9d17eb997c2bc2dc3b7c1a",
       "width": 1440,
       "height": 1000
     },
     {
       "path": "docs/verification/infra-automation/16-18/screenshots/settings-target-760.png",
-      "sha256": "5eaf4b294b5547b959ef9877cda01f13be3591c73079b361df792188c11b8d48",
+      "sha256": "d1dc0a9e15fc77d362113ee810326608b76f8615ac50237728f9ca3035cb649a",
       "width": 760,
       "height": 1000
     },
     {
       "path": "docs/verification/infra-automation/16-18/screenshots/settings-target-outcome-1440.png",
-      "sha256": "e73d4ff22c0e4accd40794bec78bfc13c8dbf776428d80d33ce050e048278e3b",
+      "sha256": "e8263a518dedb1f68e88a35c34cb963a19cb18957a754dfb4d91e110045b84e0",
       "width": 1440,
       "height": 1000
     },
     {
       "path": "docs/verification/infra-automation/16-18/screenshots/settings-target-outcome-760.png",
-      "sha256": "639d9c21ea5c0b99ab29597b09cc1ec690c431e5f5b3caf7025e09d5ae42b3c5",
+      "sha256": "74006d3b95fe26ad5ea95edaaaecf2b7442b057bf72392b8890ac81f73ca17d3",
       "width": 760,
       "height": 1000
     }

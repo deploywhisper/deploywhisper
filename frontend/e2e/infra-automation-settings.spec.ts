@@ -1,9 +1,10 @@
-import { execFileSync } from "node:child_process";
-import { closeSync, constants, fstatSync, mkdirSync, openSync, readFileSync } from "node:fs";
+import { execFileSync, spawn } from "node:child_process";
+import { closeSync, constants, fstatSync, mkdirSync, mkdtempSync, openSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import AxeBuilder from "@axe-core/playwright";
 import type { AutomationPolicy, AutomationSettings } from "../src/api/infraAutomationSettings";
-import { expect, test, type Page, type Locator, type BrowserContext } from "@playwright/test";
+import { chromium, expect, test, type Page, type Locator, type BrowserContext } from "@playwright/test";
 const file = process.env.SETTINGS_UI_FIXTURE;
 const origin = "http://localhost:8080";
 test.use({ trace: "off", screenshot: "off", video: "off" });
@@ -25,7 +26,7 @@ async function tabTo(page: Page, locator: Locator) {
 }
 async function login(page: Page, account: Account, scope: Scope) {
   const path = `/settings?project_id=${scope.projectId}`;
-  await page.goto(`/settings/account?returnTo=${encodeURIComponent(path)}`);
+  await page.goto(`${origin}/settings/account?returnTo=${encodeURIComponent(path)}`);
   await page.evaluate((id) => localStorage.setItem("deploywhisper.selectedProjectId", String(id)), scope.projectId);
   await tabTo(page, page.getByLabel("Username", { exact: true })); await page.keyboard.insertText(account.username); await page.keyboard.press("Tab"); await page.keyboard.insertText(account.password);
   await tabTo(page, page.getByRole("button", { name: "Sign in", exact: true }));
@@ -40,7 +41,7 @@ async function screenshot(page: Page, name: string) {
     await page.getByRole("heading", { name: "Automation settings", exact: true }).evaluate((element) => element.scrollIntoView({ block: "start" }));
     const findings = await new AxeBuilder({ page }).analyze(); expect(findings.violations.filter((x) => x.impact === "critical" || x.impact === "serious").map((x) => x.id)).toEqual([]);
     await page.screenshot({ path: resolve(dir, `${name}-${width}.png`) });
-    const outcome = name === "settings-conflict" ? page.getByRole("alert") : name === "settings-target" ? page.getByRole("region", { name: "Registered automation targets" }) : page.getByRole("status").filter({ hasText: "Automation settings saved" });
+    const outcome = name === "settings-conflict" ? page.getByRole("alert") : name === "settings-target" ? page.getByRole("region", { name: "Registered automation targets" }) : name === "settings-draft-changed" ? page.getByRole("status").filter({ hasText: "changed on the server" }) : name.includes("unavailable") ? page.getByRole("status").filter({ hasText: "temporarily unavailable" }) : page.getByRole("status").filter({ hasText: "Automation settings saved" });
     if (name !== "settings-nonadmin") {
       await outcome.evaluate((element) => element.scrollIntoView({ block: "center" }));
       await page.screenshot({ path: resolve(dir, `${name}-outcome-${width}.png`) });
@@ -49,8 +50,48 @@ async function screenshot(page: Page, name: string) {
   }
   await page.setViewportSize({ width: 1440, height: 1000 });
 }
-async function current(context: BrowserContext, scope: Scope): Promise<AutomationPolicy> { const res = await context.request.get(`/api/v1/infra-automation/settings?project_id=${scope.projectId}`); expect(res.status()).toBe(200); return (await res.json()).data; }
-async function patch(context: BrowserContext, scope: Scope, csrf: string, policy: AutomationPolicy, settings: AutomationSettings) { return context.request.patch("/api/v1/infra-automation/settings", { headers: { Origin: origin, "X-CSRF-Token": csrf }, data: { project_id: scope.projectId, expected_version: policy.version, reason: "Synthetic settings browser verification", settings } }); }
+async function current(context: BrowserContext, scope: Scope): Promise<AutomationPolicy> { const res = await context.request.get(`${origin}/api/v1/infra-automation/settings?project_id=${scope.projectId}`); expect(res.status()).toBe(200); return (await res.json()).data; }
+async function patch(context: BrowserContext, scope: Scope, csrf: string, policy: AutomationPolicy, settings: AutomationSettings) { return context.request.patch(`${origin}/api/v1/infra-automation/settings`, { headers: { Origin: origin, "X-CSRF-Token": csrf }, data: { project_id: scope.projectId, expected_version: policy.version, reason: "Synthetic settings browser verification", settings } }); }
+
+function failReads(resources: ("policy" | "membership")[]) {
+  // The source-controlled fixture rechecks its original nonroot/tmpfs guard;
+  // this private operator-only switch can return failures for GETs only.
+  execFileSync("docker", ["exec", process.env.SETTINGS_UI_CONTAINER!, "python", "-c", "import os,runpy,sys; runpy.run_path('/tmp/settings_ui_fixture.py')['guard'](); descriptor=os.open('/tmp/settings-ui-read-failures.json',os.O_WRONLY|os.O_CREAT|os.O_TRUNC|os.O_NOFOLLOW,0o600); os.write(descriptor,sys.argv[1].encode()); os.close(descriptor)", JSON.stringify(resources)], { stdio: ["ignore", "ignore", "pipe"] });
+}
+async function withNativeFocusBrowser(run: (context: BrowserContext, page: Page) => Promise<void>) {
+  // Playwright's normal focus emulation keeps every tab visible, suppressing
+  // TanStack's native visibility refetch. A private fresh browser attached with
+  // noDefaults exercises actual tab visibility without dispatching app events.
+  const profile = mkdtempSync(resolve(tmpdir(), "deploywhisper-settings-focus-"));
+  const process = spawn(chromium.executablePath(), ["--headless", "--no-sandbox", "--no-first-run", "--disable-background-networking", "--remote-debugging-address=127.0.0.1", "--remote-debugging-port=0", `--user-data-dir=${profile}`], { stdio: "ignore" });
+  const exited = new Promise<void>((done) => process.once("exit", () => done()));
+  let browser: Awaited<ReturnType<typeof chromium.connectOverCDP>> | undefined;
+  try {
+    let port = "";
+    await expect.poll(() => { try { port = readFileSync(resolve(profile, "DevToolsActivePort"), "utf8").split("\n")[0]; return /^\d+$/.test(port); } catch { return false; } }).toBe(true);
+    browser = await chromium.connectOverCDP(`http://127.0.0.1:${port}`, { noDefaults: true });
+    const context = browser.contexts()[0], page = await context.newPage();
+    page.setDefaultTimeout(15000);
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await run(context, page);
+  } finally {
+    await browser?.close(); process.kill("SIGTERM"); await exited;
+    rmSync(profile, { recursive: true, force: true });
+  }
+}
+async function focusRefetch(page: Page, context: BrowserContext, scope: Scope, resource: "policy" | "membership" | "session", status: number) {
+  const away = await context.newPage();
+  try {
+    await away.goto("about:blank"); await away.bringToFront();
+    await expect.poll(() => page.evaluate(() => document.visibilityState)).toBe("hidden");
+    const path = resource === "policy" ? `/api/v1/infra-automation/settings?project_id=${scope.projectId}` : resource === "membership" ? `/api/v1/projects/${encodeURIComponent(scope.projectKey)}/memberships` : "/api/v1/auth/session";
+    // Session loss cancels sibling requests as soon as any protected read sees
+    // 401, so whichever real auth/membership/policy response arrives proves it.
+    const response = page.waitForResponse((result) => result.request().method() === "GET" && (resource === "session" ? result.status() === 401 && [path, `/api/v1/infra-automation/settings?project_id=${scope.projectId}`, `/api/v1/projects/${encodeURIComponent(scope.projectKey)}/memberships`].some((value) => result.url() === `${origin}${value}`) : result.url() === `${origin}${path}`));
+    await page.bringToFront(); expect((await response).status()).toBe(status);
+    await expect.poll(() => page.evaluate(() => document.visibilityState)).toBe("visible");
+  } finally { await away.close(); }
+}
 
 test("operator saves typed settings, reviews conflict, disables with history, and nonadmin denies", async ({ page, context, browser }) => {
   test.skip(!file, "Requires the protected disposable settings Compose fixture.");
@@ -120,10 +161,13 @@ test("operator saves typed settings, reviews conflict, disables with history, an
   expect(Array.isArray(reports.evidence_status.limitations)).toBe(true);
 
   // New selected project remounts the form and discards unsaved/receipt state from the old scope.
+  await page.getByRole("button", { name: "Refresh automation settings", exact: true }).click(); await expect(active).toBeEnabled();
+  await active.fill("6"); await page.getByLabel("Change reason", { exact: true }).fill("Unsaved values belong only to the original project");
   await page.getByRole("button", { name: /Switch project|UI proof enabled|Select project/ }).first().click();
   const destination = page.getByRole("option", { name: new RegExp(data.projects.disabled.projectName) });
   if (await destination.count()) await destination.click(); else await page.getByText(data.projects.disabled.projectName, { exact: true }).click();
   await expect(page.getByLabel("Active run limit", { exact: true })).toHaveValue("10");
+  await expect(page.getByLabel("Change reason", { exact: true })).toHaveValue("");
   await expect(page.getByRole("status").filter({ hasText: "Automation settings saved" })).toHaveCount(0);
   const viewerContext = await browser.newContext({ baseURL: origin }); const viewerPage = await viewerContext.newPage();
   try {
@@ -147,4 +191,76 @@ test("operator saves typed settings, reviews conflict, disables with history, an
     const findings = await new AxeBuilder({ page }).analyze(); expect(findings.violations.filter((x) => x.impact === "critical" || x.impact === "serious").map((x) => x.id)).toEqual([]);
     await page.screenshot({ path: resolve(directory, `settings-integrated-history-${width}.png`) });
   }
+});
+
+test("dirty same-scope drafts survive native focus refetch, server changes and transient read failures", async () => {
+  test.skip(!file, "Requires the protected disposable settings Compose fixture.");
+  const data = fixture(), scope = data.projects.disabled;
+  await withNativeFocusBrowser(async (context, page) => {
+    const csrf = await login(page, data.accounts.operator, scope);
+    const active = page.getByLabel("Active run limit", { exact: true }), reason = page.getByLabel("Change reason", { exact: true });
+    const save = page.getByRole("button", { name: "Save automation settings", exact: true }), refresh = page.getByRole("button", { name: "Refresh automation settings", exact: true });
+    await expect(save).toBeEnabled();
+    const base = await current(context, scope);
+    let browserSaves = 0;
+    page.on("request", (request) => { if (request.method() === "PATCH" && request.url() === `${origin}/api/v1/infra-automation/settings`) browserSaves++; });
+    try {
+      await active.fill("7"); await reason.fill("Keep my original draft and reason");
+      expect((await patch(context, scope, csrf, base, { ...base.settings, max_queued_runs: 90 })).status()).toBe(200);
+      await focusRefetch(page, context, scope, "policy", 200);
+      await expect(page.getByRole("status").filter({ hasText: "changed on the server" })).toBeVisible();
+      await expect(active).toHaveValue("7"); await expect(reason).toHaveValue("Keep my original draft and reason");
+      await expect(page.getByText(new RegExp(`^Loaded policy version ${base.version}\\.`))).toBeVisible();
+      await expect(save).toBeDisabled(); expect(browserSaves).toBe(0);
+      expect((await current(context, scope)).settings.max_active_runs).toBe(base.settings.max_active_runs);
+      await screenshot(page, "settings-draft-changed");
+
+      await refresh.click(); await expect(save).toBeEnabled();
+      const reviewed = await current(context, scope);
+      await expect(active).toHaveValue(String(reviewed.settings.max_active_runs));
+      await expect(page.getByLabel("Queued run limit", { exact: true })).toHaveValue("90"); await expect(reason).toHaveValue("");
+      await active.fill("6"); await reason.fill("Preserve the draft through temporary unavailability");
+      for (const resource of ["policy", "membership"] as const) {
+        failReads([resource]); await focusRefetch(page, context, scope, resource, 503);
+        await expect(page.getByRole("status").filter({ hasText: "temporarily unavailable" })).toBeVisible();
+        await expect(active).toHaveValue("6"); await expect(reason).toHaveValue("Preserve the draft through temporary unavailability");
+        await expect(save).toBeDisabled(); expect(browserSaves).toBe(0);
+        await screenshot(page, `settings-draft-${resource}-unavailable`);
+        failReads([]); await focusRefetch(page, context, scope, resource, 200);
+        await expect(save).toBeEnabled(); await expect(active).toHaveValue("6");
+        await expect(reason).toHaveValue("Preserve the draft through temporary unavailability");
+        expect(browserSaves).toBe(0);
+      }
+      const response = page.waitForResponse((result) => result.url() === `${origin}/api/v1/infra-automation/settings` && result.request().method() === "PATCH");
+      await save.click(); const savedResponse = await response; expect(savedResponse.status()).toBe(200);
+      expect(savedResponse.request().postDataJSON().expected_version).toBe(reviewed.version);
+      await expect(page.getByRole("status").filter({ hasText: "Automation settings saved" })).toBeVisible();
+      const saved = await current(context, scope); expect(saved.settings.max_active_runs).toBe(6); expect(saved.settings.max_queued_runs).toBe(90); expect(browserSaves).toBe(1);
+
+      await refresh.click(); await expect(save).toBeEnabled(); await active.fill("5"); await reason.fill("Clear this draft on a definite save denial");
+      // Failure-only request tampering reaches the real CSRF guard. Both GET
+      // caches still hold successful administrator data when PATCH denies403;
+      // no response is mocked and no authenticated operation is approved.
+      const denyMutation = async (route: import("@playwright/test").Route) => {
+        if (route.request().method() === "PATCH") await route.continue({ headers: { ...route.request().headers(), "x-csrf-token": "synthetic-invalid-mutation-protection" } });
+        else await route.continue();
+      };
+      await page.route("**/api/v1/infra-automation/settings", denyMutation);
+      const denied = page.waitForResponse((result) => result.url() === `${origin}/api/v1/infra-automation/settings` && result.request().method() === "PATCH");
+      await save.click(); expect((await denied).status()).toBe(403);
+      await expect(reason).toHaveCount(0); await expect(save).toHaveCount(0);
+      expect(browserSaves).toBe(2);
+      await page.unroute("**/api/v1/infra-automation/settings", denyMutation);
+      await refresh.click(); await expect(save).toBeEnabled();
+      await expect(active).toHaveValue("6"); await expect(reason).toHaveValue("");
+      expect(browserSaves).toBe(2);
+      await active.fill("5"); await reason.fill("This draft must clear with the session");
+      const logout = await context.request.post(`${origin}/api/v1/auth/logout`, { headers: { Origin: origin, "X-CSRF-Token": csrf } }); expect(logout.status()).toBe(200);
+      await focusRefetch(page, context, scope, "session", 401);
+      await expect(page.getByLabel("Change reason", { exact: true })).toHaveCount(0); await expect(save).toHaveCount(0);
+      await login(page, data.accounts.viewer, scope);
+      await expect(page.getByText("Project administrator access is required to manage automation settings.", { exact: true })).toBeVisible();
+      await expect(page.getByLabel("Change reason", { exact: true })).toHaveCount(0);
+    } finally { failReads([]); }
+  });
 });

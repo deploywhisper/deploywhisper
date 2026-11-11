@@ -24,23 +24,41 @@ export function AutomationSettingsSection({ projectId, projectKey }: { projectId
 }
 function AutomationSettingsAccess({ projectId, projectKey }: { projectId: number; projectKey: string }) {
   const identity = useIdentity();
+  const [saveDenied, setSaveDenied] = useState(false);
   const enabled = identity.status === "ready" && identity.principal?.principal_type === "human";
   const membership = useQuery({ queryKey: ["automation-settings-memberships", projectId, identity.epoch], queryFn: ({ signal }) => getSettingsMemberships(projectId, projectKey, signal), enabled, retry: false, staleTime: 0 });
-  const isAdmin = !membership.isError && membership.data?.some((m) => m.principal_id === identity.principal?.principal_id && m.role === "admin" && m.enabled && m.workspace_id === null);
-  const policy = useQuery({ queryKey: ["automation-settings", projectId, identity.epoch], queryFn: ({ signal }) => getAutomationSettings(projectId, signal), enabled: enabled && !!isAdmin, retry: false, staleTime: 0 });
+  const hasAdminMembership = (memberships: typeof membership.data) => !!memberships?.some((m) => m.principal_id === identity.principal?.principal_id && m.role === "admin" && m.enabled && m.workspace_id === null);
+  const denied = (error: unknown) => error instanceof ApiClientError && (error.status === 401 || error.status === 403);
+  const isAdmin = hasAdminMembership(membership.data);
+  const policy = useQuery({ queryKey: ["automation-settings", projectId, identity.epoch], queryFn: ({ signal }) => getAutomationSettings(projectId, signal), enabled: enabled && isAdmin && !saveDenied, retry: false, staleTime: 0 });
+  // Cached administrator data preserves an existing draft during a transient
+  // read failure; it never grants save authority. Definite revocation removes it.
+  const retainAccess = identity.principal?.principal_type === "human" && isAdmin && !saveDenied && !denied(membership.error) && !denied(policy.error);
+  const unavailable = !enabled || membership.isError || policy.isError;
+  const checking = membership.isFetching || policy.isFetching;
+  async function refresh() {
+    if (!enabled) return;
+    const access = await membership.refetch();
+    if (!access.isSuccess || !hasAdminMembership(access.data)) return;
+    const current = await policy.refetch();
+    if (current.isSuccess) setSaveDenied(false);
+    return current.isSuccess ? current.data : undefined;
+  }
   return <div className="dw-settings-account"><Card eyebrow="InfraFlow" title="Automation settings"><div className="dw-phase6-stack">
     <p>Project execution limits and evidence lifetimes. No infrastructure credentials are entered or stored by this form.</p>
-    {!enabled && <p role="status">Sign in with a project administrator account to manage automation settings.</p>}
+    {!identity.principal && <p role="status">Sign in with a project administrator account to manage automation settings.</p>}
     {enabled && membership.isPending && <p role="status">Checking administrator access…</p>}
-    {enabled && (membership.isError || (membership.data && !isAdmin)) && <p role="status">Project administrator access is required to manage automation settings.</p>}
-    {isAdmin && policy.isPending && <p role="status">Loading automation settings…</p>}
-    {isAdmin && policy.isError && <p role="alert">Automation settings are unavailable. <Button onClick={() => void policy.refetch()}>Refresh automation settings</Button></p>}
-    {isAdmin && policy.data && !policy.isError && <AutomationSettingsForm key={`${policy.data.version}:${policy.data.authorization_epoch}`} policy={policy.data} editable={enabled && !!identity.csrfToken && !policy.isFetching && !membership.isFetching} refresh={() => policy.refetch()} />}
-    {isAdmin && <RegisteredTargets key={projectId} projectId={projectId} projectKey={projectKey} />}
+    {enabled && (saveDenied || denied(membership.error) || denied(policy.error) || (membership.data && !isAdmin)) && <p role="status">Project administrator access is required to manage automation settings.</p>}
+    {enabled && saveDenied && <Button disabled={checking} onClick={() => void refresh()}>Refresh automation settings</Button>}
+    {retainAccess && policy.isPending && <p role="status">Loading automation settings…</p>}
+    {enabled && !saveDenied && !denied(membership.error) && !denied(policy.error) && (membership.isError || policy.isError) && !(retainAccess && policy.data) && <p role="alert">Automation settings or administrator access are unavailable. <Button onClick={() => void refresh()}>Refresh automation settings</Button></p>}
+    {retainAccess && policy.data && <AutomationSettingsForm policy={policy.data} editable={enabled && !!identity.csrfToken && membership.isSuccess && policy.isSuccess && !checking} unavailable={unavailable} checking={checking} refresh={refresh} onAccessDenied={() => setSaveDenied(true)} />}
+    {retainAccess && <RegisteredTargets key={projectId} projectId={projectId} projectKey={projectKey} />}
   </div></Card></div>;
 }
-function AutomationSettingsForm({ policy, editable, refresh }: { policy: AutomationPolicy; editable: boolean; refresh: () => Promise<unknown> }) {
+function AutomationSettingsForm({ policy, editable, unavailable, checking, refresh, onAccessDenied }: { policy: AutomationPolicy; editable: boolean; unavailable: boolean; checking: boolean; refresh: () => Promise<AutomationPolicy | undefined>; onAccessDenied: () => void }) {
   const identity = useIdentity(), queryClient = useQueryClient();
+  const [basePolicy, setBasePolicy] = useState(policy);
   const [form, setForm] = useState(policy.settings);
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false), [blocked, setBlocked] = useState(false);
@@ -48,7 +66,8 @@ function AutomationSettingsForm({ policy, editable, refresh }: { policy: Automat
   const summary = useRef<HTMLDivElement>(null), alive = useRef(true);
   useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
   useEffect(() => { if (note || errors.length) summary.current?.focus(); }, [note, errors]);
-  const canEdit = editable && !busy && !blocked;
+  const changed = policy.version !== basePolicy.version || policy.authorization_epoch !== basePolicy.authorization_epoch || policy.restore_epoch !== basePolicy.restore_epoch;
+  const canEdit = editable && !busy && !blocked && !changed;
   async function submit(event: React.FormEvent) {
     event.preventDefault();
     if (!canEdit || !identity.csrfToken) return;
@@ -57,7 +76,7 @@ function AutomationSettingsForm({ policy, editable, refresh }: { policy: Automat
     if (problems.length) { setErrors(problems); setNote(""); return; }
     setBusy(true); setErrors([]); setNote("");
     try {
-      const saved = await saveAutomationSettings(policy.project_id, policy.version, form, reason, identity.csrfToken);
+      const saved = await saveAutomationSettings(basePolicy.project_id, basePolicy.version, form, reason, identity.csrfToken);
       if (!alive.current) return;
       setForm(saved.settings); setReason(""); setNote(`Automation settings saved. Version ${saved.version}. ${saved.settings.enabled ? "Execution is enabled under current permissions and evidence checks." : "New execution is disabled. History and reconciliation remain available; accepted external work may continue."}`);
       // Preserve the receipt until an explicit refresh; invalidate other scoped consumers.
@@ -65,18 +84,29 @@ function AutomationSettingsForm({ policy, editable, refresh }: { policy: Automat
       setBlocked(true);
     } catch (error) {
       if (!alive.current) return;
+      if (error instanceof ApiClientError && (error.status === 401 || error.status === 403)) { onAccessDenied(); return; }
       setErrors([message(error)]); setBlocked(true);
     } finally { if (alive.current) setBusy(false); }
   }
   async function reload() {
     if (busy) return;
     setBusy(true);
-    try { await refresh(); if (alive.current) { setBlocked(false); setErrors([]); setNote("Current settings refreshed. Review the values before saving."); setForm(policy.settings); setReason(""); } }
+    try {
+      const current = await refresh();
+      if (!alive.current) return;
+      if (!current) { setErrors(["Current settings or administrator access could not be verified. Your unsaved edits and reason remain; refresh again before saving."]); setNote(""); return; }
+      setBasePolicy(current); setForm(current.settings); setReason(""); setBlocked(false); setErrors([]); setNote("Current settings refreshed. Review the values before saving.");
+    } catch {
+      if (alive.current) { setErrors(["Current settings or administrator access could not be verified. Your unsaved edits and reason remain; refresh again before saving."]); setNote(""); }
+    }
     finally { if (alive.current) setBusy(false); }
   }
-  return <form className="dw-phase6-stack" onSubmit={(event) => void submit(event)} noValidate>
-    <p>Loaded policy version {policy.version}. Authorization epoch {policy.authorization_epoch}. Disabling execution invalidates pending authority while preserving reads and reconciliation.</p>
-    {!editable && <p role="status">Sign in again to obtain mutation protection before saving.</p>}
+  return <form className="dw-phase6-stack" onSubmit={submit} noValidate>
+    <p>Loaded policy version {basePolicy.version}. Authorization epoch {basePolicy.authorization_epoch}. Disabling execution invalidates pending authority while preserving reads and reconciliation.</p>
+    {changed && <p role="status">Automation settings changed on the server. Your unsaved edits and reason remain bound to the loaded version. Refresh automation settings to replace this draft with current values before saving.</p>}
+    {unavailable && <p role="status">Current settings or administrator access are temporarily unavailable. Your unsaved edits and reason remain; saving is paused until fresh checks succeed.</p>}
+    {!unavailable && checking && <p role="status">Checking current settings and administrator access…</p>}
+    {!identity.csrfToken && <p role="status">Sign in again to obtain mutation protection before saving.</p>}
     <fieldset disabled={!canEdit} className="dw-phase6-stack" style={{ border: 0, padding: 0, minWidth: 0 }}><legend>Execution and retention controls</legend>
       <label className="dw-toggle"><input type="checkbox" checked={form.enabled} onChange={(e) => setForm({ ...form, enabled: e.target.checked })} />Enable automation execution</label>
       <div className="dw-phase6-grid">{settingsFields.map(({ key, label, min, max }) => <label className="dw-field" key={key}><span id={`automation-label-${key}`}>{label}</span><input aria-labelledby={`automation-label-${key}`} aria-describedby={`automation-bound-${key}`} type="number" min={min} max={max} step={1} required value={Number.isNaN(form[key]) ? "" : form[key]} onChange={(e) => setForm({ ...form, [key]: e.target.value === "" ? NaN : Number(e.target.value) })} /><small id={`automation-bound-${key}`}>{min.toLocaleString()}–{max.toLocaleString()}</small></label>)}</div>
@@ -84,7 +114,7 @@ function AutomationSettingsForm({ policy, editable, refresh }: { policy: Automat
       <label className="dw-field"><span>Change reason</span><input maxLength={256} required value={reason} onChange={(e) => setReason(e.target.value)} /></label>
     </fieldset>
     {(note || errors.length > 0) && <div ref={summary} tabIndex={-1} role={errors.length ? "alert" : "status"}>{note && <p>{note}</p>}{errors.length > 0 && <ul>{errors.map((error) => <li key={error}>{error}</li>)}</ul>}</div>}
-    <div className="dw-phase6-actions"><Button type="submit" disabled={!canEdit} variant="primary-gradient">{busy ? "Saving…" : "Save automation settings"}</Button><Button disabled={busy} onClick={() => void reload()}>Refresh automation settings</Button></div>
+    <div className="dw-phase6-actions"><Button type="submit" disabled={!canEdit} variant="primary-gradient">{busy ? "Saving…" : "Save automation settings"}</Button><Button disabled={busy || checking} onClick={reload}>Refresh automation settings</Button></div>
     <Link to={`/infra-automation?project_id=${policy.project_id}&view=runs`}>Read run history and reconcile external work</Link>
   </form>;
 }

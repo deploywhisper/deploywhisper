@@ -134,6 +134,70 @@ def seed_historical_manifest(module, browser):
     module["write_private"](Path("/tmp/settings-ui-browser-fixture.json"), browser)  # nosec B108
 
 
+def install_read_failures(application, browser):
+    """Failure-only HTTP injection, confined to the guarded disposable fixture."""
+    guard()
+    import json
+    import stat
+    from urllib.parse import quote
+
+    from starlette.responses import JSONResponse
+
+    project_ids = {str(scope["projectId"]) for scope in browser["projects"].values()}
+    membership_paths = {
+        f"/api/v1/projects/{quote(scope['projectKey'], safe='')}/memberships"
+        for scope in browser["projects"].values()
+    }
+
+    @application.middleware("http")
+    async def settings_read_failure(request, call_next):
+        resource = None
+        if request.method == "GET":
+            if (
+                request.url.path == "/api/v1/infra-automation/settings"
+                and request.query_params.get("project_id") in project_ids
+            ):
+                resource = "policy"
+            elif request.url.path in membership_paths:
+                resource = "membership"
+        if resource:
+            descriptor = None
+            failures = []
+            try:
+                descriptor = os.open(
+                    "/tmp/settings-ui-read-failures.json",  # nosec B108
+                    os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK,
+                )
+                metadata = os.fstat(descriptor)
+                if (
+                    not stat.S_ISREG(metadata.st_mode)
+                    or metadata.st_uid != os.geteuid()
+                    or stat.S_IMODE(metadata.st_mode) != 0o600
+                    or metadata.st_nlink != 1
+                    or metadata.st_size > 128
+                ):
+                    raise ValueError("Invalid disposable failure flag")
+                failures = json.loads(os.read(descriptor, 129))
+                if not isinstance(failures, list) or any(
+                    item not in ("policy", "membership") for item in failures
+                ):
+                    raise ValueError("Invalid disposable failure flag")
+            except FileNotFoundError:
+                pass
+            except (OSError, ValueError):
+                # An invalid flag can only withhold reads, never supply authority.
+                failures = ["policy", "membership"]
+            finally:
+                if descriptor is not None:
+                    os.close(descriptor)
+            if resource in failures:
+                return JSONResponse(
+                    {"error": {"code": "authority_unavailable", "details": {}}},
+                    status_code=503,
+                )
+        return await call_next(request)
+
+
 def main():
     guard()
     module = runpy.run_path("/tmp/trigger_ui_fixture.py")  # nosec B108
@@ -165,9 +229,11 @@ def main():
                 target_principal_id=member.principal_id,
                 action="synthetic.settings.fixture",
             )
-    seed_historical_manifest(module, module["read_private"](module["BROWSER_OUTPUT"]))
+    browser = module["read_private"](module["BROWSER_OUTPUT"])
+    seed_historical_manifest(module, browser)
     import app
 
+    install_read_failures(app.fastapi_app, browser)
     app.run()
 
 

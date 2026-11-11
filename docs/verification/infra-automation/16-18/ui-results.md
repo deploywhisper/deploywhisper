@@ -1,5 +1,9 @@
 # Story 16.18 automation settings UI
 
+> Historical pre-fix record at `0716460`. Review-fix evidence is recorded in
+> [review-fixes.md](review-fixes.md) and [review-fixes-validation-summary.json](review-fixes-validation-summary.json).
+> Original results below remain scoped to their recorded image/source; current screenshots are identified by [screenshots.json](screenshots.json).
+
 The independent UI branch `feature/16-18-automation-settings-ui` implements the
 Packet 18.6 form against existing 16.4 policy and 16.10 target APIs. Its baseline is
 `262f47b`. Final composed verification temporarily overlaid the owning backend's

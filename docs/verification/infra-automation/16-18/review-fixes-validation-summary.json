@@ -1,0 +1,237 @@
+{
+  "date": "2026-11-11",
+  "baseline": "0716460356571aa6c5267238c910cb2adbdf3337",
+  "status": "passed",
+  "findings": {
+    "resolved": 7,
+    "unresolved": 0,
+    "independent_reviews": "R1-R5 and R6 cleared; R7 drift regression passed"
+  },
+  "production_image": "sha256:2c652ba689e6c6d6e02d7be7dc054ea4cbc093c46bb87341846824acc1a5c3e8",
+  "schema_revision": "042_add_receiver_recovery",
+  "changed_source_sha256": {
+    "frontend/e2e/infra-automation-settings.spec.ts": "775297233fe10482fb0b550ade34edb7409eea2ac5d15cd2baa633601942e271",
+    "frontend/src/screens/AutomationSettingsSection.test.tsx": "6fe3cf4af40ae473abb3a9c9732d0d656c8544569c23a8b9e13d629c27050bc2",
+    "frontend/src/screens/AutomationSettingsSection.tsx": "6333beea5bf1846c4ab52a11c74be8b595c752ad3410940927365a1e589d1d34",
+    "infra_automation/operator_recovery.py": "5baba5a96e1c4e6d07a534b0a56c7a87dd3e9a1a79b223bc56ae391f4ad67fbd",
+    "scripts/settings_ui_fixture.py": "3e1848fb861aa6e4ca3715b7cc09739e6c3b5f3e941ab0b01a97ce5a7d595884",
+    "tests/test_docs/test_automation_operations_docs.py": "afd607e585f9a2a67a6937ef22b4bdbf0e178d1a37166d7e7e3f01e4938fb839",
+    "tests/test_infra/test_settings_ui_fixture_guard.py": "8e142aa91288beb6c7f2ac4088cddb94c81ea80fd1f9758cf83e49b3b2c11edd",
+    "tests/test_infra_automation/test_operator_recovery_review.py": "d797d4a4d23cf1e5bc6e0879eba6d88739ce9cb3a4b1dbd0f06e334830664e17"
+  },
+  "completed_checks": {
+    "root": "2079 tests;3 skipped;exit0",
+    "api_cli_infra": "816 passed;1 skipped;2442 subtests;exit0",
+    "frontend": "512 tests;2 compatibility checks;typecheck/build pass",
+    "browser": "3 composed journeys;36 screenshots;axe0 serious/critical;visual97",
+    "operator": "31 named final-image CLI/API checks",
+    "recovery_regressions": "26 tests and12 subtests; independent recovery+backup53 tests and12 subtests",
+    "docs": "60 tests passed",
+    "collection": "49 checks passed",
+    "local_ci": "3554 tests across10 directories;exit0;lint/format/pip/Bandit/compile/skill checks passed"
+  },
+  "pending": [],
+  "remaining_story_gate": "Independent human self-service pilot",
+  "story_status": "in-progress",
+  "publication": "Local only; no remote publication",
+  "checks": {
+    "root": {
+      "command": "./.venv/bin/python -m unittest discover -q",
+      "result": "2079 tests;3 skipped;exit0",
+      "local_log": "/tmp/story16-18-fixes-unittest-final.log",
+      "log_sha256": "d4247e4e458245c3e091bd84bebecb1bef9ca17bbb73c16199ad4bdd49574c8a"
+    },
+    "local_ci": {
+      "command": "bash scripts/ci-local.sh",
+      "result": "3554 tests across10 targets;exit0",
+      "local_log": "/tmp/story16-18-fixes-ci-final.log",
+      "log_sha256": "f43269397382c75ed5ce5e437cc481ce41668a77cd905711ed5e43685c059b90"
+    },
+    "api_cli_infra": {
+      "command": "./.venv/bin/python -m pytest tests/test_api tests/test_cli tests/test_infra -v --tb=short",
+      "result": "816 passed;1 skipped;2442 subtests;exit0",
+      "local_log": "/tmp/story16-18-fixes-api-cli-infra-final.log",
+      "log_sha256": "114d272e8ee28b0e547e0c670d32e356fd4be87f5b2fc848096fb62d4ec80fe5"
+    },
+    "review_regressions": {
+      "command": "./.venv/bin/python -m pytest tests/test_infra_automation/test_operator_recovery_review.py -q",
+      "result": "26 passed;12 subtests;exit0",
+      "local_log": "/tmp/story16-18-recovery-review-final-green.log",
+      "log_sha256": "54b80cc1276c2993db6709f2bbf616479a54c6f2fe7f5cac72f3bac7280723c3"
+    },
+    "linux_regressions": {
+      "command": "docker run --rm --name dw16-18-review-regression-linux --network none --user 999:999 --read-only --tmpfs /tmp:rw,nosuid,nodev,size=536870912,mode=1777 --entrypoint python -e PYTHONDONTWRITEBYTECODE=1 -e PYTHONPATH=/app -v \"$PWD/tests:/app/tests:ro\" -v \"$PWD/scripts:/app/scripts:ro\" -v \"$PWD/api_server.py:/app/api_server.py:ro\" -v \"$PWD/cli.py:/app/cli.py:ro\" sha256:2c652ba689e6c6d6e02d7be7dc054ea4cbc093c46bb87341846824acc1a5c3e8 -m unittest discover -s tests/test_infra_automation -p test_operator_recovery_review.py -q",
+      "result": "26 tests;Python3.11.17/Linux;exit0",
+      "local_log": "/tmp/story16-18-review-fixes-linux-regression.log",
+      "log_sha256": "743d0171028a0a3d0e2c31d30eade655336bc3e680a24556a075db5c4436a62e"
+    },
+    "docs": {
+      "command": "./.venv/bin/python -m unittest discover -s tests/test_docs -q",
+      "result": "60 tests;exit0",
+      "local_log": "/tmp/story16-18-review-fixes-docs-final.log",
+      "log_sha256": "86e79ad2a52d9068e89b41c234fd3fbd2de3e094fdfa740d52a4280b32b562b0"
+    },
+    "collection": {
+      "command": "./.venv/bin/python scripts/qualify_collection.py",
+      "result": "49 checks;qualifiedtrue;exit0",
+      "local_log": "/tmp/story16-18-review-fixes-collection.log",
+      "log_sha256": "3083206218f8265eff0c7318662243a952ffef43e453dec21c697178788a19f3"
+    },
+    "ruff_check": {
+      "command": "./.venv/bin/ruff check .",
+      "result": "All checks passed;exit0",
+      "local_log": "/tmp/story16-18-review-fixes-ruff-check-final.log",
+      "log_sha256": "82b3e6a6c090a57601d22943bd23fca9218d1031dbe5a7b754092f9a156b4f18"
+    },
+    "ruff_format": {
+      "command": "./.venv/bin/ruff format --check .",
+      "result": "614 files already formatted;exit0",
+      "local_log": "/tmp/story16-18-review-fixes-ruff-format-final.log",
+      "log_sha256": "a7aa7b6bfda720d484a609c62f0beb5b7f1b7b9257208812a8fcb6ac71a6bc1e"
+    },
+    "capacity": {
+      "command": "./.venv/bin/python /tmp/story16-18-review-fixes-capacity-docker.py",
+      "result": "1800-second production-image measurement;exit0",
+      "local_log": "/tmp/story16-18-review-fixes-capacity-wrapper.log",
+      "log_sha256": "d18f9f652fc5aef147058f8e1f16284332b035531ffe5f89ccc273c7fb1f0329"
+    }
+  },
+  "ci_targets": [
+    {
+      "target": "tests/test_analysis",
+      "tests": 69,
+      "seconds": 338.366
+    },
+    {
+      "target": "tests/test_api",
+      "tests": 382,
+      "seconds": 232.114
+    },
+    {
+      "target": "tests/test_cli",
+      "tests": 131,
+      "seconds": 145.512
+    },
+    {
+      "target": "tests/test_docs",
+      "tests": 60,
+      "seconds": 0.777
+    },
+    {
+      "target": "tests/test_infra",
+      "tests": 304,
+      "seconds": 103.714
+    },
+    {
+      "target": "tests/test_infra_automation",
+      "tests": 1227,
+      "seconds": 654.148
+    },
+    {
+      "target": "tests/test_llm",
+      "tests": 76,
+      "seconds": 7.192
+    },
+    {
+      "target": "tests/test_models",
+      "tests": 30,
+      "seconds": 6.176
+    },
+    {
+      "target": "tests/test_parsers",
+      "tests": 43,
+      "seconds": 0.043
+    },
+    {
+      "target": "tests/test_services",
+      "tests": 1232,
+      "seconds": 390.089
+    }
+  ],
+  "ci_total_tests": 3554,
+  "capacity": {
+    "proof": "review-fixes-capacity/operator-capacity.json",
+    "container_profile": "review-fixes-capacity/container-profile.json",
+    "scope": "Current SQLite schema with configured bound operator recovery controls; ten active runs and at most two actual spawned synthetic analysis workers plus twenty persisted, enrolled, redeemed and polled local authenticated runner service ports. No remote HTTPS agent, collector, receiver, cloud or host-power-loss qualification.",
+    "acceptance_qualified": true,
+    "source_file_count": 340,
+    "source_hashes_identical": true,
+    "elapsed_seconds": 1800.4399979849986,
+    "sample_count": 3587,
+    "max_active": 10,
+    "max_workers": 2,
+    "max_analysis_inflight": 2,
+    "max_authenticated_online_runners": 20,
+    "runner_poll_authentications": 71740,
+    "runner_credential_rotations": 40,
+    "error_count": 0,
+    "queue_backpressure_checked": true,
+    "active_ten_every_sample_after_warmup": true,
+    "max_database_bytes": 5836800,
+    "max_wal_bytes": 4157112,
+    "final_resources": {
+      "children_maxrss": 117684,
+      "cpu.max": "200000 100000",
+      "maxrss_units": "KiB",
+      "memory.current": "423235584",
+      "memory.events": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0",
+      "memory.max": "2147483648",
+      "self_maxrss": 117684
+    },
+    "container_profile_sha256": "321af4ef41f0e6e40c130d132461834b0ebe1cdd1a147ebe08d407db8dd1623a",
+    "wall_minus_monotonic_seconds": -0.16390198499857433
+  },
+  "frontend": {
+    "proof": "review-fixes-ui-results.json",
+    "tests": 512,
+    "files": 30,
+    "compatibility_checks": 2,
+    "settings_component_cases": 20,
+    "typecheck": "pass",
+    "build": "pass",
+    "browser_journeys": 3,
+    "screenshots": 36,
+    "axe_critical_serious": 0,
+    "visual_score": 97
+  },
+  "operator": {
+    "proof": "review-fixes-operator-results.json",
+    "checks": 31,
+    "runtime_source_count": 209
+  },
+  "security": {
+    "required_high_high_gate": "passed",
+    "selected_medium_medium_findings": 1,
+    "existing_finding": {
+      "file": "services/sample_incident_pack.py",
+      "line": 327,
+      "id": "B104",
+      "severity": "MEDIUM",
+      "confidence": "MEDIUM",
+      "note": "Unchanged sample data includes an all-interface address; not a new review-fix finding."
+    }
+  },
+  "quality": {
+    "ruff_check": "passed",
+    "ruff_format_files": 614,
+    "pip_check": "passed",
+    "compileall": "passed",
+    "skill_and_prompt_injection_checks": "passed"
+  },
+  "qualified_at": "2026-11-11T04:12:27.288429+00:00",
+  "capacity_prior_attempt": {
+    "acceptance_qualified": false,
+    "record": "review-fixes-capacity-clock-interruption/interruption.json",
+    "reason": "Approximately40-minute Docker wall-clock jump caused correct authority-expiry denial; full horizon incomplete. Retried same source/image with host idle-sleep prevention."
+  },
+  "cleanup": {
+    "owned_resources_confirmed_absent": {
+      "dw16-18-review-fixes-capacity-a5b981a60afd": true,
+      "dw16-18-review-fixes-capacity-a5b981a60afd-evidence": true
+    },
+    "original_container": "5970d092f40105574b40ba43996b4af1b770a85697f085318d1fb4360c83b31f",
+    "original_running": true,
+    "original_docker_health": "healthy",
+    "original_http_health": 200
+  }
+}
