@@ -1,61 +1,76 @@
 {
-  "version": 1,
-  "checked_at": "2026-11-11T10:13:54Z",
-  "source_commit": "675f127a0c4ad7c3630d3c59cb7412818afd1db8",
-  "status": "automated-prerequisite-validation-passed",
+  "version": 2,
+  "checked_at": "2026-11-11T14:12:00Z",
+  "source_commit": "1adf00fd9de4223186da4976dd8caad9882e26cd",
+  "image_digest": "sha256:7a6afd6fd7b3ce74a672fa6fedda0e2c6d146813bcb3f1009930529e1c5f2323",
+  "status": "local-technical-qualification-passed-external-release-gates-open",
   "results": [
     {
       "command": "python -m unittest discover -q",
-      "result": "2096 passed, 3 skipped",
-      "log": "/tmp/story16-19-root-final.log",
-      "log_sha256": "1a6eafae545685011dc1c14cef28106141885b8ad31733ec94ccde989b2a6540"
+      "result": "2117 passed, 3 skipped",
+      "log": "/tmp/story16-19-root-final3.log",
+      "log_sha256": "8fe16fde813d1e02544969e2572fcea257276e6d3c7b6ab2e94d7d249896538b"
     },
     {
       "command": "bash scripts/ci-local.sh",
-      "result": "3571 tests passed across all 10 test directories; 3 directory-level skips; Ruff, repo-wide Ruff format, pip check, compile, skill tests and configured security gates passed",
-      "log": "/tmp/story16-19-ci-local-final.log",
-      "log_sha256": "5a7ebcff79dddbeb8cf4c59860ac8f60011b117828db38e39010411551e71fb6"
+      "result": "3592 tests passed across all 10 test directories; 3 directory-level skips; prompt-injection 8 tests and 96 subtests passed; Ruff, repo-wide Ruff format, pip check, compile, skill tests and configured security gates passed",
+      "log": "/tmp/story16-19-ci-local-final2.log",
+      "log_sha256": "4abf5312e5f5db5acdc74382e7a4e3461c91dd1bd5bb7060e60011dd00e1d35d"
     },
     {
       "command": "python -m pytest tests/test_api tests/test_cli tests/test_infra -v --tb=short",
       "result": "820 passed, 1 skipped, 2442 subtests passed",
-      "log": "/tmp/story16-19-api-cli-infra.log",
-      "log_sha256": "15a3ad80339466bc58366d10a3b506689b8cff3d9775952e978eac71561658af"
+      "log": "/tmp/story16-19-api-cli-infra-final2.log",
+      "log_sha256": "cd79182d3105caa586d2817dd8d972a821dd5ef383376bf428e85fc027a3f7d8"
     },
     {
       "command": "python -m pytest tests/test_infra_automation -v --tb=short",
-      "result": "1239 passed, 1 skipped, 3374 subtests passed",
-      "log": "/tmp/story16-19-automation-final.log",
-      "log_sha256": "7c1d5ddab0874f17e4d8ceea1bd3a625302d21c1264107f5ee4875289b8db3dc"
+      "result": "1260 passed, 1 skipped, 3382 subtests passed",
+      "log": "/tmp/story16-19-automation-final2.log",
+      "log_sha256": "6b4185cac7b4b456e466d082d0b0926da1bf9f7a797e1bfaae73cc7260c14559"
     },
     {
       "command": "npm run ui:test && npm run ui:typecheck && npm run ui:build",
       "result": "513 frontend tests and 2 compatibility checks passed; typecheck and production build passed"
     },
     {
-      "command": "focused release, manifest, runner-attempt and execution-boundary pytest selection",
-      "result": "61 passed, 136 subtests passed"
-    },
-    {
       "command": "ruff check . && ruff format --check .",
-      "result": "Ruff passed; all 618 Python files formatted"
+      "result": "Ruff passed; all 631 Python files formatted"
     },
     {
-      "command": "configured high-severity Bandit scan over services, infra automation and qualification scripts",
-      "result": "no high-severity issues"
+      "command": "bandit high-confidence/high-severity production-source scan",
+      "result": "no high-severity issues across 80113 lines"
+    },
+    {
+      "command": "scripts/qualify_collection.py",
+      "result": "actual OpenTofu 1.13.1 profile qualified; 49 checks and 65 current source hashes passed"
+    },
+    {
+      "command": "1800-second reference capacity harness",
+      "result": "qualified at 1800.138 seconds; 10 active runs, 2 analysis workers, 20 authenticated runner ports, 3730 samples, 0 errors, 0 OOM events, identical 357-file start/end source hashes"
+    },
+    {
+      "command": "release_artifacts build and verify plus extracted runner entrypoint smoke",
+      "result": "application archive, runner archive, manifests, SPDX 2.3 SBOM and checksums verified for exact source commit; runner entrypoint passed"
+    },
+    {
+      "command": "exact-commit Docker build and external health/OpenAPI smoke",
+      "result": "version 1.5.0; non-root uid 999; no Node runtime; image revision label matches source commit"
     }
   ],
-  "initial_failures_retained": [
-    "The first full automation and root/local-CI runs rejected stale Story 16.13/16.14 qualification hashes after runtime repairs.",
-    "Both real profiles were rebuilt and rerun; the current-source integrity tests and every final broad rerun passed.",
-    "A shared disposable container was removed by a concurrent CLI during the first enrollment-expiry wait; the same test passed on a separate owned Compose project and port."
-  ],
+  "performance": {
+    "workflow_validation_p95_ms": 1.668459,
+    "runner_claim_p95_ms": 90.855916,
+    "capacity_ready_transition_p95_ms": 34.045333,
+    "capacity_seconds": 1800.1377654009848
+  },
+  "human_pilot": "WAIVED BY ACCOUNTABLE MAINTAINER; NOT EXECUTED; residual self-service usability risk accepted",
   "open_gates": [
-    "independent human self-service pilot",
-    "Story 16.19 reference-hardware performance and 30-minute saturation proof",
-    "independent final code/security review",
-    "final immutable app and runner artifact signing, SBOM, checksums and provenance",
-    "separately authorized public v1.5.0 publication"
+    "durable CODEOWNERS approval evidence for the maintainer waiver",
+    "accepted/unknown external receiver effect and reconciliation qualification for Story 16.14 Packet 14.8",
+    "hosted GitHub attestations and signed OCI candidate verification",
+    "final CODEOWNERS review on the immutable source commit",
+    "separately authorized public v1.5.0 tag, release and registry aliases"
   ],
   "publication_authorized": false
 }

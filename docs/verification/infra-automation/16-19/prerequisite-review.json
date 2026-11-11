@@ -1,6 +1,6 @@
 {
   "status": "reviewed-no-open-code-findings",
-  "source_commit": "675f127a0c4ad7c3630d3c59cb7412818afd1db8",
+  "source_commit": "1adf00fd9de4223186da4976dd8caad9882e26cd",
   "prerequisite_reviews": {
     "16.13/16.14": {
       "layers": [
@@ -48,9 +48,9 @@
     }
   ],
   "acceptance_limits": [
-    "Independent human pilot unexecuted",
-    "New signed SBOM publication not executed; trusted develop preview required",
-    "Full16.19 reference-performance and release gates remain separate"
+    "Independent human pilot waived by accountable maintainer and explicitly unexecuted; durable CODEOWNERS approval evidence remains open",
+    "Accepted/unknown external receiver effect and reconciliation qualification remains open",
+    "Hosted artifact attestations, signed OCI verification and public publication not executed"
   ],
-  "full_ci": "3571 tests across10directories;exit0; seevalidation-summary.json"
+  "full_ci": "3592 tests across10directories;exit0; exact source commit; seevalidation-summary.json"
 }

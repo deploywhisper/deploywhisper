@@ -28,18 +28,24 @@ No stable release or human acceptance is claimed.
 
 | Check | Result |
 | --- | --- |
-| Root unittest | 2096 tests,3skips |
-| Full local CI | 3571 tests across10directories;exit0 |
+| Root unittest | 2117 tests,3skips |
+| Full local CI | 3592 tests across10directories;exit0 |
 | API/CLI/infra pytest | 820 passed,1skipped,2442subtests |
+| Automation pytest | 1260 passed,1skipped,3382subtests |
 | Frontend | 513 tests+2compatibility checks;typecheck/build passed |
 | Real isolation / collection | 172 /49 checks passed |
 | Actual TLS collector | 49 checks passed; one retained report/link |
 | Composed HTTPS browser | 3 journeys,8screenshots,axe0 serious/critical,visual94/pass |
 | Reviews | No remaining actionable code finding after repairs |
+| Reference performance | validation p951.668459ms; claim p9590.855916ms; 1800.138s capacity at10/2/20 with0errors |
+| Exact local candidate | commit`1adf00f`; app/runner archives, SPDX SBOM/checksums verified; image`sha256:7a6afd...f2323` healthy atv1.5.0 |
 
 See [commands and digests](validation-summary.json), [profile proof](prerequisite-profiles/README.md),
 [review](prerequisite-review.md), [SBOM preview](../../12-5/source-preview-results.json)
 and [operations scope/proof](../../operations/scope-and-verification.md).
+
+The exact-commit local candidate is technically qualified but unsigned. Hosted
+attestations, signed OCI verification and public release writes were not run.
 
 ## Remaining external gates
 
@@ -47,8 +53,8 @@ The [human pilot record](human-pilot-record.md) now records the concurrent
 accountable-maintainer waiver, explicitly NOT EXECUTED. Its durable approval
 reference must be established before the manifest process gate may pass. The
 [production composition gap](prerequisite-profiles/receiver-faults/README.md) is
-implemented and focused integration-tested; final source-frozen broad validation
-and release qualification remain pending.
+implemented and focused integration-tested; accepted/unknown external carrier
+effect and reconciliation qualification remains open under Story16.14 Packet14.8.
 The signed-artifact workflow permits previews only from trusted develop or
 release tags; feature-branch signing is not enabled to bypass that boundary.
 The code is prepared for normal review/integration, followed by actual signed

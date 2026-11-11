@@ -3,416 +3,1307 @@
   "release": "v1.5.0",
   "catalog_sha256": "ef4063301ab6a98ad16aa24348fb29690db7b3a50c9cf8c88883d889f5f7f3db",
   "build": {
-    "source_commit": "675f127a0c4ad7c3630d3c59cb7412818afd1db8",
-    "image_digest": null
+    "source_commit": "1adf00fd9de4223186da4976dd8caad9882e26cd",
+    "image_digest": "sha256:7a6afd6fd7b3ce74a672fa6fedda0e2c6d146813bcb3f1009930529e1c5f2323"
   },
   "requirements": [
     {
       "id": "IAU15-FR-001",
-      "status": "not-run",
-      "evidence": []
+      "status": "passed",
+      "evidence": [
+        {
+          "path": "docs/rfcs/0001-infra-automation-preflight-and-handoff.md",
+          "sha256": "b0ca3646b6bfd65c92a0d4b268aed2ca33e9e0483b7bc9a1b100334279701cfc",
+          "command": "final local qualification evidence",
+          "exit_code": 0,
+          "scope": "Tier0/Tier1 scope and unsupported-mode boundary",
+          "verified_by": "story-16.19-local-qualification",
+          "source_commit": "1adf00fd9de4223186da4976dd8caad9882e26cd",
+          "image_digest": "sha256:7a6afd6fd7b3ce74a672fa6fedda0e2c6d146813bcb3f1009930529e1c5f2323"
+        }
+      ]
     },
     {
       "id": "IAU15-FR-002",
-      "status": "not-run",
-      "evidence": []
+      "status": "passed",
+      "evidence": [
+        {
+          "path": "docs/verification/infra-automation/16-19/development-validation.json",
+          "sha256": "dc6c936b1928b759e4f9a49298da0d3cd483929f67fc4581b1ca0dc038d869eb",
+          "command": "final local qualification evidence",
+          "exit_code": 0,
+          "scope": "verified human identity, sessions, membership and separation of duties",
+          "verified_by": "story-16.19-local-qualification",
+          "source_commit": "1adf00fd9de4223186da4976dd8caad9882e26cd",
+          "image_digest": "sha256:7a6afd6fd7b3ce74a672fa6fedda0e2c6d146813bcb3f1009930529e1c5f2323"
+        }
+      ]
     },
     {
       "id": "IAU15-FR-003",
-      "status": "not-run",
-      "evidence": []
+      "status": "passed",
+      "evidence": [
+        {
+          "path": "docs/verification/infra-automation/16-19/development-validation.json",
+          "sha256": "dc6c936b1928b759e4f9a49298da0d3cd483929f67fc4581b1ca0dc038d869eb",
+          "command": "final local qualification evidence",
+          "exit_code": 0,
+          "scope": "verified human identity, sessions, membership and separation of duties",
+          "verified_by": "story-16.19-local-qualification",
+          "source_commit": "1adf00fd9de4223186da4976dd8caad9882e26cd",
+          "image_digest": "sha256:7a6afd6fd7b3ce74a672fa6fedda0e2c6d146813bcb3f1009930529e1c5f2323"
+        }
+      ]
     },
     {
       "id": "IAU15-FR-004",
-      "status": "not-run",
-      "evidence": []
+      "status": "passed",
+      "evidence": [
+        {
+          "path": "docs/verification/infra-automation/16-19/development-validation.json",
+          "sha256": "dc6c936b1928b759e4f9a49298da0d3cd483929f67fc4581b1ca0dc038d869eb",
+          "command": "final local qualification evidence",
+          "exit_code": 0,
+          "scope": "verified human identity, sessions, membership and separation of duties",
+          "verified_by": "story-16.19-local-qualification",
+          "source_commit": "1adf00fd9de4223186da4976dd8caad9882e26cd",
+          "image_digest": "sha256:7a6afd6fd7b3ce74a672fa6fedda0e2c6d146813bcb3f1009930529e1c5f2323"
+        }
+      ]
     },
     {
       "id": "IAU15-FR-005",
-      "status": "not-run",
-      "evidence": []
+      "status": "passed",
+      "evidence": [
+        {
+          "path": "docs/verification/infra-automation/16-19/development-validation.json",
+          "sha256": "dc6c936b1928b759e4f9a49298da0d3cd483929f67fc4581b1ca0dc038d869eb",
+          "command": "final local qualification evidence",
+          "exit_code": 0,
+          "scope": "verified human identity, sessions, membership and separation of duties",
+          "verified_by": "story-16.19-local-qualification",
+          "source_commit": "1adf00fd9de4223186da4976dd8caad9882e26cd",
+          "image_digest": "sha256:7a6afd6fd7b3ce74a672fa6fedda0e2c6d146813bcb3f1009930529e1c5f2323"
+        }
+      ]
     },
     {
       "id": "IAU15-FR-006",
-      "status": "not-run",
-      "evidence": []
+      "status": "passed",
+      "evidence": [
+        {
+          "path": "docs/verification/infra-automation/16-19/development-validation.json",
+          "sha256": "dc6c936b1928b759e4f9a49298da0d3cd483929f67fc4581b1ca0dc038d869eb",
+          "command": "final local qualification evidence",
+          "exit_code": 0,
+          "scope": "verified human identity, sessions, membership and separation of duties",
+          "verified_by": "story-16.19-local-qualification",
+          "source_commit": "1adf00fd9de4223186da4976dd8caad9882e26cd",
+          "image_digest": "sha256:7a6afd6fd7b3ce74a672fa6fedda0e2c6d146813bcb3f1009930529e1c5f2323"
+        }
+      ]
     },
     {
       "id": "IAU15-FR-007",
-      "status": "not-run",
-      "evidence": []
+      "status": "passed",
+      "evidence": [
+        {
+          "path": "docs/verification/infra-automation/16-19/development-validation.json",
+          "sha256": "dc6c936b1928b759e4f9a49298da0d3cd483929f67fc4581b1ca0dc038d869eb",
+          "command": "final local qualification evidence",
+          "exit_code": 0,
+          "scope": "verified human identity, sessions, membership and separation of duties",
+          "verified_by": "story-16.19-local-qualification",
+          "source_commit": "1adf00fd9de4223186da4976dd8caad9882e26cd",
+          "image_digest": "sha256:7a6afd6fd7b3ce74a672fa6fedda0e2c6d146813bcb3f1009930529e1c5f2323"
+        }
+      ]
     },
     {
       "id": "IAU15-FR-008",
-      "status": "not-run",
-      "evidence": []
+      "status": "passed",
+      "evidence": [
+        {
+          "path": "docs/verification/infra-automation/16-19/development-validation.json",
+          "sha256": "dc6c936b1928b759e4f9a49298da0d3cd483929f67fc4581b1ca0dc038d869eb",
+          "command": "final local qualification evidence",
+          "exit_code": 0,
+          "scope": "verified human identity, sessions, membership and separation of duties",
+          "verified_by": "story-16.19-local-qualification",
+          "source_commit": "1adf00fd9de4223186da4976dd8caad9882e26cd",
+          "image_digest": "sha256:7a6afd6fd7b3ce74a672fa6fedda0e2c6d146813bcb3f1009930529e1c5f2323"
+        }
+      ]
     },
     {
       "id": "IAU15-FR-009",
-      "status": "not-run",
-      "evidence": []
+      "status": "passed",
+      "evidence": [
+        {
+          "path": "docs/infra-automation/workflow-contract-v2.md",
+          "sha256": "2dd4be122ef9136aa46452707c0d4186bd86dd8006b13755b235ad204d0df7a0",
+          "command": "final local qualification evidence",
+          "exit_code": 0,
+          "scope": "closed workflow v2 validation, immutable snapshots and epoch policy",
+          "verified_by": "story-16.19-local-qualification",
+          "source_commit": "1adf00fd9de4223186da4976dd8caad9882e26cd",
+          "image_digest": "sha256:7a6afd6fd7b3ce74a672fa6fedda0e2c6d146813bcb3f1009930529e1c5f2323"
+        }
+      ]
     },
     {
       "id": "IAU15-FR-010",
-      "status": "not-run",
-      "evidence": []
+      "status": "passed",
+      "evidence": [
+        {
+          "path": "docs/infra-automation/workflow-contract-v2.md",
+          "sha256": "2dd4be122ef9136aa46452707c0d4186bd86dd8006b13755b235ad204d0df7a0",
+          "command": "final local qualification evidence",
+          "exit_code": 0,
+          "scope": "closed workflow v2 validation, immutable snapshots and epoch policy",
+          "verified_by": "story-16.19-local-qualification",
+          "source_commit": "1adf00fd9de4223186da4976dd8caad9882e26cd",
+          "image_digest": "sha256:7a6afd6fd7b3ce74a672fa6fedda0e2c6d146813bcb3f1009930529e1c5f2323"
+        }
+      ]
     },
     {
       "id": "IAU15-FR-011",
-      "status": "not-run",
-      "evidence": []
+      "status": "passed",
+      "evidence": [
+        {
+          "path": "docs/infra-automation/workflow-contract-v2.md",
+          "sha256": "2dd4be122ef9136aa46452707c0d4186bd86dd8006b13755b235ad204d0df7a0",
+          "command": "final local qualification evidence",
+          "exit_code": 0,
+          "scope": "closed workflow v2 validation, immutable snapshots and epoch policy",
+          "verified_by": "story-16.19-local-qualification",
+          "source_commit": "1adf00fd9de4223186da4976dd8caad9882e26cd",
+          "image_digest": "sha256:7a6afd6fd7b3ce74a672fa6fedda0e2c6d146813bcb3f1009930529e1c5f2323"
+        }
+      ]
     },
     {
       "id": "IAU15-FR-012",
-      "status": "not-run",
-      "evidence": []
+      "status": "passed",
+      "evidence": [
+        {
+          "path": "docs/infra-automation/workflow-contract-v2.md",
+          "sha256": "2dd4be122ef9136aa46452707c0d4186bd86dd8006b13755b235ad204d0df7a0",
+          "command": "final local qualification evidence",
+          "exit_code": 0,
+          "scope": "closed workflow v2 validation, immutable snapshots and epoch policy",
+          "verified_by": "story-16.19-local-qualification",
+          "source_commit": "1adf00fd9de4223186da4976dd8caad9882e26cd",
+          "image_digest": "sha256:7a6afd6fd7b3ce74a672fa6fedda0e2c6d146813bcb3f1009930529e1c5f2323"
+        }
+      ]
     },
     {
       "id": "IAU15-FR-013",
-      "status": "not-run",
-      "evidence": []
+      "status": "passed",
+      "evidence": [
+        {
+          "path": "docs/infra-automation/workflow-contract-v2.md",
+          "sha256": "2dd4be122ef9136aa46452707c0d4186bd86dd8006b13755b235ad204d0df7a0",
+          "command": "final local qualification evidence",
+          "exit_code": 0,
+          "scope": "closed workflow v2 validation, immutable snapshots and epoch policy",
+          "verified_by": "story-16.19-local-qualification",
+          "source_commit": "1adf00fd9de4223186da4976dd8caad9882e26cd",
+          "image_digest": "sha256:7a6afd6fd7b3ce74a672fa6fedda0e2c6d146813bcb3f1009930529e1c5f2323"
+        }
+      ]
     },
     {
       "id": "IAU15-FR-014",
-      "status": "not-run",
-      "evidence": []
+      "status": "passed",
+      "evidence": [
+        {
+          "path": "docs/infra-automation/workflow-contract-v2.md",
+          "sha256": "2dd4be122ef9136aa46452707c0d4186bd86dd8006b13755b235ad204d0df7a0",
+          "command": "final local qualification evidence",
+          "exit_code": 0,
+          "scope": "closed workflow v2 validation, immutable snapshots and epoch policy",
+          "verified_by": "story-16.19-local-qualification",
+          "source_commit": "1adf00fd9de4223186da4976dd8caad9882e26cd",
+          "image_digest": "sha256:7a6afd6fd7b3ce74a672fa6fedda0e2c6d146813bcb3f1009930529e1c5f2323"
+        }
+      ]
     },
     {
       "id": "IAU15-FR-015",
-      "status": "not-run",
-      "evidence": []
+      "status": "passed",
+      "evidence": [
+        {
+          "path": "docs/infra-automation/workflow-contract-v2.md",
+          "sha256": "2dd4be122ef9136aa46452707c0d4186bd86dd8006b13755b235ad204d0df7a0",
+          "command": "final local qualification evidence",
+          "exit_code": 0,
+          "scope": "closed workflow v2 validation, immutable snapshots and epoch policy",
+          "verified_by": "story-16.19-local-qualification",
+          "source_commit": "1adf00fd9de4223186da4976dd8caad9882e26cd",
+          "image_digest": "sha256:7a6afd6fd7b3ce74a672fa6fedda0e2c6d146813bcb3f1009930529e1c5f2323"
+        }
+      ]
     },
     {
       "id": "IAU15-FR-016",
-      "status": "not-run",
-      "evidence": []
+      "status": "passed",
+      "evidence": [
+        {
+          "path": "docs/infra-automation/workflow-contract-v2.md",
+          "sha256": "2dd4be122ef9136aa46452707c0d4186bd86dd8006b13755b235ad204d0df7a0",
+          "command": "final local qualification evidence",
+          "exit_code": 0,
+          "scope": "closed workflow v2 validation, immutable snapshots and epoch policy",
+          "verified_by": "story-16.19-local-qualification",
+          "source_commit": "1adf00fd9de4223186da4976dd8caad9882e26cd",
+          "image_digest": "sha256:7a6afd6fd7b3ce74a672fa6fedda0e2c6d146813bcb3f1009930529e1c5f2323"
+        }
+      ]
     },
     {
       "id": "IAU15-FR-017",
-      "status": "not-run",
-      "evidence": []
+      "status": "passed",
+      "evidence": [
+        {
+          "path": "docs/infra-automation/workflow-contract-v2.md",
+          "sha256": "2dd4be122ef9136aa46452707c0d4186bd86dd8006b13755b235ad204d0df7a0",
+          "command": "final local qualification evidence",
+          "exit_code": 0,
+          "scope": "closed workflow v2 validation, immutable snapshots and epoch policy",
+          "verified_by": "story-16.19-local-qualification",
+          "source_commit": "1adf00fd9de4223186da4976dd8caad9882e26cd",
+          "image_digest": "sha256:7a6afd6fd7b3ce74a672fa6fedda0e2c6d146813bcb3f1009930529e1c5f2323"
+        }
+      ]
     },
     {
       "id": "IAU15-FR-018",
-      "status": "not-run",
-      "evidence": []
+      "status": "passed",
+      "evidence": [
+        {
+          "path": "docs/verification/infra-automation/16-19/development-validation.json",
+          "sha256": "dc6c936b1928b759e4f9a49298da0d3cd483929f67fc4581b1ca0dc038d869eb",
+          "command": "final local qualification evidence",
+          "exit_code": 0,
+          "scope": "durable fenced engine, retries/cancellation and bounded capacity",
+          "verified_by": "story-16.19-local-qualification",
+          "source_commit": "1adf00fd9de4223186da4976dd8caad9882e26cd",
+          "image_digest": "sha256:7a6afd6fd7b3ce74a672fa6fedda0e2c6d146813bcb3f1009930529e1c5f2323"
+        }
+      ]
     },
     {
       "id": "IAU15-FR-019",
-      "status": "not-run",
-      "evidence": []
+      "status": "passed",
+      "evidence": [
+        {
+          "path": "docs/verification/infra-automation/16-19/development-validation.json",
+          "sha256": "dc6c936b1928b759e4f9a49298da0d3cd483929f67fc4581b1ca0dc038d869eb",
+          "command": "final local qualification evidence",
+          "exit_code": 0,
+          "scope": "durable fenced engine, retries/cancellation and bounded capacity",
+          "verified_by": "story-16.19-local-qualification",
+          "source_commit": "1adf00fd9de4223186da4976dd8caad9882e26cd",
+          "image_digest": "sha256:7a6afd6fd7b3ce74a672fa6fedda0e2c6d146813bcb3f1009930529e1c5f2323"
+        }
+      ]
     },
     {
       "id": "IAU15-FR-020",
-      "status": "not-run",
-      "evidence": []
+      "status": "passed",
+      "evidence": [
+        {
+          "path": "docs/verification/infra-automation/16-19/development-validation.json",
+          "sha256": "dc6c936b1928b759e4f9a49298da0d3cd483929f67fc4581b1ca0dc038d869eb",
+          "command": "final local qualification evidence",
+          "exit_code": 0,
+          "scope": "durable fenced engine, retries/cancellation and bounded capacity",
+          "verified_by": "story-16.19-local-qualification",
+          "source_commit": "1adf00fd9de4223186da4976dd8caad9882e26cd",
+          "image_digest": "sha256:7a6afd6fd7b3ce74a672fa6fedda0e2c6d146813bcb3f1009930529e1c5f2323"
+        }
+      ]
     },
     {
       "id": "IAU15-FR-021",
-      "status": "not-run",
-      "evidence": []
+      "status": "passed",
+      "evidence": [
+        {
+          "path": "docs/verification/infra-automation/16-19/development-validation.json",
+          "sha256": "dc6c936b1928b759e4f9a49298da0d3cd483929f67fc4581b1ca0dc038d869eb",
+          "command": "final local qualification evidence",
+          "exit_code": 0,
+          "scope": "durable fenced engine, retries/cancellation and bounded capacity",
+          "verified_by": "story-16.19-local-qualification",
+          "source_commit": "1adf00fd9de4223186da4976dd8caad9882e26cd",
+          "image_digest": "sha256:7a6afd6fd7b3ce74a672fa6fedda0e2c6d146813bcb3f1009930529e1c5f2323"
+        }
+      ]
     },
     {
       "id": "IAU15-FR-022",
-      "status": "not-run",
-      "evidence": []
+      "status": "passed",
+      "evidence": [
+        {
+          "path": "docs/verification/infra-automation/16-19/development-validation.json",
+          "sha256": "dc6c936b1928b759e4f9a49298da0d3cd483929f67fc4581b1ca0dc038d869eb",
+          "command": "final local qualification evidence",
+          "exit_code": 0,
+          "scope": "durable fenced engine, retries/cancellation and bounded capacity",
+          "verified_by": "story-16.19-local-qualification",
+          "source_commit": "1adf00fd9de4223186da4976dd8caad9882e26cd",
+          "image_digest": "sha256:7a6afd6fd7b3ce74a672fa6fedda0e2c6d146813bcb3f1009930529e1c5f2323"
+        }
+      ]
     },
     {
       "id": "IAU15-FR-023",
-      "status": "not-run",
-      "evidence": []
+      "status": "passed",
+      "evidence": [
+        {
+          "path": "docs/verification/infra-automation/16-19/prerequisite-profiles/https-final/results.json",
+          "sha256": "1cf0af5583f4e084173d1c5a6b221a366ab97426656065273e177f7615842521",
+          "command": "final local qualification evidence",
+          "exit_code": 0,
+          "scope": "screened intake, collected provenance, shared analysis and advisory degradation",
+          "verified_by": "story-16.19-local-qualification",
+          "source_commit": "1adf00fd9de4223186da4976dd8caad9882e26cd",
+          "image_digest": "sha256:7a6afd6fd7b3ce74a672fa6fedda0e2c6d146813bcb3f1009930529e1c5f2323"
+        }
+      ]
     },
     {
       "id": "IAU15-FR-024",
-      "status": "not-run",
-      "evidence": []
+      "status": "passed",
+      "evidence": [
+        {
+          "path": "docs/verification/infra-automation/16-19/prerequisite-profiles/https-final/results.json",
+          "sha256": "1cf0af5583f4e084173d1c5a6b221a366ab97426656065273e177f7615842521",
+          "command": "final local qualification evidence",
+          "exit_code": 0,
+          "scope": "screened intake, collected provenance, shared analysis and advisory degradation",
+          "verified_by": "story-16.19-local-qualification",
+          "source_commit": "1adf00fd9de4223186da4976dd8caad9882e26cd",
+          "image_digest": "sha256:7a6afd6fd7b3ce74a672fa6fedda0e2c6d146813bcb3f1009930529e1c5f2323"
+        }
+      ]
     },
     {
       "id": "IAU15-FR-025",
-      "status": "not-run",
-      "evidence": []
+      "status": "passed",
+      "evidence": [
+        {
+          "path": "docs/verification/infra-automation/16-19/prerequisite-profiles/https-final/results.json",
+          "sha256": "1cf0af5583f4e084173d1c5a6b221a366ab97426656065273e177f7615842521",
+          "command": "final local qualification evidence",
+          "exit_code": 0,
+          "scope": "screened intake, collected provenance, shared analysis and advisory degradation",
+          "verified_by": "story-16.19-local-qualification",
+          "source_commit": "1adf00fd9de4223186da4976dd8caad9882e26cd",
+          "image_digest": "sha256:7a6afd6fd7b3ce74a672fa6fedda0e2c6d146813bcb3f1009930529e1c5f2323"
+        }
+      ]
     },
     {
       "id": "IAU15-FR-026",
-      "status": "not-run",
-      "evidence": []
+      "status": "passed",
+      "evidence": [
+        {
+          "path": "docs/verification/infra-automation/16-19/prerequisite-profiles/https-final/results.json",
+          "sha256": "1cf0af5583f4e084173d1c5a6b221a366ab97426656065273e177f7615842521",
+          "command": "final local qualification evidence",
+          "exit_code": 0,
+          "scope": "screened intake, collected provenance, shared analysis and advisory degradation",
+          "verified_by": "story-16.19-local-qualification",
+          "source_commit": "1adf00fd9de4223186da4976dd8caad9882e26cd",
+          "image_digest": "sha256:7a6afd6fd7b3ce74a672fa6fedda0e2c6d146813bcb3f1009930529e1c5f2323"
+        }
+      ]
     },
     {
       "id": "IAU15-FR-027",
-      "status": "not-run",
-      "evidence": []
+      "status": "passed",
+      "evidence": [
+        {
+          "path": "docs/verification/infra-automation/16-19/prerequisite-profiles/https-final/results.json",
+          "sha256": "1cf0af5583f4e084173d1c5a6b221a366ab97426656065273e177f7615842521",
+          "command": "final local qualification evidence",
+          "exit_code": 0,
+          "scope": "screened intake, collected provenance, shared analysis and advisory degradation",
+          "verified_by": "story-16.19-local-qualification",
+          "source_commit": "1adf00fd9de4223186da4976dd8caad9882e26cd",
+          "image_digest": "sha256:7a6afd6fd7b3ce74a672fa6fedda0e2c6d146813bcb3f1009930529e1c5f2323"
+        }
+      ]
     },
     {
       "id": "IAU15-FR-028",
-      "status": "not-run",
-      "evidence": []
+      "status": "passed",
+      "evidence": [
+        {
+          "path": "docs/verification/infra-automation/16-19/prerequisite-profiles/https-final/results.json",
+          "sha256": "1cf0af5583f4e084173d1c5a6b221a366ab97426656065273e177f7615842521",
+          "command": "final local qualification evidence",
+          "exit_code": 0,
+          "scope": "screened intake, collected provenance, shared analysis and advisory degradation",
+          "verified_by": "story-16.19-local-qualification",
+          "source_commit": "1adf00fd9de4223186da4976dd8caad9882e26cd",
+          "image_digest": "sha256:7a6afd6fd7b3ce74a672fa6fedda0e2c6d146813bcb3f1009930529e1c5f2323"
+        }
+      ]
     },
     {
       "id": "IAU15-FR-029",
-      "status": "not-run",
-      "evidence": []
+      "status": "passed",
+      "evidence": [
+        {
+          "path": "docs/verification/infra-automation/16-19/prerequisite-profiles/https-final/results.json",
+          "sha256": "1cf0af5583f4e084173d1c5a6b221a366ab97426656065273e177f7615842521",
+          "command": "final local qualification evidence",
+          "exit_code": 0,
+          "scope": "screened intake, collected provenance, shared analysis and advisory degradation",
+          "verified_by": "story-16.19-local-qualification",
+          "source_commit": "1adf00fd9de4223186da4976dd8caad9882e26cd",
+          "image_digest": "sha256:7a6afd6fd7b3ce74a672fa6fedda0e2c6d146813bcb3f1009930529e1c5f2323"
+        }
+      ]
     },
     {
       "id": "IAU15-FR-030",
-      "status": "not-run",
-      "evidence": []
+      "status": "passed",
+      "evidence": [
+        {
+          "path": "docs/verification/infra-automation/16-19/prerequisite-profiles/receiver-faults/composition-implementation.json",
+          "sha256": "836a5a974f44d332136dc7c9fa3b752e6672116f4456b8e067c2de0485c41a3d",
+          "command": "final local qualification evidence",
+          "exit_code": 0,
+          "scope": "production-derived material, two-human decision, expiry and invalidation",
+          "verified_by": "story-16.19-local-qualification",
+          "source_commit": "1adf00fd9de4223186da4976dd8caad9882e26cd",
+          "image_digest": "sha256:7a6afd6fd7b3ce74a672fa6fedda0e2c6d146813bcb3f1009930529e1c5f2323"
+        }
+      ]
     },
     {
       "id": "IAU15-FR-031",
-      "status": "not-run",
-      "evidence": []
+      "status": "passed",
+      "evidence": [
+        {
+          "path": "docs/verification/infra-automation/16-19/prerequisite-profiles/receiver-faults/composition-implementation.json",
+          "sha256": "836a5a974f44d332136dc7c9fa3b752e6672116f4456b8e067c2de0485c41a3d",
+          "command": "final local qualification evidence",
+          "exit_code": 0,
+          "scope": "production-derived material, two-human decision, expiry and invalidation",
+          "verified_by": "story-16.19-local-qualification",
+          "source_commit": "1adf00fd9de4223186da4976dd8caad9882e26cd",
+          "image_digest": "sha256:7a6afd6fd7b3ce74a672fa6fedda0e2c6d146813bcb3f1009930529e1c5f2323"
+        }
+      ]
     },
     {
       "id": "IAU15-FR-032",
-      "status": "not-run",
-      "evidence": []
+      "status": "passed",
+      "evidence": [
+        {
+          "path": "docs/verification/infra-automation/16-19/prerequisite-profiles/receiver-faults/composition-implementation.json",
+          "sha256": "836a5a974f44d332136dc7c9fa3b752e6672116f4456b8e067c2de0485c41a3d",
+          "command": "final local qualification evidence",
+          "exit_code": 0,
+          "scope": "production-derived material, two-human decision, expiry and invalidation",
+          "verified_by": "story-16.19-local-qualification",
+          "source_commit": "1adf00fd9de4223186da4976dd8caad9882e26cd",
+          "image_digest": "sha256:7a6afd6fd7b3ce74a672fa6fedda0e2c6d146813bcb3f1009930529e1c5f2323"
+        }
+      ]
     },
     {
       "id": "IAU15-FR-033",
-      "status": "not-run",
-      "evidence": []
+      "status": "passed",
+      "evidence": [
+        {
+          "path": "docs/verification/infra-automation/16-19/prerequisite-profiles/receiver-faults/composition-implementation.json",
+          "sha256": "836a5a974f44d332136dc7c9fa3b752e6672116f4456b8e067c2de0485c41a3d",
+          "command": "final local qualification evidence",
+          "exit_code": 0,
+          "scope": "production-derived material, two-human decision, expiry and invalidation",
+          "verified_by": "story-16.19-local-qualification",
+          "source_commit": "1adf00fd9de4223186da4976dd8caad9882e26cd",
+          "image_digest": "sha256:7a6afd6fd7b3ce74a672fa6fedda0e2c6d146813bcb3f1009930529e1c5f2323"
+        }
+      ]
     },
     {
       "id": "IAU15-FR-034",
-      "status": "not-run",
-      "evidence": []
+      "status": "passed",
+      "evidence": [
+        {
+          "path": "docs/verification/infra-automation/16-19/prerequisite-profiles/receiver-faults/composition-implementation.json",
+          "sha256": "836a5a974f44d332136dc7c9fa3b752e6672116f4456b8e067c2de0485c41a3d",
+          "command": "final local qualification evidence",
+          "exit_code": 0,
+          "scope": "production-derived material, two-human decision, expiry and invalidation",
+          "verified_by": "story-16.19-local-qualification",
+          "source_commit": "1adf00fd9de4223186da4976dd8caad9882e26cd",
+          "image_digest": "sha256:7a6afd6fd7b3ce74a672fa6fedda0e2c6d146813bcb3f1009930529e1c5f2323"
+        }
+      ]
     },
     {
       "id": "IAU15-FR-035",
-      "status": "not-run",
-      "evidence": []
+      "status": "passed",
+      "evidence": [
+        {
+          "path": "docs/verification/infra-automation/16-19/prerequisite-profiles/receiver-faults/composition-implementation.json",
+          "sha256": "836a5a974f44d332136dc7c9fa3b752e6672116f4456b8e067c2de0485c41a3d",
+          "command": "final local qualification evidence",
+          "exit_code": 0,
+          "scope": "production-derived material, two-human decision, expiry and invalidation",
+          "verified_by": "story-16.19-local-qualification",
+          "source_commit": "1adf00fd9de4223186da4976dd8caad9882e26cd",
+          "image_digest": "sha256:7a6afd6fd7b3ce74a672fa6fedda0e2c6d146813bcb3f1009930529e1c5f2323"
+        }
+      ]
     },
     {
       "id": "IAU15-FR-036",
-      "status": "not-run",
-      "evidence": []
+      "status": "passed",
+      "evidence": [
+        {
+          "path": "docs/verification/infra-automation/16-19/prerequisite-profiles/receiver-faults/component-results.json",
+          "sha256": "c316389de6a43c1e5ab7b9780a14227a021b610d1cb452270fd51c907e6e3ca6",
+          "command": "final local qualification evidence",
+          "exit_code": 0,
+          "scope": "targets, exact custody, one-use grants, receiver effect fencing and unknown reconciliation",
+          "verified_by": "story-16.19-local-qualification",
+          "source_commit": "1adf00fd9de4223186da4976dd8caad9882e26cd",
+          "image_digest": "sha256:7a6afd6fd7b3ce74a672fa6fedda0e2c6d146813bcb3f1009930529e1c5f2323"
+        }
+      ]
     },
     {
       "id": "IAU15-FR-037",
-      "status": "not-run",
-      "evidence": []
+      "status": "passed",
+      "evidence": [
+        {
+          "path": "docs/verification/infra-automation/16-19/prerequisite-profiles/receiver-faults/component-results.json",
+          "sha256": "c316389de6a43c1e5ab7b9780a14227a021b610d1cb452270fd51c907e6e3ca6",
+          "command": "final local qualification evidence",
+          "exit_code": 0,
+          "scope": "targets, exact custody, one-use grants, receiver effect fencing and unknown reconciliation",
+          "verified_by": "story-16.19-local-qualification",
+          "source_commit": "1adf00fd9de4223186da4976dd8caad9882e26cd",
+          "image_digest": "sha256:7a6afd6fd7b3ce74a672fa6fedda0e2c6d146813bcb3f1009930529e1c5f2323"
+        }
+      ]
     },
     {
       "id": "IAU15-FR-038",
-      "status": "not-run",
-      "evidence": []
+      "status": "passed",
+      "evidence": [
+        {
+          "path": "docs/verification/infra-automation/16-19/prerequisite-profiles/receiver-faults/component-results.json",
+          "sha256": "c316389de6a43c1e5ab7b9780a14227a021b610d1cb452270fd51c907e6e3ca6",
+          "command": "final local qualification evidence",
+          "exit_code": 0,
+          "scope": "targets, exact custody, one-use grants, receiver effect fencing and unknown reconciliation",
+          "verified_by": "story-16.19-local-qualification",
+          "source_commit": "1adf00fd9de4223186da4976dd8caad9882e26cd",
+          "image_digest": "sha256:7a6afd6fd7b3ce74a672fa6fedda0e2c6d146813bcb3f1009930529e1c5f2323"
+        }
+      ]
     },
     {
       "id": "IAU15-FR-039",
-      "status": "not-run",
-      "evidence": []
+      "status": "passed",
+      "evidence": [
+        {
+          "path": "docs/verification/infra-automation/16-19/prerequisite-profiles/receiver-faults/component-results.json",
+          "sha256": "c316389de6a43c1e5ab7b9780a14227a021b610d1cb452270fd51c907e6e3ca6",
+          "command": "final local qualification evidence",
+          "exit_code": 0,
+          "scope": "targets, exact custody, one-use grants, receiver effect fencing and unknown reconciliation",
+          "verified_by": "story-16.19-local-qualification",
+          "source_commit": "1adf00fd9de4223186da4976dd8caad9882e26cd",
+          "image_digest": "sha256:7a6afd6fd7b3ce74a672fa6fedda0e2c6d146813bcb3f1009930529e1c5f2323"
+        }
+      ]
     },
     {
       "id": "IAU15-FR-040",
-      "status": "not-run",
-      "evidence": []
+      "status": "passed",
+      "evidence": [
+        {
+          "path": "docs/verification/infra-automation/16-19/prerequisite-profiles/receiver-faults/component-results.json",
+          "sha256": "c316389de6a43c1e5ab7b9780a14227a021b610d1cb452270fd51c907e6e3ca6",
+          "command": "final local qualification evidence",
+          "exit_code": 0,
+          "scope": "targets, exact custody, one-use grants, receiver effect fencing and unknown reconciliation",
+          "verified_by": "story-16.19-local-qualification",
+          "source_commit": "1adf00fd9de4223186da4976dd8caad9882e26cd",
+          "image_digest": "sha256:7a6afd6fd7b3ce74a672fa6fedda0e2c6d146813bcb3f1009930529e1c5f2323"
+        }
+      ]
     },
     {
       "id": "IAU15-FR-041",
-      "status": "not-run",
-      "evidence": []
+      "status": "passed",
+      "evidence": [
+        {
+          "path": "docs/verification/infra-automation/16-19/prerequisite-profiles/receiver-faults/component-results.json",
+          "sha256": "c316389de6a43c1e5ab7b9780a14227a021b610d1cb452270fd51c907e6e3ca6",
+          "command": "final local qualification evidence",
+          "exit_code": 0,
+          "scope": "targets, exact custody, one-use grants, receiver effect fencing and unknown reconciliation",
+          "verified_by": "story-16.19-local-qualification",
+          "source_commit": "1adf00fd9de4223186da4976dd8caad9882e26cd",
+          "image_digest": "sha256:7a6afd6fd7b3ce74a672fa6fedda0e2c6d146813bcb3f1009930529e1c5f2323"
+        }
+      ]
     },
     {
       "id": "IAU15-FR-042",
-      "status": "not-run",
-      "evidence": []
+      "status": "passed",
+      "evidence": [
+        {
+          "path": "docs/verification/infra-automation/16-19/prerequisite-profiles/receiver-faults/component-results.json",
+          "sha256": "c316389de6a43c1e5ab7b9780a14227a021b610d1cb452270fd51c907e6e3ca6",
+          "command": "final local qualification evidence",
+          "exit_code": 0,
+          "scope": "targets, exact custody, one-use grants, receiver effect fencing and unknown reconciliation",
+          "verified_by": "story-16.19-local-qualification",
+          "source_commit": "1adf00fd9de4223186da4976dd8caad9882e26cd",
+          "image_digest": "sha256:7a6afd6fd7b3ce74a672fa6fedda0e2c6d146813bcb3f1009930529e1c5f2323"
+        }
+      ]
     },
     {
       "id": "IAU15-FR-043",
-      "status": "not-run",
-      "evidence": []
+      "status": "passed",
+      "evidence": [
+        {
+          "path": "docs/verification/infra-automation/16-19/prerequisite-profiles/receiver-faults/component-results.json",
+          "sha256": "c316389de6a43c1e5ab7b9780a14227a021b610d1cb452270fd51c907e6e3ca6",
+          "command": "final local qualification evidence",
+          "exit_code": 0,
+          "scope": "targets, exact custody, one-use grants, receiver effect fencing and unknown reconciliation",
+          "verified_by": "story-16.19-local-qualification",
+          "source_commit": "1adf00fd9de4223186da4976dd8caad9882e26cd",
+          "image_digest": "sha256:7a6afd6fd7b3ce74a672fa6fedda0e2c6d146813bcb3f1009930529e1c5f2323"
+        }
+      ]
     },
     {
       "id": "IAU15-FR-044",
-      "status": "not-run",
-      "evidence": []
+      "status": "passed",
+      "evidence": [
+        {
+          "path": "docs/verification/infra-automation/16-19/prerequisite-profiles/receiver-faults/component-results.json",
+          "sha256": "c316389de6a43c1e5ab7b9780a14227a021b610d1cb452270fd51c907e6e3ca6",
+          "command": "final local qualification evidence",
+          "exit_code": 0,
+          "scope": "targets, exact custody, one-use grants, receiver effect fencing and unknown reconciliation",
+          "verified_by": "story-16.19-local-qualification",
+          "source_commit": "1adf00fd9de4223186da4976dd8caad9882e26cd",
+          "image_digest": "sha256:7a6afd6fd7b3ce74a672fa6fedda0e2c6d146813bcb3f1009930529e1c5f2323"
+        }
+      ]
     },
     {
       "id": "IAU15-FR-045",
-      "status": "not-run",
-      "evidence": []
+      "status": "passed",
+      "evidence": [
+        {
+          "path": "docs/verification/infra-automation/16-19/prerequisite-profiles/receiver-faults/component-results.json",
+          "sha256": "c316389de6a43c1e5ab7b9780a14227a021b610d1cb452270fd51c907e6e3ca6",
+          "command": "final local qualification evidence",
+          "exit_code": 0,
+          "scope": "targets, exact custody, one-use grants, receiver effect fencing and unknown reconciliation",
+          "verified_by": "story-16.19-local-qualification",
+          "source_commit": "1adf00fd9de4223186da4976dd8caad9882e26cd",
+          "image_digest": "sha256:7a6afd6fd7b3ce74a672fa6fedda0e2c6d146813bcb3f1009930529e1c5f2323"
+        }
+      ]
     },
     {
       "id": "IAU15-FR-046",
-      "status": "not-run",
-      "evidence": []
+      "status": "passed",
+      "evidence": [
+        {
+          "path": "docs/verification/infra-automation/16-19/prerequisite-profiles/isolation-final/results.json",
+          "sha256": "a29c4ebdf7af72069daba7aff7726579a2460f63f1701bb6a2d32fe7b0eee19f",
+          "command": "final local qualification evidence",
+          "exit_code": 0,
+          "scope": "enrollment, isolated runner, pinned OpenTofu and bounded collection",
+          "verified_by": "story-16.19-local-qualification",
+          "source_commit": "1adf00fd9de4223186da4976dd8caad9882e26cd",
+          "image_digest": "sha256:7a6afd6fd7b3ce74a672fa6fedda0e2c6d146813bcb3f1009930529e1c5f2323"
+        }
+      ]
     },
     {
       "id": "IAU15-FR-047",
-      "status": "not-run",
-      "evidence": []
+      "status": "passed",
+      "evidence": [
+        {
+          "path": "docs/verification/infra-automation/16-19/prerequisite-profiles/isolation-final/results.json",
+          "sha256": "a29c4ebdf7af72069daba7aff7726579a2460f63f1701bb6a2d32fe7b0eee19f",
+          "command": "final local qualification evidence",
+          "exit_code": 0,
+          "scope": "enrollment, isolated runner, pinned OpenTofu and bounded collection",
+          "verified_by": "story-16.19-local-qualification",
+          "source_commit": "1adf00fd9de4223186da4976dd8caad9882e26cd",
+          "image_digest": "sha256:7a6afd6fd7b3ce74a672fa6fedda0e2c6d146813bcb3f1009930529e1c5f2323"
+        }
+      ]
     },
     {
       "id": "IAU15-FR-048",
-      "status": "not-run",
-      "evidence": []
+      "status": "passed",
+      "evidence": [
+        {
+          "path": "docs/verification/infra-automation/16-19/prerequisite-profiles/isolation-final/results.json",
+          "sha256": "a29c4ebdf7af72069daba7aff7726579a2460f63f1701bb6a2d32fe7b0eee19f",
+          "command": "final local qualification evidence",
+          "exit_code": 0,
+          "scope": "enrollment, isolated runner, pinned OpenTofu and bounded collection",
+          "verified_by": "story-16.19-local-qualification",
+          "source_commit": "1adf00fd9de4223186da4976dd8caad9882e26cd",
+          "image_digest": "sha256:7a6afd6fd7b3ce74a672fa6fedda0e2c6d146813bcb3f1009930529e1c5f2323"
+        }
+      ]
     },
     {
       "id": "IAU15-FR-049",
-      "status": "not-run",
-      "evidence": []
+      "status": "passed",
+      "evidence": [
+        {
+          "path": "docs/verification/infra-automation/16-19/prerequisite-profiles/isolation-final/results.json",
+          "sha256": "a29c4ebdf7af72069daba7aff7726579a2460f63f1701bb6a2d32fe7b0eee19f",
+          "command": "final local qualification evidence",
+          "exit_code": 0,
+          "scope": "enrollment, isolated runner, pinned OpenTofu and bounded collection",
+          "verified_by": "story-16.19-local-qualification",
+          "source_commit": "1adf00fd9de4223186da4976dd8caad9882e26cd",
+          "image_digest": "sha256:7a6afd6fd7b3ce74a672fa6fedda0e2c6d146813bcb3f1009930529e1c5f2323"
+        }
+      ]
     },
     {
       "id": "IAU15-FR-050",
-      "status": "not-run",
-      "evidence": []
+      "status": "passed",
+      "evidence": [
+        {
+          "path": "docs/verification/infra-automation/16-19/prerequisite-profiles/isolation-final/results.json",
+          "sha256": "a29c4ebdf7af72069daba7aff7726579a2460f63f1701bb6a2d32fe7b0eee19f",
+          "command": "final local qualification evidence",
+          "exit_code": 0,
+          "scope": "enrollment, isolated runner, pinned OpenTofu and bounded collection",
+          "verified_by": "story-16.19-local-qualification",
+          "source_commit": "1adf00fd9de4223186da4976dd8caad9882e26cd",
+          "image_digest": "sha256:7a6afd6fd7b3ce74a672fa6fedda0e2c6d146813bcb3f1009930529e1c5f2323"
+        }
+      ]
     },
     {
       "id": "IAU15-FR-051",
-      "status": "not-run",
-      "evidence": []
+      "status": "passed",
+      "evidence": [
+        {
+          "path": "docs/verification/infra-automation/16-19/prerequisite-profiles/isolation-final/results.json",
+          "sha256": "a29c4ebdf7af72069daba7aff7726579a2460f63f1701bb6a2d32fe7b0eee19f",
+          "command": "final local qualification evidence",
+          "exit_code": 0,
+          "scope": "enrollment, isolated runner, pinned OpenTofu and bounded collection",
+          "verified_by": "story-16.19-local-qualification",
+          "source_commit": "1adf00fd9de4223186da4976dd8caad9882e26cd",
+          "image_digest": "sha256:7a6afd6fd7b3ce74a672fa6fedda0e2c6d146813bcb3f1009930529e1c5f2323"
+        }
+      ]
     },
     {
       "id": "IAU15-FR-052",
-      "status": "not-run",
-      "evidence": []
+      "status": "passed",
+      "evidence": [
+        {
+          "path": "docs/verification/infra-automation/16-19/prerequisite-profiles/results.json",
+          "sha256": "17a278b943d84ec8f81aa719f50bbf75b59d710bfa5c139ed91f6658e400b6c7",
+          "command": "final local qualification evidence",
+          "exit_code": 0,
+          "scope": "real composed editor/run/review/runner/report/recovery browser journeys",
+          "verified_by": "story-16.19-local-qualification",
+          "source_commit": "1adf00fd9de4223186da4976dd8caad9882e26cd",
+          "image_digest": "sha256:7a6afd6fd7b3ce74a672fa6fedda0e2c6d146813bcb3f1009930529e1c5f2323"
+        }
+      ]
     },
     {
       "id": "IAU15-FR-053",
-      "status": "not-run",
-      "evidence": []
+      "status": "passed",
+      "evidence": [
+        {
+          "path": "docs/verification/infra-automation/16-19/prerequisite-profiles/results.json",
+          "sha256": "17a278b943d84ec8f81aa719f50bbf75b59d710bfa5c139ed91f6658e400b6c7",
+          "command": "final local qualification evidence",
+          "exit_code": 0,
+          "scope": "real composed editor/run/review/runner/report/recovery browser journeys",
+          "verified_by": "story-16.19-local-qualification",
+          "source_commit": "1adf00fd9de4223186da4976dd8caad9882e26cd",
+          "image_digest": "sha256:7a6afd6fd7b3ce74a672fa6fedda0e2c6d146813bcb3f1009930529e1c5f2323"
+        }
+      ]
     },
     {
       "id": "IAU15-FR-054",
-      "status": "not-run",
-      "evidence": []
+      "status": "passed",
+      "evidence": [
+        {
+          "path": "docs/verification/infra-automation/16-19/prerequisite-profiles/results.json",
+          "sha256": "17a278b943d84ec8f81aa719f50bbf75b59d710bfa5c139ed91f6658e400b6c7",
+          "command": "final local qualification evidence",
+          "exit_code": 0,
+          "scope": "real composed editor/run/review/runner/report/recovery browser journeys",
+          "verified_by": "story-16.19-local-qualification",
+          "source_commit": "1adf00fd9de4223186da4976dd8caad9882e26cd",
+          "image_digest": "sha256:7a6afd6fd7b3ce74a672fa6fedda0e2c6d146813bcb3f1009930529e1c5f2323"
+        }
+      ]
     },
     {
       "id": "IAU15-FR-055",
-      "status": "not-run",
-      "evidence": []
+      "status": "passed",
+      "evidence": [
+        {
+          "path": "docs/verification/infra-automation/16-19/prerequisite-profiles/results.json",
+          "sha256": "17a278b943d84ec8f81aa719f50bbf75b59d710bfa5c139ed91f6658e400b6c7",
+          "command": "final local qualification evidence",
+          "exit_code": 0,
+          "scope": "real composed editor/run/review/runner/report/recovery browser journeys",
+          "verified_by": "story-16.19-local-qualification",
+          "source_commit": "1adf00fd9de4223186da4976dd8caad9882e26cd",
+          "image_digest": "sha256:7a6afd6fd7b3ce74a672fa6fedda0e2c6d146813bcb3f1009930529e1c5f2323"
+        }
+      ]
     },
     {
       "id": "IAU15-FR-056",
-      "status": "not-run",
-      "evidence": []
+      "status": "passed",
+      "evidence": [
+        {
+          "path": "docs/verification/infra-automation/16-19/development-validation.json",
+          "sha256": "dc6c936b1928b759e4f9a49298da0d3cd483929f67fc4581b1ca0dc038d869eb",
+          "command": "final local qualification evidence",
+          "exit_code": 0,
+          "scope": "declared units, audit, administration, retention and settings",
+          "verified_by": "story-16.19-local-qualification",
+          "source_commit": "1adf00fd9de4223186da4976dd8caad9882e26cd",
+          "image_digest": "sha256:7a6afd6fd7b3ce74a672fa6fedda0e2c6d146813bcb3f1009930529e1c5f2323"
+        }
+      ]
     },
     {
       "id": "IAU15-FR-057",
-      "status": "not-run",
-      "evidence": []
+      "status": "passed",
+      "evidence": [
+        {
+          "path": "docs/verification/infra-automation/16-19/development-validation.json",
+          "sha256": "dc6c936b1928b759e4f9a49298da0d3cd483929f67fc4581b1ca0dc038d869eb",
+          "command": "final local qualification evidence",
+          "exit_code": 0,
+          "scope": "declared units, audit, administration, retention and settings",
+          "verified_by": "story-16.19-local-qualification",
+          "source_commit": "1adf00fd9de4223186da4976dd8caad9882e26cd",
+          "image_digest": "sha256:7a6afd6fd7b3ce74a672fa6fedda0e2c6d146813bcb3f1009930529e1c5f2323"
+        }
+      ]
     },
     {
       "id": "IAU15-FR-058",
-      "status": "not-run",
-      "evidence": []
+      "status": "passed",
+      "evidence": [
+        {
+          "path": "docs/verification/infra-automation/16-19/development-validation.json",
+          "sha256": "dc6c936b1928b759e4f9a49298da0d3cd483929f67fc4581b1ca0dc038d869eb",
+          "command": "final local qualification evidence",
+          "exit_code": 0,
+          "scope": "declared units, audit, administration, retention and settings",
+          "verified_by": "story-16.19-local-qualification",
+          "source_commit": "1adf00fd9de4223186da4976dd8caad9882e26cd",
+          "image_digest": "sha256:7a6afd6fd7b3ce74a672fa6fedda0e2c6d146813bcb3f1009930529e1c5f2323"
+        }
+      ]
     },
     {
       "id": "IAU15-FR-059",
-      "status": "not-run",
-      "evidence": []
+      "status": "passed",
+      "evidence": [
+        {
+          "path": "docs/verification/infra-automation/16-19/development-validation.json",
+          "sha256": "dc6c936b1928b759e4f9a49298da0d3cd483929f67fc4581b1ca0dc038d869eb",
+          "command": "final local qualification evidence",
+          "exit_code": 0,
+          "scope": "declared units, audit, administration, retention and settings",
+          "verified_by": "story-16.19-local-qualification",
+          "source_commit": "1adf00fd9de4223186da4976dd8caad9882e26cd",
+          "image_digest": "sha256:7a6afd6fd7b3ce74a672fa6fedda0e2c6d146813bcb3f1009930529e1c5f2323"
+        }
+      ]
     },
     {
       "id": "IAU15-FR-060",
-      "status": "not-run",
-      "evidence": []
+      "status": "passed",
+      "evidence": [
+        {
+          "path": "docs/verification/infra-automation/16-19/development-validation.json",
+          "sha256": "dc6c936b1928b759e4f9a49298da0d3cd483929f67fc4581b1ca0dc038d869eb",
+          "command": "final local qualification evidence",
+          "exit_code": 0,
+          "scope": "declared units, audit, administration, retention and settings",
+          "verified_by": "story-16.19-local-qualification",
+          "source_commit": "1adf00fd9de4223186da4976dd8caad9882e26cd",
+          "image_digest": "sha256:7a6afd6fd7b3ce74a672fa6fedda0e2c6d146813bcb3f1009930529e1c5f2323"
+        }
+      ]
     },
     {
       "id": "IAU15-NFR-001",
-      "status": "not-run",
-      "evidence": []
+      "status": "passed",
+      "evidence": [
+        {
+          "path": "docs/verification/infra-automation/16-19/development-validation.json",
+          "sha256": "dc6c936b1928b759e4f9a49298da0d3cd483929f67fc4581b1ca0dc038d869eb",
+          "command": "final local qualification evidence",
+          "exit_code": 0,
+          "scope": "crash/race, authorization, secret corpus and Evidence Law matrices",
+          "verified_by": "story-16.19-local-qualification",
+          "source_commit": "1adf00fd9de4223186da4976dd8caad9882e26cd",
+          "image_digest": "sha256:7a6afd6fd7b3ce74a672fa6fedda0e2c6d146813bcb3f1009930529e1c5f2323"
+        }
+      ]
     },
     {
       "id": "IAU15-NFR-002",
-      "status": "not-run",
-      "evidence": []
+      "status": "passed",
+      "evidence": [
+        {
+          "path": "docs/verification/infra-automation/16-19/development-validation.json",
+          "sha256": "dc6c936b1928b759e4f9a49298da0d3cd483929f67fc4581b1ca0dc038d869eb",
+          "command": "final local qualification evidence",
+          "exit_code": 0,
+          "scope": "crash/race, authorization, secret corpus and Evidence Law matrices",
+          "verified_by": "story-16.19-local-qualification",
+          "source_commit": "1adf00fd9de4223186da4976dd8caad9882e26cd",
+          "image_digest": "sha256:7a6afd6fd7b3ce74a672fa6fedda0e2c6d146813bcb3f1009930529e1c5f2323"
+        }
+      ]
     },
     {
       "id": "IAU15-NFR-003",
-      "status": "not-run",
-      "evidence": []
+      "status": "passed",
+      "evidence": [
+        {
+          "path": "docs/verification/infra-automation/16-19/development-validation.json",
+          "sha256": "dc6c936b1928b759e4f9a49298da0d3cd483929f67fc4581b1ca0dc038d869eb",
+          "command": "final local qualification evidence",
+          "exit_code": 0,
+          "scope": "crash/race, authorization, secret corpus and Evidence Law matrices",
+          "verified_by": "story-16.19-local-qualification",
+          "source_commit": "1adf00fd9de4223186da4976dd8caad9882e26cd",
+          "image_digest": "sha256:7a6afd6fd7b3ce74a672fa6fedda0e2c6d146813bcb3f1009930529e1c5f2323"
+        }
+      ]
     },
     {
       "id": "IAU15-NFR-004",
-      "status": "not-run",
-      "evidence": []
+      "status": "passed",
+      "evidence": [
+        {
+          "path": "docs/verification/infra-automation/16-19/development-validation.json",
+          "sha256": "dc6c936b1928b759e4f9a49298da0d3cd483929f67fc4581b1ca0dc038d869eb",
+          "command": "final local qualification evidence",
+          "exit_code": 0,
+          "scope": "crash/race, authorization, secret corpus and Evidence Law matrices",
+          "verified_by": "story-16.19-local-qualification",
+          "source_commit": "1adf00fd9de4223186da4976dd8caad9882e26cd",
+          "image_digest": "sha256:7a6afd6fd7b3ce74a672fa6fedda0e2c6d146813bcb3f1009930529e1c5f2323"
+        }
+      ]
     },
     {
       "id": "IAU15-NFR-005",
-      "status": "not-run",
-      "evidence": []
+      "status": "passed",
+      "evidence": [
+        {
+          "path": "docs/verification/infra-automation/16-19/reference-performance/capacity-final/operator-capacity.json",
+          "sha256": "f22bb7472bf097715a088c835068b6814837be56e26218adac839b69853eb56d",
+          "command": "final local qualification evidence",
+          "exit_code": 0,
+          "scope": "ready-transition overhead and 30-minute saturation on exact resource profile",
+          "verified_by": "story-16.19-local-qualification",
+          "source_commit": "1adf00fd9de4223186da4976dd8caad9882e26cd",
+          "image_digest": "sha256:7a6afd6fd7b3ce74a672fa6fedda0e2c6d146813bcb3f1009930529e1c5f2323"
+        }
+      ]
     },
     {
       "id": "IAU15-NFR-006",
-      "status": "not-run",
-      "evidence": []
+      "status": "passed",
+      "evidence": [
+        {
+          "path": "docs/verification/infra-automation/16-19/reference-performance/runner-claims.json",
+          "sha256": "47e70d7fc7c48b291fbbc202b6c8ee3a0fb5771d19e38acc0cae1306354bd7d1",
+          "command": "final local qualification evidence",
+          "exit_code": 0,
+          "scope": "service-path sampled latency composed with separately qualified actual TLS behavior",
+          "verified_by": "story-16.19-local-qualification",
+          "source_commit": "1adf00fd9de4223186da4976dd8caad9882e26cd",
+          "image_digest": "sha256:7a6afd6fd7b3ce74a672fa6fedda0e2c6d146813bcb3f1009930529e1c5f2323"
+        }
+      ]
     },
     {
       "id": "IAU15-NFR-007",
-      "status": "not-run",
-      "evidence": []
+      "status": "passed",
+      "evidence": [
+        {
+          "path": "docs/verification/infra-automation/16-19/reference-performance/capacity-final/operator-capacity.json",
+          "sha256": "f22bb7472bf097715a088c835068b6814837be56e26218adac839b69853eb56d",
+          "command": "final local qualification evidence",
+          "exit_code": 0,
+          "scope": "ready-transition overhead and 30-minute saturation on exact resource profile",
+          "verified_by": "story-16.19-local-qualification",
+          "source_commit": "1adf00fd9de4223186da4976dd8caad9882e26cd",
+          "image_digest": "sha256:7a6afd6fd7b3ce74a672fa6fedda0e2c6d146813bcb3f1009930529e1c5f2323"
+        }
+      ]
     },
     {
       "id": "IAU15-NFR-008",
-      "status": "not-run",
-      "evidence": []
+      "status": "passed",
+      "evidence": [
+        {
+          "path": "docs/verification/infra-automation/16-19/reference-performance/workflow-validation.json",
+          "sha256": "4d15eae82f4c194ae7380dc467c97222688007a8a63b7ae55e8219e819d2e5d9",
+          "command": "final local qualification evidence",
+          "exit_code": 0,
+          "scope": "1,000 fifty-step validation timings and correctness",
+          "verified_by": "story-16.19-local-qualification",
+          "source_commit": "1adf00fd9de4223186da4976dd8caad9882e26cd",
+          "image_digest": "sha256:7a6afd6fd7b3ce74a672fa6fedda0e2c6d146813bcb3f1009930529e1c5f2323"
+        }
+      ]
     },
     {
       "id": "IAU15-NFR-009",
-      "status": "not-run",
-      "evidence": []
+      "status": "passed",
+      "evidence": [
+        {
+          "path": "docs/verification/infra-automation/16-19/prerequisite-profiles/README.md",
+          "sha256": "4d280c168ac5690081159f85e2b2ed8c3456d6dd0e62ac9bf042e8d854bb1c39",
+          "command": "final local qualification evidence",
+          "exit_code": 0,
+          "scope": "composed browser evidence on byte-identical React source, plus exact-current-image health; not a browser rerun",
+          "verified_by": "story-16.19-local-qualification",
+          "source_commit": "1adf00fd9de4223186da4976dd8caad9882e26cd",
+          "image_digest": "sha256:7a6afd6fd7b3ce74a672fa6fedda0e2c6d146813bcb3f1009930529e1c5f2323"
+        }
+      ]
     },
     {
       "id": "IAU15-NFR-010",
-      "status": "not-run",
-      "evidence": []
+      "status": "passed",
+      "evidence": [
+        {
+          "path": "docs/verification/infra-automation/16-18/acceptance-audit.md",
+          "sha256": "8b8417a7dfda61cc01ba3793c39538266240e3d24412a8c13aac9b932a1a9c0e",
+          "command": "final local qualification evidence",
+          "exit_code": 0,
+          "scope": "upgrade/restore/rotation/offline/docs and bounded maintainer waiver",
+          "verified_by": "story-16.19-local-qualification",
+          "source_commit": "1adf00fd9de4223186da4976dd8caad9882e26cd",
+          "image_digest": "sha256:7a6afd6fd7b3ce74a672fa6fedda0e2c6d146813bcb3f1009930529e1c5f2323"
+        }
+      ]
     },
     {
       "id": "IAU15-NFR-011",
-      "status": "not-run",
-      "evidence": []
+      "status": "failed",
+      "evidence": [
+        {
+          "path": "docs/verification/infra-automation/16-19/human-pilot-record.md",
+          "sha256": "76c05b792dc19bf8d72d95d76a48e75d0a7fb6dbf1d9c4080995cdb91aadbc8b",
+          "command": "external trust gate evaluation",
+          "exit_code": 2,
+          "scope": "maintainer waiver recorded but durable CODEOWNERS approval evidence remains absent",
+          "verified_by": "story-16.19-local-qualification",
+          "source_commit": "1adf00fd9de4223186da4976dd8caad9882e26cd",
+          "image_digest": "sha256:7a6afd6fd7b3ce74a672fa6fedda0e2c6d146813bcb3f1009930529e1c5f2323"
+        }
+      ]
     },
     {
       "id": "IAU15-NFR-012",
-      "status": "not-run",
-      "evidence": []
+      "status": "failed",
+      "evidence": [
+        {
+          "path": "docs/verification/infra-automation/16-19/release-decision.md",
+          "sha256": "1898386239a670381389a716ac4e7eb027f4d0b9b1606c90f9a2cf29f5a0f9f0",
+          "command": "external trust gate evaluation",
+          "exit_code": 2,
+          "scope": "exact local artifacts verified but hosted signatures, OCI provenance and publication remain open",
+          "verified_by": "story-16.19-local-qualification",
+          "source_commit": "1adf00fd9de4223186da4976dd8caad9882e26cd",
+          "image_digest": "sha256:7a6afd6fd7b3ce74a672fa6fedda0e2c6d146813bcb3f1009930529e1c5f2323"
+        }
+      ]
     }
   ],
   "gates": [
     {
       "id": "accepted-prerequisites",
-      "status": "not-run",
-      "evidence": []
+      "status": "failed",
+      "evidence": [
+        {
+          "path": "docs/verification/infra-automation/16-19/release-decision.md",
+          "sha256": "1898386239a670381389a716ac4e7eb027f4d0b9b1606c90f9a2cf29f5a0f9f0",
+          "command": "external gate evaluation",
+          "exit_code": 2,
+          "scope": "Story 16.14 Packet 14.8 external receiver-effect qualification remains open",
+          "verified_by": "story-16.19-local-qualification",
+          "source_commit": "1adf00fd9de4223186da4976dd8caad9882e26cd",
+          "image_digest": "sha256:7a6afd6fd7b3ce74a672fa6fedda0e2c6d146813bcb3f1009930529e1c5f2323"
+        }
+      ]
     },
     {
       "id": "operator-pilot-or-maintainer-waiver",
-      "status": "not-run",
-      "evidence": []
+      "status": "failed",
+      "evidence": [
+        {
+          "path": "docs/verification/infra-automation/16-19/human-pilot-record.md",
+          "sha256": "76c05b792dc19bf8d72d95d76a48e75d0a7fb6dbf1d9c4080995cdb91aadbc8b",
+          "command": "external gate evaluation",
+          "exit_code": 2,
+          "scope": "waiver_kind=accountable-maintainer; approval_evidence=missing-durable-codeowners-review; pilot=not-executed",
+          "verified_by": "story-16.19-local-qualification",
+          "source_commit": "1adf00fd9de4223186da4976dd8caad9882e26cd",
+          "image_digest": "sha256:7a6afd6fd7b3ce74a672fa6fedda0e2c6d146813bcb3f1009930529e1c5f2323"
+        }
+      ]
     },
     {
       "id": "integrated-real-profile",
-      "status": "not-run",
-      "evidence": []
+      "status": "failed",
+      "evidence": [
+        {
+          "path": "docs/verification/infra-automation/16-19/prerequisite-profiles/receiver-faults/composition-implementation.json",
+          "sha256": "836a5a974f44d332136dc7c9fa3b752e6672116f4456b8e067c2de0485c41a3d",
+          "command": "external gate evaluation",
+          "exit_code": 2,
+          "scope": "local production composition passed; accepted/unknown external carrier effect remains open",
+          "verified_by": "story-16.19-local-qualification",
+          "source_commit": "1adf00fd9de4223186da4976dd8caad9882e26cd",
+          "image_digest": "sha256:7a6afd6fd7b3ce74a672fa6fedda0e2c6d146813bcb3f1009930529e1c5f2323"
+        }
+      ]
     },
     {
       "id": "safety-and-authorization",
-      "status": "not-run",
-      "evidence": []
+      "status": "passed",
+      "evidence": [
+        {
+          "path": "docs/verification/infra-automation/16-19/development-validation.json",
+          "sha256": "dc6c936b1928b759e4f9a49298da0d3cd483929f67fc4581b1ca0dc038d869eb",
+          "command": "final local gate verification",
+          "exit_code": 0,
+          "scope": "final-source crash, authorization, redaction and evidence-law suites passed",
+          "verified_by": "story-16.19-local-qualification",
+          "source_commit": "1adf00fd9de4223186da4976dd8caad9882e26cd",
+          "image_digest": "sha256:7a6afd6fd7b3ce74a672fa6fedda0e2c6d146813bcb3f1009930529e1c5f2323"
+        }
+      ]
     },
     {
       "id": "reference-performance",
-      "status": "not-run",
-      "evidence": []
+      "status": "passed",
+      "evidence": [
+        {
+          "path": "docs/verification/infra-automation/16-19/reference-performance/capacity-final/operator-capacity.json",
+          "sha256": "f22bb7472bf097715a088c835068b6814837be56e26218adac839b69853eb56d",
+          "command": "final local gate verification",
+          "exit_code": 0,
+          "scope": "1800-second 10/2/20 capacity and latency thresholds passed",
+          "verified_by": "story-16.19-local-qualification",
+          "source_commit": "1adf00fd9de4223186da4976dd8caad9882e26cd",
+          "image_digest": "sha256:7a6afd6fd7b3ce74a672fa6fedda0e2c6d146813bcb3f1009930529e1c5f2323"
+        }
+      ]
     },
     {
       "id": "composed-browser",
-      "status": "not-run",
-      "evidence": []
+      "status": "passed",
+      "evidence": [
+        {
+          "path": "docs/verification/infra-automation/16-19/prerequisite-profiles/README.md",
+          "sha256": "4d280c168ac5690081159f85e2b2ed8c3456d6dd0e62ac9bf042e8d854bb1c39",
+          "command": "final local gate verification",
+          "exit_code": 0,
+          "scope": "composed browser proof retained on byte-identical React source; exact current image health passed",
+          "verified_by": "story-16.19-local-qualification",
+          "source_commit": "1adf00fd9de4223186da4976dd8caad9882e26cd",
+          "image_digest": "sha256:7a6afd6fd7b3ce74a672fa6fedda0e2c6d146813bcb3f1009930529e1c5f2323"
+        }
+      ]
     },
     {
       "id": "operations-and-docs",
-      "status": "not-run",
-      "evidence": []
+      "status": "passed",
+      "evidence": [
+        {
+          "path": "docs/verification/infra-automation/16-19/development-validation.json",
+          "sha256": "dc6c936b1928b759e4f9a49298da0d3cd483929f67fc4581b1ca0dc038d869eb",
+          "command": "final local gate verification",
+          "exit_code": 0,
+          "scope": "operations, restore, docs, link and full-CI evidence passed with bounded waiver disclosure",
+          "verified_by": "story-16.19-local-qualification",
+          "source_commit": "1adf00fd9de4223186da4976dd8caad9882e26cd",
+          "image_digest": "sha256:7a6afd6fd7b3ce74a672fa6fedda0e2c6d146813bcb3f1009930529e1c5f2323"
+        }
+      ]
     },
     {
       "id": "independent-code-security-review",
-      "status": "not-run",
-      "evidence": []
+      "status": "passed",
+      "evidence": [
+        {
+          "path": "docs/verification/infra-automation/16-19/prerequisite-review.json",
+          "sha256": "79e7889548a00e6bcf0c6ea7381e2698d3403af8809d44b731d879b549be1bdf",
+          "command": "final local gate verification",
+          "exit_code": 0,
+          "scope": "blind and security reviews resolved all local source findings",
+          "verified_by": "story-16.19-local-qualification",
+          "source_commit": "1adf00fd9de4223186da4976dd8caad9882e26cd",
+          "image_digest": "sha256:7a6afd6fd7b3ce74a672fa6fedda0e2c6d146813bcb3f1009930529e1c5f2323"
+        }
+      ]
     },
     {
       "id": "signed-artifacts-sbom-provenance",
-      "status": "not-run",
-      "evidence": []
+      "status": "failed",
+      "evidence": [
+        {
+          "path": "docs/verification/infra-automation/16-19/release-decision.md",
+          "sha256": "1898386239a670381389a716ac4e7eb027f4d0b9b1606c90f9a2cf29f5a0f9f0",
+          "command": "external gate evaluation",
+          "exit_code": 2,
+          "scope": "local app/runner/SBOM/checksums passed; hosted attestations and signed OCI verification not executed",
+          "verified_by": "story-16.19-local-qualification",
+          "source_commit": "1adf00fd9de4223186da4976dd8caad9882e26cd",
+          "image_digest": "sha256:7a6afd6fd7b3ce74a672fa6fedda0e2c6d146813bcb3f1009930529e1c5f2323"
+        }
+      ]
     }
   ]
 }

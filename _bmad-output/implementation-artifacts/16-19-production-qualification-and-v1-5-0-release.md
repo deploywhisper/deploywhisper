@@ -48,7 +48,7 @@ Coverage intent: Delta against released v1.4.0; full canonical mappings below ar
 
 Execute one bounded packet at a time on the story feature branch. Each packet owns the named paths; coordinate shared paths and do not revert other edits. Re-estimate after 16.0 spikes; split packets into reviewable PRs without renumbering the canonical story.
 
-- [ ] Packet 19.1: Qualification manifest and full CI — owner: Quality implementer/verifier.
+- [x] Packet 19.1: Qualification manifest and full CI — owner: Quality implementer/verifier.
   - Owned write paths: `tests/test_infra_automation/ harness; scripts/ci-local.sh; .github/workflows/ affected test shards; docs/infra-automation/qualification.md`.
   - Output: versioned gate manifest mapping all 72 requirements and actual commands/results to immutable build identity.
   - Acceptance proof: AC1–6: existing nine test directories plus new automation directory, constructor fixture search, affected pytest shard and repo-wide Ruff.
@@ -56,11 +56,11 @@ Execute one bounded packet at a time on the story feature branch. Each packet ow
   - Owned write paths: `tests/test_infra_automation/ fault/auth/redaction/receiver real-profile harness; synthetic fixtures`.
   - Output: persisted-boundary crash matrix, exact-byte custody/receiver pilot and principal×role×scope matrix.
   - Acceptance proof: AC1,2: real supported-tool profile, zero unauthorized/duplicate action and known-pattern leaks.
-- [ ] Packet 19.3: Performance and operations — owner: Performance/operator verifier.
+- [x] Packet 19.3: Performance and operations — owner: Performance/operator verifier.
   - Owned write paths: `tests/test_infra_automation/ benchmark harness and docs/infra-automation/qualification.md`.
   - Output: named 4vCPU/8GB/localSSD workload, 1,000 samples per latency gate and recorded 30-minute saturation/restore exercises.
   - Acceptance proof: AC3,5: timestamped reproducible p95/capacity/error/resource results and self-service runbooks.
-- [ ] Packet 19.4: Composed browser qualification — owner: UI verifier.
+- [x] Packet 19.4: Composed browser qualification — owner: UI verifier.
   - Owned write paths: `frontend/e2e/ automation journeys; docs/infra-automation/qualification.md screenshot evidence`.
   - Output: real seeded production-route E2E, keyboard/axe and widths 1440/760.
   - Acceptance proof: AC4: all new routes, denial/stale/unknown states, frontend type/unit/build and Compose evidence.
@@ -112,6 +112,8 @@ Codex (GPT-6 Astra), entry assessment with an independent native readiness revie
 - [Independent human pilot record — still unexecuted](../../docs/verification/infra-automation/16-19/human-pilot-record.md).
 
 ### Completion Notes List
+- 2026-11-11 final local qualification: immutable implementation commit `1adf00fd9de4223186da4976dd8caad9882e26cd` passed 2,117 root tests/3 skips, all ten local-CI directories with 3,592 tests/3 skips, the exact API/CLI/infra shard with 820 tests/1 skip/2,442 subtests, the automation shard with 1,260 tests/1 skip/3,382 subtests, frontend 513+2 compatibility/type/build, Ruff and high-severity Bandit. The uninterrupted capacity run qualified for 1,800.138 seconds at 10 active runs/2 analysis workers/20 authenticated runner ports with zero errors/OOMs and identical 357-file source hashes. Exact local app/runner archives, manifests, SPDX SBOM and checksums verified; the extracted runner entrypoint passed; image `sha256:7a6afd6fd7b3ce74a672fa6fedda0e2c6d146813bcb3f1009930529e1c5f2323` served external health/OpenAPI as version1.5.0 under non-root UID999 with no Node runtime.
+- Story remains `in-progress`, not `done`: Packet19.2 still requires Story16.14 Packet14.8 accepted/unknown external receiver-effect and reconciliation qualification. Packet19.5 still requires durable waiver approval evidence, hosted attestations/signed OCI verification, immutable-commit CODEOWNERS review and separately authorized public release writes. Local unsigned artifacts and the maintainer waiver do not satisfy those external trust gates.
 - 2026-11-11 production composition repair: final acceptance found the default material/witness and policy/human/handoff path unavailable. The approved co-located design now derives bindings from retained production facts, uses a signed monotonic operator ledger and live split-process custody verification, registers a fixed no-authority policy worker and composes one shared decision/handoff service. Focused source-freeze blind/security review is clean; production-derived two-human decision and durable handoff prepare pass without automatic dispatch. Public carrier credentials/actions remain separately gated.
 - 2026-11-11 release-scope cut-back: Epic17 had zero implemented stories and was removed from v1.5.0 under its pre-approved decision rule; it now targets independent v1.6.0. No Epic17 code, migration or release claim is included in this story.
 - 2026-11-11 release preparation: runtime/package defaults and generated OpenAPI are v1.5.0; candidate notes, changelog and named support matrix are present; deterministic release assets now include a bounded runner archive/manifest plus application archive, SBOM, checksums and provenance subjects. Actual hosted signatures and public publication remain unexecuted.

@@ -1,6 +1,6 @@
 # Prerequisite profile qualification
 
-The bounded Story 16.13/16.14 profile and the previously missing positive Story 16.15 HTTPS/browser lane passed against source commit `675f127a0c4ad7c3630d3c59cb7412818afd1db8`. This is agent-executed technical qualification, not the independent human self-service pilot or blanket production approval.
+The bounded Story 16.13/16.14 profile and the previously missing positive Story 16.15 HTTPS/browser lane initially passed against source commit `675f127a0c4ad7c3630d3c59cb7412818afd1db8`. The OpenTofu collection profile was rerun after the final production-composition changes and its current 65-file witness passes. The React production source used by the browser lane is byte-identical between that commit and final implementation commit `1adf00fd9de4223186da4976dd8caad9882e26cd`; the final exact image also passed external health/OpenAPI smoke. This is agent-executed technical qualification, not the independent human self-service pilot, external carrier-effect proof or blanket production approval.
 
 ## Final evidence
 
@@ -13,7 +13,7 @@ The bounded Story 16.13/16.14 profile and the previously missing positive Story 
 | Actual composed TLS browser | 3 journeys passed in 1.2 minutes; 8 captures at 1440/760; zero critical/serious axe violations | [results.json](results.json), [screenshots](https/screenshots) |
 | Frontend unit/type/build | 513 tests plus 2 compatibility checks; typecheck and production build passed | Log hashes in [results.json](results.json) |
 
-The final application image is `sha256:a0155abf874bd29a798a19e794dd9d2928d17ed701011e655ecc6920cc65d447`. The collector uses the recorded Linux ARM64/OpenTofu 1.13.1 image and operator-owned immutable source/catalog/custody. No cloud/provider credentials or external infrastructure action were used.
+The composed TLS/browser application's recorded image is `sha256:a0155abf874bd29a798a19e794dd9d2928d17ed701011e655ecc6920cc65d447`. The final exact local release image is `sha256:7a6afd6fd7b3ce74a672fa6fedda0e2c6d146813bcb3f1009930529e1c5f2323`; it is not relabelled as the earlier browser image. The collector uses the recorded Linux ARM64/OpenTofu 1.13.1 image and operator-owned immutable source/catalog/custody. No cloud/provider credentials or external infrastructure action were used.
 
 The real HTTP path publishes a collected workflow, admits a run, enrolls and redeems a runner, establishes its online heartbeat, receives and claims an actual task, executes the real isolated collector, uploads and completes through the normal `RunnerClient` transport, and waits for the application's coordinator and spawned analysis worker. The browser then opens that same run and its permanent briefing. There is no synthetic success-response adapter in this path. The original direct-service collector corpus remains separately identified.
 
