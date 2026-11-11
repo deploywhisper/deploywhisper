@@ -1,0 +1,11 @@
+{
+  "acceptance_qualified": false,
+  "reason": "Docker wall clock jumped forward by approximately40minutes immediately before correct authority-expiry denial; monotonic workload duration was incomplete. No authorization or clock guard bypass is applied.",
+  "last_progress_utc": "2026-11-10T15:08:42.758248+00:00",
+  "last_progress_elapsed_seconds": 1712.90742473898,
+  "first_rejection_log_time": "2026-11-10 15:48:00,976",
+  "failure_elapsed_seconds": 1729.9367709539947,
+  "source_hashes_identical": true,
+  "retry": "Same frozen source and production image; macOS caffeinate prevents idle host sleep during the retry.",
+  "log_sha256": "9ad971ac9a8c3f5380b20967562d6e23953c34335c226c8358cbc9f4016d6cf1"
+}

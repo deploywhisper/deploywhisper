@@ -1,5 +1,9 @@
 # Story 16.18 acceptance audit
 
+> Historical pre-fix record at `0716460`. Review-fix evidence is recorded in
+> [review-fixes.md](review-fixes.md) and [review-fixes-validation-summary.json](review-fixes-validation-summary.json).
+> Original results below remain scoped to their recorded image/source; current screenshots are identified by [screenshots.json](screenshots.json).
+
 Read-only acceptance audit on 2026-11-10. This document maps the canonical story
 and approved packets to delivered contracts and actual evidence. It changes no
 runtime, test, story status or checkbox. It is not an independent rerun of the
@@ -15,11 +19,10 @@ commands described by the evidence owners.
   completion-resume supplements, with private disposable stores and cleanup.
   [Operator evidence](operator-exercise.md) distinguishes real commands from
   synthetic custody and test-only interruption markers.
-- The `ui-results.md` UI evidence is currently in the separate UI worktree
-  `/tmp/deploywhisper-story16-18-ui`. The canonical location after branch
-  integration is `docs/verification/infra-automation/16-18/ui-results.md` on
-  `feature/16-18-automation-settings-ui`; the integration owner must preserve it
-  and its screenshot/source manifests when preparing the separate UI PR.
+- The `ui-results.md` evidence was prepared in an isolated UI worktree and
+  rebased onto the local backend dependency. Its integrated canonical location is `docs/verification/infra-automation/16-18/ui-results.md` on
+  `feature/16-18-automation-settings-ui`, together with its screenshot/source
+  manifests for the separate UI review unit.
   Its final results are 493 frontend tests, two compatibility checks, two composed
   browser journeys, 24 screenshots, zero serious/critical axe findings and visual
   verdict 94. These are browser proofs against the production-built image, not a
@@ -138,3 +141,94 @@ unrun should be reconciled to the newer exact evidence records during final docs
 closeout; they do not negate the now-executed agent/operator and restored-receiver
 contracts or the subsequent bounded offline installation proof, nor can they
 supply the missing independent human proof.
+
+## Formal review-fix supplement — R1–R7
+
+This supplement preserves the historical pre-fix audit above. It supersedes its
+implementation/final-image counts where stated, without converting pending
+operational gates into passing results. The source review was read-only; this
+supplement did not rerun tests, change runtime/test files or alter story status.
+It compared the seven reproduced findings in
+[formal-code-review.md](formal-code-review.md) with current implementation,
+`tests/test_infra_automation/test_operator_recovery_review.py`, the settings
+implementation and [review-fixes.md](review-fixes.md), plus the final proof records.
+
+The final review-fix product image is
+`sha256:2c652ba689e6c6d6e02d7be7dc054ea4cbc093c46bb87341846824acc1a5c3e8`.
+The earlier `363f797…` image and its successful exercises remain historical
+pre-review-fix evidence; they do not substitute for proof of the repaired paths.
+The [final operator record](review-fixes-operator-results.md) verifies all 209
+packaged runtime hashes against current host source before and after its run.
+
+| Finding | Actual repair and evidence checked | Completion disposition |
+| --- | --- | --- |
+| R1 — initialization binding stranded after ledger publication failure | `RecoveryStore.initialize` publishes a complete private `initializing` intent and permanent lifecycle-lock inode before binding the database. `_finish_initialize` rechecks layout, schema, ceiling, database device/inode and the exact original installation/generation; it inserts the binding once or recognizes only that exact binding. Resume/retry follows this intent, while a genuinely lost deployed ledger remains denied. Review tests cover failures before/after binding, parent fsync/publication, replaced database identity, wrong generation/binding and actual subprocess exits. The final-image operator exercise performs two controlled initialization exceptions and then unpatched CLI resume with unchanged intent/identity/lock. | Reproduced software defect repaired. Actual subprocess and CLI exception proofs are distinguished from host-power-loss qualification; no reconstruction of a lost deployed ledger is claimed. |
+| R2 — reserved `database` root role overwrote staging mapping | `_layout` explicitly rejects the reserved role before initial publication, and all resumed/restored layouts pass the same validation. Dedicated regressions reject both new initialization and a retained invalid ledger before binding or restore generation reservation. | Reproduced software defect repaired; no alternate caller-controlled database mapping is admitted. |
+| R3 — successful backup could exceed restore's package limits | `backup` builds the complete staging package including `manifest.json`, then calls the same `_verify_backup` used by restore before exclusive publication. Tests cover the real 4096-entry boundary, role-prefixed source depth 32, metadata ceiling and total manifest-inclusive byte budget. | Reproduced software defect repaired. Successful publication now implies acceptance by the same package verifier; tests do not claim physical disk/power-loss durability. |
+| R4 — old backup reversed a committed purge | `_preserve_external_history` now requires exact current retention-tombstone and removal-audit rows in the incoming snapshot. It separately verifies every removed manifest's identity/scope/requester/digest and `b"[]"` marker. These checks run before generation reservation, while the original handoff/grant/lock/fact preservation remains. Actual Alembic-042 API purge regressions reject an older backup without consuming a generation; a post-purge backup retains receipt, marker and audit across restore. Corrupted/missing receipts, audits, markers and digests each deny. | Reproduced software defect repaired. Active committed removal history cannot be erased by ordinary restore. This is not a claim that separately retained old private snapshots have been securely destroyed. |
+| R5 — ordinary failed upgrade-copy leaked full staging copies | `upgrade_database_copy` wraps copy/migration/validation/publication in ownership-aware cleanup. It removes only the attempt's positively identified, unpublished regular staging inode and safe private SQLite sidecars; foreign replacement inodes, source and potentially published output remain untouched. Regressions inject copy, migration, validation, interruption and publication failures; independent review also tests foreign-inode replacement. | Reproduced software defect repaired for ordinary exceptions/interrupts that execute cleanup. SIGKILL/power loss may leave private remnants requiring explicit operator inspection; automatic startup scavenging is not represented as delivered. |
+| R6 — same-scope settings refetch silently discarded a draft | `AutomationSettingsSection.tsx` keeps the original draft/base policy rather than keying the form by policy version. Background changes block saving without replacing draft/reason. Transient membership/policy failures retain the draft and disable saves. Explicit replacement requires fresh successful administrator membership and policy reads. True project/session changes and definite GET/PATCH 401/403 discard it; PATCH denial latches access closed despite cached successful GETs. Saving uses the retained base version, and no POST/PATCH is auto-replayed. Final actual-browser proof includes native hidden/visible tab changes, real subsequent GETs and failure-only fixture 503s; success and authorization responses are not mocked. | Reproduced software defect repaired, including the separately discovered PATCH-denial gap. Final 20 settings component cases and all three composed browser journeys pass. Target inspection remains the approved scope; no target-editing or credential-entry form was invented. |
+| R7 — operator runbook said schema 041 while evidence/head was 042 | `operations.md` now states destination schema 042. `test_automation_operations_docs.py` extracts that statement and compares it with the actual linked `upgrade-results.json` destination instead of introducing another independent hard-coded expectation. The regression failed on the original 041 prose; the 60 documentation tests passed after correction. | Reproduced documentation defect repaired. The authentic released-source copy result remains explicitly scoped synthetic migration evidence. |
+
+### Verification attached to the repaired source
+
+- Backend review cases: **26 tests and 12 subtests**; independent combined
+  review/backup verification: **53 tests and 12 subtests**. These include the
+  actual migrated-head retention/restore paths and process-exit boundaries;
+  metadata-only fixtures are not used as their acceptance substitute.
+- [Final UI results](review-fixes-ui-results.md): **512 frontend tests**, two
+  compatibility checks, typecheck/build passed; **three composed browser
+  journeys** on the final image, **36 screenshots**, zero critical/serious axe
+  findings, keyboard proof and visual verdict **97/pass**. The new native
+  visibility journey avoids Playwright's always-visible focus emulation.
+- [Final operator results](review-fixes-operator-results.md): **31 actual named
+  final-image checks**, network `none`, loopback only, fresh private schema-042
+  state, actual CLI/API account recovery and repeated generation 4 → 5 restore,
+  initialization intent/resume, source witnesses and confirmed resource cleanup.
+  The controlled initialization wrappers inject exceptions into process-local
+  standard-library boundaries; the unpatched production CLI performs resume.
+- Root reports final root unittest **2079 tests / three skips**, and exact
+  API/CLI/infra **816 tests / one skip / 2442 subtests**, passed. At this supplement's
+  snapshot, final full local CI and the new full 1800-second capacity run remain
+  underway. Neither is marked passed here; the integration owner must append
+  the completed records and exact final counts after checking their outputs.
+
+No residual defect in R1–R7 was identified by this source/evidence completion
+audit. This is not a blanket production approval or a replacement for the final
+formal review disposition. Packet 18.2's previously reproduced initialization,
+package-boundary, retention-history and failed-upgrade defects now have specific
+repairs and matching regressions; its implementation can be assessed as repaired
+while the remaining story gates stay explicit.
+
+### Gates that this repair supplement does not close
+
+- Final full CI and the final 1800-second configured-profile capacity record,
+  including quantitative assertions, source drift, resources/errors and cleanup,
+  are pending at this snapshot. Previous-image capacity or a short successful
+  smoke cannot qualify this final source.
+- The mandatory independent human self-service/production-profile pilot remains
+  unexecuted. The 31-check agent exercise is valuable actual procedure proof,
+  but it is not that human pilot.
+- The named capacity envelope remains ten active runs, at most two local workers
+  using synthetic analysis and twenty authenticated persisted runner-service
+  ports. It does not qualify twenty independent remote runner agents or actual
+  provider throughput.
+- Existing cold-machine/cold-Docker/dependency installation, unmanaged remote
+  writers, production receiver credential transfer/effects, host-power-loss and
+  additional profile limits remain as recorded. The earlier bounded offline
+  archive/load/fresh-state exercise is preserved at its exact image/profile;
+  this supplement does not relabel it as a cold-host or independent-human proof.
+- Stories **12.7 and 12.8 remain open** under their original acceptance. Repairing
+  R1–R7 changes neither their scope nor Story 16.19's broader release/support
+  qualification obligations.
+
+### Final integration owner supplement
+
+Full `bash scripts/ci-local.sh` passed all10 directories:3554 tests, exit0.
+Final Ruff check and repo-wide formatting passed614 files. The new full capacity
+run passed **1800.440 actual seconds, 3587 samples, 71740 authenticated polls, 40 rotations and zero errors**, with identical source witnesses,
+all quantitative assertions and independently confirmed resource cleanup.
+See [capacity results](review-fixes-capacity-results.md) and
+[final validation summary](review-fixes-validation-summary.json). The preceding
+pending statements describe their earlier snapshot; these two automated gates
+are now closed. The human pilot and broader profile gates remain open.

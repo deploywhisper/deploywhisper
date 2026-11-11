@@ -1,5 +1,9 @@
 # Final bounded capacity result
 
+> Historical pre-fix record at `0716460`. Review-fix evidence is recorded in
+> [review-fixes.md](review-fixes.md) and [review-fixes-validation-summary.json](review-fixes-validation-summary.json).
+> Original results below remain scoped to their recorded image/source; current screenshots are identified by [screenshots.json](screenshots.json).
+
 Passed on the production image recorded in [container-profile.json](capacity/container-profile.json):
 Python 3.11.17, Linux ARM64, two CPU cores, 2 GiB memory, UID/GID 999, network none,
 read-only root and 256 MiB private temporary storage. Operator recovery controls were
