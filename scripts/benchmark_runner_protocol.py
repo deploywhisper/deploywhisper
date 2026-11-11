@@ -7,6 +7,7 @@ explicitly fail reference qualification while preserving measured service sample
 from __future__ import annotations
 
 import argparse
+from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 import hashlib
 import json
@@ -18,6 +19,7 @@ import platform
 import sqlite3
 import sys
 import time
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
@@ -81,6 +83,30 @@ def environment_limits():
     return values
 
 
+def reference_failures(report):
+    reasons = []
+    limits = report["cgroup_limits"]
+    if platform.system() != "Linux":
+        reasons.append("Reference qualification requires Linux.")
+    if limits.get("cpu.max") != "400000 100000":
+        reasons.append("Reference qualification requires a four-CPU cgroup quota.")
+    if limits.get("memory.max") != str(8 * 1024**3):
+        reasons.append("Reference qualification requires an eight-GiB memory ceiling.")
+    if (report["requested_warmups"], report["requested_samples"]) != (100, 1000):
+        reasons.append("Qualification requires exactly 100 warmups and 1000 samples.")
+    if report["runner_processes"] != 20:
+        reasons.append("Qualification requires twenty runner processes.")
+    if report["measured_samples"] != report["requested_samples"]:
+        reasons.append("The complete measured sample set is required.")
+    if report["failures"] or report["harness_failure"]:
+        reasons.append("Runner claim failures are not permitted.")
+    if report["p95_ms"] is None or report["p95_ms"] >= 2000:
+        reasons.append("The p95 enqueue-to-claim latency must be below 2000 ms.")
+    if not report["source_hashes_unchanged"]:
+        reasons.append("Benchmark source changed during measurement.")
+    return reasons
+
+
 def run(warmup, samples, output):
     from importlib import import_module
     from infra_automation import claims as engine
@@ -129,9 +155,36 @@ def run(warmup, samples, output):
     started = utc_now()
     records = []
     failure = None
+    settings_patch = None
     try:
         case.setUp()
         case.enable()
+        import config
+
+        profile_manifest = support.canonical(
+            [
+                {
+                    "profile_digest": profile,
+                    "tool": "opentofu",
+                    "tool_version": "1.13.1",
+                    "runner_version": "1.0",
+                    "tags": ["isolated", *[f"slot{i}" for i in range(20)]],
+                }
+            ]
+        )
+        profile_path = Path(case.temp.name) / "benchmark-profiles.json"
+        profile_path.write_bytes(profile_manifest)
+        profile_path.chmod(0o600)
+        settings_patch = patch.object(
+            config,
+            "settings",
+            replace(
+                config.settings,
+                collection_profiles_path=str(profile_path),
+                collection_profiles_sha256=support.digest(profile_manifest),
+            ),
+        )
+        settings_patch.start()
         with case.engine.begin() as db:
             for name, body in import_module(
                 "migrations.versions.032_add_infra_automation_engine"
@@ -240,6 +293,7 @@ def run(warmup, samples, output):
                 "warmup": i < warmup,
                 "runner_pid": pids[index],
                 "enqueued_at": enqueued.isoformat(),
+                "stage": "queue",
             }
             try:
                 requirement = RunnerRequirements(
@@ -249,6 +303,7 @@ def run(warmup, samples, output):
                     runner_version="1.0",
                 )
                 tasks.queue_assignment(owner, attempt.id, requirement, now=utc_now())
+                row["stage"] = "poll"
                 assignment = tasks.poll(credentials[index], now=utc_now())
                 if assignment is None:
                     raise RuntimeError("Assignment unavailable.")
@@ -256,6 +311,7 @@ def run(warmup, samples, output):
                 if not clients[index].poll(10):
                     raise RuntimeError("Runner response timeout.")
                 message = RunnerMessage.model_validate(clients[index].recv())
+                row["stage"] = "claim"
                 result = tasks.operate(
                     message, credentials[index], assignment["task_token"], now=utc_now()
                 )
@@ -265,15 +321,47 @@ def run(warmup, samples, output):
                     state=result["state"],
                     success=result["state"] == "running",
                 )
-                # Synthetic screened bytes exercise upload/complete only. They
-                # establish no real collector or infrastructure custody trust.
+                # Use the production collected-output envelope. The bytes remain
+                # synthetic and establish no real collector or custody trust.
+                from infra_automation.runner.collector import command_digests
+
+                text = '{"format_version":"1.2","terraform_version":"1.13.1","resource_changes":[]}'
+                command_digest, argv_digest = command_digests("opentofu")
+                source_deadline = (now + timedelta(minutes=5)).strftime(
+                    "%Y-%m-%dT%H:%M:%SZ"
+                )
+                raw_local_digest = support.digest(b"synthetic protected plan")
                 raw = support.canonical(
-                    [
-                        {
-                            "name": "main.tf",
-                            "content": 'resource "null_resource" "example" {}',
-                        }
-                    ]
+                    {
+                        "version": 1,
+                        "artifacts": [{"name": "plan.json", "content": text}],
+                        "provenance": {
+                            "version": 1,
+                            "kind": "collected",
+                            "scope": result["scope"],
+                            "repository_id": "synthetic-repository",
+                            "commit_sha": "b" * 40,
+                            "profile_digest": profile,
+                            "tool": "opentofu",
+                            "tool_version": "1.13.1",
+                            "command_digest": command_digest,
+                            "argv_digest": argv_digest,
+                            "raw_local_digest": raw_local_digest,
+                            "sanitized_digest": support.digest(
+                                support.canonical([["plan.json", text]])
+                            ),
+                            "redaction_version": 1,
+                            "exit_code": 0,
+                            "collected_at": now.strftime("%Y-%m-%dT%H:%M:%SZ"),
+                            "source_deadline": source_deadline,
+                            "custody": {
+                                "version": 1,
+                                "handle": f"synthetic-{attempt.id}",
+                                "raw_local_digest": raw_local_digest,
+                                "expires_at": source_deadline,
+                            },
+                        },
+                    }
                 )
                 upload = RunnerMessage(
                     operation="upload",
@@ -284,6 +372,7 @@ def run(warmup, samples, output):
                     upload_digest=support.digest(raw),
                     atomic_upload_id=attempt.id,
                 )
+                row["stage"] = "upload"
                 uploaded = tasks.operate(
                     upload,
                     credentials[index],
@@ -300,6 +389,7 @@ def run(warmup, samples, output):
                     state="succeeded",
                     atomic_upload_id=attempt.id,
                 )
+                row["stage"] = "complete"
                 tasks.operate(
                     complete,
                     credentials[index],
@@ -307,6 +397,7 @@ def run(warmup, samples, output):
                     now=utc_now(),
                 )
                 if (i % 500) // 10 == 49:
+                    row["stage"] = "finish-run"
                     with auth.authorized_session() as db:
                         current = repo.get_run(db, runs[(i % 500) % 10])
                         repo.transition_run(
@@ -319,7 +410,11 @@ def run(warmup, samples, output):
                             now=utc_now(),
                         )
             except Exception as exc:
-                row.update(success=False, failure_type=type(exc).__name__)
+                row.update(
+                    success=False,
+                    failure_type=type(exc).__name__,
+                    failure_code=getattr(exc, "status_code", None),
+                )
             records.append(row)
             if not row["success"]:
                 break
@@ -336,6 +431,8 @@ def run(warmup, samples, output):
             if process.is_alive():
                 process.terminate()
                 process.join(5)
+        if settings_patch is not None:
+            settings_patch.stop()
         case.doCleanups()
     measured = [row for row in records if not row["warmup"]]
     latencies = [row["elapsed_ms"] for row in measured if row["success"]]
@@ -362,21 +459,21 @@ def run(warmup, samples, output):
         "source_hashes": source_before,
         "source_hashes_unchanged": source_before == source_hashes(),
         "cgroup_limits": environment_limits(),
-        "reference_qualified": False,
         "limitations": [
-            "Process IPC replaces HTTPS; no network latency qualification.",
+            "Process IPC represents the runner boundary; the separate Story16.19 actual-TLS qualification proves transport behavior, not these latency samples.",
             "Claims are serially dispatched round-robin to20 processes; no concurrent queue saturation claim.",
-            "Host memory/storage and Linux reference profile are not attested.",
             "Synthetic 50-step definitions and durable engine/service paths; no real collection.",
             "Metadata-created fixture plus engine migration guards; no full upgrade qualification.",
-            "No 30-minute saturation capacity qualification.",
+            "The separate 30-minute capacity harness owns saturation qualification.",
         ],
         "samples": records,
     }
+    report["qualification_failures"] = reference_failures(report)
+    report["runner_service_latency_qualified"] = not report["qualification_failures"]
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(report, indent=2) + "\n")
     print(json.dumps({k: v for k, v in report.items() if k != "samples"}, indent=2))
-    return 0 if failure is None and len(latencies) == samples else 1
+    return 0 if report["runner_service_latency_qualified"] else 1
 
 
 if __name__ == "__main__":

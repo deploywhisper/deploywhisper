@@ -1,0 +1,782 @@
+{
+  "qualified": true,
+  "full_corpus": true,
+  "origin": "https://localhost:18443",
+  "cases": [
+    {
+      "case": "wire-lease-expiry",
+      "run_id": "fe15b70ce5d9a2da030aed4a60b993f2bfc9c7b3313517e9",
+      "project_id": 2,
+      "workspace_id": 1,
+      "attempt_id": "719c742355be5be44c33006288a611d604d33e86bf440f2a",
+      "runner_id": "runner-e84dad6520a522e0788221f1a61e0936159e5ea0025f067a",
+      "source_commit": "e40a044e25f53b44cad64ffc55222573c0525696",
+      "published_wire_deadline": "2026-11-11T10:53:34Z",
+      "runner_result": {
+        "state": "expired_wire_admission_denied",
+        "finalizable": false,
+        "cleanup_complete": true
+      },
+      "late_heartbeat_status": 409,
+      "containers_created": [],
+      "containers_removed": true,
+      "run_state": "failed",
+      "log_page": {
+        "items": 0,
+        "cursor": {
+          "version": 1,
+          "limit": 25,
+          "last_sequence": 0,
+          "truncated": false,
+          "gap": false
+        }
+      },
+      "report_count": 0,
+      "custody_published": false
+    },
+    {
+      "case": "running-revocation",
+      "run_id": "42f2eb8b557a0f95e895203230e9341d0a60236abe8f372b",
+      "project_id": 2,
+      "workspace_id": 1,
+      "attempt_id": "65b3339984ab46b2d447ff94797b2979aff8619f734f2878",
+      "runner_id": "runner-014f0947024c5c495eb340b1380f172bd603c965907b7642",
+      "source_commit": "98c6b174530241eaa273f02d5a5efdee1939d67c",
+      "published_wire_deadline": "2026-11-11T10:54:05Z",
+      "observed_tool_processes": [
+        [
+          "92098",
+          "92090",
+          "tofu"
+        ]
+      ],
+      "revoked_after_tool_started": true,
+      "runner_result": {
+        "state": "authority_unavailable",
+        "exit_code": null,
+        "output_digest": null,
+        "container_id": "dw-isolated-1bbeac8dda8c4808a9122a08d4ef920f",
+        "cleanup_complete": true,
+        "profile_digest": "sha256:ce82a183ceba4f5bfe7b2af4050a033abaa2ee80ccbb8e4af9be69abc4fa7f70",
+        "finalizable": false
+      },
+      "containers_created": [
+        "dw-isolated-1bbeac8dda8c4808a9122a08d4ef920f"
+      ],
+      "containers_removed": true,
+      "run_state": "failed",
+      "log_page": {
+        "items": 0,
+        "cursor": {
+          "version": 1,
+          "limit": 25,
+          "last_sequence": 0,
+          "truncated": false,
+          "gap": false
+        }
+      },
+      "report_count": 0,
+      "custody_published": false
+    },
+    {
+      "case": "log-cap",
+      "run_id": "192ea522698971ba87d6b41491db56804df0e957a4ec2412",
+      "project_id": 2,
+      "workspace_id": 1,
+      "attempt_id": "5e93b9867fb6fa2eb61c6d7f0cc171b3878b9717e8f29640",
+      "runner_id": "runner-e6e7f4f2f077602bf60ec10d62b5932c5e9a584858a7e9fe",
+      "source_commit": "e40a044e25f53b44cad64ffc55222573c0525696",
+      "published_wire_deadline": "2026-11-11T10:54:09Z",
+      "oversized_chunk_status": 429,
+      "oversized_chunk_bytes": 129,
+      "accepted_log_chunks": 65,
+      "quota_status": 429,
+      "configured_attempt_log_bytes": 8192,
+      "configured_chunk_bytes": 128,
+      "runner_result": {
+        "state": "succeeded",
+        "exit_code": 0,
+        "output_digest": "sha256:fccd5b5047260f3c409a265cf7d658a1a6b9cfd66c8330a183b88c1efac9dcd1",
+        "container_id": "dw-isolated-42b7c4c5b8d04cba8bd9cc40733381d8",
+        "cleanup_complete": true,
+        "profile_digest": "sha256:ce82a183ceba4f5bfe7b2af4050a033abaa2ee80ccbb8e4af9be69abc4fa7f70",
+        "finalizable": true
+      },
+      "containers_created": [
+        "dw-isolated-42b7c4c5b8d04cba8bd9cc40733381d8"
+      ],
+      "containers_removed": true,
+      "run_state": "succeeded",
+      "log_page": {
+        "items": 25,
+        "cursor": {
+          "version": 1,
+          "limit": 25,
+          "last_sequence": 41,
+          "truncated": true,
+          "gap": false
+        }
+      },
+      "report_count": 1,
+      "custody_published": true,
+      "retained_log_bytes": 8107,
+      "retained_log_chunks": 65
+    }
+  ],
+  "transport_observations": [
+    {
+      "method": "POST",
+      "path": "/api/v1/infra-automation/runners/enrollments/7c38118557528d38980c6c9f667b7e0969372e37dce60cfd/redeem",
+      "status": 200,
+      "monotonic": 266395.629871375
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/infra-automation/runners/runner-e84dad6520a522e0788221f1a61e0936159e5ea0025f067a/tasks",
+      "status": 200,
+      "monotonic": 266395.639212333
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/infra-automation/runners/runner-e84dad6520a522e0788221f1a61e0936159e5ea0025f067a/tasks",
+      "status": 200,
+      "monotonic": 266395.682479083
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/infra-automation/runners/runner-e84dad6520a522e0788221f1a61e0936159e5ea0025f067a/tasks",
+      "status": 200,
+      "monotonic": 266395.953649791
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/infra-automation/runners/claim",
+      "status": 200,
+      "monotonic": 266395.99873825
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/infra-automation/runners/heartbeat",
+      "status": 409,
+      "monotonic": 266426.743027916
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/infra-automation/runners/enrollments/51f0af5b8151793dd72e41fbe8018cbe932883049a06e703/redeem",
+      "status": 200,
+      "monotonic": 266427.289999916
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/infra-automation/runners/runner-014f0947024c5c495eb340b1380f172bd603c965907b7642/tasks",
+      "status": 200,
+      "monotonic": 266427.298197708
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/infra-automation/runners/runner-014f0947024c5c495eb340b1380f172bd603c965907b7642/tasks",
+      "status": 200,
+      "monotonic": 266427.337529458
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/infra-automation/runners/runner-014f0947024c5c495eb340b1380f172bd603c965907b7642/tasks",
+      "status": 200,
+      "monotonic": 266427.60627
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/infra-automation/runners/claim",
+      "status": 200,
+      "monotonic": 266427.640767333
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/infra-automation/runners/heartbeat",
+      "status": 200,
+      "monotonic": 266428.713986291
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/infra-automation/runners/heartbeat",
+      "status": 200,
+      "monotonic": 266429.028130708
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/infra-automation/runners/heartbeat",
+      "status": 200,
+      "monotonic": 266429.279067958
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/infra-automation/runners/heartbeat",
+      "status": 200,
+      "monotonic": 266429.534192125
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/infra-automation/runners/heartbeat",
+      "status": 200,
+      "monotonic": 266429.718876666
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/infra-automation/runners/heartbeat",
+      "status": 200,
+      "monotonic": 266429.822743875
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/infra-automation/runners/heartbeat",
+      "status": 200,
+      "monotonic": 266429.936799375
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/infra-automation/runners/heartbeat",
+      "status": 401,
+      "monotonic": 266430.156765083
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/infra-automation/runners/enrollments/a86aea0f157528d3e55aaf6baed32cf7c80fd33d405bdca5/redeem",
+      "status": 200,
+      "monotonic": 266430.984969
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/infra-automation/runners/runner-e6e7f4f2f077602bf60ec10d62b5932c5e9a584858a7e9fe/tasks",
+      "status": 200,
+      "monotonic": 266430.994844833
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/infra-automation/runners/runner-e6e7f4f2f077602bf60ec10d62b5932c5e9a584858a7e9fe/tasks",
+      "status": 200,
+      "monotonic": 266431.027790708
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/infra-automation/runners/runner-e6e7f4f2f077602bf60ec10d62b5932c5e9a584858a7e9fe/tasks",
+      "status": 200,
+      "monotonic": 266431.291132625
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/infra-automation/runners/claim",
+      "status": 200,
+      "monotonic": 266431.326243458
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/infra-automation/runners/logs",
+      "status": 429,
+      "monotonic": 266432.274396625
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/infra-automation/runners/logs",
+      "status": 200,
+      "monotonic": 266432.326804166
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/infra-automation/runners/logs",
+      "status": 200,
+      "monotonic": 266432.367242083
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/infra-automation/runners/logs",
+      "status": 200,
+      "monotonic": 266432.405898833
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/infra-automation/runners/logs",
+      "status": 200,
+      "monotonic": 266432.448101125
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/infra-automation/runners/logs",
+      "status": 200,
+      "monotonic": 266432.482200166
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/infra-automation/runners/logs",
+      "status": 200,
+      "monotonic": 266432.5151555
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/infra-automation/runners/logs",
+      "status": 200,
+      "monotonic": 266432.554162375
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/infra-automation/runners/logs",
+      "status": 200,
+      "monotonic": 266432.59906325
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/infra-automation/runners/logs",
+      "status": 200,
+      "monotonic": 266432.6475055
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/infra-automation/runners/logs",
+      "status": 200,
+      "monotonic": 266432.697201833
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/infra-automation/runners/heartbeat",
+      "status": 200,
+      "monotonic": 266432.737712208
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/infra-automation/runners/logs",
+      "status": 200,
+      "monotonic": 266432.7870385
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/infra-automation/runners/logs",
+      "status": 200,
+      "monotonic": 266432.832154916
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/infra-automation/runners/logs",
+      "status": 200,
+      "monotonic": 266432.875553166
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/infra-automation/runners/logs",
+      "status": 200,
+      "monotonic": 266432.918567666
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/infra-automation/runners/logs",
+      "status": 200,
+      "monotonic": 266432.9622295
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/infra-automation/runners/logs",
+      "status": 200,
+      "monotonic": 266433.002210208
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/infra-automation/runners/logs",
+      "status": 200,
+      "monotonic": 266433.0470845
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/infra-automation/runners/logs",
+      "status": 200,
+      "monotonic": 266433.096390458
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/infra-automation/runners/logs",
+      "status": 200,
+      "monotonic": 266433.140176958
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/infra-automation/runners/logs",
+      "status": 200,
+      "monotonic": 266433.195383875
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/infra-automation/runners/heartbeat",
+      "status": 200,
+      "monotonic": 266433.247171041
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/infra-automation/runners/logs",
+      "status": 200,
+      "monotonic": 266433.287762333
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/infra-automation/runners/logs",
+      "status": 200,
+      "monotonic": 266433.324754916
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/infra-automation/runners/logs",
+      "status": 200,
+      "monotonic": 266433.3624525
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/infra-automation/runners/logs",
+      "status": 200,
+      "monotonic": 266433.405595333
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/infra-automation/runners/logs",
+      "status": 200,
+      "monotonic": 266433.462428916
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/infra-automation/runners/logs",
+      "status": 200,
+      "monotonic": 266433.515413083
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/infra-automation/runners/logs",
+      "status": 200,
+      "monotonic": 266433.55705225
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/infra-automation/runners/logs",
+      "status": 200,
+      "monotonic": 266433.599759708
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/infra-automation/runners/logs",
+      "status": 200,
+      "monotonic": 266433.639524458
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/infra-automation/runners/logs",
+      "status": 200,
+      "monotonic": 266433.677829166
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/infra-automation/runners/heartbeat",
+      "status": 200,
+      "monotonic": 266433.71220825
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/infra-automation/runners/logs",
+      "status": 200,
+      "monotonic": 266433.761898916
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/infra-automation/runners/logs",
+      "status": 200,
+      "monotonic": 266433.802457791
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/infra-automation/runners/logs",
+      "status": 200,
+      "monotonic": 266433.841860875
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/infra-automation/runners/logs",
+      "status": 200,
+      "monotonic": 266433.889740666
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/infra-automation/runners/logs",
+      "status": 200,
+      "monotonic": 266433.946786541
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/infra-automation/runners/logs",
+      "status": 200,
+      "monotonic": 266433.989361916
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/infra-automation/runners/logs",
+      "status": 200,
+      "monotonic": 266434.031570083
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/infra-automation/runners/logs",
+      "status": 200,
+      "monotonic": 266434.078633166
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/infra-automation/runners/logs",
+      "status": 200,
+      "monotonic": 266434.128891083
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/infra-automation/runners/logs",
+      "status": 200,
+      "monotonic": 266434.168055833
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/infra-automation/runners/heartbeat",
+      "status": 200,
+      "monotonic": 266434.21433875
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/infra-automation/runners/logs",
+      "status": 200,
+      "monotonic": 266434.253789791
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/infra-automation/runners/logs",
+      "status": 200,
+      "monotonic": 266434.291815666
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/infra-automation/runners/logs",
+      "status": 200,
+      "monotonic": 266434.330444333
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/infra-automation/runners/logs",
+      "status": 200,
+      "monotonic": 266434.37223175
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/infra-automation/runners/logs",
+      "status": 200,
+      "monotonic": 266434.422111666
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/infra-automation/runners/logs",
+      "status": 200,
+      "monotonic": 266434.464340041
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/infra-automation/runners/logs",
+      "status": 200,
+      "monotonic": 266434.50831225
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/infra-automation/runners/logs",
+      "status": 200,
+      "monotonic": 266434.54801975
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/infra-automation/runners/logs",
+      "status": 200,
+      "monotonic": 266434.593461375
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/infra-automation/runners/logs",
+      "status": 200,
+      "monotonic": 266434.63327175
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/infra-automation/runners/heartbeat",
+      "status": 200,
+      "monotonic": 266434.669796083
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/infra-automation/runners/logs",
+      "status": 200,
+      "monotonic": 266434.716936458
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/infra-automation/runners/logs",
+      "status": 200,
+      "monotonic": 266434.754982708
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/infra-automation/runners/logs",
+      "status": 200,
+      "monotonic": 266434.795417916
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/infra-automation/runners/logs",
+      "status": 200,
+      "monotonic": 266434.837729875
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/infra-automation/runners/logs",
+      "status": 200,
+      "monotonic": 266434.893181958
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/infra-automation/runners/logs",
+      "status": 200,
+      "monotonic": 266434.938347416
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/infra-automation/runners/logs",
+      "status": 200,
+      "monotonic": 266434.984928375
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/infra-automation/runners/logs",
+      "status": 200,
+      "monotonic": 266435.041728458
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/infra-automation/runners/logs",
+      "status": 200,
+      "monotonic": 266435.090146208
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/infra-automation/runners/logs",
+      "status": 200,
+      "monotonic": 266435.130248208
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/infra-automation/runners/heartbeat",
+      "status": 200,
+      "monotonic": 266435.167304958
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/infra-automation/runners/logs",
+      "status": 200,
+      "monotonic": 266435.208344333
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/infra-automation/runners/logs",
+      "status": 200,
+      "monotonic": 266435.258565958
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/infra-automation/runners/logs",
+      "status": 200,
+      "monotonic": 266435.307576541
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/infra-automation/runners/logs",
+      "status": 200,
+      "monotonic": 266435.363770583
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/infra-automation/runners/logs",
+      "status": 200,
+      "monotonic": 266435.420797375
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/infra-automation/runners/logs",
+      "status": 429,
+      "monotonic": 266435.465085083
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/infra-automation/runners/heartbeat",
+      "status": 200,
+      "monotonic": 266435.608402166
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/infra-automation/runners/heartbeat",
+      "status": 200,
+      "monotonic": 266436.016884125
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/infra-automation/runners/heartbeat",
+      "status": 200,
+      "monotonic": 266436.268005333
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/infra-automation/runners/heartbeat",
+      "status": 200,
+      "monotonic": 266436.513037666
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/infra-automation/runners/heartbeat",
+      "status": 200,
+      "monotonic": 266436.548639708
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/infra-automation/runners/heartbeat",
+      "status": 200,
+      "monotonic": 266436.590278166
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/infra-automation/runners/heartbeat",
+      "status": 200,
+      "monotonic": 266436.833872083
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/infra-automation/runners/heartbeat",
+      "status": 200,
+      "monotonic": 266436.945636083
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/infra-automation/runners/heartbeat",
+      "status": 200,
+      "monotonic": 266437.9225265
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/infra-automation/runners/heartbeat",
+      "status": 200,
+      "monotonic": 266437.997397583
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/infra-automation/runners/uploads",
+      "status": 200,
+      "monotonic": 266438.192167208
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/infra-automation/runners/complete",
+      "status": 200,
+      "monotonic": 266438.335794541
+    }
+  ]
+}

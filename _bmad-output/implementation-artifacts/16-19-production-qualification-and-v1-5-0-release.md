@@ -1,6 +1,6 @@
 # Story 16.19: Production Qualification and v1.5.0 Release
 
-Status: backlog
+Status: in-progress
 Preparation: refined
 Release: v1.5.0 | Priority: P0, highest-priority feature
 
@@ -14,6 +14,7 @@ As a maintainer, I want qualification of the complete supported release profile,
 - Blocked until Story 16.0 public RFC acceptance and executable identity/fencing/isolation/custody/receiver qualification close the readiness gates; documentation refinement does not satisfy those gates.
 - Recheck actual prerequisite records before execution. Downstream release acceptance is not a prerequisite for an earlier owned slice; test-double proofs remain explicitly limited.
 - Promote to ready-for-dev only after dependency evidence, final interfaces and packet estimates are independently reviewed. Keep unchecked tasks and backlog until then.
+- 2026-11-11 course correction: the accountable maintainer approved a v1.5.0-specific waiver of only independent human pilot execution. The pilot remains `NOT EXECUTED`; residual self-service usability risk is accepted and disclosed. This closes the entry process gate without waiving any Story16.19 technical, review, signing/provenance or publication obligation.
 
 ## Acceptance Criteria
 
@@ -21,7 +22,7 @@ As a maintainer, I want qualification of the complete supported release profile,
 2. **Given crash boundaries and principal/role/project/workspace/action matrices, when fault, authorization and sensitive-data corpora execute, then no committed state is lost, unauthorized/duplicate receiver action and cross-scope access are zero, known-secret corpus leaks are zero and Evidence Law/advisory parity is preserved.**
 3. **Given reproducible reference hardware of 4 vCPU/8 GB RAM/local SSD, when 1,000 overhead transitions, 1,000 runner claims and 1,000 50-step validations plus 30-minute saturation run execute, then p95 overhead <1s, claim <2s and validation <500ms hold, with 10 active runs/2 analysis workers/20 runners; publish workload/version/resources/errors and failed limits.**
 4. **Given new production React routes and real seeded APIs, when full create/run/review/decision/runner/unit/recovery journeys run against composed FastAPI, then frontend type/unit/build and Playwright/axe/keyboard pass, critical/serious violations are zero and 1440/760 screenshots capture happy/denied/expired/unknown states.**
-5. **Given v1.4.0 migration/backup/restore, rotation and restricted-network exercises, when a separate operator uses release-matched docs, then stale grants/leases are invalidated, reconciliation succeeds and schema/API/CLI/support/runbooks/metrics pass link/drift and self-service acceptance.**
+5. **Given v1.4.0 migration/backup/restore, rotation and restricted-network exercises, when a separate operator completes the release-matched runbook or the accountable maintainer explicitly waives only independent human execution after reviewing current technical evidence and accepting residual self-service risk, then stale grants/leases are invalidated, reconciliation succeeds and schema/API/CLI/support/runbooks/metrics pass link/drift; a waiver remains explicitly not human self-service evidence.**
 6. **Given all mandatory proofs and independent code/security review, when stable release is considered, then unresolved introduced critical/high defects or any missing gate block publication; signed app/runner artifacts, SBOM/checksums/provenance and supported matrix are verified before separately authorized public release writes.**
 
 ### Requirement Traceability
@@ -40,8 +41,8 @@ Coverage intent: Delta against released v1.4.0; full canonical mappings below ar
 | IAU15-NFR-008 | Workflow validation must have p95 <500 milliseconds for the declared 50-step workflow corpus under the reference workload. | 1,000-validation timing/correctness benchmark |
 | IAU15-NFR-009 | All new React routes must pass the composed-app axe critical/serious violation gate and keyboard-only create/run/review/decision/recovery journeys, using real API-backed seeded data and required screenshots. | Compose production build, Playwright/axe/keyboard results and screenshots |
 | IAU15-NFR-010 | Upgrade from a v1.4.0 database copy, interrupted upgrade, coordinated DB/artifact backup/restore, token rotation and restricted-network recovery must preserve auditable state while invalidating outstanding authorization/leases until reconciled. | Recorded upgrade/restore/rotation/offline exercises |
-| IAU15-NFR-011 | Publish version-matched schema/API/CLI/operator/security/support-limit docs with CI link/drift checks and secret-free run/queue/step/runner/approval/delivery metrics plus troubleshooting runbooks. | Docs CI and operator self-service installation/recovery pilot |
-| IAU15-NFR-012 | Stable v1.5.0 requires signed app/runner artifacts, SBOM/checksums/provenance, named tool/receiver support matrix, full application CI, independent review and supported-profile pilot with no unresolved introduced critical/high defect. | Signed release manifest, CI/security/review/pilot evidence |
+| IAU15-NFR-011 | Publish version-matched schema/API/CLI/operator/security/support-limit docs with CI link/drift checks and secret-free run/queue/step/runner/approval/delivery metrics plus troubleshooting runbooks. | Docs CI and either independent operator self-service proof or the bounded accountable-maintainer waiver that records no human pilot and accepts residual usability risk |
+| IAU15-NFR-012 | Stable v1.5.0 requires signed app/runner artifacts, SBOM/checksums/provenance, named tool/receiver support matrix, full application CI, independent review and supported-profile technical qualification with no unresolved introduced critical/high defect; the independent-human process step may be replaced only by the bounded accountable-maintainer waiver. | Signed release manifest, CI/security/review/technical qualification and operator-pilot-or-waiver evidence |
 
 ## Tasks / Subtasks
 
@@ -106,13 +107,33 @@ Codex (GPT-6 Astra), entry assessment with an independent native readiness revie
 
 ### Debug Log References
 - [Entry readiness audit](../../docs/verification/infra-automation/16-19/entry-readiness.md).
+- [Prerequisite profile qualification](../../docs/verification/infra-automation/16-19/prerequisite-profiles/README.md).
+- [Final automated development validation](../../docs/verification/infra-automation/16-19/development-validation.json).
+- [Independent human pilot record — still unexecuted](../../docs/verification/infra-automation/16-19/human-pilot-record.md).
 
 ### Completion Notes List
-- 2026-11-11 user-authorized prerequisite remediation: integrated settings UI locally at a6d59ec; implemented source SBOM and operations/network guides; prepared Packet19.1 manifest validator covering72 requirements and9 mandatory gates. Independent review found and repaired missing runner container acknowledgment; genuineTLS integration exposed and repaired post-commit ORM access in task assignment. Focused regression suites pass; final immutable-tree qualification and broad CI pending. Human-pilot record remains unexecuted; keep backlog and qualification checkboxes open until entry acceptance.
-- 2026-11-11: Entry assessment completed; independent review confirms NOT READY. Story16.0 gate is closed, but12.5/12.7/12.8,16.13/16.14 acceptance,16.15 positive HTTPS/runner proof and16.18 human pilot remain open. PR219 merged into the backend feature branch; its settings UI is absent from develop at e4d6b50. Kept backlog and all packets unchecked. No runtime or release work executed.
-- Story specification prepared; no feature implementation, qualification, public RFC acceptance, release publication or runtime tests performed.
+- 2026-11-11 production composition repair: final acceptance found the default material/witness and policy/human/handoff path unavailable. The approved co-located design now derives bindings from retained production facts, uses a signed monotonic operator ledger and live split-process custody verification, registers a fixed no-authority policy worker and composes one shared decision/handoff service. Focused source-freeze blind/security review is clean; production-derived two-human decision and durable handoff prepare pass without automatic dispatch. Public carrier credentials/actions remain separately gated.
+- 2026-11-11 release-scope cut-back: Epic17 had zero implemented stories and was removed from v1.5.0 under its pre-approved decision rule; it now targets independent v1.6.0. No Epic17 code, migration or release claim is included in this story.
+- 2026-11-11 release preparation: runtime/package defaults and generated OpenAPI are v1.5.0; candidate notes, changelog and named support matrix are present; deterministic release assets now include a bounded runner archive/manifest plus application archive, SBOM, checksums and provenance subjects. Actual hosted signatures and public publication remain unexecuted.
+- Reference performance source is frozen after clean review. Final workflow validation passes 1,000 samples at p95 1.668459ms; runner service-path claims pass 1,000 samples/20 processes at p95 90.855916ms with separate actual-TLS functional proof. The authoritative 1,800-second saturation run is active; stopped pre-freeze attempts remain explicitly invalidated.
+- 2026-11-11 course correction approved and applied: independent human pilot execution is waived only for v1.5.0 by the accountable maintainer; no pilot procedure is marked executed and no human-usability claim is made. Story entry advanced to `in-progress`. Remaining reference-performance/saturation, final review, signed app/runner artifacts and separately authorized publication gates are unchanged.
+- 2026-11-11 user-authorized prerequisite remediation: integrated settings UI locally; implemented source SBOM and operations/network guides; prepared the Packet19.1 manifest validator covering72 requirements and9 mandatory gates. Independent review repaired missing runner container acknowledgment; genuineTLS integration exposed and repaired post-commit ORM access in task assignment; collected report copy now distinguishes real collected provenance without granting approval authority.
+- Final automated prerequisite validation on source `675f127`: root2096/3skips; all-ten-directory localCI3571; API/CLI/infra820/1skip/2442subtests; automation1239/1skip/3374subtests; frontend513+2compatibility/typecheck/build; composedTLS three journeys, eight1440/760 screenshots, axe critical/serious0, visual94/pass. Real isolation172 checks and collection49 checks pass with current source hashes. Initial stale-evidence and shared-container-collision failures are retained in the validation record.
+- Historical entry snapshot — superseded by the approved waiver and current qualification: the independent human self-service pilot was unexecuted; reference-hardware performance/saturation, independent final review, immutable signed app/runner artifacts and separately authorized public release were open. The story was then backlog and all packets were unchecked.
+- Historical entry assessment — superseded: Story16.0 was closed, while12.5/12.7/12.8,16.13/16.14,16.15 and16.18 evidence still required reconciliation. No runtime or release work had been executed at that snapshot.
+- Historical preparation note — superseded: the story specification initially contained no implementation or runtime qualification.
 - Implementation and validation commands above are future obligations, not test results.
 
 ### File List
 - `docs/verification/infra-automation/16-19/entry-readiness.md` (preparatory audit).
-- `_bmad-output/implementation-artifacts/16-19-production-qualification-and-v1-5-0-release.md` (story specification only).
+- `docs/verification/infra-automation/16-19/development-validation.json` (final automated validation and retained failures).
+- `docs/verification/infra-automation/16-19/prerequisite-profiles/` (bounded isolation, collection, HTTPS, browser and visual evidence).
+- `docs/verification/infra-automation/16-19/qualification-manifest.json` (fail-closed72-requirement/9-gate inventory template).
+- `docs/verification/infra-automation/16-19/human-pilot-record.md` (unexecuted independent operator checklist).
+- `scripts/qualification_manifest.py`, `tests/test_infra_automation/test_release_qualification_manifest.py`, `docs/infra-automation/qualification.md`.
+- `scripts/release_artifacts.py`, `tests/test_infra/test_release_artifacts.py`, `.github/workflows/release-artifacts.yml`, `.github/workflows/release.yml`, `docs/security/release-artifacts.md`, `docs/verification/12-5/`.
+- `services/infra_automation_runner_tasks.py`, `tests/test_infra_automation/test_runner_attempts.py`, `infra_automation/runner/execution.py`, `tests/test_infra_automation/test_runner_execution_boundaries.py`.
+- `scripts/compose-story16-19-https.yaml`, `scripts/runner_https_ui_fixture.py`, `scripts/qualify_https_collection.py`, `frontend/e2e/infra-automation-runners-https.spec.ts`.
+- `frontend/src/screens/ReportAutomationContext.tsx`, `frontend/src/screens/ReportAutomationContext.test.tsx`.
+- `docs/operations/data-lifecycle.md`, `docs/operations/restricted-network.md`, `docs/verification/operations/`, `README.md`, `_bmad-output/project-context.md`.
+- `_bmad-output/implementation-artifacts/16-19-production-qualification-and-v1-5-0-release.md` (story record and bounded prerequisite progress).

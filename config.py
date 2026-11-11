@@ -185,7 +185,7 @@ def _float_env(name: str, default: float) -> float:
 @dataclass(frozen=True)
 class Settings:
     app_name: str = os.getenv("APP_NAME", "DeployWhisper")
-    app_version: str = os.getenv("APP_VERSION", "1.4.0")
+    app_version: str = os.getenv("APP_VERSION", "1.5.0")
     app_host: str = os.getenv("APP_HOST", "127.0.0.1")
     app_port: int = int(os.getenv("APP_PORT", "8080"))
     app_base_url: str | None = os.getenv("APP_BASE_URL") or os.getenv("PUBLIC_APP_URL")
@@ -240,6 +240,20 @@ class Settings:
         "DEPLOYWHISPER_COLLECTION_PROFILES_SHA256", ""
     )
     recovery_control_path: str = os.getenv("DEPLOYWHISPER_RECOVERY_CONTROL_PATH", "")
+    material_authority_profile: str = os.getenv(
+        "DEPLOYWHISPER_MATERIAL_AUTHORITY_PROFILE", "disabled"
+    )
+    material_ledger_path: str = os.getenv("DEPLOYWHISPER_MATERIAL_LEDGER_PATH", "")
+    material_verification_key_path: str = os.getenv(
+        "DEPLOYWHISPER_MATERIAL_VERIFICATION_KEY_PATH", ""
+    )
+    material_signing_key_path: str = os.getenv(
+        "DEPLOYWHISPER_MATERIAL_SIGNING_KEY_PATH", ""
+    )
+    material_custody_root: str = os.getenv("DEPLOYWHISPER_MATERIAL_CUSTODY_ROOT", "")
+    material_probe_socket_path: str = os.getenv(
+        "DEPLOYWHISPER_MATERIAL_PROBE_SOCKET_PATH", ""
+    )
     trigger_keys_path: str = os.getenv("DEPLOYWHISPER_TRIGGER_KEYS_PATH", "")
     trigger_keys_sha256: str = os.getenv("DEPLOYWHISPER_TRIGGER_KEYS_SHA256", "")
     identity_profile: str = os.getenv("DEPLOYWHISPER_IDENTITY_PROFILE", "disabled")

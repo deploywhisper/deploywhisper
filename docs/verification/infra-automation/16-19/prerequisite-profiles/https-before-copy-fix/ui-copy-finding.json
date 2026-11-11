@@ -1,0 +1,6 @@
+{
+  "finding": "Collected report context was hardcoded as uploaded despite actual collected provenance.",
+  "resolved_in": "675f127a0c4ad7c3630d3c59cb7412818afd1db8",
+  "production_backend_unchanged": true,
+  "prior_browser": "3 passed before semantic collected-kind assertion was added; this snapshot is historical."
+}

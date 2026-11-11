@@ -1,22 +1,24 @@
 {
   "version": 1,
-  "checked_at": "2026-11-11T09:22:07Z",
-  "source_commit": "a6d59ecd44adacebc02809d80f9355d6e56b9242",
+  "checked_at": "2026-11-11T09:53:53Z",
+  "source_commit": "675f127a0c4ad7c3630d3c59cb7412818afd1db8",
   "working_tree_source": {
     "services/infra_automation_runner_tasks.py": "fb0bf7b6620bf4a89626b8c799ff393cc3518190bae0d19012d686d77d6e9921",
     "tests/test_infra_automation/test_runner_attempts.py": "85e1d4e6457c8140fef40ca3898045a081a0c4292dc3dd1a20af94b5d4296352",
-    "scripts/runner_https_ui_fixture.py": "dde8409504880d151a615819ce8325ee63da94a824e6a1d27dd5e70961996339",
+    "scripts/runner_https_ui_fixture.py": "695ab9dcf033ffa4d299fe0249525fec3896de1df7379f7392f997bc2e4bf912",
     "scripts/compose-story16-19-https.yaml": "d191c4b5080bf8e7504406be35437d33e2975d0feb0babe11ab635b8aba1f074",
-    "scripts/qualify_https_collection.py": "d6cc9584a00b1aa8c7f8755d52aeb6d489a26d72b0483caee34ed934d649ec80",
-    "frontend/e2e/infra-automation-runners-https.spec.ts": "6d4afa5ab50cd9c118741fa12852d1b4271e9c103c27448011fb0a7b0cfbacce"
+    "scripts/qualify_https_collection.py": "b73020832878c11c9017dab78b364d0f041fcbc4d44665250b32340a7aff750e",
+    "frontend/e2e/infra-automation-runners-https.spec.ts": "6563e5acc0c2524976fd2099387c6c8750ff7dbc2ae9d11958de8a4abfb27d5b",
+    "frontend/src/screens/ReportAutomationContext.tsx": "bc21bc3c6d3859e2a015bff93d3db9ce8493997d4dde642f8d5c4ba36c5d66b0",
+    "frontend/src/screens/ReportAutomationContext.test.tsx": "b95c3e8e0b1cfc566c19db27e5f9e3404a877a19b38f302a2855fbda67f25927"
   },
-  "image_id": "sha256:7c4748837fb1679fc149115842121f0c0f8db24dd6ec1b554b4b3b0eae676bde",
+  "image_id": "sha256:327a045d8c9de6d8a20f529aa5972d91b7e564b1b80d89a10e472562940c9b87",
   "container": {
-    "id": "dec25d9c5fd12af66d199eb824e9f17716b05682b6ba95b1c279f944bbed8706",
-    "compose_project": "deploywhisper-story16-19-https",
+    "id": null,
+    "compose_project": "deploywhisper-story16-19-https and isolated deploywhisper-story16-19-expiry",
     "user": "appuser",
-    "health": "healthy",
-    "origin": "https://localhost:8443",
+    "health": "healthy before disposable teardown",
+    "origin": "https://localhost:8443 and isolated https://localhost:18443",
     "database": "disposable tmpfs SQLite"
   },
   "profile": {
@@ -29,6 +31,7 @@
     "https_administration_playwright": "passed",
     "same_task_collector_to_shared_report": "passed",
     "permanent_briefing_playwright": "passed",
+    "enrollment_expiry_playwright": "passed",
     "axe_critical_serious": 0,
     "keyboard_journeys": "passed",
     "viewports": [1440, 760],
@@ -44,22 +47,25 @@
     "advisory": true
   },
   "screenshots": {
-    "revoked-1440.png": "ca81bdfffd8037510c7163d89a610547557573bd628d6000b7d9e5126d64aa8c",
-    "revoked-760.png": "b19089d818b70f50fa96f933f589f5b8d5512985ec7e14949e30215d80fbf4d4",
-    "real-collection-1440.png": "79799987b21d936e67e8e18e910fa00b314a7b5863d231d450f5ba06ad9d5c3f",
-    "real-collection-760.png": "ac320e97fa0c1f188180968fd4c9447033950f371d3e058e35810fd77f3c867b",
-    "real-report-1440.png": "37e337c3c197c59fcd14e7b5962567114b2f28e02a2fd9cf9b183253f713c6df",
-    "real-report-760.png": "cb304187e7866c33a36516476b470bb083fba2c0fb3f693250cacb1ecfc74262"
+    "revoked-1440.png": "467a8a5da62d4685714f57186b51032d054e7237c41da3d3cac2c158ef06348a",
+    "revoked-760.png": "e8f68c2f0c22f43def91c25d687ebcb5f6ab7ff2c067c67bcf289b8537d987fd",
+    "real-collection-1440.png": "f718e79383adabc0570c3412003590dab8db62ce446cdabf1307dc0b9129c80f",
+    "real-collection-760.png": "7d0662416419c6e855e7f58b90ba7ee981787afa1ecd310c0786e4cc0aefc215",
+    "real-report-1440.png": "7b8e0f893f2f550ced2512dc86a6ed95b7b3697fe73f2658d51c3d21f7faccfc",
+    "real-report-760.png": "13fb92362b8db4b832d3166b0425bb8369bdcd0a2e27259281655d1a5ad1da71",
+    "expired-1440.png": "3d6b3881dc37089c501e50185b4bbe4d5f4370d97d6b6bee2925ef588d7a4f6d",
+    "expired-760.png": "245c89761b10475d2cb74d9d21881dd998176666fb6071bd4513a20469f9e87a"
   },
   "initial_failures": [
     "The first browser attempt used an ambiguous global online-status locator; it was narrowed to the enrolled runner row before the passing rerun.",
     "The first collector attempt reused a global idempotency key and received HTTP 409; keys are now bound to the created workflow.",
-    "The next collector attempt exposed a production DetachedInstanceError after assignment commit; immutable runner identity is now captured before the expiring session closes and the live rerun passed."
+    "The next collector attempt exposed a production DetachedInstanceError after assignment commit; immutable runner identity is now captured before the expiring session closes and the live rerun passed.",
+    "A shared disposable container was removed by a concurrent CLI during the first expiry wait; the same test passed on an isolated Compose project and port."
   ],
   "limits": [
     "This is a disposable local same-origin TLS profile, not an independent human operator pilot.",
     "It qualifies the named OpenTofu 1.13.1 profile only; it does not qualify Terraform, cloud IAM, remote state or a public receiver.",
-    "The source includes uncommitted qualification changes and must be rerun against the immutable release candidate before release acceptance.",
+    "The runtime and UI source is commit 675f127a0c4ad7c3630d3c59cb7412818afd1db8; the profile must still be rerun against the final immutable release candidate before release acceptance.",
     "No public release, deployment or infrastructure remediation was performed or authorized."
   ]
 }

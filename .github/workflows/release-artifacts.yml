@@ -91,6 +91,7 @@ jobs:
             dist/release/*.tar.gz
             dist/release/SHA256SUMS
             dist/release/source-manifest.json
+            dist/release/runner-manifest.json
             dist/release/sbom.spdx.json
 
       - name: Preserve native signed bundle and verify identities
@@ -102,7 +103,7 @@ jobs:
           cp "$BUNDLE_PATH" dist/release/artifact.intoto.jsonl
           cd dist/release
           sha256sum --check SHA256SUMS
-          for subject in ./*.tar.gz SHA256SUMS source-manifest.json sbom.spdx.json; do
+          for subject in ./*.tar.gz SHA256SUMS source-manifest.json runner-manifest.json sbom.spdx.json; do
             gh attestation verify "$subject" \
               --bundle artifact.intoto.jsonl --repo "$REPOSITORY" \
               --signer-workflow "$REPOSITORY/.github/workflows/release-artifacts.yml" \

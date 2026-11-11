@@ -4,8 +4,10 @@ The `Signed Release Artifacts` workflow builds a source archive from the exact
 `github.sha`, rather than the checkout's working files. Git supplies deterministic
 tar headers and Python writes gzip with no filename or timestamp (`gzip -n`
 semantics). `source-manifest.json` records the commit, ref, repository, release
-label, packaging version and archive SHA-256. `SHA256SUMS` covers the archive, manifest and source SBOM.
-The pinned `actions/attest` action signs all four assets with native
+label, packaging version and archive SHA-256. A separate exact-source runner
+archive and `runner-manifest.json` identify the operator-owned runner distribution;
+they include no tool/provider binaries. `SHA256SUMS` covers both archives, both
+manifests and the source SBOM. The pinned `actions/attest` action signs all six subjects with native
 SLSA provenance. Its signed JSONL bundle is copied byte-for-byte to
 `artifact.intoto.jsonl`; it is not a hand-written provenance claim.
 
@@ -36,6 +38,14 @@ python3 -m scripts.release_artifacts build \
 Use an empty output directory. A local build has no cryptographic attestation;
 signing requires the trusted GitHub Actions job's OIDC identity.
 
+The runner archive is not a renamed copy of the application archive. Its signed
+`runner-manifest.json` lists a bounded Python inventory and the entrypoint
+`python -m cli.runner`. Shared API/backend packages and the root README are included
+for Hatch/runtime integrity; frontend, the `docs/` tree, release scripts/workflows
+and tests are excluded. It contains no OpenTofu/Terraform/provider binary. Operators install
+the separately qualified pinned tool/catalog and verify both the archive digest
+and its attestation before enrollment.
+
 ## Verify new SBOM-enabled downloaded assets
 
 Download a workflow artifact using `gh run download RUN_ID --repo REPOSITORY
@@ -49,7 +59,7 @@ REPOSITORY=deploywhisper/deploywhisper
 SOURCE_REF=refs/heads/develop # for a release use refs/tags/vVERSION
 SOURCE_SHA=EXPECTED_FULL_COMMIT_SHA
 sha256sum --check SHA256SUMS
-for subject in ./*.tar.gz SHA256SUMS source-manifest.json sbom.spdx.json; do
+for subject in ./*.tar.gz SHA256SUMS source-manifest.json runner-manifest.json sbom.spdx.json; do
   gh attestation verify "$subject" \
     --bundle artifact.intoto.jsonl --repo "$REPOSITORY" \
     --signer-workflow "$REPOSITORY/.github/workflows/release-artifacts.yml" \
@@ -95,7 +105,7 @@ done
 
 The archive, checksum file and manifest passed this strict policy and five
 independent negative cases. Do not apply this legacy exception to new
-SBOM-enabled releases: their four-subject verification above must fail when the
+SBOM/runner-enabled releases: their six-subject verification above must fail when the
 SBOM is missing. The new `release_artifacts verify` regeneration command targets
 the new artifact format, not the immutable legacy v1.4.0 asset set.
 

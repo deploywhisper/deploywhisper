@@ -1,9 +1,9 @@
 {
   "version": 1,
   "release": "v1.5.0",
-  "catalog_sha256": "dbbfc52cbec9faff148b774c08c942f03817fb688936dff2833f67def746d693",
+  "catalog_sha256": "ef4063301ab6a98ad16aa24348fb29690db7b3a50c9cf8c88883d889f5f7f3db",
   "build": {
-    "source_commit": "a6d59ecd44adacebc02809d80f9355d6e56b9242",
+    "source_commit": "675f127a0c4ad7c3630d3c59cb7412818afd1db8",
     "image_digest": null
   },
   "requirements": [
@@ -375,7 +375,7 @@
       "evidence": []
     },
     {
-      "id": "independent-human-pilot",
+      "id": "operator-pilot-or-maintainer-waiver",
       "status": "not-run",
       "evidence": []
     },

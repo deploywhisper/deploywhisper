@@ -1,0 +1,56 @@
+{
+  "case": "log-cap",
+  "state": "failed",
+  "cleanup_complete": true,
+  "exit_code": 1,
+  "statuses": [
+    {
+      "method": "POST",
+      "path": "/api/v1/infra-automation/runners/heartbeat",
+      "status": 200,
+      "monotonic": 265146.523990958
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/infra-automation/runners/heartbeat",
+      "status": 200,
+      "monotonic": 265146.769156458
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/infra-automation/runners/heartbeat",
+      "status": 200,
+      "monotonic": 265147.019443625
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/infra-automation/runners/heartbeat",
+      "status": 200,
+      "monotonic": 265147.08748
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/infra-automation/runners/heartbeat",
+      "status": 200,
+      "monotonic": 265147.125409541
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/infra-automation/runners/heartbeat",
+      "status": 200,
+      "monotonic": 265147.268902666
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/infra-automation/runners/heartbeat",
+      "status": 200,
+      "monotonic": 265147.343595166
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/infra-automation/runners/complete",
+      "status": 200,
+      "monotonic": 265147.574936708
+    }
+  ]
+}

@@ -1,0 +1,10 @@
+{
+  "score": 95,
+  "verdict": "pass",
+  "category_match": true,
+  "differences": [
+    "Faults show the existing failed run badge; log pagination shows the actual truncation warning and screened chunks."
+  ],
+  "suggestions": [],
+  "reasoning": "Viewport captures avoid blank document overflow beyond the SPA scrollport. The approved shell, cards, typography and focus treatment remain intact; fault states and log bounds are legible at1440/760 with zero critical/serious axe findings."
+}

@@ -1,65 +1,60 @@
-# Story 16.19 entry readiness — 2026-11-11
+# Story16.19 entry-readiness remediation
 
-**Decision: NOT READY. Keep backlog and all implementation packets unchecked.**
+Current disposition: **preparatory work has started; production approval/handoff
+qualification remains blocked by missing authority and handler composition.**
+The concurrent approved human-pilot waiver is preserved as **NOT EXECUTED** and
+does not waive this technical gap or authorize publication.
 
-Inspected develop/origin/develop at e4d6b50 and independently reviewed prerequisite story records, sprint tracking, architecture section25 and release workflows. This is preparatory evidence reconciliation, not production qualification.
+The initial e4d6b50 assessment is retained in Git history. The table below
+supersedes its resolved or overly broad blocker wording.
 
-| Dependency | Actual state | Required next evidence |
+| Finding | Current disposition | Evidence / next step |
 | --- | --- | --- |
-| 16.0 | Done | RFC and bounded qualification gate is closed; copied historical blocker is obsolete |
-| 12.5 | Ready-for-dev | Actual release SBOM generation, publication and verification; checksums/provenance alone are insufficient |
-| 12.7 / 12.8 | Ready-for-dev | Original supported-deployment backup/restore and restricted-network installation/analysis acceptance |
-| 16.13 / 16.14 | Review | Accepted review closure against their actual qualification boundaries |
-| 16.15 | In-progress | Positive HTTPS enrollment and actual isolated-runner browser acceptance |
-| 16.18 | In-progress | Independent human self-service pilot; bounded capacity/offline exercises already passed |
-| Release tree | Incomplete UI integration | PR219 merged into feature/16-18-operator-recovery-retention, not develop; AutomationSettingsSection.tsx is absent from origin/develop |
+|16.0 governance/technical gate|Already closed|Do not revive copied historical blockers|
+|Missing16.18 UI integration|Integrated into this feature branch at a6d59ec; corrected report copy at675f127|Normal reviewed integration into develop remains necessary|
+|12.5 SBOM|Source SPDX generation, exact regeneration, checksums and workflow wiring implemented/reviewed;215-package preview verified|Actual signed/public verification awaits the guarded trusted-develop/release workflow; no stable publication claimed|
+|12.7/12.8 operations/network|Guides and real nonempty offline core analysis plus SQLite backup/restore verified|Documentation/core-offline ACs do not require adding unsupported PostgreSQL automation or invent a cold-OS gate|
+|16.13 review closure|Fresh layered review found creation-acknowledgement gap; repaired and independently verified|172 real isolation checks; unknown creation remains fail-closed|
+|16.14 bounded collection|49 real collection/custody/receipt checks refreshed with matching sources|Production material/witness integration is a separate newly confirmed gap, not supplied by these receipts|
+|16.15 positive HTTPS/real runner|Actual TLS collection-to-report and administration/expiry/network journeys passed|3 browser journeys,8 screenshots; collected provenance copy corrected|
+|16.15 lease/log faults|Actual wire expiry, running OpenTofu revocation and log caps verified|3 fault cases plus3 browser journeys and6 screenshots; no terminal states seeded|
+|16.15 accepted/unknown production path|**Open**: production material resolver, qualified witness/lease authority and policy/human/handoff composition absent|Reviewed material-authority proposal requires topology choice and approval; no constant witness or fixture promotion|
+|16.18 human pilot|Recorded accountable-maintainer waiver, explicitly not executed|Preserve residual usability risk and durable decision-reference requirement; no technical gate is waived|
+|19.1 preparation|Fail-closed72-requirement/9-gate inventory tool implemented|Complete inventory is not publication authorization; actual release evidence remains required|
 
-PR218 entered develop as e4d6b50. PR219 merged at9654a9a0f94f2cc0db6cadcf335448a9cf160e39 on2026-11-11T08:31:09Z into the backend feature branch. Integrate that UI through the normal develop PR path before treating it as release-tree evidence. Do not infer integration merely from the merged PR status.
+## Verified implementation
 
-## Reusable interfaces and evidence
+At source675f127: root unittest2096 tests/3skips; full local CI3571 tests across10
+directories; exact API/CLI/infra820 passed/1skip/2442subtests; frontend513 tests plus2
+compatibility checks, typecheck/build. Actual isolation172, collection49 and TLS
+collection49 checks passed. Production-image witness covers243 Python files.
+The later lease/log supplement uses the same immutable runtime and a separately
+identified fault driver. See [validation](validation-summary.json),
+[profile proof](prerequisite-profiles/README.md), [fault proof](prerequisite-profiles/runner-faults/README.md)
+and [review](prerequisite-review.md).
 
-- Packet19.1: scripts/ci-local.sh, scripts/run-test-targets.sh, existing CI shards and the canonical infra-automation-requirement-dispositions.json (60 FR plus12 NFR).
-- Packet19.2: existing automation fault/auth/redaction and collector/receiver fixtures; existing bounded proof remains scoped to its exact profile.
-- Packet19.3: scripts/qualify_operator_capacity.py and earlier engine qualification harnesses. The16.18 two-CPU/two-GiB local profile does not replace16.19's required four-vCPU/eight-GB reference profile or remote runner proof.
-- Packet19.4: composed FastAPI Playwright fixtures and existing review/runner/unit/settings journeys; first resolve release-tree integration and missing positive HTTPS profile.
-- Packet19.5: existing signing/provenance workflows and the separate12.5 SBOM implementation. Public stable release requires its own authorization after all mandatory proof.
+Concurrent waiver, version and benchmark changes in the shared checkout are
+separately owned work. The675f127 test results do not automatically qualify those
+later changes. The current waiver-aware inventory unit suite was separately
+rechecked:12 tests and17 subtests passed.
 
-The historical3–5 person-week qualification estimate is not a current independently reviewed estimate for packets19.1–19.5. Re-estimate against accepted dependencies, named tool/runner/receiver versions, available reference hardware and the operator pilot environment. No packet is promoted on assumed resources or fixture-only proof.
+## Required next decision
 
-## Entry validation
+The [material-authority integration proposal](../../../../_bmad-output/planning-artifacts/sprint-change-proposal-2026-11-11-material-authority-integration.md)
+was independently reviewed and is **not approved**. It recommends explicit
+integration follow-ups under16.14 before15.3 production accepted/unknown proof,
+keeping19.2 as final integrated qualification and preserving all canonical requirements.
 
-Read-only Git/GitHub status and file-tree checks, prerequisite story/status inspection, release-workflow SBOM search and an independent acceptance/readiness review agreed on this decision. No application source, configuration or dependency changed; runtime/UI tests are not applicable to this documentation-only entry audit. No release write was attempted.
+Choose co-located or separate-host authority topology and approve the concrete
+proposal before enabling production providers. This decision must establish
+lifecycle mutation ownership, monotonic generation/domain semantics and
+serialization or leases through admission. A source hash, current observation,
+constant counter or seeded terminal state cannot substitute for that authority.
+The [composition-gap record](prerequisite-profiles/receiver-faults/README.md)
+contains direct default-service/registry evidence and receiver component proof.
 
-Next BMad step: complete prerequisite stories and the missing develop integration, then validate Story16.19 readiness before resuming dev-story. Preparation can continue with evidence inventories; it cannot check off qualification packets or claim production readiness.
-
-
-## Authorized remediation in progress
-
-The user subsequently authorized fixing these prerequisites on this branch and
-then starting Story16.19. The initial assessment above is retained as its snapshot;
-its overly broad PostgreSQL/cold-host blockers are superseded by the contract
-review in [operations scope](../../operations/scope-and-verification.md).
-
-- UI and reviewed16.18 records are integrated into this qualification branch at
-  a6d59ec; merge conflicts were resolved. Publication into develop remains a
-  normal reviewed integration step, rather than missing code in this candidate.
-- Source SBOM generation, exact regeneration verification and release workflow
-  wiring are implemented. Independent review cleared the tooling after correcting
-  legacyv1.4.0 verification guidance. Actual signed/public artifact verification
-  remains a release gate; requiring stable publication before16.19 would create
-  a dependency cycle. See [SBOM preview](../../12-5/source-preview-results.json).
-- Core lifecycle/network guides and real nonempty offline analysis plus SQLite
-  roundtrip evidence are implemented. PostgreSQL remains conditional/future support;
-  new PostgreSQL runtime and cold OS installation are not prerequisites implied by
-  these original documentation/core-offline ACs.
-- Real isolation172 and collection49 checks passed again; HTTPS administration
-  browser proof passed. Continuous HTTPS collection-to-report proof is underway.
-- Preparatory Packet19.1 tooling maps all72 requirements and nine mandatory gates
-  to exact build/evidence identity. Its template deliberately reports82 blockers,
-  including the unset image digest; no requirement or release gate is inferred passed.
-- Independent human self-service acceptance remains unexecuted. The operator
-  question is pending; [pilot record](human-pilot-record.md) provides a concrete
-  checklist without claiming machine-run work is human acceptance.
-
-Full integrated validation is running. No story is promoted to done and no stable
-release is published from these interim results.
+The earlier conditional5–9-day estimate assumed production ports already existed.
+Re-estimate after this design decision; no delivery date or full production
+qualification follows from the successful bounded tests. Stablev1.5.0 publication
+still needs all declared profile/performance/review/signing gates and the shared
+release obligations recorded by the architecture.

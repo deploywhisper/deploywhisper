@@ -1,0 +1,40 @@
+{
+  "status": "blocked-missing-production-composition",
+  "qualified": false,
+  "source_commit": "675f127a0c4ad7c3630d3c59cb7412818afd1db8",
+  "read_only_probe": {
+    "default_step_kinds": [
+      "uploaded_intake",
+      "shared_analysis"
+    ],
+    "configured_collection_adds": "admitted_collection only",
+    "decision_material_installed": false,
+    "handoff_material_installed": false,
+    "default_material_status": 503
+  },
+  "gaps": [
+    {
+      "path": "services/infra_automation_decisions.py:255",
+      "description": "Production DecisionService has no material provider; _material denies with503. Existing scripts supply synthetic material only."
+    },
+    {
+      "path": "services/infra_automation_decisions.py:199",
+      "description": "MaterialWitness requires qualified atomic monotonic generations, including ABA and source reset. No production witness provider is composed; constant fixture generations or inferred hashes cannot replace it."
+    },
+    {
+      "path": "infra_automation/local_workers.py:117",
+      "description": "Production registry installs upload/shared-analysis and optionally admitted collection only. Policy evaluation, human decision and registered handoff are not installed executable handlers."
+    },
+    {
+      "path": "infra_automation/local_workers.py:254",
+      "description": "The generic registered-handoff worker branch is explicitly a local uncertainty double without transport; it does not establish real dispatch."
+    }
+  ],
+  "scope": "No terminal states seeded, no authority fabricated, no Docker/app mutation, no external action/GitHub calls. Existing scoped decision/handoff/receiver tests remain valuable but cannot establish this missing continuous production path.",
+  "source_hashes": {
+    "infra_automation/local_workers.py": "10f92b628198ae5d67368672d2a1b0e6541673a8a0c0fdf0a44d0c546a55d486",
+    "services/infra_automation_decisions.py": "fc3c443ef0d38e00644cbe3af4c345c60c9b78c40fbd92c941508bcfe71dca56",
+    "services/infra_automation_handoffs.py": "2a29c719856e2b68c9a2cb309eb65dfec065e7c28910f72bf937b08d6e25bee6",
+    "app.py": "65f25dced26d1ede2612b0605e929b8176a9ba8d8722e888defebb32f70b09f2"
+  }
+}

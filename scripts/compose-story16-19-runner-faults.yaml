@@ -1,0 +1,14 @@
+name: deploywhisper-s1619-runner-faults
+services:
+  app:
+    extends:
+      file: compose-story16-19-https.yaml
+      service: app
+    image: ${RUNNER_FAULT_IMAGE:?Use the qualified immutable application image}
+    environment:
+      DEPLOYWHISPER_ENGINE_ATTEMPT_LOG_BYTES: "8192"
+      DEPLOYWHISPER_ENGINE_LOG_CHUNK_UTF8_BYTES: "128"
+volumes:
+  tls:
+    external: true
+    name: ${RUNNER_HTTPS_TLS_VOLUME:?Set the owned disposable TLS volume}

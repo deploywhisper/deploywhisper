@@ -2,7 +2,12 @@
 
 ## Unreleased
 
-- No unreleased changes yet.
+- Prepared the v1.5.0 InfraFlow release candidate: verified local identity and memberships, bounded immutable workflows, durable fenced orchestration, evidence-bound human decisions, registered handoffs, isolated OpenTofu collection, protected exact-byte custody, signed triggers, declared unit preflight, recovery/retention and React operator surfaces.
+- Added deterministic source SPDX2.3 SBOM generation, checksums, exact regeneration verification, qualification manifests, supported-profile documentation and signed-artifact/provenance publication gates.
+- Added reference performance qualification for the 4-CPU/8-GiB/local-SSD profile, real TLS runner/report journeys and complete crash/authorization/redaction evidence aggregation; public release remains blocked until final signed artifacts, durable maintainer waiver evidence and publication authorization exist.
+- Recorded the independent human self-service pilot as **not executed** with a bounded accountable-maintainer waiver and visible post-release follow-up; the waiver does not expand support or replace technical gates.
+- Restored unimplemented Epic 17 Live Environment Grounding to its independent v1.6.0 release train; v1.5.0 contains no partial grounding code or claims.
+- See [v1.5.0 release-candidate notes](docs/releases/v1.5.0.md) and the [InfraFlow supported profile](docs/infra-automation/support.md).
 
 ## v1.4.0 - 2026-10-07
 

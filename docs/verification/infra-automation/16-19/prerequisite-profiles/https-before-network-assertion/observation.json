@@ -1,0 +1,27 @@
+{
+  "attempts": [
+    [
+      "collect",
+      "succeeded",
+      "2026-11-11 09:27:49.926339",
+      "2026-11-11 09:27:53.615195"
+    ],
+    [
+      "analysis",
+      "failed",
+      "2026-11-11 09:27:53.725389",
+      "2026-11-11 09:28:00.392339"
+    ],
+    [
+      "analysis",
+      "succeeded",
+      "2026-11-11 09:28:00.408605",
+      "2026-11-11 09:28:06.318076"
+    ]
+  ],
+  "report_count": 1,
+  "report_links": 1,
+  "note": "One analysis attempt failed and was retried successfully; raw failure cause is not retained by the production safe-diagnostic contract. No claim of zero attempt failures. One report and one link were retained.",
+  "browser": "2 passed;1 test assertion failed because offline health row was retained with disabled controls rather than removed. Assertion corrected to match contract.",
+  "log_sha256": "22323911266f145b18f7980b94caaa922d0344ed098f3337e97c7a336965f761"
+}

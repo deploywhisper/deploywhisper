@@ -1,0 +1,1 @@
+Historical driver attempt only: the synthetic HCL placed two arguments in a single-line block and OpenTofu rejected it with exit1. The harness was corrected to valid multiline HCL. This is not the final fault result or a product failure. The final full corpus is runner-faults.json.

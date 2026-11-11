@@ -1,0 +1,122 @@
+{
+  "date": "2026-11-11T09:50:13.620510+00:00",
+  "scope": "Local Linux ARM64/OpenTofu1.13.1 isolated collector with genuine same-origin HTTPS browser and normal verified TLS RunnerClient; not independent human pilot or universal production support.",
+  "source_commit": "675f127a0c4ad7c3630d3c59cb7412818afd1db8",
+  "image_id": "sha256:a0155abf874bd29a798a19e794dd9d2928d17ed701011e655ecc6920cc65d447",
+  "isolation_checks": 172,
+  "collection_checks": 49,
+  "actual_tls_collection_checks": 49,
+  "frontend_tests": 513,
+  "compatibility_checks": 2,
+  "typecheck": "passed",
+  "build": "passed",
+  "browser": {
+    "passed": 3,
+    "reported_duration": "1.2m",
+    "journeys": [
+      "actual TLS enrollment/redemption/poll, transient network loss/recovery, rotation and revocation",
+      "same actual isolated collection run to permanent report through keyboard navigation",
+      "actual60-second unredeemed enrollment expiry clears reveal and rejects redemption401 after published deadline"
+    ],
+    "critical_serious_axe_violations": 0,
+    "screenshots": [
+      {
+        "path": "docs/verification/infra-automation/16-19/prerequisite-profiles/https/screenshots/expired-1440.png",
+        "sha256": "3d6b3881dc37089c501e50185b4bbe4d5f4370d97d6b6bee2925ef588d7a4f6d",
+        "width": 1440,
+        "height": 1000
+      },
+      {
+        "path": "docs/verification/infra-automation/16-19/prerequisite-profiles/https/screenshots/expired-760.png",
+        "sha256": "245c89761b10475d2cb74d9d21881dd998176666fb6071bd4513a20469f9e87a",
+        "width": 760,
+        "height": 1000
+      },
+      {
+        "path": "docs/verification/infra-automation/16-19/prerequisite-profiles/https/screenshots/real-collection-1440.png",
+        "sha256": "f718e79383adabc0570c3412003590dab8db62ce446cdabf1307dc0b9129c80f",
+        "width": 1440,
+        "height": 1322
+      },
+      {
+        "path": "docs/verification/infra-automation/16-19/prerequisite-profiles/https/screenshots/real-collection-760.png",
+        "sha256": "7d0662416419c6e855e7f58b90ba7ee981787afa1ecd310c0786e4cc0aefc215",
+        "width": 760,
+        "height": 1885
+      },
+      {
+        "path": "docs/verification/infra-automation/16-19/prerequisite-profiles/https/screenshots/real-report-1440.png",
+        "sha256": "7b8e0f893f2f550ced2512dc86a6ed95b7b3697fe73f2658d51c3d21f7faccfc",
+        "width": 1440,
+        "height": 1000
+      },
+      {
+        "path": "docs/verification/infra-automation/16-19/prerequisite-profiles/https/screenshots/real-report-760.png",
+        "sha256": "13fb92362b8db4b832d3166b0425bb8369bdcd0a2e27259281655d1a5ad1da71",
+        "width": 760,
+        "height": 1000
+      },
+      {
+        "path": "docs/verification/infra-automation/16-19/prerequisite-profiles/https/screenshots/revoked-1440.png",
+        "sha256": "467a8a5da62d4685714f57186b51032d054e7237c41da3d3cac2c158ef06348a",
+        "width": 1440,
+        "height": 1000
+      },
+      {
+        "path": "docs/verification/infra-automation/16-19/prerequisite-profiles/https/screenshots/revoked-760.png",
+        "sha256": "e8f68c2f0c22f43def91c25d687ebcb5f6ab7ff2c067c67bcf289b8537d987fd",
+        "width": 760,
+        "height": 1000
+      }
+    ],
+    "visual_score": 94
+  },
+  "runtime_witness": "https-final/runtime-witness.json",
+  "commands": [
+    "python scripts/qualify_runner_isolation.py --output docs/verification/infra-automation/16-19/prerequisite-profiles/isolation-final",
+    "python scripts/qualify_collection.py --output docs/verification/infra-automation/16-19/prerequisite-profiles/collection-final",
+    "python scripts/qualify_https_collection.py --fixture <private0600fixture> --ca <disposableCA> --output docs/verification/infra-automation/16-19/prerequisite-profiles/https-final",
+    "BASE_URL=https://localhost:18443 RUNNER_HTTPS_ORIGIN=https://localhost:18443 RUNNER_HTTPS_PROJECT=deploywhisper-s1619-profile-owned RUNNER_HTTPS_CONTAINER=deploywhisper-s1619-profile-owned-app-1 RUNNER_HTTPS_FIXTURE=<private0600fixture> RUNNER_HTTPS_COLLECTION_RESULT=docs/verification/infra-automation/16-19/prerequisite-profiles/https-final/https-run.json npm run test:ui-review -- infra-automation-runners-https.spec.ts"
+  ],
+  "logs": {
+    "/tmp/s1619-final-isolation.log": "3083206218f8265eff0c7318662243a952ffef43e453dec21c697178788a19f3",
+    "/tmp/s1619-final-collection.log": "3083206218f8265eff0c7318662243a952ffef43e453dec21c697178788a19f3",
+    "/tmp/s1619-675-final-https-collection.log": "fc24ee1ab6e5c5ffd892ed33c66ceb180752e9b005bd6a9e634d4ea90237e572",
+    "/tmp/s1619-675-final-https-browser.log": "2bfeee07aaf7470f0389520dd571c3e9521a67dd52acf6a74a76b5e0389c535a",
+    "/tmp/s1619-final-ui-test.log": "d4f7818c711243c864897be0997ffb29ecbbe9b70efd1aecf5932797e1d80f4f",
+    "/tmp/s1619-final-ui-typecheck.log": "823a55476ad494bcae90a55a5549f7cdca5bdbc1c4839367d1e321772b7a17a3",
+    "/tmp/s1619-final-ui-build.log": "824b30a82dfa2edc8a040b17b66cbb9b23110e409c4b90e832658394397d9e0e",
+    "/tmp/s1619-675-final-build.log": "31314d0b79d27ea8900cf20606d99f3ff659e3cd613c039ff8ee9c0efeaade2d",
+    "/tmp/s1619-queue-detached-red.log": "a6d5e780f6acd0bb543704614c55e8c75bcc991a53fe75f2d7fb1f1255d36ae2",
+    "/tmp/s1619-queue-detached-green.log": "b80af352f0f784b94d023d9a4dabec725054ba1432998731feb648e3dd832d4c",
+    "/tmp/s1619-collected-report-red.log": "f2979597e7d24af0e74fa7a4a9009ad4240991cc809c39b658f82d8704cdbfd9"
+  },
+  "cleanup": {
+    "projects": [
+      {
+        "project": "deploywhisper-s1619-profile-owned",
+        "container_id": "7a438a55cb1e121ef91bc254055984373d0b3fe51dc8bf581788dc3b5ee0fcb1",
+        "volume": "dw1619-profile-owned-tls",
+        "removed": true
+      },
+      {
+        "project": "deploywhisper-story16-19-https",
+        "container_id": "9989cff465c67937cda4d6a1ac9356c3d1b4791afcb76b9f4cc4a880f451ba6e",
+        "volume": "dw1619-https-tls",
+        "removed": true
+      }
+    ],
+    "private_fixture_exports_removed": true,
+    "owned_certificate_directory_removed": true,
+    "unowned_qualifier_directories_untouched": true,
+    "original_app_container_id": "0abf6dc796508bc8fda32e96c1ca9386802c2b34b1ae402c6322577d27c8a979",
+    "original_app_health": "healthy",
+    "original_http_health": 200
+  },
+  "limits": [
+    "Independent human self-service pilot was NOT EXECUTED; the accountable-maintainer waiver accepts only the residual usability risk and is not pilot evidence.",
+    "Named offline OpenTofu profile only; Terraform, cloud IAM/remote state, remote fleet and broader release profiles unqualified.",
+    "Browser accepts the disposable self-signed certificate; RunnerClient uses the normal verified TLS transport with the explicit local CA. No global trust-store change.",
+    "Earlier interrupted/failed driver attempts and one undetermined retried analysis attempt remain historical, not final proof. Final run has one successful analysis completion, one report and one link."
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "score": 94,
+  "verdict": "pass",
+  "category_match": true,
+  "differences": [
+    "The final expiry state adds a real pending/offline row; its long runner identifier wraps within the existing table cell.",
+    "Collected report context now identifies its actual provenance while preserving advisory copy and existing styling."
+  ],
+  "suggestions": [],
+  "reasoning": "Compared with the approved runner-state reference, the shell, typography, cards, status treatment and spacing remain consistent. The final expiry captures are readable without overlap, expose no one-time secret, and retain the zero critical/serious axe result."
+}

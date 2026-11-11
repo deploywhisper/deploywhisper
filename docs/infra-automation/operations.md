@@ -459,8 +459,68 @@ and [handoff source hashes](../verification/infra-automation/16-18/restore-sourc
 record the deterministic migration/interruption/replay tests and exact scope.
 Shared integration edits require refreshed evidence; a handoff hash file alone
 does not attest to a later build. Live custody/receiver restore and rotation,
-unmanaged-writer coordination, restricted-network recovery, the self-service
-operator pilot and host-power-loss durability remain separate explicit gates.
+unmanaged-writer coordination, restricted-network recovery and host-power-loss
+durability remain separate explicit gates. The independent self-service pilot
+was not executed; the v1.5.0 accountable-maintainer waiver accepts only that
+residual usability risk and cannot substitute for these technical gates.
+
+## Co-located material authority
+
+The v1.5.0 exact-plan profile is opt-in and co-located: the application,
+operator-owned custody authority and receiver participate on one controlled host.
+Remote material-authority services are not supported.
+
+Configure all of the following or leave the profile disabled:
+
+```sh
+DEPLOYWHISPER_MATERIAL_AUTHORITY_PROFILE=colocated-v1
+DEPLOYWHISPER_MATERIAL_LEDGER_PATH=/private/operator/material-ledger.json
+DEPLOYWHISPER_MATERIAL_VERIFICATION_KEY_PATH=/run/secrets/material-authority-public.pem
+DEPLOYWHISPER_MATERIAL_PROBE_SOCKET_PATH=/run/deploywhisper-authority/custody.sock
+DEPLOYWHISPER_RECOVERY_CONTROL_PATH=/private/operator/recovery-control
+DEPLOYWHISPER_COLLECTION_PROFILES_PATH=/private/operator/profiles.json
+DEPLOYWHISPER_COLLECTION_PROFILES_SHA256=sha256:EXPECTED
+```
+
+The ledger is signed nonsecret metadata. Mount only the Ed25519 public key and a
+read-only ledger view into the app. Keep
+`DEPLOYWHISPER_MATERIAL_SIGNING_KEY_PATH` and raw custody solely in the separately
+privileged operator/receiver process; never mount either into the app. Raw
+saved-plan bytes remain solely in that process's protected custody root. Set
+`DEPLOYWHISPER_MATERIAL_CUSTODY_ROOT` only in the authority/receiver process;
+the app configuration intentionally does not require or open it.
+Start the separately privileged live verifier before the app, using a shared
+socket group that contains the app identity but not the raw-custody directory:
+
+```sh
+python -m cli.material_custody \
+  --socket /run/deploywhisper-authority/custody.sock \
+  --socket-gid APP_SHARED_GID \
+  --custody-root /private/receiver/custody \
+  --private-key /private/authority/material-signing.pem
+```
+
+The app sends a fresh nonce and exact receiver binding for every material read;
+the authority reopens and verifies the protected descriptor/bytes and signs the
+response. Missing/corrupt custody, replay, socket replacement or signature
+mismatch denies the decision/handoff.
+After actual collection and shared analysis, publish the exact decision-step
+record from the authority process:
+
+```sh
+python -m cli.material_authority --run-id RUN_ID --step-id DECISION_STEP
+```
+
+The command opens and verifies the exact protected custody descriptor, derives
+the binding only from retained run/report/manifest/policy/target/unit facts and
+atomically advances the monotonic material ledger. Record removal, rollback,
+ABA changes, recovery-domain reset without generation advance, symlinks and
+unsafe modes fail closed. HTTP callers cannot select a ledger or provider.
+
+Human decisions and handoffs remain API-driven durable services. The fixed
+policy worker produces no approval or dispatch authority. Missing material,
+recovery, collection-profile or GitHub carrier configuration returns503; there
+is no local dummy-success fallback or blind resend after unknown delivery.
 
 ## Retention boundary
 
@@ -520,8 +580,9 @@ runner stale/offline counts, approvals by outcome, delivery-unknown counts,
 quota/disk failures, durations and CPU/RSS/disk high-water marks without raw
 artifacts, user inputs or credentials. Hash any retained evidence logs locally.
 
-The Story 16.18 self-service pilot and real 30-minute saturation exercise are
-not run by this documentation packet. Acceptance still needs 10 active runs,
+The Story 16.18 self-service pilot was not executed and is covered only by the
+bounded accountable-maintainer waiver. The real 30-minute Story16.19 saturation
+exercise remains a separate technical gate. Acceptance still needs 10 active runs,
 at most 2 concurrent analysis jobs and 20 online runners for that interval, with
 resource samples, errors, queue/storage bounds, restart/cleanup observations and
 no corrupted transitions. The earlier 16.5 run used synthetic online slot ports;

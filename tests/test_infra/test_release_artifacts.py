@@ -32,6 +32,28 @@ class ReleaseArtifactsTests(unittest.TestCase):
             '[project]\nname = "deploywhisper"\nversion = "1.4.0rc1"\n'
         )
         (self.repo / "app.py").write_text("print('committed source')\n")
+        for directory in (
+            "analysis",
+            "api",
+            "cli",
+            "evidence",
+            "infra_automation",
+            "integrations",
+            "llm",
+            "migrations",
+            "models",
+            "parsers",
+            "services",
+        ):
+            path = self.repo / directory
+            path.mkdir()
+            (path / "__init__.py").write_text("")
+        (self.repo / "cli/runner.py").write_text(
+            "import argparse\nparser=argparse.ArgumentParser()\nparser.parse_args()\n"
+        )
+        for filename in ("alembic.ini", "config.py", "logging_config.py", "LICENSE"):
+            (self.repo / filename).write_text("synthetic fixture\n")
+        (self.repo / "README.md").write_text("# Synthetic\n")
         (self.repo / "requirements.txt").write_text(
             "example==1.0 --hash=sha256:" + "a" * 64 + "\n"
         )
@@ -65,7 +87,8 @@ class ReleaseArtifactsTests(unittest.TestCase):
         (self.repo / "app.py").write_text("dirty source")
         (self.repo / "secret.env").write_text("untracked")
         output = self.build("dist")
-        archive = next(output.glob("*.tar.gz"))
+        manifest = json.loads((output / "source-manifest.json").read_text())
+        archive = output / manifest["archive"]
         with tarfile.open(archive) as contents:
             names = contents.getnames()
             self.assertFalse(any(name.endswith("secret.env") for name in names))
@@ -170,6 +193,35 @@ class ReleaseArtifactsTests(unittest.TestCase):
         self.assertEqual(sbom["spdxVersion"], "SPDX-2.3")
         self.assertEqual(
             {p["name"] for p in sbom["packages"]}, {"deploywhisper", "example", "react"}
+        )
+        runner = json.loads((output / "runner-manifest.json").read_text())
+        self.assertEqual(runner["source_sha"], self.sha)
+        self.assertEqual(runner["runner_protocol_version"], 1)
+        self.assertEqual(runner["entrypoint"], "python -m cli.runner")
+        self.assertNotIn("frontend", runner["file_inventory"])
+        self.assertTrue(
+            {"README.md", "api", "integrations", "infra_automation", "cli"}
+            <= set(runner["file_inventory"])
+        )
+        self.assertFalse(runner["tool_binaries_included"])
+        runner_archive = output / runner["archive"]
+        self.assertTrue(runner_archive.is_file())
+        with tarfile.open(runner_archive) as contents:
+            names = contents.getnames()
+            self.assertTrue(any(name.endswith("cli/__init__.py") for name in names))
+            self.assertFalse(any("/frontend/" in name for name in names))
+            extracted = Path(self.temp.name) / "runner-extracted"
+            contents.extractall(extracted, filter="data")
+        runner_root = extracted / f"deploywhisper-runner-preview-{self.sha}"
+        subprocess.run(
+            [sys.executable, "-m", "cli.runner", "--help"],
+            cwd=runner_root,
+            check=True,
+            capture_output=True,
+        )
+        self.assertEqual(
+            runner["archive_sha256"],
+            hashlib.sha256(runner_archive.read_bytes()).hexdigest(),
         )
         args = (
             self.repo,

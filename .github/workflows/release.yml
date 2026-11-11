@@ -265,7 +265,7 @@ jobs:
       - name: Verify source asset bundle before publication
         run: |
           test "${{ needs.artifacts.outputs.source-sha }}" = "$GITHUB_SHA"
-          for subject in "dist/release/deploywhisper-$RELEASE_TAG.tar.gz" dist/release/SHA256SUMS dist/release/source-manifest.json dist/release/sbom.spdx.json; do
+          for subject in "dist/release/deploywhisper-$RELEASE_TAG.tar.gz" "dist/release/deploywhisper-runner-$RELEASE_TAG.tar.gz" dist/release/SHA256SUMS dist/release/source-manifest.json dist/release/runner-manifest.json dist/release/sbom.spdx.json; do
             gh attestation verify "$subject" \
               --bundle dist/release/artifact.intoto.jsonl --repo "$GITHUB_REPOSITORY" \
               --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/release-artifacts.yml" \
@@ -299,7 +299,8 @@ jobs:
           gh release create "$RELEASE_TAG" --verify-tag --title "DeployWhisper $RELEASE_TAG" \
             --notes-file release-notes.md "${options[@]}" \
             "dist/release/deploywhisper-$RELEASE_TAG.tar.gz" \
-            dist/release/SHA256SUMS dist/release/source-manifest.json dist/release/sbom.spdx.json dist/release/artifact.intoto.jsonl
+            "dist/release/deploywhisper-runner-$RELEASE_TAG.tar.gz" \
+            dist/release/SHA256SUMS dist/release/source-manifest.json dist/release/runner-manifest.json dist/release/sbom.spdx.json dist/release/artifact.intoto.jsonl
       - name: Promote verified digest to version and eligible stable aliases
         run: |
           tags=(--tag "$IMAGE:$VERSION")

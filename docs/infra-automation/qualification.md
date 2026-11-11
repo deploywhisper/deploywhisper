@@ -34,7 +34,7 @@ objects with these exact fields:
 | `command` | Actual command or independently performed procedure |
 | `exit_code` | Actual integer result; successful rows require zero |
 | `scope` | Executed tool/runner/receiver/hardware profile and limitations |
-| `verified_by` | Actual verifier attribution; a human gate requires the real human operator |
+| `verified_by` | Actual verifier attribution; operator proof names the operator, while a maintainer waiver names the accountable maintainer and explicitly states that no human pilot occurred |
 | `source_commit` | Same full commit as the inventory build |
 | `image_digest` | Same immutable image digest as the inventory build |
 
@@ -52,9 +52,19 @@ source/build identity, requirement coverage and external attestations. Reusing
 one report across requirements is valid only when it really establishes each
 requirement. Do not turn fixture success into a production-profile pass.
 
-The nine mandatory gates retain accepted prerequisites, the independent human
-pilot, integrated real-profile behavior, safety/authorization, reference
+The nine mandatory gates retain accepted prerequisites, either the independent
+operator pilot or an accountable-maintainer waiver, integrated real-profile behavior, safety/authorization, reference
 performance, composed-browser qualification, operations/docs, independent
 code/security review and signed-artifact/SBOM/provenance verification. Complete
 inventory validation does not publish, sign, tag, deploy or authorize any action.
 Stable publication still requires all story acceptance and separate authority.
+
+A waiver closes only the independent-execution process gate. It must preserve
+`NOT EXECUTED` for the pilot procedures, cite reviewed technical evidence, accept
+the residual self-service/runbook-usability risk and leave every performance,
+security-review, signing, provenance, support-boundary and publication gate intact.
+The manifest validator will pass this gate only with the named maintainer
+(`accountable-maintainer:psaho01`) and a source-bound
+`docs/verification/infra-automation/16-19/maintainer-waiver-approval.json`
+record backed by an approved CODEOWNERS review. A branch-local assertion is not
+durable approval evidence.

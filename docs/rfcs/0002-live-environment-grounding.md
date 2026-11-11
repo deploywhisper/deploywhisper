@@ -4,7 +4,7 @@
 - **Created:** 2026-10-19
 - **Accepted:** 2026-10-19
 - **Epic:** 17
-- **Target release:** v1.5.0 (shared release train with Epic 16; retargeted 2026-10-20 from the original v1.6.0 proposal)
+- **Target release:** v1.6.0 (independent release train restored by the approved 2026-11-11 cut-back)
 - **Supersedes:** nothing
 - **Depends on:** nothing in Epic 16
 

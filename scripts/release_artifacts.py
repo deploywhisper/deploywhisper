@@ -36,6 +36,27 @@ def read_project_version(repo: Path, source_sha: str) -> str:
 
 
 SBOM_NAME = "sbom.spdx.json"
+RUNNER_MANIFEST_NAME = "runner-manifest.json"
+RUNNER_PATHS = (
+    "analysis",
+    "api",
+    "cli",
+    "evidence",
+    "infra_automation",
+    "integrations",
+    "llm",
+    "migrations",
+    "models",
+    "parsers",
+    "services",
+    "alembic.ini",
+    "config.py",
+    "logging_config.py",
+    "requirements.txt",
+    "pyproject.toml",
+    "README.md",
+    "LICENSE",
+)
 
 
 def _unique_json(data: bytes) -> dict:
@@ -170,6 +191,15 @@ def source_sbom(repo: Path, source_sha: str, repository: str, version: str) -> d
     }
 
 
+def _gzip_archive(output: Path, archive: bytes) -> str:
+    with output.open("wb") as stream:
+        with gzip.GzipFile(
+            filename="", mode="wb", fileobj=stream, mtime=0
+        ) as compressor:
+            compressor.write(archive)
+    return hashlib.sha256(output.read_bytes()).hexdigest()
+
+
 def build_artifacts(
     repo: Path,
     source_sha: str,
@@ -213,12 +243,18 @@ def build_artifacts(
         source_sha,
     )
     # Equivalent to gzip -n: no original filename or wall-clock mtime.
-    with (output_dir / filename).open("wb") as stream:
-        with gzip.GzipFile(
-            filename="", mode="wb", fileobj=stream, mtime=0
-        ) as compressor:
-            compressor.write(archive)
-    digest = hashlib.sha256((output_dir / filename).read_bytes()).hexdigest()
+    digest = _gzip_archive(output_dir / filename, archive)
+    runner_filename = f"deploywhisper-runner-{release}.tar.gz"
+    runner_archive = _git(
+        repo,
+        "archive",
+        "--format=tar",
+        f"--prefix=deploywhisper-runner-{release}/",
+        source_sha,
+        "--",
+        *RUNNER_PATHS,
+    )
+    runner_digest = _gzip_archive(output_dir / runner_filename, runner_archive)
     manifest = {
         "schema_version": 1,
         "repository": repository,
@@ -232,12 +268,36 @@ def build_artifacts(
     (output_dir / "source-manifest.json").write_text(
         json.dumps(manifest, indent=2, sort_keys=True) + "\n"
     )
+    runner_manifest = {
+        "schema_version": 1,
+        "repository": repository,
+        "source_ref": source_ref,
+        "source_sha": source_sha,
+        "release": release,
+        "version": version,
+        "archive": runner_filename,
+        "archive_sha256": runner_digest,
+        "runner_protocol_version": 1,
+        "entrypoint": "python -m cli.runner",
+        "file_inventory": list(RUNNER_PATHS),
+        "tool_binaries_included": False,
+        "scope": "Bounded exact-source Python distribution for the operator-owned qualified runner profile; frontend/docs/release-script/test sources are excluded, and tool/provider binaries remain operator-supplied and independently licensed.",
+    }
+    (output_dir / RUNNER_MANIFEST_NAME).write_text(
+        json.dumps(runner_manifest, indent=2, sort_keys=True) + "\n"
+    )
     (output_dir / SBOM_NAME).write_text(
         json.dumps(sbom, indent=2, sort_keys=True) + "\n"
     )
     checksums = "".join(
         f"{hashlib.sha256((output_dir / name).read_bytes()).hexdigest()}  {name}\n"
-        for name in (filename, "source-manifest.json", SBOM_NAME)
+        for name in (
+            filename,
+            runner_filename,
+            "source-manifest.json",
+            RUNNER_MANIFEST_NAME,
+            SBOM_NAME,
+        )
     )
     (output_dir / "SHA256SUMS").write_text(checksums)
     return output_dir

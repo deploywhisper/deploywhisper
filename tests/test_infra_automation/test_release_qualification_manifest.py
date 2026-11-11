@@ -35,8 +35,27 @@ class ReleaseQualificationManifestTests(unittest.TestCase):
         }
         for row in self.value["requirements"] + self.value["gates"]:
             row.update(status="passed", evidence=[deepcopy(proof)])
+        approval = self.root / manifest.WAIVER_APPROVAL_PATH
+        approval.parent.mkdir(parents=True)
+        approval.write_text('{"approval":"synthetic test only"}')
+        waiver = next(
+            row
+            for row in self.value["gates"]
+            if row["id"] == "operator-pilot-or-maintainer-waiver"
+        )
+        waiver["evidence"] = [
+            {
+                **deepcopy(proof),
+                "path": manifest.WAIVER_APPROVAL_PATH,
+                "sha256": manifest.digest(approval.read_bytes()),
+                "verified_by": "accountable-maintainer:psaho01",
+                "scope": "waiver_kind=accountable-maintainer approval_evidence=approved-codeowners-review synthetic-test",
+            }
+        ]
 
     def test_template_keeps_all_requirements_and_gates_unexecuted(self):
+        self.assertIn("operator-pilot-or-maintainer-waiver", manifest.GATES)
+        self.assertNotIn("independent-human-pilot", manifest.GATES)
         result = manifest.validate(self.value, self.root)
         self.assertEqual(len(result["blockers"]), 82)
         self.assertFalse(result["inventory_complete"])
@@ -127,6 +146,17 @@ class ReleaseQualificationManifestTests(unittest.TestCase):
         self.assertEqual(
             manifest.validate(self.value, self.root)["blockers"], [manifest.GATES[0]]
         )
+
+    def test_waiver_gate_rejects_generic_self_assertion(self):
+        self.complete()
+        waiver = next(
+            row
+            for row in self.value["gates"]
+            if row["id"] == "operator-pilot-or-maintainer-waiver"
+        )
+        waiver["evidence"][0]["verified_by"] = "generic branch author"
+        with self.assertRaises(ValueError):
+            manifest.validate(self.value, self.root)
 
     def test_serialized_template_round_trip(self):
         path = self.root / "manifest.json"

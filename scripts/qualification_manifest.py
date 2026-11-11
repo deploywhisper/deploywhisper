@@ -14,7 +14,7 @@ CATALOG = (
 )
 GATES = (
     "accepted-prerequisites",
-    "independent-human-pilot",
+    "operator-pilot-or-maintainer-waiver",
     "integrated-real-profile",
     "safety-and-authorization",
     "reference-performance",
@@ -22,6 +22,9 @@ GATES = (
     "operations-and-docs",
     "independent-code-security-review",
     "signed-artifacts-sbom-provenance",
+)
+WAIVER_APPROVAL_PATH = (
+    "docs/verification/infra-automation/16-19/maintainer-waiver-approval.json"
 )
 HEX = re.compile(r"[0-9a-f]{64}")
 COMMIT = re.compile(r"[0-9a-f]{40}")
@@ -157,6 +160,24 @@ def validate(manifest, root):
             )
             if row["status"] != "passed":
                 blockers.append(row["id"])
+            if (
+                section == "gates"
+                and row["id"] == "operator-pilot-or-maintainer-waiver"
+                and row["status"] == "passed"
+            ):
+                require(
+                    any(
+                        item.get("path") == WAIVER_APPROVAL_PATH
+                        and item.get("verified_by") == "accountable-maintainer:psaho01"
+                        and "waiver_kind=accountable-maintainer"
+                        in item.get("scope", "")
+                        and "approval_evidence=approved-codeowners-review"
+                        in item.get("scope", "")
+                        for item in evidence
+                        if isinstance(item, dict)
+                    ),
+                    "Maintainer waiver requires named durable CODEOWNERS approval evidence",
+                )
             for item in evidence:
                 require(
                     isinstance(item, dict)

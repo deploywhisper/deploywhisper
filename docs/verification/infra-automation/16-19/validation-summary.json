@@ -1,0 +1,83 @@
+{
+  "date": "2026-11-11T10:12:53.337358+00:00",
+  "source_commit": "675f127a0c4ad7c3630d3c59cb7412818afd1db8",
+  "verification_worktree": "/tmp/dw1619-final-verification",
+  "python_executable": "/Users/psaho01/deploywhisper/.venv/bin/python",
+  "checks": {
+    "root_unit": {
+      "command": "python -m unittest discover -q",
+      "result": "2096 tests;3 skips;exit0",
+      "local_log": "/tmp/story1619-isolated-root.log",
+      "log_sha256": "1bdf9569721edbb908401dbdcada58fd90b26d26495148029dd1580d5cc18211"
+    },
+    "local_ci": {
+      "command": "bash scripts/ci-local.sh",
+      "result": "3571 tests across10 directories;exit0",
+      "local_log": "/tmp/story1619-isolated-ci.log",
+      "log_sha256": "e071c46e64d0bf81cf8778727ebb138a0d99b626b44c7a6bc3a399ad190ee226"
+    },
+    "api_cli_infra": {
+      "command": "python -m pytest tests/test_api tests/test_cli tests/test_infra -v --tb=short",
+      "result": "820 passed;1 skipped;2442 subtests;exit0",
+      "local_log": "/tmp/story1619-isolated-api-cli-infra.log",
+      "log_sha256": "869ca518eb1f7a7a025e94c1275652099e3aece6341ff976a88d460d01a1004d"
+    }
+  },
+  "ci_target_counts": [
+    69,
+    382,
+    131,
+    60,
+    308,
+    1240,
+    76,
+    30,
+    43,
+    1232
+  ],
+  "ci_total": 3571,
+  "frontend": "513 tests+2compat;typecheck/build passed",
+  "profile_record": "prerequisite-profiles/results.json",
+  "profile_image": "sha256:a0155abf874bd29a798a19e794dd9d2928d17ed701011e655ecc6920cc65d447",
+  "runtime_changes": "Production Python source stayed fixed during final suites. Later frontend copy/test and test-only observer changes were covered by final frontend/build/browser verification.",
+  "source_hashes": {
+    "scripts/release_artifacts.py": "a9869ccbacddca97ae6c6a2443eb8860e1f6272a2a027f4e5f2c5c72d91216cd",
+    "scripts/qualification_manifest.py": "5a95ee924393ed01a0b561f8b5280297e63b60746f313b76472362295d623a25",
+    "infra_automation/runner/execution.py": "6f57b036586dbaeb6736b08e7f3d3523cddf9a1720a89da18dc11783ddd3a89c",
+    "services/infra_automation_runner_tasks.py": "fb0bf7b6620bf4a89626b8c799ff393cc3518190bae0d19012d686d77d6e9921",
+    "frontend/src/screens/ReportAutomationContext.tsx": "bc21bc3c6d3859e2a015bff93d3db9ce8493997d4dde642f8d5c4ba36c5d66b0",
+    "frontend/e2e/infra-automation-runners-https.spec.ts": "6563e5acc0c2524976fd2099387c6c8750ff7dbc2ae9d11958de8a4abfb27d5b",
+    "scripts/qualify_https_collection.py": "b73020832878c11c9017dab78b364d0f041fcbc4d44665250b32340a7aff750e",
+    "scripts/runner_https_ui_fixture.py": "695ab9dcf033ffa4d299fe0249525fec3896de1df7379f7392f997bc2e4bf912"
+  },
+  "review": "prerequisite-review.json",
+  "human_pilot": "Recorded accountable-maintainer waiver in concurrent planning update; NOT EXECUTED. Durable decision reference remains required before its manifest gate may pass.",
+  "signed_sbom_publication": "NOT EXECUTED; workflow restricts preview to trusted develop or release tag",
+  "stable_publication_authorized": false,
+  "story19_entry": "Concurrent approved waiver permits preparation/in-progress work; production authority/handler composition remains unavailable and requires reviewed topology/protocol design.",
+  "earlier_attempts": "Pre-fix broad runs intentionally interrupted after runtime findings; not claimed final proof.",
+  "later_workspace_changes": "This validation record covers the675f127 production source and listed tests. Concurrent waiver/benchmark changes are separate work and are not qualified by these counts.",
+  "runner_fault_supplement": {
+    "record": "prerequisite-profiles/runner-faults/results.json",
+    "actual_cases": 3,
+    "browser_journeys": 3,
+    "browser_seconds": 6.2,
+    "screenshots": 6,
+    "axe_critical_serious": 0,
+    "scope": "actual wire expiry, running OpenTofu revocation, chunk/retention limits; no terminal states seeded; production675image unchanged"
+  },
+  "unresolved_technical_gap": "Production material/witness authority and policy/human/handoff composition; receiver-faults/composition-gap.json; reviewed course proposal awaits topology/approval",
+  "current_manifest_supplement": {
+    "result": "12 passed;17 subtests;exit0",
+    "source_sha256": "21266f37f564a592fd2cd7afe5d3c274506b0db96a345baca0b6c5c30e4aee42",
+    "log_sha256": "c50f546448ee758ac952ca79e275a0af0418b3f6a177a6593ef741248d0a41fa",
+    "scope": "Current concurrent waiver-aware validator only; not full current-workspace CI"
+  },
+  "final_static_checks": {
+    "isolated_tree": "Ruff check and repo-wide format619 files passed",
+    "current_workspace": "Ruff check and repo-wide format625 files passed; two concurrent material-authority files received AST-preserving formatting only",
+    "docs": "60 tests passed",
+    "diff": "git diff --check passed",
+    "limitation": "Later concurrent material-authority, waiver, version and benchmark changes are not covered by the675f127 full-suite result."
+  }
+}

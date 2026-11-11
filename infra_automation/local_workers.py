@@ -115,17 +115,28 @@ DEFAULT_REGISTRY = None
 
 
 def default_registry():
-    """Load only the two fixed application-owned upload/analysis handlers."""
+    """Load fixed application-owned handlers; human/dispatch authority stays external."""
     if DEFAULT_REGISTRY is not None:
         return DEFAULT_REGISTRY
     from services.infra_automation_preflight import PREFLIGHT_REGISTRY
+    from services.infra_automation_policy_worker import execute_policy_step
 
     from services.infra_automation_collection import configured_profiles, remote_only
 
+    registrations = PREFLIGHT_REGISTRY.registrations + (
+        HandlerRegistration(
+            handler_id="policy-evaluation-v1",
+            handler_version="1",
+            step_kind="policy_evaluation",
+            output_kind="action_binding",
+            retry_safe=True,
+            handler=execute_policy_step,
+        ),
+    )
     if not configured_profiles():
-        return PREFLIGHT_REGISTRY
+        return HandlerRegistry(registrations)
     return HandlerRegistry(
-        PREFLIGHT_REGISTRY.registrations
+        registrations
         + (
             HandlerRegistration(
                 handler_id="collected-plan-v1",
@@ -303,11 +314,14 @@ def _worker_main(
 
 def _invoke_handler(registration, value, handle, factory):
     from services.infra_automation_preflight import execute_preflight_step
+    from services.infra_automation_policy_worker import execute_policy_step
     from infra_automation.analysis_context import _bind_worker
 
     if registration.handler is execute_preflight_step:
         with _bind_worker(handle, factory):
             return registration.handler(value)
+    if registration.handler is execute_policy_step:
+        return registration.handler(value, handle, factory)
     return registration.handler(value)
 
 

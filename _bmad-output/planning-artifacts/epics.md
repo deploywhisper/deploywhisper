@@ -476,7 +476,7 @@ The owner selected Epic 16 as the first-priority v1.5.0 workstream. These are th
 - **IAU15-NFR-009:** All new React routes must pass the composed-app axe critical/serious violation gate and keyboard-only create/run/review/decision/recovery journeys, using real API-backed seeded data and required screenshots.
 - **IAU15-NFR-010:** Upgrade from a v1.4.0 database copy, interrupted upgrade, coordinated DB/artifact backup/restore, token rotation and restricted-network recovery must preserve auditable state while invalidating outstanding authorization/leases until reconciled.
 - **IAU15-NFR-011:** Publish version-matched schema/API/CLI/operator/security/support-limit docs with CI link/drift checks and secret-free run/queue/step/runner/approval/delivery metrics plus troubleshooting runbooks.
-- **IAU15-NFR-012:** Stable v1.5.0 requires signed app/runner artifacts, SBOM/checksums/provenance, named tool/receiver support matrix, full application CI, independent review and supported-profile pilot with no unresolved introduced critical/high defect.
+- **IAU15-NFR-012:** Stable v1.5.0 requires signed app/runner artifacts, SBOM/checksums/provenance, a named support matrix, full application CI, independent review and supported-profile technical qualification with no unresolved introduced critical/high defect; independent human self-service evidence may be replaced only by the bounded accountable-maintainer waiver.
 
 #### Architecture obligations extracted for story preparation
 
@@ -2728,7 +2728,7 @@ So that old authorizations cannot revive and uncertainty remains recoverable.
 | IAU15-FR-060 | Let authorized operators configure feature enablement, targets, quotas, retention, TTL and credential lifetimes; reject unsafe reductions, protect pending evidence or invalidate its decision before deletion, and audit each change. | Configuration permissions, pending-retention and floor-change tests |
 | IAU15-NFR-007 | The singleton SQLite profile must sustain 10 active runs with at most 2 concurrent analysis jobs and 20 online runners, with bounded queue/storage and no corrupted transitions. | 30-minute capacity/saturation run with resource and error report |
 | IAU15-NFR-010 | Upgrade from a v1.4.0 database copy, interrupted upgrade, coordinated DB/artifact backup/restore, token rotation and restricted-network recovery must preserve auditable state while invalidating outstanding authorization/leases until reconciled. | Recorded upgrade/restore/rotation/offline exercises |
-| IAU15-NFR-011 | Publish version-matched schema/API/CLI/operator/security/support-limit docs with CI link/drift checks and secret-free run/queue/step/runner/approval/delivery metrics plus troubleshooting runbooks. | Docs CI and operator self-service installation/recovery pilot |
+| IAU15-NFR-011 | Publish version-matched schema/API/CLI/operator/security/support-limit docs with CI link/drift checks and secret-free run/queue/step/runner/approval/delivery metrics plus troubleshooting runbooks. | Docs CI and either an independent operator self-service installation/recovery pilot or a bounded accountable-maintainer waiver that records no human pilot, accepts residual usability risk and cannot replace technical/release gates |
 
 Only add persistence/entities needed for this slice; do not create all future automation tables in one foundational migration. Runtime schema/constructor changes require repository-wide fixture search and affected CI shards. New dependencies require an explicit approved dependency decision.
 
@@ -2746,7 +2746,7 @@ So that operators receive honest safety, compatibility and release-integrity evi
 
 **Acceptance Criteria:**
 
-1. **Given** the required earlier contracts and a scoped authorized request, **when** the story capability is exercised, **then** full CI/security/contract/fault/E2E/a11y gates; supported-profile pilot; signed app/runner artifacts and SBOM; upgrade evidence; no unresolved introduced critical/high defect.
+1. **Given** the required earlier contracts and a scoped authorized request, **when** the story capability is exercised, **then** full CI/security/contract/fault/E2E/a11y gates, supported-profile technical qualification, the recorded pilot-or-waiver process gate, signed app/runner artifacts and SBOM, upgrade evidence and no unresolved introduced critical/high defect.
 2. **Given an unmet mandatory profile/recovery/security/operations gate or introduced critical/high defect, when release publication is considered, then release stays blocked and the limitation is reported honestly.**
 3. **Given** the delivered slice, **when** its acceptance review runs, **then** the requirement-specific proof below, relevant regression/contract checks and documentation are recorded; browser changes use the Compose-built FastAPI app and unrelated future features are not presented as implemented.
 
@@ -2764,8 +2764,8 @@ So that operators receive honest safety, compatibility and release-integrity evi
 | IAU15-NFR-008 | Workflow validation must have p95 <500 milliseconds for the declared 50-step workflow corpus under the reference workload. | 1,000-validation timing/correctness benchmark |
 | IAU15-NFR-009 | All new React routes must pass the composed-app axe critical/serious violation gate and keyboard-only create/run/review/decision/recovery journeys, using real API-backed seeded data and required screenshots. | Compose production build, Playwright/axe/keyboard results and screenshots |
 | IAU15-NFR-010 | Upgrade from a v1.4.0 database copy, interrupted upgrade, coordinated DB/artifact backup/restore, token rotation and restricted-network recovery must preserve auditable state while invalidating outstanding authorization/leases until reconciled. | Recorded upgrade/restore/rotation/offline exercises |
-| IAU15-NFR-011 | Publish version-matched schema/API/CLI/operator/security/support-limit docs with CI link/drift checks and secret-free run/queue/step/runner/approval/delivery metrics plus troubleshooting runbooks. | Docs CI and operator self-service installation/recovery pilot |
-| IAU15-NFR-012 | Stable v1.5.0 requires signed app/runner artifacts, SBOM/checksums/provenance, named tool/receiver support matrix, full application CI, independent review and supported-profile pilot with no unresolved introduced critical/high defect. | Signed release manifest, CI/security/review/pilot evidence |
+| IAU15-NFR-011 | Publish version-matched schema/API/CLI/operator/security/support-limit docs with CI link/drift checks and secret-free run/queue/step/runner/approval/delivery metrics plus troubleshooting runbooks. | Docs CI and either an independent operator self-service installation/recovery pilot or a bounded accountable-maintainer waiver that records no human pilot, accepts residual usability risk and cannot replace technical/release gates |
+| IAU15-NFR-012 | Stable v1.5.0 requires signed app/runner artifacts, SBOM/checksums/provenance, named tool/receiver support matrix, full application CI, independent review and supported-profile technical qualification with no unresolved introduced critical/high defect. Independent human validation may be waived only by the accountable maintainer with the residual risk and limitation recorded. | Signed release manifest, CI/security/review/technical-qualification evidence plus operator-pilot evidence or the explicit bounded waiver |
 
 Only add persistence/entities needed for this slice; do not create all future automation tables in one foundational migration. Runtime schema/constructor changes require repository-wide fixture search and affected CI shards. New dependencies require an explicit approved dependency decision.
 
@@ -2786,7 +2786,7 @@ The owner requested refinement of all readiness work and preparation of Story 16
 
 ## Epic 17: Live Environment Grounding
 
-**Release priority:** Independent parallel workstream shipping in **v1.5.0** alongside Epic 16 (retargeted 2026-10-20 from v1.6.0 by owner decision). Development remains independent of Epic 16; the **release tag is now shared**, so v1.5.0 cannot ship until both epics close. **Delivery status:** Story 17.0 ready-for-dev after the RFC 0002 acceptance; no implementation started.
+**Release priority:** Independent parallel workstream targeting **v1.6.0**. The 2026-11-11 cut-back removed the unimplemented epic from v1.5.0 under the pre-approved decision rule; development and release remain independent of Epic 16. **Delivery status:** Story 17.0 ready-for-dev after RFC 0002 acceptance; no implementation started.
 
 A reviewer analyzing an infrastructure change receives evidence grounded in the operator's **actual running environment** instead of a hand-authored topology: real blast radius from live dependency edges, detection of plans computed against stale reality, verified recoverability for destructive changes, and grounded environment classification. Collection is read-only, plan-directed, bounded, opt-in and local-first. AWS is supported; Azure and GCP ship as registered stubs behind a published connector contract.
 
@@ -3136,36 +3136,36 @@ So that the community can extend grounding and operators receive honest capabili
 | LEG-NFR-010 | Provider extensibility without core modification. | Conformance suite against the reference stub |
 | All LEG-NFR | Release-wide nonfunctional proof. | Full qualification matrix, measured results and published deltas |
 
-### Story 17.10: v1.5.0 Release Integration and Joint Qualification
+### Story 17.10: v1.6.0 Release Integration and Qualification
 
-As a maintainer shipping Epic 16 and Epic 17 under one v1.5.0 tag,
-I want Epic 17's release documentation published as a self-contained fragment and the two epics proven mutually independent at build and test level,
-So that a combined release is safe to cut, the release-notes file has exactly one owner, and Epic 17 can still be cut from v1.5.0 cheaply if it is not ready.
+As a maintainer shipping Epic 17 on its independent v1.6.0 train,
+I want its release documentation and compatibility qualification owned by the Epic 17 lane,
+So that grounding can ship safely without coupling or delaying Epic 16.
 
-**Status:** backlog. Added 2026-10-20 with the v1.5.0 retarget.
+**Status:** backlog. Re-scoped 2026-11-11 by the v1.5.0 cut-back.
 
 **Dedicated context:** [17-10-v1-5-0-release-integration-and-joint-qualification.md](../implementation-artifacts/17-10-v1-5-0-release-integration-and-joint-qualification.md).
 
-**Dependencies:** all earlier Epic 17 stories. **No Epic 16 code dependency**; the single touchpoint is Story 16.19 including this story's fragment by reference.
+**Dependencies:** all earlier Epic 17 stories. **No Epic 16 code or release dependency.**
 
 **Acceptance Criteria:**
 
-1. **Given** the v1.5.0 release, **when** Epic 17 release documentation is published, **then** it exists as a self-contained fragment under `docs/releases/` owned entirely by Epic 17, and Story 16.19's release-notes file references it with a single added line and no content duplication.
-2. **Given** an operator upgrading to v1.5.0, **when** they read the upgrade and rollback record, **then** it states that grounding is disabled by default, that no migration, credential provisioning or IAM change is required to upgrade, and how to disable grounding without downgrading.
-3. **Given** grounding disabled, **when** a v1.5.0 build containing both epics is compared against a build containing Epic 16 alone, **then** reports, fixtures, schemas, API responses, CLI output and agent output are identical, with the comparison recorded as evidence.
-4. **Given** each epic's test shard, **when** it runs with the other epic's modules absent from the import graph, **then** it passes, and a CI check fails the build if either epic imports from the other's module tree.
-5. **Given** a decision to cut Epic 17 from v1.5.0, **when** the documented cut-back procedure is followed on a scratch branch, **then** Epic 16's release remains complete and green.
-6. **Given** the combined release, **when** the release manifest is published, **then** it names both epics, states the disabled-by-default posture, and claims no Epic 17 capability that Story 17.9 did not qualify.
+1. **Given** the v1.6.0 release, **when** Epic 17 release documentation is published, **then** it is owned entirely by Epic 17 and covers enablement, IAM, degradation, snapshot handling and the disabled-by-default guarantee.
+2. **Given** an operator upgrading to v1.6.0, **when** they read the upgrade and rollback record, **then** it states that grounding is disabled by default, that no credential provisioning is required to upgrade, and how to disable grounding without downgrading.
+3. **Given** grounding disabled, **when** the v1.6.0 build is compared with the prior release, **then** reports, fixtures, schemas, API responses, CLI output and agent output are unchanged, with the comparison recorded as evidence.
+4. **Given** each epic's test shard, **when** it runs with the other epic's modules absent from the import graph, **then** it passes, and CI fails if Epic 17 imports Epic 16's module tree.
+5. **Given** the independent release, **when** release qualification runs, **then** Epic 16 is neither imported nor required and the absence is recorded.
+6. **Given** the v1.6.0 release manifest, **when** it is published, **then** it names Epic 17, states the disabled-by-default posture, and claims no capability that Story 17.9 did not qualify.
 
-**Slice acceptance boundary:** This story proves release integration and cross-epic isolation only. It does not re-prove feature requirements; release-wide feature qualification remains owned by Story 17.9 and must not be duplicated here. If an earlier story is incomplete at this point, the correct outcomes are to finish it or to cut Epic 17 from v1.5.0, never to paper over the gap in release copy.
+**Slice acceptance boundary:** This story proves standalone release integration and cross-epic isolation only. It does not re-prove feature requirements; release-wide feature qualification remains owned by Story 17.9 and must not be duplicated here. If an earlier story is incomplete, finish it or delay v1.6.0; never paper over the gap in release copy.
 
 **Requirement-specific acceptance coverage:**
 
 | Requirement | Contract owned by this story | Required acceptance proof |
 | --- | --- | --- |
-| LEG-FR-041 | Self-contained Epic 17 release fragment, included by reference from 16.19. | Fragment published; 16.19 reference is one line with no duplicated content |
-| LEG-FR-042 | Upgrade and rollback record for v1.5.0. | Clean-upgrade exercise with grounding left disabled |
-| LEG-FR-043 | Joint-release qualification with grounding disabled. | Recorded differential across reports, schemas, API, CLI and agent output |
+| LEG-FR-041 | Epic 17-owned v1.6.0 release documentation. | Release documentation published with the qualified support boundary |
+| LEG-FR-042 | Upgrade and rollback record for v1.6.0. | Clean-upgrade exercise with grounding left disabled |
+| LEG-FR-043 | Standalone-release compatibility qualification with grounding disabled. | Recorded differential across reports, schemas, API, CLI and agent output |
 | LEG-NFR-013 | No code, test or fixture dependency between the epics. | Per-shard isolation run plus a CI cross-import invariant with a deliberate failing case |
 
 Only add persistence and entities needed for each slice; do not create the full grounding schema in one foundational migration. Runtime schema or constructor changes require a repository-wide fixture search and the affected CI shards. New dependencies require an explicit approved dependency decision.

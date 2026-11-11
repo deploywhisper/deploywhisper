@@ -268,7 +268,7 @@ def main(argv: list[str] | None = None) -> int:
             indent=2,
         )
     )
-    return int(any(report["failures"].values()))
+    return int(not report["qualified"])
 
 
 if __name__ == "__main__":

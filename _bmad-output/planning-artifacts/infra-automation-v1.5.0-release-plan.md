@@ -192,7 +192,7 @@ All 20 adopted stories now have dedicated prepared contexts. **16.0 is ready-for
 | 16.16 | Human-declared multi-unit preflight map and dependency plan | 16.3, 16.10, 16.14 | Confirmed unit set/dependencies, deterministic waves and plan digest; cycles/unknown identities rejected; impacted/prerequisite scope explicit; collection order is not deployment-order completion. |
 | 16.17 | Signed trigger intake, API/CLI commands and source pinning | 16.4, 16.11, 16.15 | Replay-resistant signed requests, quotas/idempotency, typed scope/input validation; CLI uses the same API authority; manual/webhook/PR-origin records and denied agent approval tested. |
 | 16.18 | Operator docs, retention, recovery, limits and restricted networks | Incremental from 16.5; final after 16.16/16.17 | Backup/restore/upgrade/reconciliation exercise; offline tool/cache setup; receiver configuration, credential rotation, incident procedure and size/concurrency results; relevant 12.7/12.8 coverage explicit. |
-| 16.19 | Production qualification and v1.5.0 signed release | All P0 stories; 12.5; applicable 12.7/12.8 acceptance | Full CI/security/contract/fault/E2E/a11y gates; supported-profile pilot; signed app/runner artifacts and SBOM; upgrade evidence; no unresolved introduced critical/high defect. |
+| 16.19 | Production qualification and v1.5.0 signed release | All P0 stories; 12.5; applicable 12.7/12.8 acceptance | Full CI/security/contract/fault/E2E/a11y gates; supported-profile technical qualification; operator-pilot-or-accountable-maintainer-waiver process gate; signed app/runner artifacts and SBOM; upgrade evidence; no unresolved introduced critical/high defect. |
 
 ### Delivery waves
 

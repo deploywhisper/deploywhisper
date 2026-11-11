@@ -1,0 +1,61 @@
+{
+  "version": 1,
+  "checked_at": "2026-11-11T10:13:54Z",
+  "source_commit": "675f127a0c4ad7c3630d3c59cb7412818afd1db8",
+  "status": "automated-prerequisite-validation-passed",
+  "results": [
+    {
+      "command": "python -m unittest discover -q",
+      "result": "2096 passed, 3 skipped",
+      "log": "/tmp/story16-19-root-final.log",
+      "log_sha256": "1a6eafae545685011dc1c14cef28106141885b8ad31733ec94ccde989b2a6540"
+    },
+    {
+      "command": "bash scripts/ci-local.sh",
+      "result": "3571 tests passed across all 10 test directories; 3 directory-level skips; Ruff, repo-wide Ruff format, pip check, compile, skill tests and configured security gates passed",
+      "log": "/tmp/story16-19-ci-local-final.log",
+      "log_sha256": "5a7ebcff79dddbeb8cf4c59860ac8f60011b117828db38e39010411551e71fb6"
+    },
+    {
+      "command": "python -m pytest tests/test_api tests/test_cli tests/test_infra -v --tb=short",
+      "result": "820 passed, 1 skipped, 2442 subtests passed",
+      "log": "/tmp/story16-19-api-cli-infra.log",
+      "log_sha256": "15a3ad80339466bc58366d10a3b506689b8cff3d9775952e978eac71561658af"
+    },
+    {
+      "command": "python -m pytest tests/test_infra_automation -v --tb=short",
+      "result": "1239 passed, 1 skipped, 3374 subtests passed",
+      "log": "/tmp/story16-19-automation-final.log",
+      "log_sha256": "7c1d5ddab0874f17e4d8ceea1bd3a625302d21c1264107f5ee4875289b8db3dc"
+    },
+    {
+      "command": "npm run ui:test && npm run ui:typecheck && npm run ui:build",
+      "result": "513 frontend tests and 2 compatibility checks passed; typecheck and production build passed"
+    },
+    {
+      "command": "focused release, manifest, runner-attempt and execution-boundary pytest selection",
+      "result": "61 passed, 136 subtests passed"
+    },
+    {
+      "command": "ruff check . && ruff format --check .",
+      "result": "Ruff passed; all 618 Python files formatted"
+    },
+    {
+      "command": "configured high-severity Bandit scan over services, infra automation and qualification scripts",
+      "result": "no high-severity issues"
+    }
+  ],
+  "initial_failures_retained": [
+    "The first full automation and root/local-CI runs rejected stale Story 16.13/16.14 qualification hashes after runtime repairs.",
+    "Both real profiles were rebuilt and rerun; the current-source integrity tests and every final broad rerun passed.",
+    "A shared disposable container was removed by a concurrent CLI during the first enrollment-expiry wait; the same test passed on a separate owned Compose project and port."
+  ],
+  "open_gates": [
+    "independent human self-service pilot",
+    "Story 16.19 reference-hardware performance and 30-minute saturation proof",
+    "independent final code/security review",
+    "final immutable app and runner artifact signing, SBOM, checksums and provenance",
+    "separately authorized public v1.5.0 publication"
+  ],
+  "publication_authorized": false
+}
