@@ -1,0 +1,24 @@
+{
+  "date": "2026-11-11T14:12:00Z",
+  "source_commit": "1adf00fd9de4223186da4976dd8caad9882e26cd",
+  "image_digest": "sha256:7a6afd6fd7b3ce74a672fa6fedda0e2c6d146813bcb3f1009930529e1c5f2323",
+  "root_unit": "2117 tests; 3 skips; exit 0",
+  "local_ci": "3592 tests across 10 directories; 3 skips; exit 0",
+  "api_cli_infra": "820 passed; 1 skipped; 2442 subtests; exit 0",
+  "infra_automation": "1260 passed; 1 skipped; 3382 subtests; exit 0",
+  "frontend": "513 tests plus 2 compatibility checks; typecheck and production build passed",
+  "static_security": "Ruff lint/format clean for 631 files; Bandit high/high found zero issues",
+  "real_profiles": "OpenTofu collection 49 checks; isolated runner 172 checks; actual TLS/browser and runner-fault supplements retained",
+  "reference_performance": "workflow p95 1.668459 ms; runner claim p95 90.855916 ms; NFR-007 capacity 1800.138 s with 10/2/20 and zero errors; NFR-005 failed sample count because only 250 of 1000 ready transitions were recorded",
+  "release_assets": {
+    "application_archive_sha256": "87be36a479167b663b80545a21ff7f2e5bf90c755a39c072c80438215a70df80",
+    "runner_archive_sha256": "bbbe17d484b915d3e0f02fee3f3a8c40efead9cf914ad76d56b169e55400e8c4",
+    "source_manifest_sha256": "91dbbc925eb3117976b92cd7602c78ff69a473a0fb5b56a6ad8b3a34bba1c487",
+    "runner_manifest_sha256": "684b20ec5824b76e5ea8b999be5a18551871c961061232230417f5de650afcb6",
+    "sbom_sha256": "59c92f386e656757e6b3acc3ab8279d314cc789459a314dbf00d8fdb715fb125",
+    "checksums_sha256": "5e53bda0ad4f8f2eb918e7880cc1557e1de55531cc8c74462938673e335f6af8",
+    "hosted_signatures": "NOT EXECUTED"
+  },
+  "human_pilot": "Accountable-maintainer waiver recorded; independent pilot NOT EXECUTED",
+  "stable_publication_authorized": false
+}

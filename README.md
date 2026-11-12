@@ -723,6 +723,12 @@ For more detail, see [`_bmad-output/planning-artifacts/architecture.md`](./_bmad
 
 ## Documentation
 
+- [Core backup, restore, upgrade and retention](./docs/operations/data-lifecycle.md)
+- [Restricted-network installation and core analysis](./docs/operations/restricted-network.md)
+- [Release qualification evidence inventory](./docs/infra-automation/qualification.md)
+- [InfraFlow v1.5.0 supported profile](./docs/infra-automation/support.md)
+- [v1.5.0 release-candidate notes](./docs/releases/v1.5.0.md)
+
 Project documentation currently lives in a few places:
 
 - [PRD](./_bmad-output/planning-artifacts/prd.md)

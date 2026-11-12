@@ -1,0 +1,235 @@
+{
+  "review": "bmad-code-review",
+  "date": "2026-11-10",
+  "baseline": "262f47b",
+  "head": "0716460",
+  "branch": "feature/16-18-automation-settings-ui",
+  "review_mode": "full",
+  "layers": [
+    "blind",
+    "edge",
+    "auditor"
+  ],
+  "failed_layers": [],
+  "scope": {
+    "all_files": 164,
+    "source_test_config_files": 74,
+    "source_diff_lines": 9824,
+    "bulk_artifacts": "Reviewed through evidence/source integrity rather than feeding telemetry/images into blind source diff"
+  },
+  "outcome": "REQUEST_CHANGES",
+  "counts": {
+    "decision_needed": 0,
+    "patch": 7,
+    "defer": 0,
+    "dismiss": 6,
+    "high": 2,
+    "medium": 3,
+    "low": 2
+  },
+  "findings": [
+    {
+      "id": 1,
+      "source": "blind+edge+primary",
+      "severity": "HIGH",
+      "bucket": "patch",
+      "title": "Make initial recovery binding recoverable after ledger-publication failure",
+      "location": "infra_automation/operator_recovery.py:574",
+      "detail": "initialize commits the recovery-state binding before publishing ledger.json. Injecting OSError from _save leaves one committed binding and no ledger; normal startup, initialize retry, status and resume cannot recover through supported tooling.",
+      "proof": {
+        "binding_rows": 1,
+        "ledger_exists": false,
+        "initialize_retry": "denied",
+        "resume": "denied"
+      },
+      "recommendation": "Journal initialization intent before the database binding, then support bounded idempotent recovery of that same intent; do not silently reset a genuinely lost deployed ledger.",
+      "resolution": {
+        "status": "resolved",
+        "implementation": "Durable initialization intent precedes binding; exact-intent resume is idempotent and missing deployed ledgers remain denied.",
+        "verification": "Real subprocess exits at initialization boundaries; inode/schema/generation/layout mismatch regressions; final-image CLI fault/resume checks.",
+        "evidence": "review-fixes.md"
+      }
+    },
+    {
+      "id": 2,
+      "source": "blind+edge+primary",
+      "severity": "HIGH",
+      "bucket": "patch",
+      "title": "Reject the reserved database root role before binding or restore reservation",
+      "location": "infra_automation/operator_recovery.py:532",
+      "detail": "The role validator accepts database alongside artifacts/custody. In _stage, the expanded root maps overwrite the reserved database source/target entry. Initialization and backup succeed; restore reserves a new generation then fails, and resume repeats the invalid mapping.",
+      "proof": {
+        "initialize_and_backup": "accepted",
+        "restore": "denied",
+        "phase": "restore_reserved"
+      },
+      "recommendation": "Reject reserved role names at layout validation or keep the database mapping structurally separate from caller-supplied root roles.",
+      "resolution": {
+        "status": "resolved",
+        "implementation": "Reserved database root role rejected during layout validation before effects.",
+        "verification": "Fresh initialization and existing-ledger restore regressions; no binding/reservation.",
+        "evidence": "review-fixes.md"
+      }
+    },
+    {
+      "id": 3,
+      "source": "blind+edge+primary",
+      "severity": "MEDIUM",
+      "bucket": "patch",
+      "title": "Validate the complete generated backup against restore limits before publication",
+      "location": "infra_automation/operator_recovery.py:678",
+      "detail": "Creation counts content before adding manifest.json and measures depth from each source root; restore walks the entire package including manifest and its role prefix. A successful package at MAX_FILES or the accepted source depth can therefore be rejected by restore.",
+      "proof": {
+        "default_max_files": 4096,
+        "source_files": 4093,
+        "backup_returned_files": 4096,
+        "manifest_bytes": 561138,
+        "restore": "denied before reservation",
+        "depth_case": "32 actual nested directories; backup files35; restore denied"
+      },
+      "recommendation": "Apply a single package-aware budget including manifest bytes/count/depth and MAX_METADATA; run package verification on staging before exclusive publication.",
+      "resolution": {
+        "status": "resolved",
+        "implementation": "Complete staged backup verified against restore limits before exclusive publication.",
+        "verification": "Actual4096-entry successful restore; actual32-level depth rejection; metadata/manifest-byte boundaries.",
+        "evidence": "review-fixes.md"
+      }
+    },
+    {
+      "id": 4,
+      "source": "blind+auditor",
+      "severity": "MEDIUM",
+      "bucket": "patch",
+      "title": "Preserve committed retention tombstones when restoring an older snapshot",
+      "location": "infra_automation/operator_recovery.py:800",
+      "detail": "_preserve_external_history excludes retention tombstones/removal audits, and nonexternal terminal runs bypass the run preservation check. A backup before purge restores the payload and removes the tombstone/removal audit from active history. Old private database copies remain, so this is not a claim that every historical copy is destroyed.",
+      "proof": {
+        "purge_http": 200,
+        "payload_bytes_before_restore": 2,
+        "payload_bytes_after_restore": 6390,
+        "active_tombstones_before": 1,
+        "active_tombstones_after": 0,
+        "active_removal_audits_before": 1,
+        "active_removal_audits_after": 0,
+        "restore_phase": "reconciliation_required"
+      },
+      "recommendation": "Refuse snapshots missing current protected deletion receipts, or carry forward validated tombstones and keep their payloads removed before publication. Preserve associated active deletion audit history.",
+      "resolution": {
+        "status": "resolved",
+        "implementation": "Restore requires current tombstones/removal audits and removed marker/digest identity before reserving generation.",
+        "verification": "Real Alembic042 and HTTP purge; old snapshot refusal; current snapshot restore; changed receipt/audit/identity denial; unknown external-work preservation.",
+        "evidence": "review-fixes.md"
+      }
+    },
+    {
+      "id": 5,
+      "source": "blind+auditor",
+      "severity": "MEDIUM",
+      "bucket": "patch",
+      "title": "Clean up or durably track failed upgrade-copy staging databases",
+      "location": "infra_automation/operator_recovery.py:1374",
+      "detail": "Copy/migration/validation/publication failures have no enclosing cleanup or resumable upgrade mapping. Three injected Alembic failures left three full .upgrade-* copies while source stayed unchanged and output absent; every retry allocates another copy.",
+      "proof": {
+        "source_unchanged": true,
+        "output_published": false,
+        "failed_attempts": 3,
+        "orphan_staging_files": 3,
+        "orphan_bytes": 24576,
+        "fixture": "tiny private SQLite input carrying schema028 marker; failure injected before migration"
+      },
+      "recommendation": "Remove only positively owned unpublished staging files on ordinary failure, or retain one durable resumable attempt with explicit bounded cleanup; add interrupted upgrade-copy regressions.",
+      "resolution": {
+        "status": "resolved",
+        "implementation": "Ordinary failed upgrade cleans only owned unpublished staging and private sidecars, retaining foreign/published outputs.",
+        "verification": "Repeated migration failure followed by real successful retry; partial copy/schema/publication/BaseException cases; independent foreign-inode probe.",
+        "evidence": "review-fixes.md"
+      }
+    },
+    {
+      "id": 6,
+      "source": "blind+primary",
+      "severity": "LOW",
+      "bucket": "patch",
+      "title": "Preserve or explicitly warn before discarding same-scope settings drafts",
+      "location": "frontend/src/screens/AutomationSettingsSection.tsx:38",
+      "detail": "The form key includes policy version/authorization epoch, so a background refetch seeing an external update remounts it and silently resets values/reason. The query is immediately stale and the installed QueryClient retains focus-refetch defaults. A transient refetch error also removes the existing form through !policy.isError.",
+      "proof": {
+        "verification": "source path + installed TanStack Query defaults; no fresh browser reproduction"
+      },
+      "recommendation": "Keep scope/session remount isolation, but retain dirty same-scope drafts or request an explicit reload acknowledgement when fresh policy data differs.",
+      "resolution": {
+        "status": "resolved",
+        "implementation": "Same-scope drafts retain immutable base version/reason; changed server policy pauses save; explicit fresh reads replace drafts; definite GET/PATCH401/403 clears and latches closed.",
+        "verification": "20 focused cases;512 frontend tests;3 real composed journeys including native Chromium visibility refetch, guarded503, actual CSRF403, successful CAS save and scope/session reset.",
+        "evidence": "review-fixes.md"
+      }
+    },
+    {
+      "id": 7,
+      "source": "auditor+primary",
+      "severity": "LOW",
+      "bucket": "patch",
+      "title": "Update the operator upgrade runbook to the verified schema042 result",
+      "location": "docs/infra-automation/operations.md:423",
+      "detail": "The final runbook states destination schema041 while the linked final upgrade-results.json and current migration head are042.",
+      "proof": {
+        "runbook_destination": "041",
+        "verified_destination": "042"
+      },
+      "recommendation": "Reconcile the runbook statement with the linked final evidence and current supported upgrade target.",
+      "resolution": {
+        "status": "resolved",
+        "implementation": "Runbook destination corrected to schema042 and drift tested against linked upgrade evidence.",
+        "verification": "Original041 statement failed new regression;60 documentation tests passed.",
+        "evidence": "review-fixes.md"
+      }
+    }
+  ],
+  "dismissed": [
+    {
+      "title": "Restored password/account policy",
+      "reason": "The approved restore design explicitly preserves account/password/membership state; canonical invalidation enumerates sessions/machine/task credentials and epochs. A stronger forced-password-recovery policy is not established as this implementation contract. No new authorization-revival claim is made."
+    },
+    {
+      "title": "Restore event chain only in active database",
+      "reason": "Private old database roots retain pre-restore events; permanent audit loss was not demonstrated. Unlike the explicit one-way retention invariant, an active merged restore-event chain is not unambiguously required by the current bounded contract."
+    },
+    {
+      "title": "Old restore copies are retained",
+      "reason": "Retention of private old roots and operator disk budgeting are explicit runbook/rollback limits, not silent unintended deletion or lock release."
+    },
+    {
+      "title": "Incomplete backup directories are retained",
+      "reason": "Private incomplete backup retention is documented and never accepted as complete. This does not dismiss the independently verified untracked upgrade-copy leak."
+    },
+    {
+      "title": "Aggregate copy cost before rejection",
+      "reason": "Per-root bytes/entries and role count are bounded. Upfront aggregate budgeting remains a design improvement; no separate unbounded-input or state-corruption defect established beyond the accepted package-limit finding."
+    },
+    {
+      "title": "Purge lacks an additional human check",
+      "reason": "support.scope enters guard_project; trusted_capability_allowed grants nonhuman service-request principals only automation.read/request, so automation.admin is already human-audience-only."
+    }
+  ],
+  "qualification_notes": [
+    "Independent human pilot remains explicitly open; no promotion to done",
+    "AC7 explicit approved packet is target selection/details, not a new target-editing form; canonical wording tension remains disclosed",
+    "No real application, external operation or production credential used in reproductions"
+  ],
+  "review_actions": "Recorded action items only; implementation unchanged",
+  "local_reproduction_artifacts": [
+    "/tmp/story16-18-review-root-repros.json",
+    "/tmp/story16-18-default-backup-boundary.json",
+    "/tmp/story16-18-default-backup-boundary.log"
+  ],
+  "follow_up": {
+    "date": "2026-11-11",
+    "status": "ALL_PATCH_FINDINGS_RESOLVED",
+    "resolved": 7,
+    "unresolved": 0,
+    "original_outcome_preserved": true,
+    "validation": "review-fixes-validation-summary.json",
+    "story_status": "in-progress",
+    "remaining_gate": "Independent human self-service pilot; broader production qualification remains unclaimed."
+  }
+}

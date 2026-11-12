@@ -1,0 +1,24 @@
+{
+  "source_sha": "a6d59ecd44adacebc02809d80f9355d6e56b9242",
+  "checked_at": "2026-11-11T09:09:02.692204+00:00",
+  "scope": "Exact committed source dependency inventory: Python runtime lock candidates and all npm build/development entries; not installed image/OS or separately deployed runner inventory",
+  "packages": 215,
+  "schema_valid": true,
+  "schema_url": "https://raw.githubusercontent.com/spdx/spdx-spec/v2.3/schemas/spdx-schema.json",
+  "schema_sha256": "239208b7ac287b3cf5d9a9af23f9d69863971102a5e1587a27a398b43490b89b",
+  "schema_validator": "jsonschema 4.23.0 Draft7Validator",
+  "schema_validation_command": "curl the recorded schema_url to an isolated temporary file; require the recorded schema_sha256; run Draft7Validator.check_schema(schema) and Draft7Validator(schema).validate(sbom)",
+  "regeneration_command": "python -m scripts.release_artifacts build followed by verify with source_sha a6d59ecd44adacebc02809d80f9355d6e56b9242, its preview label, repository deploywhisper/deploywhisper and the feature branch source ref",
+  "regeneration_verified": true,
+  "published": false,
+  "attestation_executed": false,
+  "artifact_sha256": {
+    "source-manifest.json": "4783d21390d59de7fd12bd392b85d913ac9d66bf1f3fc8d28145dee8c9e24ed9",
+    "sbom.spdx.json": "667b536314c20148393a37d61d00489d0d59c6292e05bfbefeca51b0f3720c35",
+    "deploywhisper-preview-a6d59ecd44adacebc02809d80f9355d6e56b9242.tar.gz": "c87ccf24ea07a2fa32a79db55fabc0d03ba77d147915bd000f0b5ea61cbead29",
+    "SHA256SUMS": "1b1d4df95de91f5e83de48e87ffd44961dc7e21b9bed56a9285d27ea88c116cb"
+  },
+  "generator_source_sha256": "a9869ccbacddca97ae6c6a2443eb8860e1f6272a2a027f4e5f2c5c72d91216cd",
+  "artifacts_identical_to_previous_preview": true,
+  "generator_change_note": "Current generator rejects duplicate npm JSON object keys; valid recorded source produces byte-identical archive, source manifest, SBOM and checksums. Exact-source regeneration and official SPDX2.3 schema validation were repeated."
+}

@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "recorded_at": "2026-11-11T10:45:00Z",
+  "host": {
+    "platform": "macOS host with Docker Desktop Linux ARM64 VM",
+    "root_device": "/dev/disk3s3s1",
+    "filesystem": "APFS",
+    "protocol": "Apple Fabric",
+    "solid_state": true
+  },
+  "container": {
+    "os": "Linux 6.12.54-linuxkit",
+    "architecture": "aarch64",
+    "cpu_max": "400000 100000",
+    "effective_cpu_ceiling": 4,
+    "memory_max_bytes": 8589934592,
+    "memory_gib": 8,
+    "docker_backing_filesystem": "extfs on Docker Desktop virtual disk",
+    "docker_root": "/var/lib/docker"
+  },
+  "storage_attestation": "Docker Desktop's virtual disk is stored on the recorded local APFS solid-state host volume. This is a virtualized local-SSD reference profile, not dedicated bare metal or a direct in-container block-device claim.",
+  "commands": [
+    "diskutil info /",
+    "docker info --format DriverStatus/DockerRootDir/OperatingSystem/Architecture",
+    "read /sys/fs/cgroup/cpu.max and memory.max inside each benchmark container"
+  ]
+}

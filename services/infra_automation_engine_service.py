@@ -102,8 +102,10 @@ def _require_handlers(document: SnapshotDocument, registry) -> None:
         from infra_automation.local_workers import default_registry
 
         registry = default_registry()
+    external_steps = {"human_decision", "registered_github_handoff"}
     if not callable(getattr(registry, "get", None)) or any(
-        registry.get(step.kind) is None for step in document.definition.steps
+        registry.get(step.kind) is None and step.kind not in external_steps
+        for step in document.definition.steps
     ):
         raise LifecycleError(503)
 

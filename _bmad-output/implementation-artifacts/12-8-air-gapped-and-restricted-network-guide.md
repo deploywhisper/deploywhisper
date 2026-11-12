@@ -80,19 +80,26 @@ So that I can use DeployWhisper without internet access for core analysis.
 
 ### Agent Model Used
 
-_To be filled during implementation._
+Codex (GPT-6 Astra), bounded operations prerequisite work.
 
 ### Debug Log References
 
-_To be filled during implementation._
+- `docs/operations/restricted-network.md`
+- `docs/verification/operations/core-offline-results.json`
+- Local docs-test log: `/tmp/story12-operations-docs.log`.
 
 ### Completion Notes List
+- 2026-11-11 scope correction: [independent contract audit](../../docs/verification/operations/scope-and-verification.md) distinguishes the documentation/offline-core ACs from separate16.18/16.19 human-pilot and future PostgreSQL qualification. Fresh network-none core analysis and SQLite backup/restore passed; implementation review is pending, with no broader profile claim. Earlier mandatory PostgreSQL/cold-host wording below is superseded by this scope audit.
 
-_To be filled during implementation._
+- 2026-11-11: Added image transfer/verification, source-install prerequisites, local analysis, optional provider/registry/connector/update limitations and acceptance recording. Actual network-none production-image CLI analysis persisted report1 with advisory_only=true and explicit narrative_degraded. Existing-image/Docker-host proof is not cold installation or independent human acceptance; those broader gates remain explicit.
+- Existing documentation suite:60 tests passed. UI validation not applicable: documentation and disposable CLI verification only. No application code/dependency/public-release change.
+- Scope remains incomplete; no acceptance/task checkbox is marked complete.
 
 ### File List
 
-_To be filled during implementation._
+- `docs/operations/restricted-network.md`
+- `docs/verification/operations/core-offline-results.json`
+- `_bmad-output/implementation-artifacts/12-8-air-gapped-and-restricted-network-guide.md`
 
 ## Change Log
 

@@ -1,0 +1,79 @@
+{
+  "version": 2,
+  "checked_at": "2026-11-11T14:12:00Z",
+  "source_commit": "1adf00fd9de4223186da4976dd8caad9882e26cd",
+  "image_digest": "sha256:7a6afd6fd7b3ce74a672fa6fedda0e2c6d146813bcb3f1009930529e1c5f2323",
+  "status": "partial-local-technical-validation-passed-mandatory-gates-open",
+  "results": [
+    {
+      "command": "python -m unittest discover -q",
+      "result": "2117 passed, 3 skipped",
+      "log": "/tmp/story16-19-root-final3.log",
+      "log_sha256": "8fe16fde813d1e02544969e2572fcea257276e6d3c7b6ab2e94d7d249896538b"
+    },
+    {
+      "command": "bash scripts/ci-local.sh",
+      "result": "3592 tests passed across all 10 test directories; 3 directory-level skips; prompt-injection 8 tests and 96 subtests passed; Ruff, repo-wide Ruff format, pip check, compile, skill tests and configured security gates passed",
+      "log": "/tmp/story16-19-ci-local-final2.log",
+      "log_sha256": "4abf5312e5f5db5acdc74382e7a4e3461c91dd1bd5bb7060e60011dd00e1d35d"
+    },
+    {
+      "command": "python -m pytest tests/test_api tests/test_cli tests/test_infra -v --tb=short",
+      "result": "820 passed, 1 skipped, 2442 subtests passed",
+      "log": "/tmp/story16-19-api-cli-infra-final2.log",
+      "log_sha256": "cd79182d3105caa586d2817dd8d972a821dd5ef383376bf428e85fc027a3f7d8"
+    },
+    {
+      "command": "python -m pytest tests/test_infra_automation -v --tb=short",
+      "result": "1260 passed, 1 skipped, 3382 subtests passed",
+      "log": "/tmp/story16-19-automation-final2.log",
+      "log_sha256": "6b4185cac7b4b456e466d082d0b0926da1bf9f7a797e1bfaae73cc7260c14559"
+    },
+    {
+      "command": "npm run ui:test && npm run ui:typecheck && npm run ui:build",
+      "result": "513 frontend tests and 2 compatibility checks passed; typecheck and production build passed"
+    },
+    {
+      "command": "ruff check . && ruff format --check .",
+      "result": "Ruff passed; all 631 Python files formatted"
+    },
+    {
+      "command": "bandit high-confidence/high-severity production-source scan",
+      "result": "no high-severity issues across 80113 lines"
+    },
+    {
+      "command": "scripts/qualify_collection.py",
+      "result": "actual OpenTofu 1.13.1 profile qualified; 49 checks and 65 current source hashes passed"
+    },
+    {
+      "command": "1800-second reference capacity harness",
+      "result": "NFR-007 capacity qualified at 1800.138 seconds; 10 active runs, 2 analysis workers, 20 authenticated runner ports, 3730 samples, 0 errors, 0 OOM events, identical 357-file start/end source hashes; only 250 ready-transition timings, so NFR-005 remains unqualified"
+    },
+    {
+      "command": "release_artifacts build and verify plus extracted runner entrypoint smoke",
+      "result": "application archive, runner archive, manifests, SPDX 2.3 SBOM and checksums verified for exact source commit; runner entrypoint passed"
+    },
+    {
+      "command": "exact-commit Docker build and external health/OpenAPI smoke",
+      "result": "version 1.5.0; non-root uid 999; no Node runtime; image revision label matches source commit"
+    }
+  ],
+  "performance": {
+    "workflow_validation_p95_ms": 1.668459,
+    "runner_claim_p95_ms": 90.855916,
+    "capacity_ready_transition_p95_ms": 34.045333,
+    "capacity_seconds": 1800.1377654009848
+  },
+  "human_pilot": "WAIVED BY ACCOUNTABLE MAINTAINER; NOT EXECUTED; residual self-service usability risk accepted",
+  "open_gates": [
+    "NFR-005 requires 1000 ready-transition overhead samples; only 250 are recorded",
+    "NFR-001 through NFR-004 require published fault, authorization, redaction and Evidence-Law matrices",
+    "NFR-009 requires accepted/unknown delivery and complete final-image browser journeys",
+    "durable CODEOWNERS approval evidence for the maintainer waiver",
+    "accepted/unknown external receiver effect and reconciliation qualification for Story 16.14 Packet 14.8",
+    "hosted GitHub attestations and signed OCI candidate verification",
+    "final CODEOWNERS review on the immutable source commit",
+    "separately authorized public v1.5.0 tag, release and registry aliases"
+  ],
+  "publication_authorized": false
+}

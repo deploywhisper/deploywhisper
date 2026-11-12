@@ -1,6 +1,6 @@
 # Story 16.14: OpenTofu/Terraform Collection and Provenance
 
-Status: review
+Status: in-progress
 Preparation: refined
 Release: v1.5.0 | Priority: P0, highest-priority feature
 
@@ -61,6 +61,22 @@ Execute one bounded packet at a time on the story feature branch. Each packet ow
   - Owned write paths: `infra_automation/runner/; docs/infra-automation/collection.md; tests/test_infra_automation/`.
   - Output: bounded upload cleanup/cancellation and named compatibility/licensing/custody limits.
   - Acceptance proof: AC4–6: disk-full/egress/tree-kill proof plus repeatable real collection guide.
+- [x] Packet 14.5: Co-located material-authority design — owner: Architecture/security implementer.
+  - Owned write paths: `infra_automation/material_authority.py; services/infra_automation_material_authority.py; architecture/operator docs; focused tests`.
+  - Output: owner-only monotonic custody/material ledger bound to recovery installation/generation; no raw bytes exposed to the app.
+  - Acceptance proof: pending/active/revoke/ABA/reset/crash and witness before/after tests.
+- [x] Packet 14.6: Production material and witness composition — owner: Service implementer.
+  - Owned write paths: trusted startup composition, decision/handoff services and focused tests.
+  - Output: one shared fail-closed `DecisionService`/`HandoffService` deriving exact bindings from retained run/report/manifest/policy/target/unit/custody facts.
+  - Acceptance proof: wrong scope/report/branch/profile/fence/policy/target/custody denial and no caller-selected authority.
+- [x] Packet 14.7: Policy/human/handoff progression — owner: Engine/domain implementer.
+  - Owned write paths: fixed policy handler plus existing decision/handoff orchestration.
+  - Output: policy output without minting approval; API-driven durable human wait/approve and one-use handoff progression.
+  - Acceptance proof: restart/expiry/revoke/cancel/unknown-delivery state and exactly-once intent tests.
+- [ ] Packet 14.8: Integrated co-located proof — owner: Security/verifier.
+  - Owned write paths: `tests/test_infra_automation/` and Story16.19 real-profile harness/evidence.
+  - Output: actual collected evidence through shared review, decision, handoff, non-destructive receiver effect and lost-response reconciliation.
+  - Acceptance proof: one effect, retained lock, no blind resend and raw custody inaccessible to HTTP/application code.
 
 
 ### Review Findings
@@ -119,6 +135,8 @@ Codex; native agents for independent readiness, collector, custody, intake and q
 2026-11-04: Independent readiness review confirms upstream foundations. PR210 merged as `4ff2c2d`; actual GitHub CI/security/CodeQL success supersedes stale Story16.13 tracker status. Packet contracts and estimates reviewed: fixed pinned argv (2 review units), protected local custody transfer (2–3), authenticated envelope-to-manifest/shared analysis (3), limits/real qualification (2). No new dependencies or runner distribution authorized. Real-tool acceptance remains pending.
 
 ### Completion Notes List
+- 2026-11-11 Packets14.5–14.7 implemented: Ed25519-signed monotonic ledger, recovery-bound witness, live split-UID custody probe, exact retained-fact binding, fixed policy worker, API-driven human/handoff composition and operator CLI publication. App startup rejects private signing/raw-custody settings and incomplete profiles. Focused production-derived integration uses actual custody, CLI publication, two verified humans and durable non-destructive handoff prepare; Packet14.8 remains open for final actual accepted/unknown effect/reconciliation qualification.
+- 2026-11-11 course correction reopened the story for Packets14.5–14.8 after final qualification found that production material/witness and policy/human/handoff composition still defaulted to503. The accountable maintainer delegated the best approach; the co-located singleton/local-custody profile is approved. Earlier collector/custody/provenance packets remain accepted and are not rolled back.
 - Formal review repairs: R1–R4 resolved and independently rechecked. Decoded keys/values are credential-screened at host and authenticated intake/completion; the receiver accepts the canonical approved production payload; bounded sends seal the channel after timeout/ambiguity and late responses cannot advance scope/sequence.
 - Fresh repair verification: root unittest1766 tests/3skips exit0; complete `bash scripts/ci-local.sh` exit0 (all10directories,3212 test executions/3skips); API/CLI/infra734 passed/1skip/2353subtests; real collection49 checks across8cases plus isolation172 checks; integrity9tests/66subtests. The first isolation observation miss and successful isolated rerun are disclosed. See `docs/verification/infra-automation/16-14/review-fixes.md`.
 - Reused existing redaction, authentication, custody and canonical payload mapping; no new dependency or application migration. Required host handler execution timeout is documented and all constructor call sites updated. UI validation not applicable.

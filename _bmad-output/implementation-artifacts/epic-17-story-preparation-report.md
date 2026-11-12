@@ -72,6 +72,6 @@ Architecture §26.2 `LEG-ADR-10` records the deliberate decision **not** to reus
 
 RFC 0002 was accepted on 2026-10-19, which authorizes Story 17.0 qualification only. Story 17.0 must close its feasibility gate, record the dependency decision and freeze the coverage list before any downstream story is promoted. The open items in the table above remain open.
 
-**v1.5.0 retarget (2026-10-20).** Epic 17 now ships in v1.5.0 alongside Epic 16 by owner decision. Story 17.10 was added to own release integration, bringing Epic 17 to eleven stories. This does not change the readiness verdict: preparation is still specification only, and the retarget tightens rather than relaxes the schedule. The combined release now gates on 31 stories across both epics, and the documented mitigation is the Epic 17 cut-back path rehearsed in Story 17.10 Packet 10.5, not an assumption that both lanes will finish together.
+**v1.6.0 cut-back (2026-11-11).** Epic 17 returned to its independent v1.6.0 train before implementation, so it no longer gates Epic16 or v1.5.0. Story17.10 now owns standalone v1.6.0 release integration. The readiness verdict remains unchanged: preparation is specification only and Story17.0 must close first.
 
 No code was written, no spike was run, no dependency was installed, no provider was contacted and no test result is claimed anywhere in this preparation set.

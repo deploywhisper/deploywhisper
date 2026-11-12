@@ -2,7 +2,7 @@
 
 Status: backlog
 Preparation: refined
-Release: v1.5.0 (shared release train with Epic 16) | Priority: P1 within the independent Epic 17 lane
+Release: v1.6.0 (independent release train) | Priority: P1 within the independent Epic 17 lane
 
 ## Story
 
@@ -71,7 +71,7 @@ Execute one bounded packet at a time on `feature/17-9-extensibility-and-qualific
   - Owned write paths: `docs/verification/live-environment-grounding/17-9/`, `ROADMAP.md`.
   - Output: full CI, security, contract, fault-injection, end-to-end and accessibility gate results; a versioned manifest freezing supported SDK, provider API and application versions.
   - Acceptance proof: AC7 — qualification matrix with no unresolved introduced critical or high defect.
-  - **Ownership note (2026-10-20 v1.5.0 retarget):** this packet no longer writes release notes. Release documentation moved to Story 17.10, which publishes a self-contained Epic 17 fragment. Story 16.19 owns the v1.5.0 release-notes file itself and includes that fragment by reference.
+  - **Ownership note (updated by the 2026-11-11 cut-back):** release documentation remains in Story17.10 on Epic17's standalone v1.6.0 train. Story16.19 has no Epic17 reference or dependency.
 
 ## Dev Notes
 

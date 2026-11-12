@@ -129,8 +129,11 @@ def queue_assignment(
                 now=now,
             )
             deadline = claims.wire_deadline(assignment["scope"]["lease_deadline"])
-        _MAILBOX[attempt_id] = (deadline, selected.id, selected.generation, assignment)
-        return {"runner_id": selected.id, "attempt_id": attempt_id}
+            # Production sessions expire ORM rows on commit. Retain only the
+            # immutable mailbox binding before the successful transaction exits.
+            runner_id, generation = selected.id, selected.generation
+        _MAILBOX[attempt_id] = (deadline, runner_id, generation, assignment)
+        return {"runner_id": runner_id, "attempt_id": attempt_id}
 
 
 def poll(credential, *, now=None):

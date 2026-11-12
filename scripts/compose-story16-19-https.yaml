@@ -1,0 +1,49 @@
+name: deploywhisper-story16-19-https
+services:
+  app:
+    image: deploywhisper-story16-19:https-proof
+    build:
+      context: ..
+      target: runtime
+    user: appuser
+    working_dir: /app
+    command: [python, /tmp/runner_https_ui_fixture.py]
+    init: true
+    restart: "no"
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          python -c "import ssl; from urllib.request import urlopen;
+          context=ssl._create_unverified_context();
+          raise SystemExit(0 if urlopen('https://127.0.0.1:8443/api/v1/health',
+          context=context, timeout=2).status == 200 else 1)"
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 5s
+    ports:
+      - "127.0.0.1:${RUNNER_HTTPS_HOST_PORT:-8443}:8443"
+    environment:
+      RUNNER_HTTPS_DISPOSABLE: "1"
+      RUNNER_HTTPS_ORIGIN: ${RUNNER_HTTPS_ORIGIN:-https://localhost:8443}
+      RUNNER_HTTPS_PROFILE_DIGEST: ${RUNNER_HTTPS_PROFILE_DIGEST:?Set the locally qualified profile digest}
+      DATABASE_URL: sqlite:////app/data/deploywhisper.db
+      DEPLOYWHISPER_IDENTITY_PROFILE: https
+      DEPLOYWHISPER_IDENTITY_ORIGIN: ${RUNNER_HTTPS_ORIGIN:-https://localhost:8443}
+      DEPLOYWHISPER_AUTHORIZATION_PROFILE: verified
+      DEPLOYWHISPER_IDENTITY_DECISION_MODE: shared
+      APP_BASE_URL: ${RUNNER_HTTPS_ORIGIN:-https://localhost:8443}
+      NARRATOR_ENABLED: "false"
+      LLM_API_KEY: ""
+      OPENAI_API_KEY: ""
+      ANTHROPIC_API_KEY: ""
+    tmpfs:
+      - /app/data:rw,noexec,nosuid,nodev,mode=1777,size=256m
+    volumes:
+      - ./runner_https_ui_fixture.py:/tmp/runner_https_ui_fixture.py:ro
+      - tls:/tls:ro
+volumes:
+  tls:
+    external: true
+    name: ${RUNNER_HTTPS_TLS_VOLUME:?Set the owned disposable TLS volume}

@@ -12,7 +12,11 @@ import tarfile
 import tempfile
 import unittest
 
-from scripts.release_artifacts import build_artifacts, validate_release_tag
+from scripts.release_artifacts import (
+    build_artifacts,
+    validate_release_tag,
+    verify_artifacts,
+)
 
 
 class ReleaseArtifactsTests(unittest.TestCase):
@@ -28,6 +32,40 @@ class ReleaseArtifactsTests(unittest.TestCase):
             '[project]\nname = "deploywhisper"\nversion = "1.4.0rc1"\n'
         )
         (self.repo / "app.py").write_text("print('committed source')\n")
+        for directory in (
+            "analysis",
+            "api",
+            "cli",
+            "evidence",
+            "infra_automation",
+            "integrations",
+            "llm",
+            "migrations",
+            "models",
+            "parsers",
+            "services",
+        ):
+            path = self.repo / directory
+            path.mkdir()
+            (path / "__init__.py").write_text("")
+        (self.repo / "cli/runner.py").write_text(
+            "import argparse\nparser=argparse.ArgumentParser()\nparser.parse_args()\n"
+        )
+        for filename in ("alembic.ini", "config.py", "logging_config.py", "LICENSE"):
+            (self.repo / filename).write_text("synthetic fixture\n")
+        (self.repo / "README.md").write_text("# Synthetic\n")
+        (self.repo / "requirements.txt").write_text(
+            "example==1.0 --hash=sha256:" + "a" * 64 + "\n"
+        )
+        (self.repo / "frontend").mkdir()
+        (self.repo / "frontend/package-lock.json").write_text(
+            json.dumps(
+                {
+                    "lockfileVersion": 3,
+                    "packages": {"": {}, "node_modules/react": {"version": "18.3.1"}},
+                }
+            )
+        )
         self.git("add", ".")
         self.git("commit", "-qm", "Synthetic fixture")
         self.sha = self.git("rev-parse", "HEAD").strip()
@@ -49,7 +87,8 @@ class ReleaseArtifactsTests(unittest.TestCase):
         (self.repo / "app.py").write_text("dirty source")
         (self.repo / "secret.env").write_text("untracked")
         output = self.build("dist")
-        archive = next(output.glob("*.tar.gz"))
+        manifest = json.loads((output / "source-manifest.json").read_text())
+        archive = output / manifest["archive"]
         with tarfile.open(archive) as contents:
             names = contents.getnames()
             self.assertFalse(any(name.endswith("secret.env") for name in names))
@@ -146,6 +185,100 @@ class ReleaseArtifactsTests(unittest.TestCase):
             capture_output=True,
         )
         self.assertTrue((output / "SHA256SUMS").is_file())
+
+    def test_sbom_exact_locks_and_tamper_verification(self):
+        (self.repo / "requirements.txt").write_text("dirty==9.0")
+        output = self.build("sbom")
+        sbom = json.loads((output / "sbom.spdx.json").read_text())
+        self.assertEqual(sbom["spdxVersion"], "SPDX-2.3")
+        self.assertEqual(
+            {p["name"] for p in sbom["packages"]}, {"deploywhisper", "example", "react"}
+        )
+        runner = json.loads((output / "runner-manifest.json").read_text())
+        self.assertEqual(runner["source_sha"], self.sha)
+        self.assertEqual(runner["runner_protocol_version"], 1)
+        self.assertEqual(runner["entrypoint"], "python -m cli.runner")
+        self.assertNotIn("frontend", runner["file_inventory"])
+        self.assertTrue(
+            {"README.md", "api", "integrations", "infra_automation", "cli"}
+            <= set(runner["file_inventory"])
+        )
+        self.assertFalse(runner["tool_binaries_included"])
+        runner_archive = output / runner["archive"]
+        self.assertTrue(runner_archive.is_file())
+        with tarfile.open(runner_archive) as contents:
+            names = contents.getnames()
+            self.assertTrue(any(name.endswith("cli/__init__.py") for name in names))
+            self.assertFalse(any("/frontend/" in name for name in names))
+            extracted = Path(self.temp.name) / "runner-extracted"
+            contents.extractall(extracted, filter="data")
+        runner_root = extracted / f"deploywhisper-runner-preview-{self.sha}"
+        subprocess.run(
+            [sys.executable, "-m", "cli.runner", "--help"],
+            cwd=runner_root,
+            check=True,
+            capture_output=True,
+        )
+        self.assertEqual(
+            runner["archive_sha256"],
+            hashlib.sha256(runner_archive.read_bytes()).hexdigest(),
+        )
+        args = (
+            self.repo,
+            self.sha,
+            "refs/heads/develop",
+            f"preview-{self.sha}",
+            "example/deploywhisper",
+            output,
+        )
+        verify_artifacts(*args)
+        (output / "sbom.spdx.json").write_text("{}")
+        with self.assertRaises(ValueError):
+            verify_artifacts(*args)
+
+    def test_unpinned_or_unhashed_lock_fails_before_output(self):
+        for index, entry in enumerate(("example>=1", "example==1")):
+            (self.repo / "requirements.txt").write_text(entry)
+            self.git("add", "requirements.txt")
+            self.git("commit", "-qm", "Bad synthetic lock")
+            self.sha = self.git("rev-parse", "HEAD").strip()
+            with self.assertRaises(ValueError):
+                self.build(f"invalid-{index}")
+            self.assertFalse((Path(self.temp.name) / f"invalid-{index}").exists())
+
+    def test_duplicate_npm_lock_key_fails_before_output(self):
+        (self.repo / "frontend/package-lock.json").write_text(
+            '{"lockfileVersion":3,"packages":{"":{},'
+            '"node_modules/react":{"version":"18.3.1"},'
+            '"node_modules/react":{"version":"0.0.0"}}}'
+        )
+        self.git("add", "frontend/package-lock.json")
+        self.git("commit", "-qm", "Ambiguous synthetic lock")
+        self.sha = self.git("rev-parse", "HEAD").strip()
+        with self.assertRaises(ValueError):
+            self.build("duplicate-npm-key")
+        self.assertFalse((Path(self.temp.name) / "duplicate-npm-key").exists())
+
+    def test_missing_or_linked_sbom_cannot_verify(self):
+        output = self.build("missing-sbom")
+        sbom = output / "sbom.spdx.json"
+        original = sbom.read_bytes()
+        sbom.unlink()
+        args = (
+            self.repo,
+            self.sha,
+            "refs/heads/develop",
+            f"preview-{self.sha}",
+            "example/deploywhisper",
+            output,
+        )
+        with self.assertRaises(ValueError):
+            verify_artifacts(*args)
+        external = Path(self.temp.name) / "external-sbom"
+        external.write_bytes(original)
+        sbom.symlink_to(external)
+        with self.assertRaises(ValueError):
+            verify_artifacts(*args)
 
     def test_strict_tag_version_validation(self):
         validate_release_tag("v1.3.0", "1.3.0")

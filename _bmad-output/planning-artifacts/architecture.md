@@ -1341,6 +1341,17 @@ Generate screened/redacted plan JSON for transport; compute raw-local digest and
 
 Receiver admission verifies the retained exact binary plan against the approved raw-local digest and uses those bytes within the operator pipeline; it must not replan under the previous grant. A new plan needs fresh sanitized evidence, analysis and approval. Cloud-hosted GitHub workers without qualified local custody are outside saved-plan authorization support. Uploaded-only workflows may request an advisory handoff/receipt but cannot assert exact-plan apply authorization. Multi-unit preflight does not authorize stale downstream plans after upstream deployment changes.
 
+The v1.5.0 co-located material-authority profile uses a separately privileged
+operator/receiver process on the same controlled host. That process verifies raw
+custody and signs an owner-maintained monotonic nonsecret ledger with an Ed25519
+private key that is never mounted into the app. The app receives only a read-only
+ledger view and public verification key, derives every decision binding again from
+retained run/report/manifest/policy/target/unit facts, and rejects signature,
+generation, recovery-domain, custody or binding changes. Human decision and
+handoff progression remain API-driven durable services; the fixed policy worker
+cannot mint approval or dispatch authority. Remote material-authority profiles
+remain unsupported.
+
 ### 25.9 API, protocol and UI consistency
 
 All public contracts are typed, project-scoped and use existing `ApiRoute`/`ApiError` envelopes, `build_meta`, UTC timestamps, opaque IDs and explicit state enums. Under `/api/v1/infra-automation`, planned resource groups are `workflows` (draft/validate/publish/revisions), `runs` (request/detail/steps/artifacts/logs/cancel), `approvals` (list/decision), `runners` (enroll/claim/heartbeat/upload/complete), `targets` (admin registry), `handoffs` (receiver consume/receipt/outcome/reconcile) and `triggers/webhook`. Exact OpenAPI operation shapes are fixed and fixture-tested per owning story before consumers are built. Workflow authoring uses major 2. Runner/enrollment, receiver, provenance, state, error and cursor protocols independently remain v1; reports remain v2. Only the receiver binding directly carries opaque workflow revision/input digests, which must bind the exact v2 canonical bytes; other protocols keep their own scope/profile/source fields. Reject unknown major versions and negotiate explicitly supported capabilities, never silently downgrade safety or translate v1 workflow bytes.
@@ -1359,7 +1370,7 @@ Feature enablement defaults off. Disable rejects new runs/grants/dispatch, inval
 
 Coordinated database/artifact/custody backup and restore use a quiesced snapshot; startup after restore changes epoch, invalidates sessions/machine/task credentials, leases and unconsumed grants, and requires an operator reconciliation before outbound work. Preserve immutable minimal decision/operation metadata and deletion tombstones after content retention; missing required evidence blocks approval/resumption. Disk quotas, expired uploads, redacted logs, custody TTL and pending unknown operations have separate retention policies; unknown remote work is not deleted/unlocked as routine cleanup. Document export digests and administrator trust: append-only application APIs are not tamper-proof against a database/host administrator.
 
-Story 16.0 must produce executable evidence for verified local identity/session/CSRF + project revocation, SQLite fenced overlapping claims/restarts, real hostile collection containment and exact-plan custody/receiver crash recovery. Its RFC needs public review and a recorded maintainer outcome. Those results do not exist merely because this target design is written. Then Story 16.18 proves upgrade/backup/restore/offline/network/retention operations, and 16.19 qualifies the full supported tool/runner/receiver profile, layered code/security review, fault matrix, full CI and composed browser/a11y flows, SBOM/signing/provenance and a representative pilot. Publish actual versions/hardware/commands/results/limits and known misses. No calendar release promise or production-readiness claim precedes these gates.
+Story 16.0 must produce executable evidence for verified local identity/session/CSRF + project revocation, SQLite fenced overlapping claims/restarts, real hostile collection containment and exact-plan custody/receiver crash recovery. Its RFC needs public review and a recorded maintainer outcome. Those results do not exist merely because this target design is written. Then Story 16.18 proves upgrade/backup/restore/offline/network/retention operations, and 16.19 qualifies the full supported tool/runner/receiver profile, layered code/security review, fault matrix, full CI and composed browser/a11y flows, SBOM/signing/provenance and either a representative operator pilot or an explicit accountable-maintainer waiver. A waiver must state that the pilot was not executed, cite the reviewed automated evidence, accept residual self-service/runbook-usability risk and leave each unexecuted procedure unpassed. It cannot expand supported profiles or waive reference performance/saturation, independent technical review, signed-artifact/provenance or publication gates. Publish actual versions/hardware/commands/results/limits and known misses. No calendar release promise or production-readiness claim precedes these gates.
 
 ### 25.11 Architecture review and implementation handoff
 
@@ -1373,11 +1384,11 @@ Each earlier story proves only its owned contract with scoped fixtures or test-d
 
 ---
 
-## 26. v1.5.0 Live Environment Grounding Architecture Amendment
+## 26. v1.6.0 Live Environment Grounding Architecture Amendment
 
 ### 26.1 Authority, baseline and supported boundary
 
-This amendment is appended for **Epic 17, Live Environment Grounding**, targeting **v1.5.0** (retargeted 2026-10-20 from v1.6.0; Epic 17 now shares the v1.5.0 release tag with Epic 16 while remaining architecturally independent of it). Its governance source is [RFC 0002](../../docs/rfcs/0002-live-environment-grounding.md) (**Accepted**, 2026-10-19) and its canonical requirement authority is the [feature PRD](prd-live-environment-grounding.md), requirement IDs `LEG-FR-001..040` and `LEG-NFR-001..012`. Story **17.0** owns RFC acceptance, the dependency decision, the threat model and executable feasibility spikes. **Nothing described below is represented as implemented.**
+This amendment is appended for **Epic 17, Live Environment Grounding**, targeting **v1.6.0** on its independent release train. The 2026-11-11 cut-back removed the unimplemented epic from v1.5.0 so it cannot block or be partially represented in the Epic 16 release. Its governance source is [RFC 0002](../../docs/rfcs/0002-live-environment-grounding.md) (**Accepted**, 2026-10-19) and its canonical requirement authority is the [feature PRD](prd-live-environment-grounding.md), requirement IDs `LEG-FR-001..043` and `LEG-NFR-001..013`. Story **17.0** owns RFC acceptance, the dependency decision, the threat model and executable feasibility spikes. **Nothing described below is represented as implemented.**
 
 This amendment is **append-only and does not modify §25**. Epic 16 and Epic 17 are independent in both directions and are intended to run concurrently; the operative contract is the [boundary and parallelization plan](epic-16-17-boundary-and-parallelization-plan.md). Sections 2, 4, 8, 19–23 remain constraints, and the existing shared-core, advisory, local-first and scale ADRs are unchanged.
 
@@ -1401,7 +1412,7 @@ The following **LEG-ADR** records extend the existing ADRs and the §25.2 `IA-AD
 | LEG-ADR-08 Report contract | Optional, separately versioned `live_context` block with its own `live_context_version: 1`; **no report schema version bump**, consistent with IA-ADR-06. | A report minor-version bump is not an established contract and would break existing consumers for an optional additive field. | 17.1, 17.8 |
 | LEG-ADR-09 Extensibility | Provider-neutral connector contract, registry, and an executable conformance suite; Azure and GCP as explicit stubs. | An AWS-only implementation forfeits the community contribution surface that makes multi-cloud coverage sustainable for a volunteer-maintained project. | 17.1, 17.9 |
 | LEG-ADR-10 Epic independence | Grounding executes in-application as a short synchronous inbound read. It does not use the Epic 16 runner; private-network operators use snapshot import instead. | Reusing the runner would import the enrollment/fencing/lease protocol for a read that does not need it and would block all Epic 17 value behind 16.12–16.14. | 17.0, 17.7 |
-| LEG-ADR-11 Shared release, separate documents | Epic 17 ships in v1.5.0 with Epic 16 but publishes its own self-contained release fragment under `docs/releases/`, which Story 16.19 includes by one reference line. Epic 17 never edits Epic 16's release-notes file. | The retarget created exactly one new cross-epic obligation. Containing it in a separate document keeps the most contended artifact of the release single-owner, keeps the coupling documentation-only, and keeps an Epic 17 cut-back cheap: deleting one fragment and one reference line. | 17.10 |
+| LEG-ADR-11 Independent release | Epic 17 ships on its own v1.6.0 release train and owns its release documentation. Story 16.19 has no Epic 17 release-note reference or dependency. | The 2026-11-11 cut-back removes a scheduling dependency on an unimplemented epic while preserving all module/test boundaries and the option for a future explicit retarget. | 17.10 |
 
 An AWS SDK is a **new runtime dependency** and requires an explicit approved dependency decision recorded in Story 17.0 before any implementation. Preserve the repository Python floor and locked dependencies; do not introduce unrelated framework upgrades.
 

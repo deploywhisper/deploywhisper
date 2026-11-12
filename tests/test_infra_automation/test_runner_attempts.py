@@ -518,6 +518,29 @@ class RunnerAttemptTests(LifecycleCase):
         self.operation(
             engine_claims.start_run, self.owner, run_id=run.id, expected_version=1
         )
+        # The application sessionmaker expires ORM attributes on commit.
+        # A fixture with expire_on_commit=False hides post-commit mailbox reads.
+        self.factory.configure(expire_on_commit=True)
+        from sqlalchemy import event
+
+        def reject_commit(session):
+            raise RuntimeError("Synthetic queue commit failure")
+
+        event.listen(self.factory.class_, "before_commit", reject_commit)
+        try:
+            with self.assertRaisesRegex(RuntimeError, "Synthetic queue commit failure"):
+                tasks.queue_assignment(
+                    self.owner,
+                    pending.id,
+                    self.requirements,
+                    now=self.now,
+                    session_factory=self.factory,
+                )
+        finally:
+            event.remove(self.factory.class_, "before_commit", reject_commit)
+        self.assertNotIn(pending.id, tasks._MAILBOX)
+        with self.factory() as db:
+            self.assertEqual(runs.get_attempt(db, pending.id).state, "pending")
         tasks.queue_assignment(
             self.owner,
             pending.id,

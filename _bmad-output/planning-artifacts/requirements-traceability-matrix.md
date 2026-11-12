@@ -135,8 +135,8 @@ The [canonical feature PRD](prd-infra-automation.md) adds 60 FR and 12 NFR witho
 | IAU15-NFR-008 | Workflow validation must have p95 <500 milliseconds for the declared 50-step workflow corpus under the reference workload. | 16.3, 16.19 | 1,000-validation timing/correctness benchmark |
 | IAU15-NFR-009 | All new React routes must pass the composed-app axe critical/serious violation gate and keyboard-only create/run/review/decision/recovery journeys, using real API-backed seeded data and required screenshots. | 16.7, 16.9, 16.15, 16.16, 16.19 | Compose production build, Playwright/axe/keyboard results and screenshots |
 | IAU15-NFR-010 | Upgrade from a v1.4.0 database copy, interrupted upgrade, coordinated DB/artifact backup/restore, token rotation and restricted-network recovery must preserve auditable state while invalidating outstanding authorization/leases until reconciled. | 16.18, 16.19 | Recorded upgrade/restore/rotation/offline exercises |
-| IAU15-NFR-011 | Publish version-matched schema/API/CLI/operator/security/support-limit docs with CI link/drift checks and secret-free run/queue/step/runner/approval/delivery metrics plus troubleshooting runbooks. | 16.18, 16.19 | Docs CI and operator self-service installation/recovery pilot |
-| IAU15-NFR-012 | Stable v1.5.0 requires signed app/runner artifacts, SBOM/checksums/provenance, named tool/receiver support matrix, full application CI, independent review and supported-profile pilot with no unresolved introduced critical/high defect. | 16.19, 12.5 | Signed release manifest, CI/security/review/pilot evidence |
+| IAU15-NFR-011 | Publish version-matched schema/API/CLI/operator/security/support-limit docs with CI link/drift checks and secret-free metrics plus troubleshooting runbooks. | 16.18, 16.19 | Docs CI and either independent operator self-service proof or the bounded accountable-maintainer waiver |
+| IAU15-NFR-012 | Stable v1.5.0 requires signed app/runner artifacts, SBOM/checksums/provenance, named support matrix, full application CI, independent review and supported-profile technical qualification; independent human validation may be replaced only by the bounded waiver. | 16.19, 12.5 | Signed release manifest, CI/security/review/technical qualification and operator-pilot-or-waiver evidence |
 
 See [the readiness review](implementation-readiness-report-2026-10-07-infra-automation-v1.5.0.md) for coverage and remaining gates.
 
@@ -153,7 +153,7 @@ The following previously implicit family-map ownership is now explicit in the ep
 | NFR-PERF-03 | 2.7 | Deterministic fallback after narrative timeout/failure |
 | NFR-PERF-05 | 7.2/7.3 and 2.6 | Connector deadline/unavailable context; proof remains distinct from mapping |
 
-## v1.5.0 Live Environment Grounding Adoption — 2026-10-19 (retargeted to v1.5.0 on 2026-10-20)
+## v1.6.0 Live Environment Grounding Adoption — 2026-10-19 (release restored on 2026-11-11)
 
 The [canonical feature PRD](prd-live-environment-grounding.md) adds 40 FR and 12 NFR in the `LEG-*` family without replacing the parent's requirements or the v1.5.0 `IAU15-*` family. Epic 17 owns this outcome end to end and takes **no dependency on Epic 16**; see the [boundary and parallelization plan](epic-16-17-boundary-and-parallelization-plan.md).
 
@@ -218,11 +218,11 @@ Nonfunctional obligations:
 | LEG-NFR-010 | A new provider must be addable without modifying core analysis, scoring, blast radius or report code. | 17.1, 17.9 | Conformance suite executed against a reference stub provider |
 | LEG-NFR-011 | Air-gapped operators must achieve grounding parity through snapshot import. | 17.7, 17.9 | Disconnected-host equivalence exercise |
 | LEG-NFR-012 | Call count, elapsed time and budget consumption must be visible to the operator for every collection. | 17.3, 17.9 | Budget reporting assertions in API, CLI and UI |
-| LEG-FR-041 | Publish Live Environment Grounding release documentation as a self-contained fragment owned by Epic 17 and included by reference from Story 16.19. | 17.10 | Fragment published; 16.19 reference is one line with no duplicated content |
+| LEG-FR-041 | Publish Epic 17-owned v1.6.0 release documentation covering the qualified support boundary. | 17.10 | Release documentation published and reviewed against Story17.9 evidence |
 | LEG-FR-042 | Publish an upgrade and rollback record stating grounding is disabled by default and requires no migration or credential provisioning. | 17.10 | Clean-upgrade exercise with grounding left disabled |
-| LEG-FR-043 | Produce joint-release qualification evidence that a both-epic build with grounding disabled is behaviourally identical to an Epic 16-only build. | 17.10 | Recorded differential across reports, schemas, API, CLI and agent output |
-| LEG-NFR-013 | Sharing the v1.5.0 release tag must not create a code, test or fixture dependency between Epic 16 and Epic 17. | 17.10 | Per-shard isolation run plus a CI cross-import invariant with a deliberate failing case |
+| LEG-FR-043 | Produce standalone v1.6.0 compatibility evidence showing grounding-disabled output remains compatible with the prior release. | 17.10 | Recorded differential across reports, schemas, API, CLI and agent output |
+| LEG-NFR-013 | Epic 17 must not create a code, test or fixture dependency on Epic 16. | 17.10 | Per-shard isolation run plus a CI cross-import invariant with a deliberate failing case |
 
 Cross-cutting notes: `LEG-*` intersects `CTX-*` (context enrichment gains a live source), `RSK-*` (grounded severity floors and recoverability), `EVD-*` (a new `live_state` evidence source under unchanged Evidence Law), `REV-*` (the Live Context report surface), `WRK-*` (the divergence CI gate), `AIA-*` (grounded facts labelled distinctly from inferred ones) and `NFR-SEC-*` (a new outbound trust boundary with mechanically enforced read-only access). Grounding is opt-in and disabled by default; with it off, all existing coverage is unchanged, which is itself an acceptance obligation under LEG-NFR-009.
 
-Release retarget (2026-10-20): Epic 17 moved from v1.6.0 into v1.5.0, shipping alongside Epic 16 under one tag. `LEG-FR-041..043` and `LEG-NFR-013` were added to cover the release-integration obligations this created and are owned by the new Story 17.10. The retarget adds no code coupling between the epics; `LEG-NFR-013` exists to keep it that way and is mechanically enforced.
+Release cut-back (2026-11-11): Epic 17 returned to its independent v1.6.0 train before implementation. `LEG-FR-041..043` and `LEG-NFR-013` now cover standalone release documentation, compatibility and continued cross-epic isolation. Story16.19 has no Epic17 release dependency.

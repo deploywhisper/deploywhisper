@@ -6,9 +6,9 @@
 
 ## Purpose
 
-Epic 16 (Evidence-Gated Infrastructure Automation) and Epic 17 (Live Environment Grounding) are being developed **concurrently by different workers** and, since the 2026-10-20 retarget, both ship in **v1.5.0**. This document is the contract that keeps them independent. Read it before editing any file listed in the shared-surface table.
+Epic 16 (Evidence-Gated Infrastructure Automation) and Epic 17 (Live Environment Grounding) are developed **independently by different workers**. The approved 2026-11-11 cut-back restores separate release trains: Epic 16 targets **v1.5.0** and Epic 17 targets **v1.6.0**. This document is the contract that keeps them independent. Read it before editing any file listed in the shared-surface table.
 
-**What the shared release tag changes, and what it does not.** It does not change module ownership, branch prefixes, test shards, review lanes or the no-cross-import rule: development stays fully independent and nothing below is relaxed. It changes exactly one thing — the release gate. v1.5.0 now ships only when **both** epics close, so a delay in either lane delays the tag for both. Treat that as a scheduling dependency between maintainers, never as a code dependency between modules.
+**Separate release trains.** Module ownership, branch prefixes, test shards, review lanes and the no-cross-import rule remain unchanged. v1.5.0 no longer waits for Epic 17, and Story16.19 carries no Epic17 release-note or manifest obligation. A future retarget requires another explicit course correction.
 
 ## One-sentence separation
 
@@ -99,31 +99,31 @@ Constraints on this integration:
 
 | | Epic 16 | Epic 17 |
 | --- | --- | --- |
-| Release | v1.5.0 | v1.5.0 (retargeted 2026-10-20 from v1.6.0) |
+| Release | v1.5.0 | v1.6.0 (restored 2026-11-11) |
 | Branch prefix | `feature/16-*` | `feature/17-*` |
 | Integration branch | `develop` | `develop` |
 | Test shard | `tests/test_infra_automation` | `tests/test_cloud` |
 | Independently developable? | Yes | Yes |
-| Independently releasable? | **No — shared v1.5.0 tag** | **No — shared v1.5.0 tag** |
+| Independently releasable? | **Yes** | **Yes** |
 
 Both lanes merge to `develop` under the existing Git Flow process.
 
 ### Release-notes ownership
 
-Story 16.19 owns the v1.5.0 release and its notes file. To keep that ownership unambiguous and to avoid a shared-file conflict in the most contended artifact of the release, Epic 17 does **not** edit it. Instead:
+Story 16.19 owns the v1.5.0 release and its notes file. Epic 17 does **not** edit or reference it. For v1.6.0:
 
 - Story 17.10 publishes a **self-contained Epic 17 fragment** under `docs/releases/`.
-- Story 16.19 **includes that fragment by reference**, a one-line addition on the Epic 16 side.
-- If the Epic 17 fragment does not exist at release time, Story 16.19 ships the v1.5.0 notes without it rather than blocking on Epic 17 authorship.
+- Story 17.10 owns Epic 17's standalone release documentation.
+- Story 16.19 ships v1.5.0 without an Epic 17 fragment or reference.
 
 This is the only new cross-epic touchpoint created by the retarget, and it is documentation-only.
 
 ### Joint release gate
 
-- Neither epic may tag v1.5.0 alone.
+- Each epic follows its own release authorization and tag.
 - With grounding disabled — the default — a build containing both epics must be behaviourally identical to one containing Epic 16 alone. Story 17.10 owns that proof (`LEG-FR-043`).
 - Each test shard must pass with the other epic's modules absent from the import graph (`LEG-NFR-013`).
-- If Epic 17 cannot complete in time, the correct response is to **cut Epic 17 from v1.5.0 and restore it to v1.6.0**, not to block Epic 16 or to merge partial grounding. Because grounding is disabled by default and additive, this cut is low-cost at any point before the tag.
+- The 2026-11-11 cut-back restored Epic 17 to v1.6.0 because it was not implemented; partial grounding remains prohibited.
 
 ## Risk register for concurrent execution
 
@@ -135,7 +135,7 @@ This is the only new cross-epic touchpoint created by the retarget, and it is do
 | Reviewer fatigue across two large lanes | Epic 17 front-loads a thin, independently valuable slice (17.0–17.4) so review arrives in small, demoable units |
 | Maintainer capacity contention | Real and acknowledged; addressed in the course correction, which does **not** propose de-scoping Epic 16 |
 | Accidental cross-epic import | Reviewable grep invariant stated in "Module ownership", promoted to a CI check by `LEG-NFR-013` |
-| **Shared release tag couples two large lanes** | 31 stories now gate one tag. Mitigated by the documented Epic 17 cut-back path above: grounding is disabled by default and additive, so removing it from v1.5.0 stays cheap until the tag is cut |
+| **Historical shared-tag coupling** | Resolved by the approved 2026-11-11 cut-back: Epic16 targets v1.5.0 and Epic17 targets v1.6.0 |
 | Release-notes file contention in 16.19 | Epic 17 publishes a separate fragment; 16.19 includes it by reference and never waits on Epic 17 to edit its file |
 
 ## Checklist before opening any PR in either lane

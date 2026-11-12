@@ -66,6 +66,14 @@ class SupplyChainRemediationTests(unittest.TestCase):
                     "attestations": "write",
                     "artifact-metadata": "write",
                 }
+            elif name == "qualification":
+                expected = {
+                    "contents": "read",
+                    "pull-requests": "read",
+                    "id-token": "write",
+                    "attestations": "write",
+                    "artifact-metadata": "write",
+                }
             with self.subTest(job=name):
                 self.assertEqual(permissions, expected)
 

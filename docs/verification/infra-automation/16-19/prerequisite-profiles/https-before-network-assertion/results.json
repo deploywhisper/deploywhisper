@@ -1,0 +1,385 @@
+{
+  "version": 1,
+  "qualified": true,
+  "checked_at": "2026-11-11T09:28:30.769997+00:00",
+  "tool": "opentofu",
+  "tool_version": "1.13.1",
+  "image_id": "sha256:4794e840e57dbf5167bbf40e03b6c74eca54455283b28358799efdf9656c42be",
+  "catalog": {
+    "version": 1,
+    "image_id": "sha256:4794e840e57dbf5167bbf40e03b6c74eca54455283b28358799efdf9656c42be",
+    "files": [
+      {
+        "path": "/opt/deploywhisper/bootstrap.py",
+        "sha256": "sha256:68fa8b5f6be256ff083a6536954b14c4013d91679788d14de1b58ef7aea53c50",
+        "kind": "probe"
+      },
+      {
+        "path": "/opt/deploywhisper/collector.py",
+        "sha256": "sha256:05d35ba13cd699e50227c65e26699f54b2412db0d07b4326c528beba2a6fcfb2",
+        "kind": "probe"
+      },
+      {
+        "path": "/opt/deploywhisper/probe.py",
+        "sha256": "sha256:777f35694b0ead117470704b191a14091ad204749c2b1aaec7f20d9084ad8336",
+        "kind": "probe"
+      },
+      {
+        "path": "/opt/deploywhisper/provider_probe.py",
+        "sha256": "sha256:029e9204bcadfbc29a8933b1507b744883ae4c443c530b93d50e3d0a2ef27ca2",
+        "kind": "probe"
+      },
+      {
+        "path": "/opt/deploywhisper/source/.terraform.lock.hcl",
+        "sha256": "sha256:3071bf1f71db45e51751c8b66ac866134e1fff1c40dbad3e3b22b6664ba5b729",
+        "kind": "lock"
+      },
+      {
+        "path": "/opt/deploywhisper/source/main.tf",
+        "sha256": "sha256:9c86769848a67230bff9fd46368d601563b1f19064f2f0c9d65fc6667bed398d",
+        "kind": "module"
+      },
+      {
+        "path": "/opt/deploywhisper/source/source.lock",
+        "sha256": "sha256:81b56767fec06d7e3fb8cbb335f4c61983525b25f9e477b8a1f9b2d735aa5e6c",
+        "kind": "lock"
+      },
+      {
+        "path": "/opt/deploywhisper/tofurc",
+        "sha256": "sha256:6ca5b0f7e983ec1862a5779209b6477ba1e7431d9f3a57cdfc23e4e720287dcb",
+        "kind": "lock"
+      },
+      {
+        "path": "/opt/mirror/registry.opentofu.org/hashicorp/external/2.3.5.json",
+        "sha256": "sha256:f71e931dba63654caaae85b4f31a5c05314807e7ab01b2a07be26bb70da424b8",
+        "kind": "module"
+      },
+      {
+        "path": "/opt/mirror/registry.opentofu.org/hashicorp/external/2.3.5/linux_arm64/CHANGELOG.md",
+        "sha256": "sha256:2573f7e6eb9ca75615f0f75cccc42843334c99cce6644b9951bd129789102749",
+        "kind": "module"
+      },
+      {
+        "path": "/opt/mirror/registry.opentofu.org/hashicorp/external/2.3.5/linux_arm64/LICENSE",
+        "sha256": "sha256:4e2bb185ebd706f76329206869ccb348b92b6236100cfb07775fe31530dab0d5",
+        "kind": "module"
+      },
+      {
+        "path": "/opt/mirror/registry.opentofu.org/hashicorp/external/2.3.5/linux_arm64/README.md",
+        "sha256": "sha256:4233eb135859b806701d0f3ee25730af3f33d039f0e5c88f9e757a4605f8b709",
+        "kind": "module"
+      },
+      {
+        "path": "/opt/mirror/registry.opentofu.org/hashicorp/external/2.3.5/linux_arm64/terraform-provider-external",
+        "sha256": "sha256:f9994ee228b86d34c289d858af46f758921f34393a27a1bb5677761c08228f50",
+        "kind": "provider"
+      },
+      {
+        "path": "/opt/mirror/registry.opentofu.org/hashicorp/external/index.json",
+        "sha256": "sha256:96f7d8c14feaff8962f4d0054eff532e08284b581770680925cc348d3541436d",
+        "kind": "module"
+      },
+      {
+        "path": "/usr/local/bin/python",
+        "sha256": "sha256:3e83cdfa4cdb93afd114c2b5742d48d653621fbbd7468ecd6e482e5143d1d4c4",
+        "kind": "tool"
+      },
+      {
+        "path": "/usr/local/bin/tofu",
+        "sha256": "sha256:d5c690023baebe8bf2cfb2062e292186f4797a173db22c973bd9de45cb68a62f",
+        "kind": "tool"
+      }
+    ],
+    "tool_versions": [
+      {
+        "tool": "opentofu",
+        "version": "1.13.1"
+      }
+    ]
+  },
+  "source_hashes": {
+    "infra_automation/runner/catalog.py": "sha256:6ac7999df14df6cd154922d3471796e705a3b05d5af2db0eeab15d0f476e32d0",
+    "infra_automation/runner/bootstrap.py": "sha256:68fa8b5f6be256ff083a6536954b14c4013d91679788d14de1b58ef7aea53c50",
+    "infra_automation/runner/execution.py": "sha256:6f57b036586dbaeb6736b08e7f3d3523cddf9a1720a89da18dc11783ddd3a89c",
+    "infra_automation/runner/collection_output.py": "sha256:e85f5a8fb6f6de1b2f3abaf3ebd5af7eae913e7c11ce2a5e5ca9c35249b8010b",
+    "infra_automation/runner/protocol.py": "sha256:fdc1365097e394570f215edb2a8f0e412745a2ce45820f163d07513219719b68",
+    "infra_automation/runner/client.py": "sha256:f5da0b3c8f3f56d9982345c3df4a6df9a8ad17ce96d49ed21c4c1943eba7ef11",
+    "infra_automation/runner/collector.py": "sha256:05d35ba13cd699e50227c65e26699f54b2412db0d07b4326c528beba2a6fcfb2",
+    "infra_automation/runner/claims.py": "sha256:1828639d1c35a90dc7b48c683f2fafb774bfb0f65bbdaef2989acf0e6f1b3731",
+    "infra_automation/runner/cache.py": "sha256:afab6fc343541360e36b7cb04a5dd63cd55f94e9b584ff30cb4630057d7cac65",
+    "infra_automation/runner/__init__.py": "sha256:d86185aafd32b31c003eb44a210e3e1885d156ede80963a2912a4d2ddb6cc68e",
+    "infra_automation/runner/execution_profile.py": "sha256:55f61d74527fbcf7827bb352bfc4f6a0f78b8565b17400a0c4c3a0fa474bc872",
+    "infra_automation/runner/sandbox.py": "sha256:e4b37d0118d57167cf8dd8a0c92fa6e6974f5b4d599a9696ef216cb347687b0d",
+    "infra_automation/runner/collection_client.py": "sha256:24b71d20012b2a91265116b5b7dced794c338f683dc9375a44b1a599b8591fa6",
+    "infra_automation/runner/source.py": "sha256:e4bf635846eef26f3c287a354808c79f514a401a741f9a827fedafc375e2bc13",
+    "infra_automation/receiver_custody.py": "sha256:79e192178dfd94c03818dbf44d936a3e9913daf26c9476d764be843456cc1b49",
+    "infra_automation/receiver_runtime.py": "sha256:939f1ce8d3af71868f6450c9006667e6486f85f4e9e010f374574d65c4951aa1",
+    "infra_automation/collection_contracts.py": "sha256:c2eb400e32f46fb2e22fb23dd7dd52fad41fe4104cbbaab07a32481cf68dff07",
+    "infra_automation/artifact_intake.py": "sha256:8a07a6a09a70487df148b6270f889a47b731a6ec60a5ba03de232844e2481dce",
+    "infra_automation/targets.py": "sha256:83c17cd7669023d84027c00eed673d90f2cbe9fa67bc0c30c00145481fd7533a",
+    "infra_automation/receiver_protocol.py": "sha256:6cdc187d1de29be1b6a725d08bf4b8d3f29e537a97b5591922e228604f1447f7",
+    "services/content_security.py": "sha256:722885fea5af32cce11bf31d440b04b7392371013c87aa0c9c3afd89a0db715b",
+    "services/infra_automation_collection.py": "sha256:efb0d62c0163b15d4099347715ecafd3b307bd66c9a0254b9b6590c7084e98eb",
+    "infra_automation/operator_recovery.py": "sha256:5baba5a96e1c4e6d07a534b0a56c7a87dd3e9a1a79b223bc56ae391f4ad67fbd",
+    "infra_automation/retention.py": "sha256:ea93a15f270fd1788a00fc44c74ca2c9129fe9ceaf4750c2c4c8e1d72cbd1255",
+    "models/operator_recovery.py": "sha256:9f2f04937062e62fdcdbf90032a17d736801285856a65ece87a59b06608a0693",
+    "models/receiver_recovery.py": "sha256:1f0a991b72be22baac38e576ffa4649d883015eace1c135a6ac56bcdc1a3941f",
+    "infra_automation/receiver_recovery.py": "sha256:7573fc1bcfd75bbeb5927e26f6e554d9d1969617f5821e50b5d8dc981a4c571e",
+    "services/infra_automation_receiver_recovery.py": "sha256:e1e9350938961a3170ef6b4719f44694ea18fb94cce488bb80f8811298a5e4ec",
+    "services/infra_automation_handoffs.py": "sha256:2a29c719856e2b68c9a2cb309eb65dfec065e7c28910f72bf937b08d6e25bee6",
+    "models/database.py": "sha256:c6f7720843eab0354a7eb1e525b43de8995f90c9c9f6080982fccdc33d254000",
+    "models/tables.py": "sha256:e9fbc075b8ab25713e8deeaadf57e2dd31aebc73afacd1e02bffb58a26d26e18",
+    "migrations/versions/040_add_manifest_retention.py": "sha256:678fb54884a7e72fb3a0f389962c057fef82e7c9e78ee65bb9b5763c5c613ea4",
+    "migrations/versions/041_add_operator_recovery.py": "sha256:4a1747ea11ab6d996c5a3471cc51a3b836f4386e8cb4b1a5731d8e21f7cce139",
+    "migrations/versions/042_add_receiver_recovery.py": "sha256:aa45e46856a5f3b8e5e50007537f3ec357b47e57b41b4d83c63feaacf438f840",
+    "services/identity_service.py": "sha256:05b55d354df9b532c00439258a6b8a8e6c441195925074545ed8950fd32a2170",
+    "infra_automation/claims.py": "sha256:dcb065f1ebc19974d0179e513b156c3b8d6908b91873225a167b4b7337767791",
+    "infra_automation/unit_map.py": "sha256:cecbbee6c462982d3333a41727e501b89a81790cddc6d7a375af13720036865d",
+    "infra_automation/unit_contracts.py": "sha256:cdea6771517cc83f9065b8c761b715dfeba290174e3b21a165a2b02847eeb422",
+    "services/infra_automation_units.py": "sha256:97b05fe833d15cdf24ea8c223ac86b0a3a938adf51c159a5de4e2a6d1f3a55c4",
+    "models/repositories/infra_automation_units.py": "sha256:6bcf0f9f0a9426fa7f91cad0426a959c5e5d5a0853f3923d89a9e043d8fb2cac",
+    "infra_automation/trigger_contracts.py": "sha256:e5391cf5e247aa9744e01fc353c1061b6ecf26c59e52459579bf1fabd42596cc",
+    "infra_automation/trigger_signing.py": "sha256:2ac2e3fb8aa7e8d16152d538b1193875b5c82503604226ea46543c6fd66ad5e7",
+    "infra_automation/lifecycle.py": "sha256:f1308ee6de1763c79a45b947a9183afc19bbfea0d70da95c19e311aa123593c9",
+    "infra_automation/state.py": "sha256:11dbfb3ce77c4b2e1c945e45b8c368b3992d2c00b6a98add4602660b57116851",
+    "services/infra_automation_trigger_authority.py": "sha256:bc69d682fd5fd28613608d3c2d56fd5959af940a28e868eac0b9788a2a633aa6",
+    "services/infra_automation_triggers.py": "sha256:8e8519fa5d754211bdd053109b79b31babf3ce551c220c8bb4b88966e7607f56",
+    "services/infra_automation_policy.py": "sha256:63a793bd9fa3caa2f7d8c560613dc4f395c3242844c7094c08840ecfb48e2f66",
+    "services/infra_automation_snapshots.py": "sha256:ddfaf05d4a279b2b7b704752c663e1df597e2fda7a0bf01cecfa227179f5369c",
+    "services/infra_automation_engine_service.py": "sha256:14aa95810156ce4c23c877a7bcccbe1ab58cf2c1e0b766a6c15ce711373c2b70",
+    "services/infra_automation_engine_support.py": "sha256:1e94049abae13687978af81c5f036ac3f126d961177102f7a3cb46eb5d8d52be",
+    "services/project_service.py": "sha256:ef8789d01839642d749a7fcf04fb0c429e3367ecf036c1ff308a42b9ff57e372",
+    "models/repositories/infra_automation_triggers.py": "sha256:8f2806bf17d72e0ad95b9d93ad1d34f3f2a08b1efeaaa0400d0af2ba443d2f69",
+    "config.py": "sha256:64a8d5e918d87ec0ea5d446dd28953eb4a539254a5a42e0ee49c8b46c490dae5",
+    "infra_automation/preflight_evidence.py": "sha256:17f0d198068ac01fdc087583c513b62866bec29752574cf466b7a32ad9992e74",
+    "models/repositories/infra_automation_reports.py": "sha256:fedc9c4ecaae3fbdcff47a33f5f0ee51e6c8bf1e1484bdc894edb02e0d8784c1",
+    "models/repositories/infra_automation_runs.py": "sha256:7d1557ba32fa64a3f6c3f09361f14519161f596d5dc552470d83abbd77a6dd5a",
+    "services/infra_automation_preflight.py": "sha256:b30bbc1ddedf3dd942a7db52ebc282d195723f8f630e8ab821e69502994bf947",
+    "services/infra_automation_decisions.py": "sha256:fc3c443ef0d38e00644cbe3af4c345c60c9b78c40fbd92c941508bcfe71dca56",
+    "services/infra_automation_runners.py": "sha256:1e25d6932a4d44df64ee55b249929c01c7de04f42bed62034ef4a5dd90936333",
+    "services/infra_automation_runner_tasks.py": "sha256:fb0bf7b6620bf4a89626b8c799ff393cc3518190bae0d19012d686d77d6e9921",
+    "services/infra_automation_collection_views.py": "sha256:09f5d7045b5f7529fd5ce2ff5146dd35dcb1ef105199adbb6cfa868224ce1631",
+    "models/repositories/infra_automation_runners.py": "sha256:2417dfde0303793c191960aaab77b54b05828f9ab6b7b44ba2b6d31c281a271a",
+    "tests/test_infra_automation/test_collection_intake.py": "sha256:77eb1d6f2340d90fed425ab61ea90a9f579c28d52e391cb21e74e0b8bc905d41",
+    "scripts/qualify_collection.py": "sha256:8db1e5afeb3d72d1f8f533e86876c1d3028f4a1a04c46f25d72bc9309de8b390",
+    "tests/fixtures/infra_automation/qualification/16_14/Dockerfile": "sha256:62202668bda55c3d9368b6010e0bc75a5b3226a244319a92e9457426ca1f4186"
+  },
+  "cases": [
+    {
+      "case": "no-change",
+      "state": "succeeded",
+      "finalizable": true,
+      "cleanup_complete": true,
+      "exit_code": 0,
+      "source_commit": "429c45a45e05722ea0e7edba9f9f7c4daf1f56d5",
+      "profile_digest": "sha256:ce82a183ceba4f5bfe7b2af4050a033abaa2ee80ccbb8e4af9be69abc4fa7f70",
+      "screened_output_digest": "sha256:8bc97d99814c058775c19ecb3117a69062f590fad66940cb2da161d69edce17e",
+      "screened_output_bytes": 197,
+      "custody_published": true,
+      "raw_local_digest": "sha256:801ef5478f85bdded8aac638e8ae1756b5c9432295f3351e81fcb3fb2485fb24",
+      "raw_local_bytes": 1388,
+      "custody_handle": "no-change"
+    },
+    {
+      "case": "change",
+      "state": "succeeded",
+      "finalizable": true,
+      "cleanup_complete": true,
+      "exit_code": 0,
+      "source_commit": "df8b4a96c279755e1b1e161f555f67368817cbdd",
+      "profile_digest": "sha256:ce82a183ceba4f5bfe7b2af4050a033abaa2ee80ccbb8e4af9be69abc4fa7f70",
+      "screened_output_digest": "sha256:36cb3fe0f20d9dbece0713bfd7f9af8ccd2220d5b4912bedbf4e075f640d6a56",
+      "screened_output_bytes": 1135,
+      "custody_published": true,
+      "local_service_acceptance": {
+        "authenticated_intake": true,
+        "shared_analysis": true,
+        "same_task_provenance": true,
+        "report_id": 1,
+        "report_schema_version": "v2",
+        "report_digest": "sha256:fa14e25ee7b981c3d13c9e3fd0cebfbb8e62e535e6771440510772c7a891a425",
+        "advisory": true,
+        "provenance": {
+          "argv_digest": "sha256:81faab346f6b093c4dc53af97cd652232dce24787cf12511c158647fbf469976",
+          "collected_at": "2026-11-11T09:27:50Z",
+          "command_digest": "sha256:25895e430ed40c726cfea5ab6d28f016c491bf62b84d6b37457d35334ec26e71",
+          "commit_sha": "df8b4a96c279755e1b1e161f555f67368817cbdd",
+          "custody": {
+            "expires_at": "2026-11-11T09:37:50Z",
+            "handle": "50c8701ae0542bae7abb0efe2a584eece999ea7b1dcc4c60",
+            "raw_local_digest": "sha256:3dacb9ddbbdf97032644e4a664c922714d476e5ea6fb01d57c157b2648e80fa4",
+            "version": 1
+          },
+          "exit_code": 2,
+          "kind": "collected",
+          "limitation": "Collected provenance does not establish completeness or authorize an action.",
+          "profile_digest": "sha256:ce82a183ceba4f5bfe7b2af4050a033abaa2ee80ccbb8e4af9be69abc4fa7f70",
+          "raw_local_digest": "sha256:3dacb9ddbbdf97032644e4a664c922714d476e5ea6fb01d57c157b2648e80fa4",
+          "redaction_version": 1,
+          "repository_id": "qualification-source",
+          "sanitized_digest": "sha256:20054c0ec3e67122e72deff75fde183d37a2b2b5cdba491a73b61e74a3c5e63e",
+          "scope": {
+            "attempt": 1,
+            "audience": "runner-task-v1",
+            "authorization_epoch": 1,
+            "coordinator_generation": 1,
+            "fence": 1,
+            "lease_deadline": "2026-11-11T09:28:23Z",
+            "project_id": "2",
+            "restore_epoch": 1,
+            "run_id": "7d030da4b0aacfccabd479eeb2cd90e1ea32d72dd796e124",
+            "runner_id": "runner-7e454d332e871bcf5dc33d6fd54818c932f733545393a809",
+            "step_id": "collect",
+            "version": 1,
+            "workspace_id": "1"
+          },
+          "source_deadline": "2026-11-11T09:37:50Z",
+          "tool": "opentofu",
+          "tool_version": "1.13.1",
+          "version": 1
+        }
+      },
+      "receiver_receipt": {
+        "canonical_registered_payload": true,
+        "same_report_identity": true,
+        "real_saved_plan_receipt": true,
+        "exact_digest": true,
+        "restart_no_duplicate": true,
+        "no_deployment": true
+      },
+      "raw_local_digest": "sha256:3dacb9ddbbdf97032644e4a664c922714d476e5ea6fb01d57c157b2648e80fa4",
+      "raw_local_bytes": 1804,
+      "custody_handle": "50c8701ae0542bae7abb0efe2a584eece999ea7b1dcc4c60"
+    },
+    {
+      "case": "output-limit",
+      "state": "output_limit",
+      "finalizable": false,
+      "cleanup_complete": true,
+      "exit_code": 126,
+      "source_commit": "df8b4a96c279755e1b1e161f555f67368817cbdd",
+      "profile_digest": "sha256:ba6dc9ae081f5dea87e64a924f8dcafcdd766aea579faea2bce08f3755fb40ed",
+      "screened_output_digest": null,
+      "screened_output_bytes": 0,
+      "custody_published": false
+    },
+    {
+      "case": "cancel-at-finalization",
+      "state": "cancelled",
+      "finalizable": false,
+      "cleanup_complete": true,
+      "exit_code": 0,
+      "source_commit": "df8b4a96c279755e1b1e161f555f67368817cbdd",
+      "profile_digest": "sha256:ce82a183ceba4f5bfe7b2af4050a033abaa2ee80ccbb8e4af9be69abc4fa7f70",
+      "screened_output_digest": null,
+      "screened_output_bytes": 0,
+      "custody_published": false
+    },
+    {
+      "case": "error",
+      "state": "failed",
+      "finalizable": false,
+      "cleanup_complete": true,
+      "exit_code": 1,
+      "source_commit": "0437df27cc05bfb5d581ab0c13407d80e6050338",
+      "profile_digest": "sha256:ce82a183ceba4f5bfe7b2af4050a033abaa2ee80ccbb8e4af9be69abc4fa7f70",
+      "screened_output_digest": null,
+      "screened_output_bytes": 0,
+      "custody_published": false
+    },
+    {
+      "case": "credential-reflection",
+      "state": "output_rejected",
+      "finalizable": false,
+      "cleanup_complete": true,
+      "exit_code": 0,
+      "source_commit": "fe215b41f9d5fb5fdad4956f819f0856adbf2f3d",
+      "profile_digest": "sha256:ce82a183ceba4f5bfe7b2af4050a033abaa2ee80ccbb8e4af9be69abc4fa7f70",
+      "screened_output_digest": null,
+      "screened_output_bytes": 0,
+      "custody_published": false
+    },
+    {
+      "case": "sensitive",
+      "state": "output_rejected",
+      "finalizable": false,
+      "cleanup_complete": true,
+      "exit_code": 0,
+      "source_commit": "95e773433f8e2429534859c0762989a25c886903",
+      "profile_digest": "sha256:ce82a183ceba4f5bfe7b2af4050a033abaa2ee80ccbb8e4af9be69abc4fa7f70",
+      "screened_output_digest": null,
+      "screened_output_bytes": 0,
+      "custody_published": false
+    },
+    {
+      "case": "credential-key-reflection",
+      "state": "output_rejected",
+      "finalizable": false,
+      "cleanup_complete": true,
+      "exit_code": 0,
+      "source_commit": "ae996af2259a0baf9074c812e1c31d91f78b80c7",
+      "profile_digest": "sha256:ce82a183ceba4f5bfe7b2af4050a033abaa2ee80ccbb8e4af9be69abc4fa7f70",
+      "screened_output_digest": null,
+      "screened_output_bytes": 0,
+      "custody_published": false
+    }
+  ],
+  "checks": {
+    "image_source_pins": true,
+    "no-change:cleanup": true,
+    "no-change:screened": true,
+    "no-change:success": true,
+    "no-change:plan_exit": true,
+    "no-change:actual_file_digest": true,
+    "no-change:changed_source_denied": true,
+    "no-change:expired_denied": true,
+    "no-change:overwritten_denied": true,
+    "no-change:symlink_denied": true,
+    "change:cleanup": true,
+    "change:screened": true,
+    "change:success": true,
+    "change:plan_exit": true,
+    "local_service:authenticated_intake": true,
+    "local_service:shared_analysis": true,
+    "local_service:advisory": true,
+    "local_service:same_task_provenance": true,
+    "receiver:canonical_registered_payload": true,
+    "receiver:same_report_identity": true,
+    "receiver:real_saved_plan_receipt": true,
+    "receiver:exact_digest": true,
+    "receiver:restart_no_duplicate": true,
+    "receiver:no_deployment": true,
+    "change:actual_file_digest": true,
+    "change:changed_source_denied": true,
+    "change:expired_denied": true,
+    "change:overwritten_denied": true,
+    "change:symlink_denied": true,
+    "output-limit:cleanup": true,
+    "output-limit:screened": true,
+    "output-limit:no_partial_evidence": true,
+    "cancel-at-finalization:cleanup": true,
+    "cancel-at-finalization:screened": true,
+    "cancel-at-finalization:no_partial_evidence": true,
+    "error:cleanup": true,
+    "error:screened": true,
+    "error:no_partial_evidence": true,
+    "credential-reflection:cleanup": true,
+    "credential-reflection:screened": true,
+    "credential-reflection:no_partial_evidence": true,
+    "sensitive:cleanup": true,
+    "sensitive:screened": true,
+    "sensitive:no_partial_evidence": true,
+    "credential-key-reflection:cleanup": true,
+    "credential-key-reflection:screened": true,
+    "credential-key-reflection:no_partial_evidence": true,
+    "journal_secret_free": true,
+    "source_hashes_unchanged": true
+  },
+  "failed_checks": [],
+  "limitations": [
+    "Offline Linux ARM64 Docker29.1.3/LinuxKit6.12.54 profile only.",
+    "Terraform is not qualified; no Terraform binary was supplied.",
+    "No remote backend/state or real cloud IAM/provider credential qualification.",
+    "Receiver binding verification is actual protected-file admission; this harness does not dispatch GitHub actions or manufacture approval authority."
+  ]
+}

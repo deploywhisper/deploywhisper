@@ -692,16 +692,16 @@
         "16.18",
         "16.19"
       ],
-      "proof": "Docs CI and operator self-service installation/recovery pilot"
+      "proof": "Docs CI and either an independent operator self-service installation/recovery pilot or a recorded accountable-maintainer waiver that states no human pilot occurred, accepts residual self-service usability risk and cannot replace technical/release gates"
     },
     {
       "id": "IAU15-NFR-012",
-      "text": "Stable v1.5.0 requires signed app/runner artifacts, SBOM/checksums/provenance, named tool/receiver support matrix, full application CI, independent review and supported-profile pilot with no unresolved introduced critical/high defect.",
+      "text": "Stable v1.5.0 requires signed app/runner artifacts, SBOM/checksums/provenance, named tool/receiver support matrix, full application CI, independent review and supported-profile technical qualification with no unresolved introduced critical/high defect. Independent human self-service validation is required unless the accountable maintainer records a release-specific waiver accepting that residual usability risk; the waiver is not pilot evidence and cannot expand support.",
       "stories": [
         "16.19",
         "12.5"
       ],
-      "proof": "Signed release manifest, CI/security/review/pilot evidence"
+      "proof": "Signed release manifest, CI/security/review/technical-qualification evidence plus operator-pilot evidence or the explicit bounded waiver"
     }
   ],
   "original_dispositions": [

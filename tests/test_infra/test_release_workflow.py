@@ -19,11 +19,57 @@ from scripts.release_policy import (
     main,
     verify_remote_tag,
 )
+from scripts.github_codeowners_approval import select_approval
 
 ROOT = Path(__file__).resolve().parents[2]
 
 
 class ReleasePolicyTests(unittest.TestCase):
+    def test_codeowners_approval_binds_exact_merged_source_and_independent_owner(self):
+        pulls = [
+            {
+                "number": 7,
+                "merged_at": "2026-11-12T00:00:00Z",
+                "merge_commit_sha": "a" * 40,
+                "base": {"ref": "develop"},
+                "user": {"login": "author"},
+            }
+        ]
+
+        def reviews(number):
+            return [{"user": {"login": "reviewer"}, "state": "APPROVED"}]
+
+        self.assertEqual(
+            select_approval(
+                pulls,
+                reviews,
+                source_commit="a" * 40,
+                base_branch="develop",
+                allowed={"reviewer"},
+            ),
+            (7, "reviewer"),
+        )
+        for changed in (
+            [{**pulls[0], "merge_commit_sha": "b" * 40}],
+            [{**pulls[0], "merged_at": None}],
+        ):
+            with self.assertRaises(ValueError):
+                select_approval(
+                    changed,
+                    reviews,
+                    source_commit="a" * 40,
+                    base_branch="develop",
+                    allowed={"reviewer"},
+                )
+        with self.assertRaises(ValueError):
+            select_approval(
+                pulls,
+                lambda number: [{"user": {"login": "author"}, "state": "APPROVED"}],
+                source_commit="a" * 40,
+                base_branch="develop",
+                allowed={"author"},
+            )
+
     @patch("scripts.release_policy.subprocess.check_output")
     def test_remote_tag_accepts_lightweight_and_peeled_annotated_commits(self, output):
         source = "a" * 40
@@ -238,7 +284,10 @@ class ReleaseWorkflowTests(unittest.TestCase):
 
     def test_promotion_waits_for_source_and_image_and_guards_reruns(self):
         release = self.workflow["jobs"]["release"]
-        self.assertEqual(set(release["needs"]), {"validate", "docker", "artifacts"})
+        self.assertEqual(
+            set(release["needs"]),
+            {"validate", "docker", "artifacts", "qualification"},
+        )
         self.assertFalse(self.workflow["concurrency"]["cancel-in-progress"])
         self.assertEqual(self.workflow["concurrency"]["queue"], "max")
         steps = release["steps"]
@@ -263,6 +312,44 @@ class ReleaseWorkflowTests(unittest.TestCase):
             publish["run"].index("gh release create"),
         )
         self.assertNotIn("notify", self.workflow["jobs"])
+
+    def test_post_build_qualification_is_attested_and_blocks_publication(self):
+        qualification = self.workflow["jobs"]["qualification"]
+        self.assertEqual(
+            set(qualification["needs"]), {"validate", "docker", "artifacts"}
+        )
+        steps = qualification["steps"]
+        generate = next(
+            step
+            for step in steps
+            if step["name"] == "Generate exact post-build qualification manifest"
+        )
+        attest = next(
+            step for step in steps if step.get("id") == "attest-qualification"
+        )
+        self.assertLess(steps.index(generate), steps.index(attest))
+        for required in (
+            "scripts.github_codeowners_approval",
+            "scripts.qualification_manifest finalize",
+            '--image-digest "$DIGEST"',
+            "--require-final",
+        ):
+            self.assertIn(required, generate["run"])
+        release = self.workflow["jobs"]["release"]
+        verify = next(
+            step
+            for step in release["steps"]
+            if step["name"] == "Verify source asset bundle before publication"
+        )
+        publish = next(
+            step
+            for step in release["steps"]
+            if step["name"] == "Create new release with verified immutable assets"
+        )
+        self.assertIn("final-qualification-manifest.json", verify["run"])
+        self.assertIn("--require-final", verify["run"])
+        self.assertIn("final-qualification-manifest.json", publish["run"])
+        self.assertLess(release["steps"].index(verify), release["steps"].index(publish))
 
     def test_required_ci_summary_rejects_failed_cancelled_skipped_and_missing_gates(
         self,
@@ -315,6 +402,6 @@ class ReleaseWorkflowTests(unittest.TestCase):
 
     def test_docker_runtime_metadata_has_safe_existing_default(self):
         dockerfile = (ROOT / "Dockerfile").read_text()
-        self.assertIn("ARG BUILD_VERSION=1.4.0", dockerfile)
+        self.assertIn("ARG BUILD_VERSION=1.5.0", dockerfile)
         self.assertIn('APP_VERSION="${BUILD_VERSION}"', dockerfile)
         self.assertIn('org.opencontainers.image.revision="${BUILD_SHA}"', dockerfile)

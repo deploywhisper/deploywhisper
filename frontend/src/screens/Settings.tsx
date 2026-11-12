@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Eye, EyeOff, FileJson, Upload, Zap } from "lucide-react";
 import { LocalAccountSection } from "./LocalAccountSection";
+import { AutomationSettingsSection } from "./AutomationSettingsSection";
 
 import {
   previewTopology,
@@ -374,6 +375,7 @@ export function SettingsScreen() {
               <EvidenceTag>Evidence Law enforced</EvidenceTag>
             </header>
             <LocalAccountSection />
+            {selectedProject && <AutomationSettingsSection projectId={selectedProject.id} projectKey={selectedProject.project_key} />}
             {settingsQuery.isLoading && (
               <div className="dw-phase6-grid">
                 <SkeletonCard />

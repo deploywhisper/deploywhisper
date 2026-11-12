@@ -1,0 +1,56 @@
+{
+  "status": "superseded-by-2026-11-12-code-review-findings",
+  "source_commit": "1adf00fd9de4223186da4976dd8caad9882e26cd",
+  "prerequisite_reviews": {
+    "16.13/16.14": {
+      "layers": [
+        "blind",
+        "edge",
+        "acceptance"
+      ],
+      "found": [
+        {
+          "severity": "P2",
+          "path": "infra_automation/runner/execution.py",
+          "issue": "Normal creation did not durably acknowledge immutable container ID before removal; a removal-before-journal-finish crash remained unresolved.",
+          "resolution": "Persist acknowledgement immediately after successful creation.",
+          "verification": "Red regression followed by39 tests/67subtests; independent closure; real172/49 checks refreshed."
+        }
+      ],
+      "unresolved": 0
+    },
+    "SBOM/operations/inventory": {
+      "layers": [
+        "blind",
+        "edge",
+        "acceptance"
+      ],
+      "unresolved": 0,
+      "repairs": [
+        "Legacyv1.4.0 verification uses three subjects; new releases include SBOM as fourth.",
+        "Offline core proof now includes a nonempty change with deterministic finding/evidence linkage."
+      ],
+      "verification": "29 release tests/34subtests; independent23 tests/21subtests; actual215-package SPDX schema/regeneration proof."
+    }
+  },
+  "integration_findings": [
+    {
+      "path": "services/infra_automation_runner_tasks.py",
+      "issue": "Expired ORM access after committed production session caused DetachedInstanceError before mailbox publication.",
+      "resolution": "Capture immutable identity/generation within transaction; publish only after successful commit.",
+      "verification": "29tests102subtests; independent24tests92subtests; actualTLScollection."
+    },
+    {
+      "path": "frontend/src/screens/ReportAutomationContext.tsx",
+      "issue": "Collected reports displayed uploaded-only origin and approval copy.",
+      "resolution": "Use existing validated provenance kind; keep report advisory and all approval controls unchanged.",
+      "verification": "513 frontendtests+2compat; typecheck/build; actualcollectedreport browserassertion."
+    }
+  ],
+  "acceptance_limits": [
+    "Independent human pilot waived by accountable maintainer and explicitly unexecuted; durable CODEOWNERS approval evidence remains open",
+    "Accepted/unknown external receiver effect and reconciliation qualification remains open",
+    "Hosted artifact attestations, signed OCI verification and public publication not executed"
+  ],
+  "full_ci": "3592 tests across10directories;exit0; exact source commit; seevalidation-summary.json"
+}

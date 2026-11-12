@@ -10,7 +10,7 @@ on:
         type: string
     outputs:
       artifact-name:
-        description: Verified archive, checksums, source manifest and native signed bundle.
+        description: Verified archive, source SBOM, checksums, source manifest and native signed bundle.
         value: ${{ jobs.artifacts.outputs.artifact-name }}
       source-sha:
         description: Exact source commit packaged and attested.
@@ -77,6 +77,10 @@ jobs:
             --source-sha "$SOURCE_SHA" --source-ref "$SOURCE_REF" \
             --release "$RELEASE_LABEL" --repository "$REPOSITORY" \
             --output-dir dist/release
+          python3 -m scripts.release_artifacts verify \
+            --source-sha "$SOURCE_SHA" --source-ref "$SOURCE_REF" \
+            --release "$RELEASE_LABEL" --repository "$REPOSITORY" \
+            --output-dir dist/release
           echo "artifact-name=release-artifacts-$SOURCE_SHA-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" >> "$GITHUB_OUTPUT"
 
       - name: Attest exact source assets
@@ -87,6 +91,8 @@ jobs:
             dist/release/*.tar.gz
             dist/release/SHA256SUMS
             dist/release/source-manifest.json
+            dist/release/runner-manifest.json
+            dist/release/sbom.spdx.json
 
       - name: Preserve native signed bundle and verify identities
         env:
@@ -97,7 +103,7 @@ jobs:
           cp "$BUNDLE_PATH" dist/release/artifact.intoto.jsonl
           cd dist/release
           sha256sum --check SHA256SUMS
-          for subject in ./*.tar.gz SHA256SUMS source-manifest.json; do
+          for subject in ./*.tar.gz SHA256SUMS source-manifest.json runner-manifest.json sbom.spdx.json; do
             gh attestation verify "$subject" \
               --bundle artifact.intoto.jsonl --repo "$REPOSITORY" \
               --signer-workflow "$REPOSITORY/.github/workflows/release-artifacts.yml" \

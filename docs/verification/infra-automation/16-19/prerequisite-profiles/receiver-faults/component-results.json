@@ -1,0 +1,34 @@
+{
+  "status": "component-tests-passed",
+  "full_receiver_browser_qualified": false,
+  "source_commit": "675f127a0c4ad7c3630d3c59cb7412818afd1db8",
+  "command": "/Users/psaho01/deploywhisper/.venv/bin/python -m pytest tests/test_infra_automation/test_receiver_runtime.py tests/test_infra_automation/test_receiver_reconciliation.py -q",
+  "tests_passed": 32,
+  "subtests_passed": 21,
+  "elapsed_seconds": 16.13,
+  "exit_code": 0,
+  "local_log": "/tmp/s1619-receiver-components.log",
+  "log_sha256": "6bc1fbd9a12feca06e4798b0c7e797064e3f77c59d1b614df99e00ea713b6db9",
+  "source_hashes": {
+    "infra_automation/receiver_runtime.py": "939f1ce8d3af71868f6450c9006667e6486f85f4e9e010f374574d65c4951aa1",
+    "infra_automation/receiver_custody.py": "79e192178dfd94c03818dbf44d936a3e9913daf26c9476d764be843456cc1b49",
+    "services/infra_automation_handoffs.py": "2a29c719856e2b68c9a2cb309eb65dfec065e7c28910f72bf937b08d6e25bee6",
+    "tests/test_infra_automation/test_receiver_runtime.py": "e4898d4973e1a1c8621bc4b1c43b9aea70a4afd2448962be6dde1d9addf9801e",
+    "tests/test_infra_automation/test_receiver_reconciliation.py": "b4ae29dc25b04340c969ea784ae95c99d22317a29fee99fc3dee6f91e760ce2e"
+  },
+  "proved": [
+    "Real durable ReferenceReceiver journal and protected synthetic custody across process exit checkpoints",
+    "Concurrent processes preserve at-most-once harmless counted action",
+    "Lost callback acknowledgment and replay preserve one action and original envelope",
+    "Actual handoff service retains uncertainty and refuses renewed action authority after cancellation/unknown history",
+    "Authenticated ASGI receiver route integration with synthetic decision/material source"
+  ],
+  "not_proved": [
+    "Continuous production collector-to-decision-to-handoff composition",
+    "Real accepted/unknown browser journey",
+    "Production material generation witness",
+    "GitHub transport or external infrastructure action",
+    "Independent human approval or pilot"
+  ],
+  "cleanup": "Test-owned temporary directories and child processes cleaned by existing fixtures; no Docker project, shared app, public workflow or external credential created"
+}

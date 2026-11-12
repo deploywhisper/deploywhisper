@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "status": "implemented-and-focused-validation-passed",
+  "profile": "colocated-v1",
+  "controls": [
+    "Ed25519-signed monotonic material ledger",
+    "public-verification-key-only application composition",
+    "separate authority process with live ProtectedCustody verification",
+    "fresh nonce and exact ReceiverBinding Unix-socket challenge",
+    "recovery-generation-bound witness identity",
+    "fixed policy worker with no approval or dispatch authority",
+    "API-driven two-human decision and durable handoff preparation",
+    "ledger revocation/generation fail-closed recheck"
+  ],
+  "focused_validation": {
+    "command": "pytest material authority/custody/policy/integration plus decision/handoff/recovery/target suites",
+    "result": "168 passed, 156 subtests passed before final split-custody hardening; final focused release/material/docs selection 125 passed, 407 subtests passed",
+    "raw_custody_exposed_to_app": false,
+    "automatic_dispatch_performed": false
+  },
+  "limits": [
+    "Public GitHub dispatch requires separately configured target credentials and explicit authority.",
+    "Remote material authority is unsupported; only the co-located operator-controlled profile is qualified.",
+    "Final source-frozen full CI, capacity and signed release evidence remain separate Story16.19 gates."
+  ]
+}

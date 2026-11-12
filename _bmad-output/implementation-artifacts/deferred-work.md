@@ -112,3 +112,12 @@
 ## Deferred from: code review of 16-16-declared-multi-unit-preflight-planning.md (2026-11-05)
 
 - D1 — Existing medium `brace-expansion` CPU denial-of-service advisory GHSA-q2hr-2g5m-vwhr in root `package-lock.json`; confirmed open via GitHub Dependabot alert8 during publication. The lockfile is unchanged by Story16.16. Track as a separate dependency-maintenance change; no dependency update is included in this review. [Alert](https://github.com/deploywhisper/deploywhisper/security/dependabot/8).
+
+## Deferred from: accountable-maintainer waiver for Story 16.18/16.19 (2026-11-11)
+
+- **Independent human self-service validation:** The v1.5.0 accountable maintainer
+  waived only independent execution after reviewing the automated technical
+  qualification. No human pilot occurred. Arrange a separate first-time operator
+  installation/recovery exercise after release, record runbook ambiguity and
+  implementer assistance, and feed findings into documentation. This follow-up
+  cannot retroactively relabel the waiver as pilot evidence or broaden v1.5.0 support.

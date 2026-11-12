@@ -1,0 +1,91 @@
+{
+  "version": 1,
+  "purpose": "Source-bound grouping plan used to populate all 72 final qualification rows after the immutable commit/image exists.",
+  "groups": [
+    {
+      "requirements": ["IAU15-FR-001"],
+      "evidence": ["docs/rfcs/0001-infra-automation-preflight-and-handoff.md", "docs/infra-automation/support.md"],
+      "scope": "Tier0/Tier1 scope and unsupported-mode boundary"
+    },
+    {
+      "requirements": ["IAU15-FR-002", "IAU15-FR-003", "IAU15-FR-004", "IAU15-FR-005", "IAU15-FR-006", "IAU15-FR-007", "IAU15-FR-008"],
+      "evidence": ["docs/verification/infra-automation/16-19/development-validation.json", "docs/infra-automation/identity.md", "docs/infra-automation/permissions.md"],
+      "scope": "verified human identity, sessions, membership and separation of duties"
+    },
+    {
+      "requirements": ["IAU15-FR-009", "IAU15-FR-010", "IAU15-FR-011", "IAU15-FR-012", "IAU15-FR-013", "IAU15-FR-014", "IAU15-FR-015", "IAU15-FR-016", "IAU15-FR-017"],
+      "evidence": ["docs/infra-automation/workflow-contract-v2.md", "docs/verification/infra-automation/16-19/development-validation.json"],
+      "scope": "closed workflow v2 validation, immutable snapshots and epoch policy"
+    },
+    {
+      "requirements": ["IAU15-FR-018", "IAU15-FR-019", "IAU15-FR-020", "IAU15-FR-021", "IAU15-FR-022"],
+      "evidence": ["docs/verification/infra-automation/16-19/development-validation.json", "docs/verification/infra-automation/16-19/reference-performance/capacity-final/operator-capacity.json"],
+      "scope": "durable fenced engine, retries/cancellation and bounded capacity"
+    },
+    {
+      "requirements": ["IAU15-FR-023", "IAU15-FR-024", "IAU15-FR-025", "IAU15-FR-026", "IAU15-FR-027", "IAU15-FR-028", "IAU15-FR-029"],
+      "evidence": ["docs/verification/infra-automation/16-19/prerequisite-profiles/https-final/results.json", "docs/verification/infra-automation/16-19/development-validation.json"],
+      "scope": "screened intake, collected provenance, shared analysis and advisory degradation"
+    },
+    {
+      "requirements": ["IAU15-FR-030", "IAU15-FR-031", "IAU15-FR-032", "IAU15-FR-033", "IAU15-FR-034", "IAU15-FR-035"],
+      "evidence": ["docs/verification/infra-automation/16-19/prerequisite-profiles/receiver-faults/composition-implementation.json", "docs/verification/infra-automation/16-19/development-validation.json"],
+      "scope": "production-derived material, two-human decision, expiry and invalidation"
+    },
+    {
+      "requirements": ["IAU15-FR-036", "IAU15-FR-037", "IAU15-FR-038", "IAU15-FR-039", "IAU15-FR-040", "IAU15-FR-041", "IAU15-FR-042", "IAU15-FR-043", "IAU15-FR-044", "IAU15-FR-045"],
+      "evidence": ["docs/verification/infra-automation/16-19/prerequisite-profiles/receiver-faults/component-results.json", "docs/verification/infra-automation/16-19/prerequisite-profiles/receiver-faults/composition-implementation.json"],
+      "scope": "targets, exact custody, one-use grants, receiver effect fencing and unknown reconciliation"
+    },
+    {
+      "requirements": ["IAU15-FR-046", "IAU15-FR-047", "IAU15-FR-048", "IAU15-FR-049", "IAU15-FR-050", "IAU15-FR-051"],
+      "evidence": ["docs/verification/infra-automation/16-19/prerequisite-profiles/isolation-final/results.json", "docs/verification/infra-automation/16-19/prerequisite-profiles/collection-final/results.json", "docs/verification/infra-automation/16-19/reference-performance/runner-claims.json"],
+      "scope": "enrollment, isolated runner, pinned OpenTofu and bounded collection"
+    },
+    {
+      "requirements": ["IAU15-FR-052", "IAU15-FR-053", "IAU15-FR-054", "IAU15-FR-055"],
+      "evidence": ["docs/verification/infra-automation/16-19/prerequisite-profiles/results.json", "docs/verification/infra-automation/16-19/prerequisite-profiles/https/visual-verdict.json"],
+      "scope": "real composed editor/run/review/runner/report/recovery browser journeys"
+    },
+    {
+      "requirements": ["IAU15-FR-056", "IAU15-FR-057", "IAU15-FR-058", "IAU15-FR-059", "IAU15-FR-060"],
+      "evidence": ["docs/verification/infra-automation/16-19/development-validation.json", "docs/infra-automation/operations.md"],
+      "scope": "declared units, audit, administration, retention and settings"
+    },
+    {
+      "requirements": ["IAU15-NFR-001", "IAU15-NFR-002", "IAU15-NFR-003", "IAU15-NFR-004"],
+      "evidence": ["docs/verification/infra-automation/16-19/development-validation.json", "docs/verification/infra-automation/16-19/prerequisite-profiles/collection-final/results.json"],
+      "scope": "crash/race, authorization, secret corpus and Evidence Law matrices"
+    },
+    {
+      "requirements": ["IAU15-NFR-005", "IAU15-NFR-007"],
+      "evidence": ["docs/verification/infra-automation/16-19/reference-performance/capacity-final/operator-capacity.json", "docs/verification/infra-automation/16-19/reference-performance/environment.json"],
+      "scope": "ready-transition overhead and 30-minute saturation on exact resource profile"
+    },
+    {
+      "requirements": ["IAU15-NFR-006"],
+      "evidence": ["docs/verification/infra-automation/16-19/reference-performance/runner-claims.json", "docs/verification/infra-automation/16-19/prerequisite-profiles/https-final/https-run.json"],
+      "scope": "service-path sampled latency composed with separately qualified actual TLS behavior"
+    },
+    {
+      "requirements": ["IAU15-NFR-008"],
+      "evidence": ["docs/verification/infra-automation/16-19/reference-performance/workflow-validation.json"],
+      "scope": "1,000 fifty-step validation timings and correctness"
+    },
+    {
+      "requirements": ["IAU15-NFR-009"],
+      "evidence": ["docs/verification/infra-automation/16-19/prerequisite-profiles/results.json"],
+      "scope": "composed browser, keyboard, axe and screenshots"
+    },
+    {
+      "requirements": ["IAU15-NFR-010", "IAU15-NFR-011"],
+      "evidence": ["docs/verification/infra-automation/16-18/acceptance-audit.md", "docs/verification/infra-automation/16-19/human-pilot-record.md", "docs/infra-automation/operations.md"],
+      "scope": "upgrade/restore/rotation/offline/docs and bounded maintainer waiver"
+    },
+    {
+      "requirements": ["IAU15-NFR-012"],
+      "evidence": ["docs/verification/infra-automation/16-19/qualification-manifest.json", "docs/infra-automation/support.md", "docs/security/release-artifacts.md"],
+      "scope": "final immutable build, reviews, signed app/runner artifacts, SBOM/provenance and release decision"
+    }
+  ]
+}

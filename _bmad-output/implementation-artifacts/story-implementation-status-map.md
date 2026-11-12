@@ -161,12 +161,12 @@ Story 16.0's four follow-up review findings were resolved and requalified on 202
 | 16.11 | `done` | [16-11-github-receiver-and-outcome-reconciliation.md](16-11-github-receiver-and-outcome-reconciliation.md) |
 | 16.12 | `backlog` | [16-12-runner-enrollment-and-attempt-protocol.md](16-12-runner-enrollment-and-attempt-protocol.md) |
 | 16.13 | `backlog` | [16-13-isolated-runner-execution-profile.md](16-13-isolated-runner-execution-profile.md) |
-| 16.14 | `backlog` | [16-14-opentofu-terraform-collection-and-provenance.md](16-14-opentofu-terraform-collection-and-provenance.md) |
+| 16.14 | `in-progress` | [16-14-opentofu-terraform-collection-and-provenance.md](16-14-opentofu-terraform-collection-and-provenance.md) |
 | 16.15 | `backlog` | [16-15-runner-health-and-collection-ux.md](16-15-runner-health-and-collection-ux.md) |
 | 16.16 | `backlog` | [16-16-declared-multi-unit-preflight-planning.md](16-16-declared-multi-unit-preflight-planning.md) |
 | 16.17 | `backlog` | [16-17-signed-trigger-intake-and-cli.md](16-17-signed-trigger-intake-and-cli.md) |
-| 16.18 | `backlog` | [16-18-operator-recovery-retention-and-network-readiness.md](16-18-operator-recovery-retention-and-network-readiness.md) |
-| 16.19 | `backlog` | [16-19-production-qualification-and-v1-5-0-release.md](16-19-production-qualification-and-v1-5-0-release.md) |
+| 16.18 | `done` | [16-18-operator-recovery-retention-and-network-readiness.md](16-18-operator-recovery-retention-and-network-readiness.md) |
+| 16.19 | `in-progress` | [16-19-production-qualification-and-v1-5-0-release.md](16-19-production-qualification-and-v1-5-0-release.md) |
 
 ## Next delivery and remaining risks
 
@@ -180,13 +180,13 @@ Current planning authority: [feature PRD](../planning-artifacts/prd-infra-automa
 
 Story preparation: [complete report](epic-16-story-preparation-report.md). Current foundation readiness is restored after the 2026-10-12 review fixes; this qualification is not production or release readiness.
 
-Story16.0 closure on2026-10-10 qualifies only the prepared16.1/16.3 foundations; see the final readiness report and evidence manifest. Later16.2/16.4–16.19 retain backlog.
+Story16.0 closure on2026-10-10 qualified only the prepared16.1/16.3 foundations at that snapshot; see the final readiness report and evidence manifest. Current per-story rows above supersede that historical baseline.
 
 ## Epic 17 — Live Environment Grounding (independent lane)
 
 Added 2026-10-19. Epic 17 is tracked in its own appended section so that Epic 16 rows, the epic inventory table and the baseline narrative above remain untouched while both epics progress in parallel. See the [boundary and parallelization plan](../planning-artifacts/epic-16-17-boundary-and-parallelization-plan.md).
 
-Epic 17 status: `in-progress`. Stories done: 0/11. **Retargeted 2026-10-20 from v1.6.0 into v1.5.0**, shipping alongside Epic 16 under one release tag; development remains independent, the release gate is now shared, and Story 17.10 was added to own release integration. **[RFC 0002](../../docs/rfcs/0002-live-environment-grounding.md) was accepted 2026-10-19, authorizing Story 17.0 qualification only.** Stories 17.1–17.10 remain `backlog` until Story 17.0 closes its feasibility gate and records the dependency decision. Preparation is specification only; no implementation, qualification or test evidence exists for any Epic 17 story.
+Epic 17 status: `in-progress`. Stories done: 0/11. **Restored to its independent v1.6.0 train on 2026-11-11** before any implementation; it no longer gates Epic16 or v1.5.0. **[RFC 0002](../../docs/rfcs/0002-live-environment-grounding.md) was accepted 2026-10-19, authorizing Story 17.0 qualification only.** Stories 17.1–17.10 remain `backlog` until Story 17.0 closes its feasibility gate and records the dependency decision.
 
 | Story | Status | Dedicated context |
 | --- | --- | --- |
@@ -202,7 +202,7 @@ Epic 17 status: `in-progress`. Stories done: 0/11. **Retargeted 2026-10-20 from 
 | 17.9 | `backlog` | [17-9-extensibility-cli-agent-and-qualification.md](17-9-extensibility-cli-agent-and-qualification.md) |
 | 17.10 | `backlog` | [17-10-v1-5-0-release-integration-and-joint-qualification.md](17-10-v1-5-0-release-integration-and-joint-qualification.md) |
 
-Epic 17 planning authority: [RFC 0002](../../docs/rfcs/0002-live-environment-grounding.md), [feature PRD](../planning-artifacts/prd-live-environment-grounding.md), [course correction](../planning-artifacts/sprint-change-proposal-2026-10-19-epic-17-live-environment-grounding.md), [architecture §26](../planning-artifacts/architecture.md), [v1.5.0 retarget course correction](../planning-artifacts/sprint-change-proposal-2026-10-20-epic-17-into-v1-5-0.md).
+Epic 17 planning authority: [RFC 0002](../../docs/rfcs/0002-live-environment-grounding.md), [feature PRD](../planning-artifacts/prd-live-environment-grounding.md), [course correction](../planning-artifacts/sprint-change-proposal-2026-10-19-epic-17-live-environment-grounding.md), [architecture §26](../planning-artifacts/architecture.md), and the [v1.6.0 cut-back](../planning-artifacts/sprint-change-proposal-2026-11-11-epic-17-cutback.md).
 
 Story preparation: [Epic 17 preparation report](epic-17-story-preparation-report.md).
 

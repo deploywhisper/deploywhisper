@@ -154,6 +154,47 @@ async def _start_engine_coordinator():
     return coordinator
 
 
+def _configure_infra_automation_authority():
+    """Compose the explicit co-located authority profile or remain fail-closed."""
+    import config
+
+    profile = config.settings.material_authority_profile
+    if (
+        config.settings.material_signing_key_path
+        or config.settings.material_custody_root
+    ):
+        from infra_automation.lifecycle import LifecycleError
+
+        raise LifecycleError(503)
+    if profile == "disabled":
+        return None
+    if (
+        profile != "colocated-v1"
+        or not config.settings.material_ledger_path
+        or not config.settings.material_verification_key_path
+        or not config.settings.material_probe_socket_path
+        or not config.settings.recovery_control_path
+        or not config.settings.collection_profiles_path
+        or not config.settings.collection_profiles_sha256
+        or config.settings.material_signing_key_path
+        or config.settings.material_custody_root
+    ):
+        from infra_automation.lifecycle import LifecycleError
+
+        raise LifecycleError(503)
+    from models.database import SessionLocal
+    from services.infra_automation_material_authority import (
+        configure_colocated_defaults,
+    )
+
+    return configure_colocated_defaults(
+        ledger_path=config.settings.material_ledger_path,
+        verification_key_path=config.settings.material_verification_key_path,
+        probe_socket_path=config.settings.material_probe_socket_path,
+        session_factory=SessionLocal,
+    )
+
+
 @asynccontextmanager
 async def lifespan(app):
     """Initialize local storage and background maintenance for the app."""
@@ -166,6 +207,8 @@ async def lifespan(app):
         startup_state = assert_startup_allowed()
         recovering = startup_state is not None and startup_state["phase"] != "ready"
         init_db()
+        if not recovering:
+            _configure_infra_automation_authority()
         stop_event = asyncio.Event()
         drift_scheduler_task = (
             None

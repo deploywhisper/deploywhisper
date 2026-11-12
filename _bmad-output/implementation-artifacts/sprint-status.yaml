@@ -1,5 +1,5 @@
 # generated: 2026-05-01
-# last_updated: 2026-11-10
+# last_updated: 2026-11-12
 # project: deploywhisper
 # project_key: NOKEY
 # tracking_system: file-system
@@ -28,8 +28,10 @@
 #   - done: Retrospective has been completed
 #
 # RECONCILIATION BASELINE: v1.4.0 published 2026-10-07; accepted through 12.4, plus 12.6 and 13.8
-# NEXT WORKFLOW: Story16.18 implementation/automated qualification complete; independent human operator pilot remains open.
+# NEXT WORKFLOW: Story16.19 code-review fixes are active. Capacity NFR-007 passed, but run the missing 1,000-transition NFR-005 benchmark, complete the accepted/unknown final-image browser and receiver matrices, then obtain immutable review/signing evidence before publication.
+# Independent human operator pilot was NOT EXECUTED; the approved waiver accepts only residual self-service usability risk and does not replace technical/release gates.
 # Story16.15 positive HTTPS/real-runner and broader production release qualifications remain separate gates.
+# Epic17 was cut back to its independent v1.6.0 train on 2026-11-11 and no longer gates Story16.19 or v1.5.0.
 # RELEASE ENABLER: 12-5-sbom-and-release-checksums (SBOM remains unshipped)
 # EVIDENCE: story-implementation-status-map.md and planning-artifacts/sprint-change-proposal-2026-10-07-v1.4.0-status-reconciliation.md
 # WORKFLOW NOTES:
@@ -40,7 +42,7 @@
 # - Dev moves story to review, then runs code-review
 
 generated: 2026-05-01
-last_updated: 2026-11-10
+last_updated: 2026-11-12
 project: deploywhisper
 project_key: NOKEY
 tracking_system: file-system
@@ -174,7 +176,7 @@ development_status:
   12-2-provider-settings-administration: done
   12-3-connector-credential-handling-and-redaction-audit: done
   12-4-openssf-scorecard-and-codeql: done
-  12-5-sbom-and-release-checksums: ready-for-dev
+  12-5-sbom-and-release-checksums: in-progress
   12-6-signing-and-provenance: done
   12-7-backup-restore-upgrade-and-retention-docs: ready-for-dev
   12-8-air-gapped-and-restricted-network-guide: ready-for-dev
@@ -225,17 +227,17 @@ development_status:
   16-11-github-receiver-and-outcome-reconciliation: done
   16-12-runner-enrollment-and-attempt-protocol: done
   16-13-isolated-runner-execution-profile: review
-  16-14-opentofu-terraform-collection-and-provenance: review
+  16-14-opentofu-terraform-collection-and-provenance: in-progress
   16-15-runner-health-and-collection-ux: in-progress
   16-16-declared-multi-unit-preflight-planning: done
   16-17-signed-trigger-intake-and-cli: done
-  16-18-operator-recovery-retention-and-network-readiness: in-progress
-  16-19-production-qualification-and-v1-5-0-release: backlog
+  16-18-operator-recovery-retention-and-network-readiness: done
+  16-19-production-qualification-and-v1-5-0-release: in-progress
   epic-16-retrospective: optional
 
   # Epic 17 is an independent lane (see planning-artifacts/epic-16-17-boundary-and-parallelization-plan.md).
-  # Retargeted 2026-10-20: Epic 17 ships in v1.5.0 with Epic 16 under one release tag.
-  # Development stays independent; the release gate is shared. Story 17.10 owns release integration.
+  # Cut back 2026-11-11: Epic 17 targets its independent v1.6.0 release train.
+  # Development and release stay independent; Story17.10 owns standalone v1.6.0 integration.
   # RFC 0002 accepted 2026-10-19; Story 17.0 is authorized. Stories 17.1+ remain backlog
   # until Story 17.0 closes its feasibility gate and the dependency decision is recorded.
   epic-17: in-progress

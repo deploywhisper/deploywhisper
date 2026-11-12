@@ -1,0 +1,92 @@
+{
+  "finding": "Story16.18 R6",
+  "status": "verified",
+  "baseline_commit": "0716460356571aa6c5267238c910cb2adbdf3337",
+  "final_image": "sha256:2c652ba689e6c6d6e02d7be7dc054ea4cbc093c46bb87341846824acc1a5c3e8",
+  "frontend": {
+    "tests": 512,
+    "files": 30,
+    "compatibility_checks": 2,
+    "settings_component_cases": 20,
+    "typecheck": "pass",
+    "build": "pass"
+  },
+  "fixture_guard_tests": 4,
+  "settings_browser": {
+    "passed": 2,
+    "total_seconds": 24.1,
+    "journey_seconds": [
+      10.8,
+      12.0
+    ],
+    "origin": "http://localhost:8080"
+  },
+  "outcomes_browser": {
+    "passed": 1,
+    "total_seconds": 4.7,
+    "journey_seconds": [
+      3.6
+    ],
+    "origin": "http://localhost:8080"
+  },
+  "screenshots": {
+    "count": 36,
+    "viewport_widths": [
+      1440,
+      760
+    ],
+    "new_draft_captures": 12,
+    "critical_or_serious_axe_violations": 0,
+    "visual_verdict": "review-fixes-ui-visual-verdict.json",
+    "score": 97
+  },
+  "source_sha256": {
+    "frontend/src/screens/AutomationSettingsSection.tsx": "6333beea5bf1846c4ab52a11c74be8b595c752ad3410940927365a1e589d1d34",
+    "frontend/src/screens/AutomationSettingsSection.test.tsx": "6fe3cf4af40ae473abb3a9c9732d0d656c8544569c23a8b9e13d629c27050bc2",
+    "frontend/e2e/infra-automation-settings.spec.ts": "775297233fe10482fb0b550ade34edb7409eea2ac5d15cd2baa633601942e271",
+    "scripts/settings_ui_fixture.py": "3e1848fb861aa6e4ca3715b7cc09739e6c3b5f3e941ab0b01a97ce5a7d595884",
+    "tests/test_infra/test_settings_ui_fixture_guard.py": "8e142aa91288beb6c7f2ac4088cddb94c81ea80fd1f9758cf83e49b3b2c11edd",
+    "infra_automation/operator_recovery.py": "5baba5a96e1c4e6d07a534b0a56c7a87dd3e9a1a79b223bc56ae391f4ad67fbd"
+  },
+  "local_log_sha256": {
+    "/tmp/story16-18-r6-final-compose-build.log": "d6474bc6fcf2ed55206d164c2c30a7588a350eee5bfb42896031c7b25e977cbf",
+    "/tmp/story16-18-r6-final-ui-build.log": "08f7f44268aebcefc798eaf3c15f77f2ea0dcdd97f8ac06b90aac1e7708be952",
+    "/tmp/story16-18-r6-settings-playwright.log": "05eef19f4c8c8ad02c46a6e78fac5ddf15026c3be16ee00141f511b653d804d3",
+    "/tmp/story16-18-r6-outcomes-playwright.log": "7f148509b20b9a6ef31f08113d2f8aceb8991dd2060addd2a7b2878c76e44cec"
+  },
+  "new_draft_screenshot_sha256": {
+    "docs/verification/infra-automation/16-18/screenshots/settings-draft-changed-1440.png": "2936b9f928024154576083a8905186027c3f6ac9e873322c8bb424b8ba6cad55",
+    "docs/verification/infra-automation/16-18/screenshots/settings-draft-changed-760.png": "608ebac6426c35c20bbbaa5379b30a134404a9e8142f08c9ffafd1106a2f5b73",
+    "docs/verification/infra-automation/16-18/screenshots/settings-draft-changed-outcome-1440.png": "03adc783e39665d65ee30c8d728d80b8812a5fb034e263070f1a79d6db2ce49d",
+    "docs/verification/infra-automation/16-18/screenshots/settings-draft-changed-outcome-760.png": "92c37d15d3e28b3a075719cb0b2797fcf00ea0ae04de29f7e5e3cb91a4e480f8",
+    "docs/verification/infra-automation/16-18/screenshots/settings-draft-membership-unavailable-1440.png": "944bf8cabb0d0838a60bd3dd51a5ce33246bf4c7ce13c098c99d8af13741cdc2",
+    "docs/verification/infra-automation/16-18/screenshots/settings-draft-membership-unavailable-760.png": "165764bf285ccf28ebedf44a69f53111f8eb1d33c3c6f74b9330729222e4f776",
+    "docs/verification/infra-automation/16-18/screenshots/settings-draft-membership-unavailable-outcome-1440.png": "39c85502a38431aec23639cbdd0f8d10d289d979ca46716b49b4c850583c423d",
+    "docs/verification/infra-automation/16-18/screenshots/settings-draft-membership-unavailable-outcome-760.png": "8c6994a356e8861ac81a958ab9b739c1b1d566bb464e196e055296bc59fa2bab",
+    "docs/verification/infra-automation/16-18/screenshots/settings-draft-policy-unavailable-1440.png": "fca86f8f8735b829e22de6aa229fa604fafd93ed5657eb533d26fc443a1db974",
+    "docs/verification/infra-automation/16-18/screenshots/settings-draft-policy-unavailable-760.png": "be01444f03b33422a2cc25bfc944742eedc7af05d23303f795485d8c85eedb69",
+    "docs/verification/infra-automation/16-18/screenshots/settings-draft-policy-unavailable-outcome-1440.png": "110b84d8177b3ff9ca53493b2b1165092fd8fd4cd3cc9e6165fec1e44eb79d08",
+    "docs/verification/infra-automation/16-18/screenshots/settings-draft-policy-unavailable-outcome-760.png": "8c6994a356e8861ac81a958ab9b739c1b1d566bb464e196e055296bc59fa2bab"
+  },
+  "cleanup": {
+    "original_container": "5970d092f40105574b40ba43996b4af1b770a85697f085318d1fb4360c83b31f",
+    "running": true,
+    "docker_health": "healthy",
+    "http_health": 200,
+    "disposable_compose_projects_empty": true,
+    "private_exported_fixtures_removed": true,
+    "temporary_chromium_profile_removed": true
+  },
+  "limitations": [
+    "Synthetic material and receiver ports do not qualify external production actions.",
+    "Independent human pilot and broader production qualification remain open."
+  ],
+  "preceding_tree_evidence": {
+    "image": "sha256:0016a092d8f1d1f2a62e2770b2b184cb82926d6780af27d67e36b718fc6852e1",
+    "settings_passed": 2,
+    "settings_total_seconds": 20.5,
+    "outcomes_passed": 1,
+    "outcomes_total_seconds": 4.2,
+    "excludes": "Independent PATCH403 draft-clearing repair; final image repeats all three journeys."
+  }
+}

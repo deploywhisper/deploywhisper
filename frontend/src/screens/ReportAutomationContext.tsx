@@ -16,9 +16,10 @@ export function verifiedReportRelation(run: Run, reports: RunReports, runId: str
 }
 
 export function ReportAutomationProvenance({ link, evidence, scope }: { scope?: AutomationScope; link: RunReports["items"][number]; evidence?: RunReports["evidence_status"] }) {
-  return <Card eyebrow="Verified run relation" title="Uploaded preflight context">
+  const collected = link.provenance.kind === "collected";
+  return <Card eyebrow="Verified run relation" title={collected ? "Collected preflight context" : "Uploaded preflight context"}>
     <p><Link to={`/infra-automation/runs/${encodeURIComponent(link.run_id)}${scope ? scopeQuery(scope) : ""}`}>Back to run {link.run_id}</Link></p>
-    <p>{link.provenance.limitation}</p><p>Uploaded evidence is advisory and not eligible for approval.</p>
+    <p>{link.provenance.limitation}</p><p>{collected ? "Reports remain advisory. Approval eligibility is checked separately against current evidence and permissions." : "Uploaded evidence is advisory and not eligible for approval."}</p>
     <Uncertainty limitations={link.limitations} todos={link.context_todos} />
     {evidence && <><p>Evidence {evidence.status} · evaluated {evidence.evaluated_at} · deadline {evidence.evidence_deadline}</p><Uncertainty limitations={evidence.limitations.filter((item) => !link.limitations.includes(item))} todos={evidence.context_todos.filter((item) => !link.context_todos.includes(item))} /></>}
   </Card>;
