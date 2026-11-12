@@ -1,0 +1,67 @@
+{
+  "scope": "offline real botocore model/credential/configuration qualification, no live AWS calls",
+  "python": "3.13 (isolated uv environment)",
+  "sdk": {
+    "boto3": "1.44.1",
+    "botocore": "1.44.1"
+  },
+  "commands": [
+    {
+      "command": "/tmp/dw17-qualification-venv/bin/python -m unittest discover -s docs/verification/live-environment-grounding/17-0/sdk -q",
+      "phase": "red",
+      "result": "1 import failure before boundary.py existed"
+    },
+    {
+      "command": "/tmp/dw17-qualification-venv/bin/python -m unittest discover -s docs/verification/live-environment-grounding/17-0/sdk -q",
+      "phase": "hostile-profile regression red",
+      "result": "4 errors: AWS_PROFILE still selected a profile after set_config_variable(profile,None)"
+    },
+    {
+      "command": "/tmp/dw17-qualification-venv/bin/python -m unittest discover -s docs/verification/live-environment-grounding/17-0/sdk -v",
+      "phase": "green",
+      "result": "10 tests passed after freezing trusted profile ConfigStore provider"
+    },
+    {
+      "command": "./.venv/bin/ruff check docs/verification/live-environment-grounding/17-0/sdk",
+      "result": "All checks passed"
+    },
+    {
+      "command": "./.venv/bin/ruff format docs/verification/live-environment-grounding/17-0/sdk",
+      "result": "2 files formatted, subsequent run unchanged"
+    },
+    {
+      "command": "./.venv/bin/bandit -r docs/verification/live-environment-grounding/17-0/sdk --severity-level medium --confidence-level medium",
+      "result": "exit0, no medium/high findings, three low severity findings"
+    },
+    {
+      "command": "/tmp/dw17-qualification-venv/bin/python -m unittest discover -s docs/verification/live-environment-grounding/17-0/sdk -q",
+      "phase": "model-loader regression red",
+      "result": "11 tests, one failure: default Loader searched hostile AWS_DATA_PATH and ~/.aws/models before installed package data"
+    },
+    {
+      "command": "/tmp/dw17-qualification-venv/bin/python -m unittest discover -s docs/verification/live-environment-grounding/17-0/sdk -v",
+      "phase": "model-loader green",
+      "result": "11 tests passed after package-only Loader registration"
+    }
+  ],
+  "proofs": [
+    "default env-only SDK resolver; unavailable credentials do not fall through",
+    "trusted operator-only sharedcredentials opt-in",
+    "hostile config corpus denied",
+    "credential-free dryrun imports no boto SDK",
+    "real canonical endpoint ignores hostile endpoint env; TLS verify true; proxies empty; retries1",
+    "exact SDK Stubber request and no network",
+    "unlisted action denied before session/client construction",
+    "fixed physical-ID manifest with partial pagination and no hidden followups",
+    "provider errors project known cause/permission and omit synthetic credential message",
+    "Pinned botocore data_loader resolves only installed package data; AWS_DATA_PATH and home model overrides cannot change service/endpoint metadata"
+  ],
+  "limitations": [
+    "No live AWS or production provider profile qualified",
+    "Only EC2 DescribeInstances modeled in this trust-boundary slice; full family map belongs to main contract",
+    "SSO/IRSA/host roles/credential_process/role chaining not admitted by this qualified mechanism policy",
+    "ConfigStore constant provider is version-specific internal botocore behavior; rerun on upgrade",
+    "No real transport/DNS/IAM/latency/cost claim",
+    "botocore Loader/component registration APIs and package data layout must be pinned/requalified alongside ConfigStore behavior"
+  ]
+}

@@ -1,0 +1,53 @@
+{
+  "date": "2026-11-12",
+  "scope": "frozen25-family initial coverage contract; no client/network/credential resolution; no live IAM qualification",
+  "versions": {
+    "boto3": "1.44.1",
+    "botocore": "1.44.1"
+  },
+  "commands": [
+    {
+      "command": "/tmp/dw17-qualification-venv/bin/python docs/verification/live-environment-grounding/17-0/coverage/validate_contract.py",
+      "result": "25 families,42operationtemplates,33IAMactions; every input shape and response path valid in packaged SDK model; exactpolicyaction/resourceunion verified"
+    },
+    {
+      "command": "/tmp/dw17-qualification-venv/bin/python -m unittest discover -s docs/verification/live-environment-grounding/17-0/coverage -v",
+      "result": "11tests passed; includes exactversion/family membership, empty/missing/unknown/duplicate/malformed operation refs, orphaned allowlist entry and existing no-network/no-credentials SDK/policy checks"
+    },
+    {
+      "command": "./.venv/bin/ruff check docs/verification/live-environment-grounding/17-0/coverage",
+      "result": "All checks passed"
+    },
+    {
+      "command": "./.venv/bin/ruff format docs/verification/live-environment-grounding/17-0/coverage",
+      "result": "2files formatted"
+    }
+  ],
+  "hashes": {
+    "coverage.json": "9c5f828abf2eb4591250696eeb750df1777d5f910ed8bec369b8624a4630afce",
+    "policy.json": "9b598deed7c8d36203c21ec24a4110fa297e2a976944c03a21994bc220439668",
+    "validate_contract.py": "820338826db1a6ae6c6725dc51e87d7aee706c083949d5ac3943dc6678f3eaa6",
+    "test_contract.py": "9a761502feebaf41801c9d116feb34f43e4f9e352dce789236f88fff478cb93d"
+  },
+  "limitations": [
+    "SDK shape validation does not authorize or execute AWS requests.",
+    "Resource scopes follow published service authorization reference, not live IAM tests.",
+    "Only static known-identity first-page requests; any remaining cursor or missingfact incomplete/unknown.",
+    "No universal reverse graph or restoration success is promised."
+  ],
+  "review_fixes": {
+    "R7": {
+      "result": "fixed",
+      "red_command": "/tmp/dw17-qualification-venv/bin/python -m unittest discover -s docs/verification/live-environment-grounding/17-0/coverage -q",
+      "red_result": "11test methods;12failing regression subcases before validator changes",
+      "green_command": "/tmp/dw17-qualification-venv/bin/python -m unittest discover -s docs/verification/live-environment-grounding/17-0/coverage -v",
+      "green_result": "11tests pass",
+      "behavior": "Version1 exact approved25-family set; each family has nonempty unique valid operation references; every allowed operation is referenced. Shared operations across different families remain allowed.",
+      "static_checks": [
+        "scoped Ruff lint pass",
+        "repo-wide Ruff format --check . pass645files",
+        "scoped Bandit medium/high pass0findings"
+      ]
+    }
+  }
+}

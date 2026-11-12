@@ -1,0 +1,122 @@
+{
+  "format_version": "1.2",
+  "terraform_version": "1.12.12",
+  "prior_state": {
+    "format_version": "1.0",
+    "values": {
+      "root_module": {
+        "resources": [
+          {
+            "address": "terraform_data.changed",
+            "mode": "managed",
+            "type": "terraform_data",
+            "name": "changed",
+            "values": {
+              "id": "c1f55316-ede3-b68d-43e7-749c459ebfac",
+              "input": "before"
+            }
+          },
+          {
+            "address": "terraform_data.removed",
+            "mode": "managed",
+            "type": "terraform_data",
+            "name": "removed",
+            "values": {
+              "id": "91c164cc-5dd1-74ed-d4f1-22627410a2c4",
+              "input": "remove-me"
+            }
+          }
+        ],
+        "child_modules": [
+          {
+            "resources": [
+              {
+                "address": "module.nested.terraform_data.nested",
+                "mode": "managed",
+                "type": "terraform_data",
+                "name": "nested",
+                "values": {
+                  "id": "b85c549c-75b1-b309-6bfb-47d4fd4eb5e0",
+                  "input": "nested-before"
+                }
+              }
+            ],
+            "child_modules": []
+          }
+        ]
+      }
+    }
+  },
+  "resource_changes": [
+    {
+      "address": "terraform_data.changed",
+      "mode": "managed",
+      "type": "terraform_data",
+      "name": "changed",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "id": "c1f55316-ede3-b68d-43e7-749c459ebfac",
+          "input": "before"
+        },
+        "after": {
+          "id": "c1f55316-ede3-b68d-43e7-749c459ebfac",
+          "input": "after"
+        }
+      }
+    },
+    {
+      "address": "terraform_data.created",
+      "mode": "managed",
+      "type": "terraform_data",
+      "name": "created",
+      "change": {
+        "actions": [
+          "create"
+        ],
+        "before": null,
+        "after": {
+          "id": null,
+          "input": "new"
+        }
+      }
+    },
+    {
+      "address": "terraform_data.removed",
+      "mode": "managed",
+      "type": "terraform_data",
+      "name": "removed",
+      "change": {
+        "actions": [
+          "delete"
+        ],
+        "before": {
+          "id": "91c164cc-5dd1-74ed-d4f1-22627410a2c4",
+          "input": "remove-me"
+        },
+        "after": null
+      }
+    },
+    {
+      "address": "module.nested.terraform_data.nested",
+      "mode": "managed",
+      "type": "terraform_data",
+      "name": "nested",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "id": "b85c549c-75b1-b309-6bfb-47d4fd4eb5e0",
+          "input": "nested-before"
+        },
+        "after": {
+          "id": "b85c549c-75b1-b309-6bfb-47d4fd4eb5e0",
+          "input": "nested-after"
+        }
+      }
+    }
+  ]
+}

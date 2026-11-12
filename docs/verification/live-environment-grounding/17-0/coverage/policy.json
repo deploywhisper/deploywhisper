@@ -1,0 +1,304 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "autoscaling:DescribeAutoScalingGroups"
+      ],
+      "Resource": [
+        "*"
+      ]
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "dynamodb:DescribeContinuousBackups"
+      ],
+      "Resource": [
+        "arn:${partition}:dynamodb:${region}:${account}:table/${name}"
+      ]
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "dynamodb:DescribeTable"
+      ],
+      "Resource": [
+        "arn:${partition}:dynamodb:${region}:${account}:table/${name}"
+      ]
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "ec2:DescribeInstanceAttribute"
+      ],
+      "Resource": [
+        "arn:${partition}:ec2:${region}:${account}:instance/${id}"
+      ]
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "ec2:DescribeInstances"
+      ],
+      "Resource": [
+        "*"
+      ]
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "ec2:DescribeNetworkInterfaces"
+      ],
+      "Resource": [
+        "*"
+      ]
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "ec2:DescribeRouteTables"
+      ],
+      "Resource": [
+        "*"
+      ]
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "ec2:DescribeSecurityGroups"
+      ],
+      "Resource": [
+        "*"
+      ]
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "ec2:DescribeSnapshots"
+      ],
+      "Resource": [
+        "*"
+      ]
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "ec2:DescribeSubnets"
+      ],
+      "Resource": [
+        "*"
+      ]
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "ec2:DescribeVolumes"
+      ],
+      "Resource": [
+        "*"
+      ]
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "ec2:DescribeVpcs"
+      ],
+      "Resource": [
+        "*"
+      ]
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "ecs:DescribeClusters"
+      ],
+      "Resource": [
+        "${arn}"
+      ]
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "ecs:DescribeServices"
+      ],
+      "Resource": [
+        "${arn}"
+      ]
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "eks:DescribeCluster"
+      ],
+      "Resource": [
+        "arn:${partition}:eks:${region}:${account}:cluster/${name}"
+      ]
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "elasticloadbalancing:DescribeListeners"
+      ],
+      "Resource": [
+        "*"
+      ]
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "elasticloadbalancing:DescribeLoadBalancerAttributes"
+      ],
+      "Resource": [
+        "*"
+      ]
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "elasticloadbalancing:DescribeLoadBalancers"
+      ],
+      "Resource": [
+        "*"
+      ]
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "elasticloadbalancing:DescribeTargetGroups"
+      ],
+      "Resource": [
+        "*"
+      ]
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "elasticloadbalancing:DescribeTargetHealth"
+      ],
+      "Resource": [
+        "*"
+      ]
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "iam:GetInstanceProfile"
+      ],
+      "Resource": [
+        "arn:${partition}:iam::${account}:instance-profile/${path_name}"
+      ]
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "iam:GetRole"
+      ],
+      "Resource": [
+        "arn:${partition}:iam::${account}:role/${path_name}"
+      ]
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "lambda:GetFunctionConcurrency"
+      ],
+      "Resource": [
+        "${arn}"
+      ]
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "lambda:ListEventSourceMappings"
+      ],
+      "Resource": [
+        "*"
+      ]
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "lambda:ListTags"
+      ],
+      "Resource": [
+        "${arn}"
+      ]
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "rds:DescribeDBClusterSnapshots"
+      ],
+      "Resource": [
+        "arn:${partition}:rds:${region}:${account}:cluster-snapshot:*",
+        "arn:${partition}:rds:${region}:${account}:cluster:${name}"
+      ]
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "rds:DescribeDBClusters"
+      ],
+      "Resource": [
+        "arn:${partition}:rds:${region}:${account}:cluster:${name}"
+      ]
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "rds:DescribeDBInstances"
+      ],
+      "Resource": [
+        "arn:${partition}:rds:${region}:${account}:db:${name}"
+      ]
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "rds:DescribeDBSnapshots"
+      ],
+      "Resource": [
+        "arn:${partition}:rds:${region}:${account}:db:${name}",
+        "arn:${partition}:rds:${region}:${account}:snapshot:*"
+      ]
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "route53:ListResourceRecordSets"
+      ],
+      "Resource": [
+        "arn:${partition}:route53:::hostedzone/${zone_id}"
+      ]
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "s3:GetBucketTagging"
+      ],
+      "Resource": [
+        "arn:${partition}:s3:::${name}"
+      ]
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "s3:GetBucketVersioning"
+      ],
+      "Resource": [
+        "arn:${partition}:s3:::${name}"
+      ]
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "sqs:GetQueueAttributes"
+      ],
+      "Resource": [
+        "arn:${partition}:sqs:${region}:${account}:${name}"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,188 @@
+{
+  "observed_on": "2026-11-12",
+  "currency": "USD",
+  "region": "us-east-1",
+  "source_policy": "Only official AWS HTTPS pricing/API sources and public regional Price List offers; no credentials or account APIs.",
+  "sources": {
+    "ec2": {
+      "url": "https://aws.amazon.com/ec2/pricing/",
+      "observed_on": "2026-11-12",
+      "sha256_of_retrieved_bytes": "1822fa2c1afdc4f625ecc884640730434558df3b2662ea3845a31ce19292eadc",
+      "bytes": 368843,
+      "basis": "Published billing is for compute, storage, transfer and optional features; these selected metadata Describe requests provision and consume none of those priced resources. Zero incremental request fee is an explicit estimate inference, not a provider promise."
+    },
+    "elbv2": {
+      "url": "https://aws.amazon.com/elasticloadbalancing/pricing/",
+      "observed_on": "2026-11-12",
+      "sha256_of_retrieved_bytes": "e3c9da6735042e64280846fc711eebdcb88fd0cc98e692d7a2b2fb3fa7603715",
+      "bytes": 401685,
+      "basis": "Published meters cover running load-balancer hours/capacity units and data transfer; metadata Describe operations do not create a load balancer or send traffic through it. Zero incremental request fee is an explicit inference."
+    },
+    "rds": {
+      "url": "https://aws.amazon.com/rds/pricing/",
+      "observed_on": "2026-11-12",
+      "sha256_of_retrieved_bytes": "b5f7c3ea1587ad7903b30469250f489498504515ec572ac64eb8912e8cddaa4b",
+      "bytes": 464439,
+      "basis": "Published meters cover database compute, storage, backup and I/O; selected Describe operations read management metadata, not SQL/Data API queries, backup creation or restoration. Zero incremental request fee is an explicit inference."
+    },
+    "ecs": {
+      "url": "https://aws.amazon.com/ecs/pricing/",
+      "observed_on": "2026-11-12",
+      "sha256_of_retrieved_bytes": "71be5a6f4ffac60cf3124b3ab99b38a8d4b5f60f7bc78459efaf7d3e28d32172",
+      "bytes": 389098,
+      "basis": "Published pricing covers infrastructure/capacity used for workloads; describing existing clusters/services does not launch tasks or provision capacity. Zero incremental metadata-request fee is an explicit inference."
+    },
+    "eks": {
+      "url": "https://aws.amazon.com/eks/pricing/",
+      "observed_on": "2026-11-12",
+      "sha256_of_retrieved_bytes": "f07b55d2c8b4f7b861954797d0a4b65fdca682bed97322f4b52cf6f4d88d93d2",
+      "bytes": 386840,
+      "basis": "Published EKS meters include cluster/capability/node hours; DescribeCluster does not create or extend a separate cluster. Zero incremental metadata-request fee is an explicit inference."
+    },
+    "autoscaling": {
+      "url": "https://aws.amazon.com/autoscaling/pricing/",
+      "observed_on": "2026-11-12",
+      "sha256_of_retrieved_bytes": "527dd91af2b119c1c891a73042d650226290a8df823c50aa63de763f2dced593",
+      "bytes": 349746,
+      "basis": "AWS Auto Scaling itself has no additional charge; underlying resources and monitoring are separate. Describing an existing group creates neither."
+    },
+    "iam": {
+      "url": "https://docs.aws.amazon.com/awsaccountbilling/latest/aboutv2/security-iam.html",
+      "observed_on": "2026-11-12",
+      "sha256_of_retrieved_bytes": "19619fc9af2420d2abedc98509599d106cdfabfa62620516a18b532bf9f84f27",
+      "bytes": 28029,
+      "basis": "IAM is available without an additional service charge; these GetRole/GetInstanceProfile operations do not invoke paid IAM Access Analyzer features."
+    },
+    "lambda": {
+      "url": "https://aws.amazon.com/lambda/pricing/",
+      "observed_on": "2026-11-12",
+      "sha256_of_retrieved_bytes": "fe475e85b549c13509dccc870f6dfcf0142dc883f2494ad142af64c9b21018e8",
+      "bytes": 492512,
+      "basis": "Published function request meters concern invocation/execution, with separate duration/provisioning/resource meters. Selected Get/List management operations do not invoke a function or provision event pollers. Zero incremental management-request fee is an explicit inference."
+    },
+    "dynamodb": {
+      "url": "https://aws.amazon.com/dynamodb/pricing/",
+      "observed_on": "2026-11-12",
+      "sha256_of_retrieved_bytes": "c7ac271d4d939b7f05173c5ad4c94968d7bc65ef38803453e3f40f3afe51cdeb",
+      "bytes": 444747,
+      "basis": "Published read/write meters concern table-item data and streams; selected DescribeTable/DescribeContinuousBackups are management metadata reads, not item reads, backup creation or restore. Zero incremental management-request fee is an explicit inference."
+    },
+    "dynamodb_control": {
+      "url": "https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/HowItWorks.API.html",
+      "observed_on": "2026-11-12",
+      "sha256_of_retrieved_bytes": "35a0b8f4ca035e346dd57243b394b230faf29f8a5f1636d3de9a70717c40bcf1",
+      "bytes": 25844,
+      "basis": "AWS distinguishes management control-plane operations such as DescribeTable from item-data reads/writes. This distinction scopes the pricing-meter inference."
+    },
+    "route53": {
+      "url": "https://aws.amazon.com/route53/pricing/",
+      "observed_on": "2026-11-12",
+      "sha256_of_retrieved_bytes": "4be327b0774df4bb4205e417bb598a88b0e65efbd2e77359a37af13a81ac84b3",
+      "bytes": 429350,
+      "basis": "Published meters cover hosted zones, DNS queries, health checks and optional features. Listing record metadata is neither a DNS resolution nor creation of a separately billed resource. Zero incremental management-request fee is an explicit inference."
+    },
+    "s3": {
+      "url": "https://aws.amazon.com/s3/pricing/",
+      "observed_on": "2026-11-12",
+      "sha256_of_retrieved_bytes": "4afa18a53acfc7db5dc3733d1fa8f4d73061f16d0a8498cd6f1e6202a8b657e6",
+      "bytes": 519580,
+      "basis": "S3 request charges depend on request type. The public regional GET-and-all-other request dimension supplies the us-east-1 rate; free tiers and discounts are deliberately excluded."
+    },
+    "s3_versioning_api": {
+      "url": "https://docs.aws.amazon.com/AmazonS3/latest/API/API_GetBucketVersioning.html",
+      "observed_on": "2026-11-12",
+      "sha256_of_retrieved_bytes": "697011e89b3f7dbddf885b51cded94eed885938b33d3d583da18b80c24817aa4",
+      "bytes": 22630,
+      "basis": "General-purpose GetBucketVersioning uses HTTP GET against the bucket versioning subresource, not an object retrieval."
+    },
+    "s3_tagging_api": {
+      "url": "https://docs.aws.amazon.com/AmazonS3/latest/API/API_GetBucketTagging.html",
+      "observed_on": "2026-11-12",
+      "sha256_of_retrieved_bytes": "00d7ea9ae08a443397883d227ddfe75ffc332cfbc265b223d670560b2ac751ed",
+      "bytes": 21374,
+      "basis": "General-purpose GetBucketTagging uses HTTP GET against the bucket tagging subresource, not an object retrieval."
+    },
+    "sqs": {
+      "url": "https://aws.amazon.com/sqs/pricing/",
+      "observed_on": "2026-11-12",
+      "sha256_of_retrieved_bytes": "5b347ba84e5f832f840a55d1c10f15737d1b61c363ae74b807029d91a9d94735",
+      "bytes": 342170,
+      "basis": "Every SQS action counts as a request. The selected Standard-queue attribute request is assumed at most64KiB and therefore one request unit; free monthly requests and volume discounts are excluded."
+    },
+    "s3_tariff": {
+      "url": "https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AmazonS3/current/us-east-1/index.json",
+      "observed_on": "2026-11-12",
+      "offer_version": "20261109154310",
+      "publication_date": "2026-11-09T15:43:10Z",
+      "sha256_of_retrieved_bytes": "b436ef5d6a6d1cd801edcf8c2c26caabad8ad4820a28a51bbb1ca260f7d84c05",
+      "selected_dimensions": [
+        {
+          "sku": "ZWQ6Q48CRJXX4FXE",
+          "attributes": {
+            "servicecode": "AmazonS3",
+            "location": "US East (N. Virginia)",
+            "locationType": "AWS Region",
+            "group": "S3-API-Tier2",
+            "groupDescription": "GET and all other requests",
+            "usagetype": "Requests-Tier2",
+            "operation": "",
+            "regionCode": "us-east-1",
+            "servicename": "Amazon Simple Storage Service"
+          },
+          "effective_date": "2026-10-01T00:00:00Z",
+          "rate": {
+            "rateCode": "ZWQ6Q48CRJXX4FXE.JRTCKXETXF.6YS6EN2CT7",
+            "description": "$0.004 per 10,000 GET and all other requests",
+            "beginRange": "0",
+            "endRange": "Inf",
+            "unit": "Requests",
+            "pricePerUnit": {
+              "USD": "0.0000004000"
+            },
+            "appliesTo": []
+          }
+        }
+      ],
+      "basis": "Published us-east-1 OnDemand first paid request tier; no free tier, volume discount, tax or transfer allocation."
+    },
+    "sqs_tariff": {
+      "url": "https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AWSQueueService/current/us-east-1/index.json",
+      "observed_on": "2026-11-12",
+      "offer_version": "20261111153551",
+      "publication_date": "2026-11-11T15:35:51Z",
+      "sha256_of_retrieved_bytes": "648858030624323467ae2a28a905d07cbb809217aa0eb9fe1b0af68bf3fd3ef9",
+      "selected_dimensions": [
+        {
+          "sku": "8RN6B8U4MERHRXP3",
+          "attributes": {
+            "servicecode": "AWSQueueService",
+            "location": "US East (N. Virginia)",
+            "locationType": "AWS Region",
+            "group": "SQS-APIRequest-Tier1",
+            "groupDescription": "Amazon SQS Requests",
+            "usagetype": "Requests-RBP",
+            "operation": "",
+            "messageDeliveryFrequency": "At Least Once",
+            "messageDeliveryOrder": "Not Guaranteed",
+            "queueType": "Standard",
+            "regionCode": "us-east-1",
+            "servicename": "Amazon Simple Queue Service"
+          },
+          "effective_date": "2026-11-01T00:00:00Z",
+          "rate": {
+            "rateCode": "8RN6B8U4MERHRXP3.JRTCKXETXF.VXGXCWQKTY",
+            "description": "$0.40 per million Amazon SQS standard requests in Tier1 in US East (N Virginia)",
+            "beginRange": "0",
+            "endRange": "100000000000",
+            "unit": "Requests",
+            "pricePerUnit": {
+              "USD": "0.0000004000"
+            },
+            "appliesTo": []
+          }
+        }
+      ],
+      "basis": "Published us-east-1 OnDemand first paid request tier; no free tier, volume discount, tax or transfer allocation."
+    }
+  }
+}

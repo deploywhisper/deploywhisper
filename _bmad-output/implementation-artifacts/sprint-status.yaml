@@ -241,7 +241,7 @@ development_status:
   # RFC 0002 accepted 2026-10-19; Story 17.0 is authorized. Stories 17.1+ remain backlog
   # until Story 17.0 closes its feasibility gate and the dependency decision is recorded.
   epic-17: in-progress
-  17-0-adopt-and-qualify-the-grounding-contract: ready-for-dev
+  17-0-adopt-and-qualify-the-grounding-contract: done
   17-1-cloud-connector-contract-and-snapshot-evidence: backlog
   17-2-aws-read-only-session-allowlist-and-dry-run: backlog
   17-3-plan-directed-reflection-and-bounded-collection: backlog

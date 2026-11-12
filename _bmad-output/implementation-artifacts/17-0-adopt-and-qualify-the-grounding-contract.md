@@ -1,6 +1,6 @@
 # Story 17.0: Adopt and Qualify the Grounding Contract
 
-Status: ready-for-dev
+Status: done
 Preparation: refined
 Release: v1.6.0 (independent release train) | Priority: P0 within the independent Epic 17 lane
 
@@ -44,30 +44,41 @@ Coverage intent: this story **verifies feasibility** of the requirements below. 
 
 Execute one bounded packet at a time on the story feature branch `feature/17-0-grounding-contract`. Each packet owns the named paths.
 
-- [ ] **Packet 0.1: Governance and scope adoption — owner: maintainer.**
+- [x] **Packet 0.1: Governance and scope adoption — owner: maintainer.**
   - Owned write paths: `docs/rfcs/0002-live-environment-grounding.md`, `_bmad-output/planning-artifacts/`.
   - Output: recorded RFC decision, CODEOWNERS coverage for `cloud/`, scope agreement with parent PRD and architecture §26.
   - Acceptance proof: AC1, AC2 — decision record and readiness gate statement.
-- [ ] **Packet 0.2: Dependency decision — owner: maintainer.**
+- [x] **Packet 0.2: Dependency decision — owner: maintainer.**
   - Owned write paths: `docs/decisions/` or the RFC decision record.
   - Output: explicit approval or rejection of an AWS SDK runtime dependency, with the chosen option among runtime dependency, optional extra or thin signed-request client, plus supply-chain and lockfile impact.
   - Acceptance proof: AC7 — recorded dependency decision with rationale.
-- [ ] **Packet 0.3: Trust-boundary spikes — owner: security-focused implementer.**
+- [x] **Packet 0.3: Trust-boundary spikes — owner: security-focused implementer.**
   - Owned write paths: disposable spike directory, evidence packet under `docs/verification/live-environment-grounding/17-0/`.
   - Output: allow-list refusal prototype, credential-free dry-run, confused-deputy and SSRF configuration corpus, secret-absence check across logs and outputs.
   - Acceptance proof: AC3, AC4, AC8 — recorded spike results.
-- [ ] **Packet 0.4: Plan prior-state extraction spike — owner: implementer.**
+- [x] **Packet 0.4: Plan prior-state extraction spike — owner: implementer.**
   - Owned write paths: disposable spike directory, evidence packet.
   - Output: prior-state extraction across Terraform and OpenTofu plan format versions, with defined fallback when absent.
   - Acceptance proof: AC5.
-- [ ] **Packet 0.5: Latency, call count and cost measurement — owner: implementer.**
+- [x] **Packet 0.5: Latency, call count and cost measurement — owner: implementer.**
   - Owned write paths: disposable spike directory, evidence packet.
   - Output: measured results on named hardware for a realistic large plan; proposed defaults for deadline, concurrency and call budget.
   - Acceptance proof: AC6.
-- [ ] **Packet 0.6: Coverage freeze and readiness report — owner: maintainer.**
+- [x] **Packet 0.6: Coverage freeze and readiness report — owner: maintainer.**
   - Owned write paths: `_bmad-output/planning-artifacts/implementation-readiness-report-<date>-live-environment-grounding.md`.
   - Output: frozen resource-family coverage list, per-capability permission map, all RFC unresolved questions closed, blocking-gap list.
   - Acceptance proof: AC7 — readiness report with no blocking gap or an explicit NOT READY verdict.
+
+### Review Findings
+
+- [x] [Review][Patch][P2] R1: Validate mandatory response postfilters [`docs/verification/live-environment-grounding/17-0/measurement/benchmark.py:206`]
+- [x] [Review][Patch][P2] R2: Match Route53 routing variants by SetIdentifier [`docs/verification/live-environment-grounding/17-0/measurement/benchmark.py:197`]
+- [x] [Review][Patch][P2] R3: Restrict benchmark SDK model loading to installed package data [`docs/verification/live-environment-grounding/17-0/measurement/benchmark.py:236`]
+- [x] [Review][Patch][P2] R4: Drain completed results during throttle backoff [`docs/verification/live-environment-grounding/17-0/measurement/benchmark.py:305`]
+- [x] [Review][Patch][P2] R5: Provide a provider-based request-cost estimate for AC6 [`docs/verification/live-environment-grounding/17-0/measurement/benchmark.py:413`]
+- [x] [Review][Patch][P2] R6: Detect or explicitly label benchmark hardware identity [`docs/verification/live-environment-grounding/17-0/measurement/benchmark.py:382`]
+- [x] [Review][Patch][P2] R7: Validate the frozen family set and operation references [`docs/verification/live-environment-grounding/17-0/coverage/validate_contract.py:60`]
+- [x] [Review][Patch][P3] R8: Reject fractional and non-finite measurement bounds [`docs/verification/live-environment-grounding/17-0/measurement/benchmark.py:264`]
 
 ## Dev Notes
 
@@ -102,14 +113,103 @@ Execute one bounded packet at a time on the story feature branch `feature/17-0-g
 ## Dev Agent Record
 
 ### Agent Model Used
-Planning preparation only; implementation agent records its model at execution.
+Codex with bounded native agents for producer, SDK, measurement and coverage qualifications; separate independent read-only readiness reviewer.
 
 ### Debug Log References
-Not executed.
+- Evidence and reproduction: `docs/verification/live-environment-grounding/17-0/README.md`.
+- Approved dependency and scan: `dependency-decision.md`, `sdk-requirements.lock`, `sdk-versions.json`, `sdk-audit.json` in that packet.
+- Exact packet commands/results: `producer-results.json`, `sdk-results.json`, `bounded-measurement-results.json`, `coverage/results.json`, `retention/README.md`.
+- Fresh repository regression logs: `/tmp/story17-0-approved-unittest.log`, `/tmp/story17-0-approved-ci.log`; final summaries retained in packet README.
+
+### Implementation Plan
+- Maintainer continuation explicitly approved choosing the best SDK/design and completing all qualification. Adopt optional boto3; install only isolated qualification dependencies; preserve default application locks and Python floor.
+- Generate checksum-verified real producer exports in temporary directories using local built-in terraform_data. No cloud provider, production state or credentials.
+- Exercise real SDK credential/endpoint/model-loader trust boundaries; freeze exact25-family request/action/field/permission map; use the same map for benchmark requests.
+- Measure a realistic1000-resource mixed synthetic plan on named hardware with bounded response replay and explicit cost-rate input; record no live AWS claims.
+- Adopt reference-bound retention and fixed credential mechanisms with executable tests. Independently review evidence and correct findings before advancing story status.
 
 ### Completion Notes List
-- Story specification prepared; no governance decision, spike, qualification or runtime test performed.
-- Commands and proofs above are future obligations, not results.
+- Packets0.1–0.6 completed for story-scoped governance and feasibility. Explicit maintainer approval recorded in RFC/dependency decision; optional boto3 selected, custom signer and mandatory default dependency rejected.
+- Qualified seven-package SDK set is Python3.10-compatible by metadata/resolution, hash-locked and scanned with no known advisories. Default app dependencies and locks unchanged.
+- Terraform1.17.2/1.16.7 and OpenTofu1.13.9/1.12.12 emitted actual planformat1.2; nested prior-state and absent/null/change.before/create fallbacks verified. Raw local state/binary plans discarded. Older synthetic shape probes remain historical, not qualified producer support.
+- Real SDK probes constrain credentials to environment or trusted operator-selected shared files; deny all other fallthrough, caller overrides and external model data. Tests discovered and corrected AWS_PROFILE and AWS_DATA_PATH/home model injection paths.
+- Frozen25families/42requesttemplates/33IAMactions; published exact policy/action/resource equality and response field map. Static plan-derived manifests, bounded filtered first pages, no account inventory/recursive expansion; absent facts remain unknown/incomplete.
+- Large mixed1000-resource fixture yields900intended requests; deadline/concurrency/budget/cancellation/backoff and SDK request shapes verified.15s/4concurrent/100attempts/2spercall defaults supported by controlled50ms/200ms/1000ms scenarios. Cost estimate uses explicit sensitivity input, not universal AWS pricing.
+- Snapshot retention adopted: seven days unreferenced from observation, extended by live report references; no import age reset; payload purge preserves nonsecret digest and reports missing evidence. Five decision tests pass.
+- Independent review found benchmark operation drift; eliminated duplicate catalog and rendered frozen templates, adding exact membership, Lambda parent/UUID and SQS URL regressions. Independent re-review verified the fix and final fixture hash, with no blocking findings.43qualification checks pass.
+- No product LEG-FR implementation, live AWS production profile or later security/release qualification claimed. No Epic16 dependency or downstream story completion introduced.
+- UI validation not applicable. Application routes, persistence, runtime behavior and default dependency footprint unchanged.
+
+- Fresh root validation passed2,128tests (3skips); full localCI passed3,603tests (3skips) plus skill/prompt-injection checks. Repo-wide Ruff lint/format passed645files; Bandit medium/high passed (eight low informational findings). Story moved to review; no downstream promotion.
+
+- BMad code review requested changes:8patch findings, recorded in `docs/verification/live-environment-grounding/17-0/code-review.md`; story returned to in-progress. Implementation unchanged during review.
+
+- Review findings R1–R8 repaired and independently closed. 68 qualification checks passed; fresh root discovery passed 2,128 tests (3 skipped); full local CI passed 3,603 tests across 10 shards (3 skipped), plus skill scenarios and 8 prompt-injection tests with 96 subtests. Repo-wide Ruff lint/format (647 files), Bandit medium/high gate, compilation, Python 3.10 syntax and fixture/link checks passed. Code review approved; story marked done for governance/feasibility only.
 
 ### File List
-- `_bmad-output/implementation-artifacts/17-0-adopt-and-qualify-the-grounding-contract.md` (story specification only).
+- `_bmad-output/implementation-artifacts/17-0-adopt-and-qualify-the-grounding-contract.md`
+- `_bmad-output/implementation-artifacts/sprint-status.yaml`
+- `_bmad-output/planning-artifacts/architecture.md`
+- `_bmad-output/planning-artifacts/implementation-readiness-report-2026-11-12-live-environment-grounding.md`
+- `docs/rfcs/0002-live-environment-grounding.md`
+- `docs/verification/live-environment-grounding/17-0/README.md`
+- `docs/verification/live-environment-grounding/17-0/bounded-measurement-results.json`
+- `docs/verification/live-environment-grounding/17-0/code-review.md`
+- `docs/verification/live-environment-grounding/17-0/coverage/coverage.json`
+- `docs/verification/live-environment-grounding/17-0/coverage/iam-reference-evidence.json`
+- `docs/verification/live-environment-grounding/17-0/coverage/permission-map.md`
+- `docs/verification/live-environment-grounding/17-0/coverage/policy.json`
+- `docs/verification/live-environment-grounding/17-0/coverage/results.json`
+- `docs/verification/live-environment-grounding/17-0/coverage/test_contract.py`
+- `docs/verification/live-environment-grounding/17-0/coverage/validate_contract.py`
+- `docs/verification/live-environment-grounding/17-0/dependency-decision.md`
+- `docs/verification/live-environment-grounding/17-0/final-verification.json`
+- `docs/verification/live-environment-grounding/17-0/independent-review.md`
+- `docs/verification/live-environment-grounding/17-0/measurement/README.md`
+- `docs/verification/live-environment-grounding/17-0/measurement/benchmark.py`
+- `docs/verification/live-environment-grounding/17-0/measurement/cost-rates.json`
+- `docs/verification/live-environment-grounding/17-0/measurement/cost_model.py`
+- `docs/verification/live-environment-grounding/17-0/measurement/large-plan.json`
+- `docs/verification/live-environment-grounding/17-0/measurement/pricing-evidence.json`
+- `docs/verification/live-environment-grounding/17-0/measurement/test_benchmark.py`
+- `docs/verification/live-environment-grounding/17-0/measurement/test_cost_model.py`
+- `docs/verification/live-environment-grounding/17-0/measurement-results.json`
+- `docs/verification/live-environment-grounding/17-0/producer/README.md`
+- `docs/verification/live-environment-grounding/17-0/producer/generate.py`
+- `docs/verification/live-environment-grounding/17-0/producer/terraform-1.16.7.json`
+- `docs/verification/live-environment-grounding/17-0/producer/terraform-1.17.2.json`
+- `docs/verification/live-environment-grounding/17-0/producer/test_producers.py`
+- `docs/verification/live-environment-grounding/17-0/producer/tofu-1.12.12.json`
+- `docs/verification/live-environment-grounding/17-0/producer/tofu-1.13.9.json`
+- `docs/verification/live-environment-grounding/17-0/producer-results.json`
+- `docs/verification/live-environment-grounding/17-0/retention/README.md`
+- `docs/verification/live-environment-grounding/17-0/retention/retention_spike.py`
+- `docs/verification/live-environment-grounding/17-0/retention/test_retention.py`
+- `docs/verification/live-environment-grounding/17-0/review-fix-verification.md`
+- `docs/verification/live-environment-grounding/17-0/sdk/README.md`
+- `docs/verification/live-environment-grounding/17-0/sdk/boundary.py`
+- `docs/verification/live-environment-grounding/17-0/sdk/test_boundary.py`
+- `docs/verification/live-environment-grounding/17-0/sdk-audit.json`
+- `docs/verification/live-environment-grounding/17-0/sdk-requirements.lock`
+- `docs/verification/live-environment-grounding/17-0/sdk-results.json`
+- `docs/verification/live-environment-grounding/17-0/sdk-versions.json`
+- `docs/verification/live-environment-grounding/17-0/spike/coverage.json`
+- `docs/verification/live-environment-grounding/17-0/spike/plan-opentofu-1.0.json`
+- `docs/verification/live-environment-grounding/17-0/spike/plan-opentofu-1.1.json`
+- `docs/verification/live-environment-grounding/17-0/spike/plan-opentofu-1.2.json`
+- `docs/verification/live-environment-grounding/17-0/spike/plan-terraform-1.0.json`
+- `docs/verification/live-environment-grounding/17-0/spike/plan-terraform-1.1.json`
+- `docs/verification/live-environment-grounding/17-0/spike/plan-terraform-1.2.json`
+- `docs/verification/live-environment-grounding/17-0/spike/plan.json`
+- `docs/verification/live-environment-grounding/17-0/spike/policy.json`
+- `docs/verification/live-environment-grounding/17-0/spike/qualification.py`
+- `docs/verification/live-environment-grounding/17-0/spike/test_qualification.py`
+- `docs/verification/live-environment-grounding/17-0/spike-results.json`
+- `docs/verification/live-environment-grounding/17-0/threat-model.md`
+
+## Change Log
+
+- 2026-11-12: Initial offline packet retained NOT READY gates. Maintainer then explicitly approved selecting and completing outstanding decisions. Added approved SDK qualification, real producer exports, frozen coverage/permissions, mixed-plan replay measurements and retention proof; independent review corrections integrated.
+- 2026-11-12: Final independent readiness review and all validation passed; story and sprint status moved to review.
+- 2026-11-12: BMad three-layer review found8patch items; readiness withdrawn pending fixes and story/sprint status set in-progress.
+- 2026-11-12: Fixed all eight formal review findings; added25 qualification checks, regenerated evidence, independently re-reviewed and passed fresh root/full-CI runs. Review approved and story marked done.

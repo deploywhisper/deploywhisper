@@ -1,0 +1,348 @@
+{
+  "catalog_version": 1,
+  "observed_on": "2026-11-12",
+  "region": "us-east-1",
+  "currency": "USD",
+  "estimate_kind": "provider tariffs plus explicitly labelled control-plane meter inferences",
+  "scope_assumptions": [
+    "Only the frozen33metadata operations; no hidden retries or pagination.",
+    "General-purpose S3 buckets; successful GET metadata calls charged at GET-and-other request rate.",
+    "Standard SQS queue and selected attribute exchange not exceeding64KiB, one unit per call.",
+    "Gross first paid request tier, without free-tier credits or account-volume discounts.",
+    "Zero marginal request fees for selected non-metered control-plane APIs are source-based inferences from published pricing dimensions, not universal free-API guarantees."
+  ],
+  "exclusions": [
+    "data transfer and network/NAT/private-endpoint charges",
+    "taxes, discounts and free tiers",
+    "pre-existing resource-hour/storage/backup/invocation charges",
+    "CloudTrail/logging and operator monitoring charges",
+    "unlisted operations, other regions or changed provider tariffs"
+  ],
+  "sources": {
+    "ec2": {
+      "url": "https://aws.amazon.com/ec2/pricing/",
+      "observed_on": "2026-11-12",
+      "basis": "Published billing is for compute, storage, transfer and optional features; these selected metadata Describe requests provision and consume none of those priced resources. Zero incremental request fee is an explicit estimate inference, not a provider promise."
+    },
+    "elbv2": {
+      "url": "https://aws.amazon.com/elasticloadbalancing/pricing/",
+      "observed_on": "2026-11-12",
+      "basis": "Published meters cover running load-balancer hours/capacity units and data transfer; metadata Describe operations do not create a load balancer or send traffic through it. Zero incremental request fee is an explicit inference."
+    },
+    "rds": {
+      "url": "https://aws.amazon.com/rds/pricing/",
+      "observed_on": "2026-11-12",
+      "basis": "Published meters cover database compute, storage, backup and I/O; selected Describe operations read management metadata, not SQL/Data API queries, backup creation or restoration. Zero incremental request fee is an explicit inference."
+    },
+    "ecs": {
+      "url": "https://aws.amazon.com/ecs/pricing/",
+      "observed_on": "2026-11-12",
+      "basis": "Published pricing covers infrastructure/capacity used for workloads; describing existing clusters/services does not launch tasks or provision capacity. Zero incremental metadata-request fee is an explicit inference."
+    },
+    "eks": {
+      "url": "https://aws.amazon.com/eks/pricing/",
+      "observed_on": "2026-11-12",
+      "basis": "Published EKS meters include cluster/capability/node hours; DescribeCluster does not create or extend a separate cluster. Zero incremental metadata-request fee is an explicit inference."
+    },
+    "autoscaling": {
+      "url": "https://aws.amazon.com/autoscaling/pricing/",
+      "observed_on": "2026-11-12",
+      "basis": "AWS Auto Scaling itself has no additional charge; underlying resources and monitoring are separate. Describing an existing group creates neither."
+    },
+    "iam": {
+      "url": "https://docs.aws.amazon.com/awsaccountbilling/latest/aboutv2/security-iam.html",
+      "observed_on": "2026-11-12",
+      "basis": "IAM is available without an additional service charge; these GetRole/GetInstanceProfile operations do not invoke paid IAM Access Analyzer features."
+    },
+    "lambda": {
+      "url": "https://aws.amazon.com/lambda/pricing/",
+      "observed_on": "2026-11-12",
+      "basis": "Published function request meters concern invocation/execution, with separate duration/provisioning/resource meters. Selected Get/List management operations do not invoke a function or provision event pollers. Zero incremental management-request fee is an explicit inference."
+    },
+    "dynamodb": {
+      "url": "https://aws.amazon.com/dynamodb/pricing/",
+      "observed_on": "2026-11-12",
+      "basis": "Published read/write meters concern table-item data and streams; selected DescribeTable/DescribeContinuousBackups are management metadata reads, not item reads, backup creation or restore. Zero incremental management-request fee is an explicit inference."
+    },
+    "dynamodb_control": {
+      "url": "https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/HowItWorks.API.html",
+      "observed_on": "2026-11-12",
+      "basis": "AWS distinguishes management control-plane operations such as DescribeTable from item-data reads/writes. This distinction scopes the pricing-meter inference."
+    },
+    "route53": {
+      "url": "https://aws.amazon.com/route53/pricing/",
+      "observed_on": "2026-11-12",
+      "basis": "Published meters cover hosted zones, DNS queries, health checks and optional features. Listing record metadata is neither a DNS resolution nor creation of a separately billed resource. Zero incremental management-request fee is an explicit inference."
+    },
+    "s3": {
+      "url": "https://aws.amazon.com/s3/pricing/",
+      "observed_on": "2026-11-12",
+      "basis": "S3 request charges depend on request type. The public regional GET-and-all-other request dimension supplies the us-east-1 rate; free tiers and discounts are deliberately excluded."
+    },
+    "s3_versioning_api": {
+      "url": "https://docs.aws.amazon.com/AmazonS3/latest/API/API_GetBucketVersioning.html",
+      "observed_on": "2026-11-12",
+      "basis": "General-purpose GetBucketVersioning uses HTTP GET against the bucket versioning subresource, not an object retrieval."
+    },
+    "s3_tagging_api": {
+      "url": "https://docs.aws.amazon.com/AmazonS3/latest/API/API_GetBucketTagging.html",
+      "observed_on": "2026-11-12",
+      "basis": "General-purpose GetBucketTagging uses HTTP GET against the bucket tagging subresource, not an object retrieval."
+    },
+    "sqs": {
+      "url": "https://aws.amazon.com/sqs/pricing/",
+      "observed_on": "2026-11-12",
+      "basis": "Every SQS action counts as a request. The selected Standard-queue attribute request is assumed at most64KiB and therefore one request unit; free monthly requests and volume discounts are excluded."
+    },
+    "s3_tariff": {
+      "url": "https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AmazonS3/current/us-east-1/index.json",
+      "observed_on": "2026-11-12",
+      "basis": "Published us-east-1 OnDemand first paid request tier; no free tier, volume discount, tax or transfer allocation."
+    },
+    "sqs_tariff": {
+      "url": "https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AWSQueueService/current/us-east-1/index.json",
+      "observed_on": "2026-11-12",
+      "basis": "Published us-east-1 OnDemand first paid request tier; no free tier, volume discount, tax or transfer allocation."
+    }
+  },
+  "operations": {
+    "autoscaling:DescribeAutoScalingGroups": {
+      "usd_per_request": "0",
+      "classification": "no_additional_charge",
+      "source_ids": [
+        "autoscaling"
+      ]
+    },
+    "dynamodb:DescribeContinuousBackups": {
+      "usd_per_request": "0",
+      "classification": "control_plane_meter_inference",
+      "source_ids": [
+        "dynamodb",
+        "dynamodb_control"
+      ]
+    },
+    "dynamodb:DescribeTable": {
+      "usd_per_request": "0",
+      "classification": "control_plane_meter_inference",
+      "source_ids": [
+        "dynamodb",
+        "dynamodb_control"
+      ]
+    },
+    "ec2:DescribeInstanceAttribute": {
+      "usd_per_request": "0",
+      "classification": "control_plane_meter_inference",
+      "source_ids": [
+        "ec2"
+      ]
+    },
+    "ec2:DescribeInstances": {
+      "usd_per_request": "0",
+      "classification": "control_plane_meter_inference",
+      "source_ids": [
+        "ec2"
+      ]
+    },
+    "ec2:DescribeNetworkInterfaces": {
+      "usd_per_request": "0",
+      "classification": "control_plane_meter_inference",
+      "source_ids": [
+        "ec2"
+      ]
+    },
+    "ec2:DescribeRouteTables": {
+      "usd_per_request": "0",
+      "classification": "control_plane_meter_inference",
+      "source_ids": [
+        "ec2"
+      ]
+    },
+    "ec2:DescribeSecurityGroups": {
+      "usd_per_request": "0",
+      "classification": "control_plane_meter_inference",
+      "source_ids": [
+        "ec2"
+      ]
+    },
+    "ec2:DescribeSnapshots": {
+      "usd_per_request": "0",
+      "classification": "control_plane_meter_inference",
+      "source_ids": [
+        "ec2"
+      ]
+    },
+    "ec2:DescribeSubnets": {
+      "usd_per_request": "0",
+      "classification": "control_plane_meter_inference",
+      "source_ids": [
+        "ec2"
+      ]
+    },
+    "ec2:DescribeVolumes": {
+      "usd_per_request": "0",
+      "classification": "control_plane_meter_inference",
+      "source_ids": [
+        "ec2"
+      ]
+    },
+    "ec2:DescribeVpcs": {
+      "usd_per_request": "0",
+      "classification": "control_plane_meter_inference",
+      "source_ids": [
+        "ec2"
+      ]
+    },
+    "ecs:DescribeClusters": {
+      "usd_per_request": "0",
+      "classification": "control_plane_meter_inference",
+      "source_ids": [
+        "ecs"
+      ]
+    },
+    "ecs:DescribeServices": {
+      "usd_per_request": "0",
+      "classification": "control_plane_meter_inference",
+      "source_ids": [
+        "ecs"
+      ]
+    },
+    "eks:DescribeCluster": {
+      "usd_per_request": "0",
+      "classification": "control_plane_meter_inference",
+      "source_ids": [
+        "eks"
+      ]
+    },
+    "elbv2:DescribeListeners": {
+      "usd_per_request": "0",
+      "classification": "control_plane_meter_inference",
+      "source_ids": [
+        "elbv2"
+      ]
+    },
+    "elbv2:DescribeLoadBalancerAttributes": {
+      "usd_per_request": "0",
+      "classification": "control_plane_meter_inference",
+      "source_ids": [
+        "elbv2"
+      ]
+    },
+    "elbv2:DescribeLoadBalancers": {
+      "usd_per_request": "0",
+      "classification": "control_plane_meter_inference",
+      "source_ids": [
+        "elbv2"
+      ]
+    },
+    "elbv2:DescribeTargetGroups": {
+      "usd_per_request": "0",
+      "classification": "control_plane_meter_inference",
+      "source_ids": [
+        "elbv2"
+      ]
+    },
+    "elbv2:DescribeTargetHealth": {
+      "usd_per_request": "0",
+      "classification": "control_plane_meter_inference",
+      "source_ids": [
+        "elbv2"
+      ]
+    },
+    "iam:GetInstanceProfile": {
+      "usd_per_request": "0",
+      "classification": "no_additional_charge",
+      "source_ids": [
+        "iam"
+      ]
+    },
+    "iam:GetRole": {
+      "usd_per_request": "0",
+      "classification": "no_additional_charge",
+      "source_ids": [
+        "iam"
+      ]
+    },
+    "lambda:GetFunctionConcurrency": {
+      "usd_per_request": "0",
+      "classification": "control_plane_meter_inference",
+      "source_ids": [
+        "lambda"
+      ]
+    },
+    "lambda:ListEventSourceMappings": {
+      "usd_per_request": "0",
+      "classification": "control_plane_meter_inference",
+      "source_ids": [
+        "lambda"
+      ]
+    },
+    "lambda:ListTags": {
+      "usd_per_request": "0",
+      "classification": "control_plane_meter_inference",
+      "source_ids": [
+        "lambda"
+      ]
+    },
+    "rds:DescribeDBClusterSnapshots": {
+      "usd_per_request": "0",
+      "classification": "control_plane_meter_inference",
+      "source_ids": [
+        "rds"
+      ]
+    },
+    "rds:DescribeDBClusters": {
+      "usd_per_request": "0",
+      "classification": "control_plane_meter_inference",
+      "source_ids": [
+        "rds"
+      ]
+    },
+    "rds:DescribeDBInstances": {
+      "usd_per_request": "0",
+      "classification": "control_plane_meter_inference",
+      "source_ids": [
+        "rds"
+      ]
+    },
+    "rds:DescribeDBSnapshots": {
+      "usd_per_request": "0",
+      "classification": "control_plane_meter_inference",
+      "source_ids": [
+        "rds"
+      ]
+    },
+    "route53:ListResourceRecordSets": {
+      "usd_per_request": "0",
+      "classification": "control_plane_meter_inference",
+      "source_ids": [
+        "route53"
+      ]
+    },
+    "s3:GetBucketTagging": {
+      "usd_per_request": "0.0000004000",
+      "classification": "metered_request",
+      "source_ids": [
+        "s3",
+        "s3_tariff",
+        "s3_tagging_api"
+      ]
+    },
+    "s3:GetBucketVersioning": {
+      "usd_per_request": "0.0000004000",
+      "classification": "metered_request",
+      "source_ids": [
+        "s3",
+        "s3_tariff",
+        "s3_versioning_api"
+      ]
+    },
+    "sqs:GetQueueAttributes": {
+      "usd_per_request": "0.0000004000",
+      "classification": "metered_request",
+      "source_ids": [
+        "sqs",
+        "sqs_tariff"
+      ]
+    }
+  }
+}

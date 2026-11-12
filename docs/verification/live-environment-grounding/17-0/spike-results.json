@@ -1,0 +1,55 @@
+{
+  "date": "2026-11-12",
+  "scope": "Disposable offline synthetic feasibility probes only. No runtime feature, credentials, SDK installation, network, Terraform or OpenTofu binary invocation.",
+  "commands": [
+    {
+      "command": "./.venv/bin/python -m unittest discover -s docs/verification/live-environment-grounding/17-0/spike -q",
+      "stage": "red before qualification.py existed",
+      "result": "FAILED: ModuleNotFoundError qualification; 1 import error"
+    },
+    {
+      "command": "./.venv/bin/python -m unittest discover -s docs/verification/live-environment-grounding/17-0/spike -v",
+      "stage": "green",
+      "result": "9 tests passed"
+    },
+    {
+      "command": "./.venv/bin/ruff format docs/verification/live-environment-grounding/17-0/spike",
+      "result": "2 files formatted"
+    },
+    {
+      "command": "./.venv/bin/ruff check docs/verification/live-environment-grounding/17-0/spike",
+      "result": "All checks passed"
+    },
+    {
+      "command": "./.venv/bin/python docs/verification/live-environment-grounding/17-0/spike/qualification.py > docs/verification/live-environment-grounding/17-0/measurement-results.json",
+      "result": "exit0; benchmark output retained"
+    },
+    {
+      "command": "./.venv/bin/bandit -r docs/verification/live-environment-grounding/17-0/spike --severity-level medium --confidence-level medium",
+      "result": "exit0; no medium/high severity findings; 3 low severity findings"
+    },
+    {
+      "command": "./.venv/bin/python -m unittest discover -s docs/verification/live-environment-grounding/17-0/spike -q",
+      "stage": "independent audit regression",
+      "result": "Explicit prior_state:null case reproduced AttributeError before fix; 9 tests pass after fallback fix."
+    }
+  ],
+  "proofs": {
+    "AC2": "Readiness predicate requires all five independent gates; setting any one false produces NOT READY.",
+    "AC3": "Unlisted mutating and read actions refused before mock constructor; published prototype policy action set equals allowlist; deliberate TerminateInstances insertion rejected by non-mutating verb assertion.",
+    "AC4": "Empty-environment subprocess with empty temporary HOME; socket creation replaced by deny function. Exact typed intended reads; issued0; no boto/session imports in dry-run path. Three supported-family parameter shapes independently asserted.",
+    "AC5": "Synthetic Terraform/OpenTofu-labelled format1.0/1.1/1.2 shape probes traverse nested prior_state, fallback change.before, missing unknown, pure create no_live_counterpart. Unknown format rejected. NOT proof of actual tool exports/version support.",
+    "AC6": "1000-resource synthetic benchmark with fake delayed provider; total scheduler latency/call count/concurrency cap/deadline tested. No AWS latency/pricing proof. Hypothetical cost sensitivity only.",
+    "AC8": "Caller-config endpoint/role/account/host/profile denied, strict fixed region corpus; synthetic secret removed through existing services.content_security.redact_value. No product credential-chain/endpoint hardening qualification."
+  },
+  "limitations": [
+    "Only three prototype resource families; approximately25-family coverage and per-capability permission freeze not complete.",
+    "Policy action equivalence is prototype proof only; Resource wildcard must be reviewed against exact SDK/API IAM support and cannot justify broad account inventory.",
+    "Simple verb assertion does not alone prove API semantic safety.",
+    "Fake provider cooperatively observes deadline; real sockets/retries/credential resolution require independent bounded execution proof.",
+    "No live AWS credentials used and no real provider pricing measured.",
+    "Synthetic shape matrix cannot close real Terraform/OpenTofu plan version qualification.",
+    "Independent packet audit completed with two findings fixed; readiness remains NOT READY pending dependency approval, missing feasibility evidence and product coverage freeze. Production security review remains separate."
+  ],
+  "record_status": "Historical initial three-family experiment; superseded for final coverage/readiness by coverage/results.json, sdk-results.json and updated readiness report after explicit maintainer continuation approval."
+}
