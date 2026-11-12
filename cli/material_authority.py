@@ -8,8 +8,10 @@ import sys
 
 import config
 from infra_automation.material_authority import (
+    MaterialAuthorityCheckpoint,
     MaterialAuthorityDocument,
     MaterialAuthorityLedger,
+    document_digest,
     load_private_key,
     load_public_key,
 )
@@ -52,6 +54,7 @@ def _current_document(ledger, status):
         rebound = MaterialAuthorityDocument(
             source_id=status["installation_id"],
             recovery_generation=status["generation"],
+            checkpoint=previous.checkpoint,
             records=tuple(
                 row.model_copy(
                     update={"state": "revoked", "generation": row.generation + 1}
@@ -61,6 +64,43 @@ def _current_document(ledger, status):
         )
         ledger.write(rebound)
         return rebound
+
+
+def _with_record(current, proposed):
+    retained = tuple(
+        row
+        for row in current.records
+        if (row.run_id, row.step_id) != (proposed.run_id, proposed.step_id)
+    )
+    records = (*retained, proposed)
+    if len(records) <= 250:
+        return current.model_copy(update={"records": records})
+    revoked = tuple(row for row in retained if row.state == "revoked")
+    if not revoked:
+        raise ValueError("Material ledger has no revoked records to compact")
+    removed = {(row.run_id, row.step_id) for row in revoked}
+    records = tuple(row for row in records if (row.run_id, row.step_id) not in removed)
+    previous_count = (
+        current.checkpoint.compacted_records if current.checkpoint is not None else 0
+    )
+    previous_max = max(
+        (
+            *(row.generation for row in current.records),
+            current.checkpoint.max_generation if current.checkpoint is not None else 0,
+        )
+    )
+    return current.model_copy(
+        update={
+            "checkpoint": MaterialAuthorityCheckpoint(
+                prior_document_digest=document_digest(current),
+                source_id=current.source_id,
+                recovery_generation=current.recovery_generation,
+                max_generation=previous_max,
+                compacted_records=previous_count + len(revoked),
+            ),
+            "records": records,
+        }
+    )
 
 
 def prepare(run_id, step_id, generation=None):
@@ -91,7 +131,12 @@ def prepare(run_id, step_id, generation=None):
         ),
     )
     current = _current_document(ledger, status)
-    maximum = max((row.generation for row in current.records), default=0)
+    maximum = max(
+        (
+            *(row.generation for row in current.records),
+            current.checkpoint.max_generation if current.checkpoint is not None else 0,
+        )
+    )
     selected_generation = maximum + 1 if generation is None else generation
     if selected_generation <= maximum:
         raise ValueError("Material generation must exceed the retained maximum")
@@ -108,12 +153,7 @@ def prepare(run_id, step_id, generation=None):
         if run is None:
             raise ValueError("Run is unavailable")
         proposed = authority.propose_record(session, run, step_id, selected_generation)
-    retained = tuple(
-        row
-        for row in current.records
-        if (row.run_id, row.step_id) != (proposed.run_id, proposed.step_id)
-    )
-    document = current.model_copy(update={"records": (*retained, proposed)})
+    document = _with_record(current, proposed)
     ledger.write(document)
     return {
         "run_id": proposed.run_id,

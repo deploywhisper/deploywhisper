@@ -238,6 +238,101 @@ jobs:
           docker rm -f release-smoke 2>/dev/null || true
           docker volume rm whisper-release-data 2>/dev/null || true
 
+  qualification:
+    name: "Finalize Exact Qualification Manifest"
+    permissions:
+      contents: read
+      pull-requests: read
+      id-token: write
+      attestations: write
+      artifact-metadata: write
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: [validate, docker, artifacts]
+    outputs:
+      artifact-name: ${{ steps.metadata.outputs.artifact-name }}
+    env:
+      GH_TOKEN: ${{ github.token }}
+      IMAGE: ${{ needs.docker.outputs.image }}
+      DIGEST: ${{ needs.docker.outputs.digest }}
+      SOURCE_ARTIFACT: ${{ needs.artifacts.outputs.artifact-name }}
+      SOURCE_SHA: ${{ needs.artifacts.outputs.source-sha }}
+      DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+    steps:
+      - name: Checkout exact release source
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          fetch-depth: 0
+      - name: Download signed source evidence
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: ${{ needs.artifacts.outputs.artifact-name }}
+          path: dist/release
+      - name: Verify source and OCI attestations before finalization
+        run: |
+          set -euo pipefail
+          test "$SOURCE_SHA" = "$GITHUB_SHA"
+          for subject in dist/release/*.tar.gz dist/release/SHA256SUMS dist/release/source-manifest.json dist/release/runner-manifest.json dist/release/sbom.spdx.json; do
+            gh attestation verify "$subject" \
+              --bundle dist/release/artifact.intoto.jsonl --repo "$GITHUB_REPOSITORY" \
+              --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/release-artifacts.yml" \
+              --signer-digest "$GITHUB_SHA" --source-digest "$GITHUB_SHA" \
+              --source-ref "$GITHUB_REF" --deny-self-hosted-runners
+          done
+          (cd dist/release && sha256sum --strict --check SHA256SUMS)
+          gh attestation verify "oci://$IMAGE@$DIGEST" --bundle-from-oci \
+            --repo "$GITHUB_REPOSITORY" \
+            --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/release.yml" \
+            --signer-digest "$GITHUB_SHA" --source-digest "$GITHUB_SHA" \
+            --source-ref "$GITHUB_REF" --deny-self-hosted-runners
+      - name: Generate exact post-build qualification manifest
+        id: metadata
+        run: |
+          set -euo pipefail
+          mkdir -p dist/qualification
+          approval_args=()
+          if jq -e '[.gates[] | select(.id == "operator-pilot-or-maintainer-waiver" or .id == "independent-code-security-review")] | any(.status == "passed")' docs/verification/infra-automation/16-19/qualification-manifest.json >/dev/null; then
+            python3 -m scripts.github_codeowners_approval \
+              --repository "$GITHUB_REPOSITORY" --source-commit "$GITHUB_SHA" \
+              --base-branch "$DEFAULT_BRANCH" \
+              --output dist/qualification/codeowners-approval.json
+            approval_args+=(--codeowners-approval dist/qualification/codeowners-approval.json)
+          fi
+          python3 -m scripts.qualification_manifest finalize \
+            docs/verification/infra-automation/16-19/qualification-manifest.json \
+            --source-commit "$GITHUB_SHA" --image-digest "$DIGEST" \
+            --repository "$GITHUB_REPOSITORY" --workflow-ref "$GITHUB_REF" \
+            --run-id "$GITHUB_RUN_ID" "${approval_args[@]}" \
+            --output dist/qualification/final-qualification-manifest.json
+          python3 -m scripts.qualification_manifest validate \
+            dist/qualification/final-qualification-manifest.json \
+            --expected-source-commit "$GITHUB_SHA" \
+            --expected-image-digest "$DIGEST" --require-final
+          echo "artifact-name=release-qualification-$GITHUB_SHA-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" >> "$GITHUB_OUTPUT"
+      - name: Attest final qualification manifest
+        id: attest-qualification
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4
+        with:
+          subject-path: dist/qualification/final-qualification-manifest.json
+      - name: Preserve and verify final qualification attestation
+        env:
+          BUNDLE_PATH: ${{ steps.attest-qualification.outputs.bundle-path }}
+        run: |
+          cp "$BUNDLE_PATH" dist/qualification/qualification.intoto.jsonl
+          gh attestation verify dist/qualification/final-qualification-manifest.json \
+            --bundle dist/qualification/qualification.intoto.jsonl \
+            --repo "$GITHUB_REPOSITORY" \
+            --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/release.yml" \
+            --signer-digest "$GITHUB_SHA" --source-digest "$GITHUB_SHA" \
+            --source-ref "$GITHUB_REF" --deny-self-hosted-runners
+      - name: Upload final qualification evidence
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ${{ steps.metadata.outputs.artifact-name }}
+          path: dist/qualification/
+          if-no-files-found: error
+          retention-days: 90
+
   release:
     name: "Promote Verified Release"
     permissions:
@@ -245,7 +340,7 @@ jobs:
       packages: write
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    needs: [validate, docker, artifacts]
+    needs: [validate, docker, artifacts, qualification]
     env:
       GH_TOKEN: ${{ github.token }}
       VERSION: ${{ needs.validate.outputs.image_version }}
@@ -262,6 +357,11 @@ jobs:
         with:
           name: ${{ needs.artifacts.outputs.artifact-name }}
           path: dist/release
+      - name: Download exact final qualification from this run
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: ${{ needs.qualification.outputs.artifact-name }}
+          path: dist/qualification
       - name: Verify source asset bundle before publication
         run: |
           test "${{ needs.artifacts.outputs.source-sha }}" = "$GITHUB_SHA"
@@ -273,6 +373,16 @@ jobs:
               --source-ref "$GITHUB_REF" --deny-self-hosted-runners
           done
           (cd dist/release && sha256sum --strict --check SHA256SUMS)
+          gh attestation verify dist/qualification/final-qualification-manifest.json \
+            --bundle dist/qualification/qualification.intoto.jsonl \
+            --repo "$GITHUB_REPOSITORY" \
+            --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/release.yml" \
+            --signer-digest "$GITHUB_SHA" --source-digest "$GITHUB_SHA" \
+            --source-ref "$GITHUB_REF" --deny-self-hosted-runners
+          python3 -m scripts.qualification_manifest validate \
+            dist/qualification/final-qualification-manifest.json \
+            --expected-source-commit "$GITHUB_SHA" \
+            --expected-image-digest "$DIGEST" --require-final
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
       - name: Log in to GitHub Container Registry
@@ -300,7 +410,8 @@ jobs:
             --notes-file release-notes.md "${options[@]}" \
             "dist/release/deploywhisper-$RELEASE_TAG.tar.gz" \
             "dist/release/deploywhisper-runner-$RELEASE_TAG.tar.gz" \
-            dist/release/SHA256SUMS dist/release/source-manifest.json dist/release/runner-manifest.json dist/release/sbom.spdx.json dist/release/artifact.intoto.jsonl
+            dist/release/SHA256SUMS dist/release/source-manifest.json dist/release/runner-manifest.json dist/release/sbom.spdx.json dist/release/artifact.intoto.jsonl \
+            dist/qualification/final-qualification-manifest.json dist/qualification/qualification.intoto.jsonl
       - name: Promote verified digest to version and eligible stable aliases
         run: |
           tags=(--tag "$IMAGE:$VERSION")

@@ -13,6 +13,31 @@ from services import infra_automation_support as support
 from services import project_service as authorization
 
 
+def policy_output_digest(
+    run, document, step, link, policy_row, settings, target
+) -> str:
+    """Bind the fixed worker output to the exact retained policy and target facts."""
+    from infra_automation.targets import target_snapshot_bytes
+
+    return support.digest(
+        support.canonical(
+            {
+                "version": 1,
+                "run_id": run.id,
+                "step_id": step.id,
+                "report_link_id": link.id,
+                "report_link_digest": link.digest,
+                "policy_version": policy_row.version,
+                "policy": settings.model_dump(mode="json"),
+                "advisory_policy": document.advisory_policy.model_dump(mode="json"),
+                "target_snapshot_digest": support.digest(target_snapshot_bytes(target)),
+                "authorization_kind": step.authorization_kind,
+                "environment": step.environment,
+            }
+        )
+    )
+
+
 def execute_policy_step(value, handle=None, factory=None):
     """Evaluate only the server-retained policy input; mint no approval authority."""
     if type(handle) is not AttemptHandle or not callable(factory):
@@ -86,22 +111,8 @@ def execute_policy_step(value, handle=None, factory=None):
         }
         if len(target_digests) != 1:
             raise LifecycleError(409)
-        digest = support.digest(
-            support.canonical(
-                {
-                    "version": 1,
-                    "run_id": run.id,
-                    "step_id": step.id,
-                    "report_link_id": link.id,
-                    "report_link_digest": link.digest,
-                    "policy_version": policy_row.version,
-                    "policy": settings.model_dump(mode="json"),
-                    "advisory_policy": document.advisory_policy.model_dump(mode="json"),
-                    "target_snapshot_digest": next(iter(target_digests)),
-                    "authorization_kind": step.authorization_kind,
-                    "environment": step.environment,
-                }
-            )
+        digest = policy_output_digest(
+            run, document, step, link, policy_row, settings, snapshots[0]
         )
         return WorkerResult(
             outcome="local_success",

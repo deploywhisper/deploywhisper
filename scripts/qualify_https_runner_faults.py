@@ -22,6 +22,26 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 
+def require(condition, message):
+    if not condition:
+        raise RuntimeError(message)
+
+
+def qualification_summary(case, origin, records, statuses):
+    full_corpus = case is None and {item["case"] for item in records} == {
+        "wire-lease-expiry",
+        "running-revocation",
+        "log-cap",
+    }
+    return {
+        "qualified": full_corpus,
+        "full_corpus": full_corpus,
+        "origin": origin,
+        "cases": records,
+        "transport_observations": statuses,
+    }
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--fixture", type=Path, required=True)
@@ -244,7 +264,10 @@ def main():
             client = RunnerClient(
                 origin, redeemed["runner_id"], redeemed["token"], transport=transport
             )
-            assert client.poll(max_polls=1) is None
+            require(
+                client.poll(max_polls=1) is None,
+                "Runner received an assignment before admission",
+            )
             run = api(
                 "/api/v1/infra-automation/runs",
                 {
@@ -334,14 +357,19 @@ def main():
                         }
                     else:
                         raise AssertionError("Expired scope started local execution")
-                    assert not created
+                    require(
+                        not created, "Expired task unexpectedly created a container"
+                    )
                     try:
                         client.send(message, assignment.task_token)
                     except RunnerClientError:
                         facts["late_heartbeat_status"] = statuses[-1]["status"]
                     else:
                         raise AssertionError("Expired wire lease accepted")
-                    assert facts["late_heartbeat_status"] in (401, 409)
+                    require(
+                        facts["late_heartbeat_status"] in (401, 409),
+                        "Late heartbeat did not fail closed",
+                    )
                 else:
                     if case == "log-cap":
                         oversized = parse_message(
@@ -351,7 +379,10 @@ def main():
                         try:
                             client.send(oversized, assignment.task_token)
                         except RunnerClientError:
-                            assert statuses[-1]["status"] == 429
+                            require(
+                                statuses[-1]["status"] == 429,
+                                "Oversized log chunk did not return 429",
+                            )
                         else:
                             raise AssertionError("Oversized log chunk admitted")
                         facts["oversized_chunk_status"] = 429
@@ -382,7 +413,10 @@ def main():
                                     log_message, assignment.task_token
                                 )
                             except RunnerClientError:
-                                assert statuses[-1]["status"] == 429
+                                require(
+                                    statuses[-1]["status"] == 429,
+                                    "Log-cap transport did not return 429",
+                                )
                                 break
                             chunks += 1
                             message = parse_message(
@@ -392,7 +426,10 @@ def main():
                                     "sequence": receipt["sequence"] + 1,
                                 }
                             )
-                        assert chunks > 25 and chunks < 100
+                        require(
+                            25 < chunks < 100,
+                            "Log-cap fixture did not exercise the bounded chunk range",
+                        )
                         assignment = TaskAssignment(message, assignment.task_token)
                         facts.update(
                             accepted_log_chunks=chunks,
@@ -474,17 +511,21 @@ def main():
                         stop.set()
                         if monitor:
                             monitor.join(timeout=20)
-                    assert len(executed) == 1
+                    require(
+                        len(executed) == 1,
+                        "Fault fixture did not execute exactly once",
+                    )
                     result = executed[0]
                     if case == "running-revocation":
-                        assert (
+                        require(
                             revoked.is_set()
                             and result.state == "authority_unavailable"
                             and not result.finalizable
                             and result.output == ""
                             and result.output_digest is None
                             and result.collection is None
-                            and result.cleanup_complete
+                            and result.cleanup_complete,
+                            "Running revocation did not fail closed after cleanup",
                         )
                     else:
                         if not result.finalizable or not result.cleanup_complete:
@@ -501,7 +542,10 @@ def main():
                                 )
                                 + "\n"
                             )
-                        assert result.finalizable and result.cleanup_complete
+                        require(
+                            result.finalizable and result.cleanup_complete,
+                            "Log-cap execution did not finalize cleanly",
+                        )
                 if result is not None:
                     facts["runner_result"] = {
                         k: v
@@ -517,7 +561,10 @@ def main():
                     != 0
                     for name in created
                 )
-                assert facts["containers_removed"]
+                require(
+                    facts["containers_removed"],
+                    "Fault case left an owned container behind",
+                )
             deadline = time.monotonic() + 60
             while time.monotonic() < deadline:
                 current = api("/api/v1/infra-automation/runs/" + run["id"])
@@ -573,9 +620,10 @@ def main():
                 retained.sort(key=lambda item: item["sequence"])
                 facts["retained_log_bytes"] = len(canonical(retained))
                 facts["retained_log_chunks"] = len(retained)
-                assert (
+                require(
                     len(retained) == facts["accepted_log_chunks"]
-                    and facts["retained_log_bytes"] <= 8192
+                    and facts["retained_log_bytes"] <= 8192,
+                    "Retained logs exceeded the accepted bounded result",
                 )
                 rejected = {
                     "sequence": len(retained) + 1,
@@ -584,19 +632,27 @@ def main():
                     + " "
                     + "." * 70,
                 }
-                assert len(canonical(retained + [rejected])) > 8192
-                assert facts["custody_published"]
-                assert (
+                require(
+                    len(canonical(retained + [rejected])) > 8192,
+                    "Rejected log chunk did not cross the configured cap",
+                )
+                require(
+                    facts["custody_published"],
+                    "Successful log-cap case did not publish custody",
+                )
+                require(
                     current["state"] == "succeeded"
                     and len(links) == 1
                     and logs["cursor"]["truncated"]
-                    and not logs["cursor"]["gap"]
+                    and not logs["cursor"]["gap"],
+                    "Log-cap result did not retain one complete truncated history",
                 )
             else:
-                assert (
+                require(
                     current["state"] == "failed"
                     and not links
-                    and not facts["custody_published"]
+                    and not facts["custody_published"],
+                    "Denied fault case advanced report or custody state",
                 )
             if case != "running-revocation":
                 api(
@@ -610,20 +666,16 @@ def main():
                 )
                 + "\n"
             )
+    summary = qualification_summary(args.case, origin, records, statuses)
     (args.output / "runner-faults.json").write_text(
-        json.dumps(
-            {
-                "qualified": True,
-                "full_corpus": args.case is None,
-                "origin": origin,
-                "cases": records,
-                "transport_observations": statuses,
-            },
-            indent=2,
-        )
-        + "\n"
+        json.dumps(summary, indent=2) + "\n"
     )
-    print("Actual TLS runner faults passed", flush=True)
+    print(
+        "Actual TLS runner faults passed"
+        if summary["qualified"]
+        else "Partial TLS runner fault case passed; full corpus unqualified",
+        flush=True,
+    )
 
 
 if __name__ == "__main__":

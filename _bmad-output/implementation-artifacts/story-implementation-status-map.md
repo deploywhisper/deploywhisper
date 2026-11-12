@@ -161,12 +161,12 @@ Story 16.0's four follow-up review findings were resolved and requalified on 202
 | 16.11 | `done` | [16-11-github-receiver-and-outcome-reconciliation.md](16-11-github-receiver-and-outcome-reconciliation.md) |
 | 16.12 | `backlog` | [16-12-runner-enrollment-and-attempt-protocol.md](16-12-runner-enrollment-and-attempt-protocol.md) |
 | 16.13 | `backlog` | [16-13-isolated-runner-execution-profile.md](16-13-isolated-runner-execution-profile.md) |
-| 16.14 | `backlog` | [16-14-opentofu-terraform-collection-and-provenance.md](16-14-opentofu-terraform-collection-and-provenance.md) |
+| 16.14 | `in-progress` | [16-14-opentofu-terraform-collection-and-provenance.md](16-14-opentofu-terraform-collection-and-provenance.md) |
 | 16.15 | `backlog` | [16-15-runner-health-and-collection-ux.md](16-15-runner-health-and-collection-ux.md) |
 | 16.16 | `backlog` | [16-16-declared-multi-unit-preflight-planning.md](16-16-declared-multi-unit-preflight-planning.md) |
 | 16.17 | `backlog` | [16-17-signed-trigger-intake-and-cli.md](16-17-signed-trigger-intake-and-cli.md) |
-| 16.18 | `backlog` | [16-18-operator-recovery-retention-and-network-readiness.md](16-18-operator-recovery-retention-and-network-readiness.md) |
-| 16.19 | `backlog` | [16-19-production-qualification-and-v1-5-0-release.md](16-19-production-qualification-and-v1-5-0-release.md) |
+| 16.18 | `done` | [16-18-operator-recovery-retention-and-network-readiness.md](16-18-operator-recovery-retention-and-network-readiness.md) |
+| 16.19 | `in-progress` | [16-19-production-qualification-and-v1-5-0-release.md](16-19-production-qualification-and-v1-5-0-release.md) |
 
 ## Next delivery and remaining risks
 
@@ -180,7 +180,7 @@ Current planning authority: [feature PRD](../planning-artifacts/prd-infra-automa
 
 Story preparation: [complete report](epic-16-story-preparation-report.md). Current foundation readiness is restored after the 2026-10-12 review fixes; this qualification is not production or release readiness.
 
-Story16.0 closure on2026-10-10 qualifies only the prepared16.1/16.3 foundations; see the final readiness report and evidence manifest. Later16.2/16.4–16.19 retain backlog.
+Story16.0 closure on2026-10-10 qualified only the prepared16.1/16.3 foundations at that snapshot; see the final readiness report and evidence manifest. Current per-story rows above supersede that historical baseline.
 
 ## Epic 17 — Live Environment Grounding (independent lane)
 

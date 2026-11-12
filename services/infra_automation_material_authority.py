@@ -157,7 +157,14 @@ class CoLocatedMaterialAuthority:
             if link is not None
             else None
         )
-        if link is None or manifest is None or manifest.collection_bytes is None:
+        if (
+            link is None
+            or manifest is None
+            or manifest.collection_bytes is None
+            or manifest.collection_digest is None
+            or support.digest(manifest.collection_bytes) != manifest.collection_digest
+            or support.digest(manifest.artifacts_bytes) != manifest.digest
+        ):
             raise LifecycleError(409)
         try:
             collection = CollectionProvenance.model_validate_json(
@@ -165,6 +172,8 @@ class CoLocatedMaterialAuthority:
             )
         except (ValueError, TypeError):
             raise LifecycleError(409) from None
+        if collection.sanitized_digest != manifest.digest:
+            raise LifecycleError(409)
         source = CollectedSource(
             repository_id=collection.repository_id,
             commit_sha=collection.commit_sha,
@@ -187,8 +196,33 @@ class CoLocatedMaterialAuthority:
         from services.report_service import _serialize_report
 
         report_bytes, report_digest = freeze_report_snapshot(_serialize_report(report))
-        policy_row, _ = support.policy_state(session, run.project_id)
+        policy_row, settings = support.policy_state(session, run.project_id)
         if policy_row is None:
+            raise LifecycleError(409)
+        policy_attempt = next(
+            (
+                item
+                for item in reversed(attempts)
+                if item.step_id == gate.id and item.state == "succeeded"
+            ),
+            None,
+        )
+        from services.infra_automation_policy_worker import policy_output_digest
+
+        expected_policy_digest = policy_output_digest(
+            run, document, gate, link, policy_row, settings, target
+        )
+        if policy_attempt is None:
+            raise LifecycleError(409)
+        try:
+            policy_output = json.loads(policy_attempt.output_json or "null")
+        except (ValueError, TypeError):
+            raise LifecycleError(409) from None
+        if policy_output != {
+            "kind": "action_binding",
+            "reference": link.id,
+            "digest": expected_policy_digest,
+        }:
             raise LifecycleError(409)
         policy_digest = support.digest(
             support.canonical(

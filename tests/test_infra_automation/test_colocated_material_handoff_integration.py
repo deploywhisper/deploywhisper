@@ -168,6 +168,39 @@ class ColocatedMaterialHandoffIntegrationTests(unittest.TestCase):
                 collection.model_dump(mode="json")
             )
             manifest.collection_digest = support.digest(manifest.collection_bytes)
+            from infra_automation.run_resolution import runtime_workflow
+            from infra_automation.state import OutputReference
+            from models.repositories import infra_automation_runs as run_repository
+            from models.tables import InfraAutomationReportLink
+            from services.infra_automation_policy_worker import policy_output_digest
+
+            gate = next(
+                step
+                for step in runtime_workflow(case.document).steps
+                if step.id == "gate"
+            )
+            link = db.get(InfraAutomationReportLink, "link")
+            policy, settings = support.policy_state(db, 100)
+            output = OutputReference(
+                kind="action_binding",
+                reference=link.id,
+                digest=policy_output_digest(
+                    case.run,
+                    case.document,
+                    gate,
+                    link,
+                    policy,
+                    settings,
+                    snapshot,
+                ),
+            ).model_dump(mode="json")
+            attempt = next(
+                item
+                for item in run_repository.list_attempts(db, run_id=case.run.id)
+                if item.step_id == "gate"
+            )
+            attempt.output_json = support.canonical(output).decode()
+            attempt.output_digest = support.digest(attempt.output_json.encode())
 
         with tempfile.TemporaryDirectory() as temporary:
             private_key = Ed25519PrivateKey.generate()

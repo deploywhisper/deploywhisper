@@ -1,5 +1,5 @@
 # generated: 2026-05-01
-# last_updated: 2026-11-11
+# last_updated: 2026-11-12
 # project: deploywhisper
 # project_key: NOKEY
 # tracking_system: file-system
@@ -28,7 +28,7 @@
 #   - done: Retrospective has been completed
 #
 # RECONCILIATION BASELINE: v1.4.0 published 2026-10-07; accepted through 12.4, plus 12.6 and 13.8
-# NEXT WORKFLOW: Story16.19 active; production material composition and source-freeze reviews are clean. Finish the running 1,800-second capacity proof, final full validation, immutable manifest/signatures and separately authorized publication.
+# NEXT WORKFLOW: Story16.19 code-review fixes are active. Capacity NFR-007 passed, but run the missing 1,000-transition NFR-005 benchmark, complete the accepted/unknown final-image browser and receiver matrices, then obtain immutable review/signing evidence before publication.
 # Independent human operator pilot was NOT EXECUTED; the approved waiver accepts only residual self-service usability risk and does not replace technical/release gates.
 # Story16.15 positive HTTPS/real-runner and broader production release qualifications remain separate gates.
 # Epic17 was cut back to its independent v1.6.0 train on 2026-11-11 and no longer gates Story16.19 or v1.5.0.
@@ -42,7 +42,7 @@
 # - Dev moves story to review, then runs code-review
 
 generated: 2026-05-01
-last_updated: 2026-11-11
+last_updated: 2026-11-12
 project: deploywhisper
 project_key: NOKEY
 tracking_system: file-system

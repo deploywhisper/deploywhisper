@@ -1,6 +1,6 @@
 # v1.5.0 release decision
 
-Current decision: **BLOCKED — local technical qualification passed; external trust and publication gates remain open.**
+Current decision: **BLOCKED — partial local qualification passed; mandatory technical, trust and publication gates remain open.**
 
 ## Passed or implemented
 
@@ -13,7 +13,7 @@ Current decision: **BLOCKED — local technical qualification passed; external t
 - Clean source-freeze blind/security reviews of the material authority, runner
   distribution, waiver boundary, benchmarks and release tooling.
 - Source-freeze workflow validation and runner service latency thresholds.
-- An uninterrupted 1,800.138-second capacity run at the declared 10 active
+- An uninterrupted 1,800.138-second NFR-007 capacity run at the declared 10 active
   runs, 2 analysis workers and 20 authenticated runner ports, with zero errors,
   zero OOM events and identical start/end hashes for 357 source files.
 - Fresh final-source validation: 2,117 root tests; 3,592 tests across all ten
@@ -29,12 +29,20 @@ Current decision: **BLOCKED — local technical qualification passed; external t
 
 ## Mandatory gates still open
 
+- The NFR-005 ready-transition overhead benchmark has only 250 of the required
+  1,000 samples.
+- Published persisted-boundary, authorization, redaction and Evidence-Law
+  matrices required by NFR-001–004.
+- Final-image composed browser coverage for accepted/unknown delivery and the
+  complete create/run/review/decision/runner/unit/recovery journey.
 - Durable repository approval evidence for the maintainer waiver.
 - Story 16.14 Packet 14.8 accepted/unknown external receiver-effect and
   reconciliation qualification.
 - Hosted GitHub attestations for application archive, bounded runner archive,
   manifests, SBOM and checksums; signed OCI candidate verification.
 - Final CODEOWNERS/code/security review on the immutable commit.
+- Successful trusted-workflow generation and attestation of the post-build final
+  qualification manifest bound to the exact source and multi-architecture image.
 - Explicit public tag/release/alias publication authorization.
 
 The local artifacts are unsigned preview evidence only. No tag, GitHub release,

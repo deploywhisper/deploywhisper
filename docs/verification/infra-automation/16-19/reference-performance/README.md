@@ -13,12 +13,13 @@ Current source-frozen measurements:
   zero failures, p95 1.668459 ms (limit: below 500 ms).
 - Runner service path: 100 warmups + 1,000 measured claims across twenty
   processes, zero failures, p95 90.855916 ms (limit: below 2,000 ms).
-- Capacity/saturation: the accepted run sustained 10 active runs, 2 spawned
+- Capacity/saturation: the NFR-007-qualified run sustained 10 active runs, 2 spawned
   analysis workers and 20 persisted authenticated local runner ports for
   1,800.138 seconds. It recorded 3,730 samples, zero errors, zero OOM events,
   bounded storage (6,021,120-byte database; 4,165,352-byte WAL), and identical
   start/end hashes for all 357 measured source files. Its 250 actual
-  ready-to-spawn transitions had p95 34.046 ms (limit: below 1,000 ms). The
+  ready-to-spawn transitions had p95 34.046 ms, but NFR-005 requires 1,000
+  transitions and therefore remains unqualified. The
   authoritative record is `capacity-final/operator-capacity.json`; earlier
   stopped attempts are explicitly retained only in invalidated directories.
 

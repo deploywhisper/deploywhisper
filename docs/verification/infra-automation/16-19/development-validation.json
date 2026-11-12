@@ -3,7 +3,7 @@
   "checked_at": "2026-11-11T14:12:00Z",
   "source_commit": "1adf00fd9de4223186da4976dd8caad9882e26cd",
   "image_digest": "sha256:7a6afd6fd7b3ce74a672fa6fedda0e2c6d146813bcb3f1009930529e1c5f2323",
-  "status": "local-technical-qualification-passed-external-release-gates-open",
+  "status": "partial-local-technical-validation-passed-mandatory-gates-open",
   "results": [
     {
       "command": "python -m unittest discover -q",
@@ -47,7 +47,7 @@
     },
     {
       "command": "1800-second reference capacity harness",
-      "result": "qualified at 1800.138 seconds; 10 active runs, 2 analysis workers, 20 authenticated runner ports, 3730 samples, 0 errors, 0 OOM events, identical 357-file start/end source hashes"
+      "result": "NFR-007 capacity qualified at 1800.138 seconds; 10 active runs, 2 analysis workers, 20 authenticated runner ports, 3730 samples, 0 errors, 0 OOM events, identical 357-file start/end source hashes; only 250 ready-transition timings, so NFR-005 remains unqualified"
     },
     {
       "command": "release_artifacts build and verify plus extracted runner entrypoint smoke",
@@ -66,6 +66,9 @@
   },
   "human_pilot": "WAIVED BY ACCOUNTABLE MAINTAINER; NOT EXECUTED; residual self-service usability risk accepted",
   "open_gates": [
+    "NFR-005 requires 1000 ready-transition overhead samples; only 250 are recorded",
+    "NFR-001 through NFR-004 require published fault, authorization, redaction and Evidence-Law matrices",
+    "NFR-009 requires accepted/unknown delivery and complete final-image browser journeys",
     "durable CODEOWNERS approval evidence for the maintainer waiver",
     "accepted/unknown external receiver effect and reconciliation qualification for Story 16.14 Packet 14.8",
     "hosted GitHub attestations and signed OCI candidate verification",

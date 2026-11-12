@@ -24,6 +24,22 @@ complete. Its JSON always reports `publication_authorized: false`. The checked-i
 is intentionally incomplete. Regenerate for the actual immutable release build;
 it does not claim that uncommitted preparation belongs to its source commit.
 
+Stable publication does not consume that preliminary inventory directly. After
+the release workflow has built and verified the exact multi-architecture image
+and source artifacts, it runs `qualification_manifest finalize` with the exact
+Git source SHA, OCI digest, tag ref and trusted GitHub run identity. If either
+the waiver or independent-review gate is passed, the workflow also collects an
+independent approved review for that exact merged commit from a login named by
+the committed `.github/CODEOWNERS`. The finalizer rejects unrelated evidence
+paths using the canonical `evidence-groups.json` and gate-specific mapping.
+
+The resulting version2 final manifest is attested by the release workflow. The
+publication job downloads it, verifies its GitHub attestation and exact
+source/image identity, then reruns validation with `--require-final`. Any open
+requirement/gate, missing independent CODEOWNERS approval, substituted digest,
+untrusted workflow identity or failed source/OCI attestation prevents the
+release job from starting.
+
 For each executed requirement or gate, record `passed` or `failed` and evidence
 objects with these exact fields:
 
@@ -45,12 +61,12 @@ are rejected. Artifact existence alone never marks a gate passed. Evidence files
 are capped at 32 MiB; the inventory is an operator-local review input, not an
 untrusted HTTP upload endpoint.
 
-The validator checks structure and integrity, not the truth of a human's claim
-or the semantics of a result file. A copied digest or a claimed verifier is not
-a signature. Independent maintainers must inspect the actual proof, its scope,
-source/build identity, requirement coverage and external attestations. Reusing
-one report across requirements is valid only when it really establishes each
-requirement. Do not turn fixture success into a production-profile pass.
+The preliminary validator checks structure, allowed evidence routing and byte
+integrity; it does not infer the truth of a human claim from prose. A copied
+digest or claimed verifier is not a signature. The post-build finalizer adds the
+trusted GitHub review receipt and verified source/OCI attestation boundary.
+Independent maintainers must still inspect the actual proof and its scope. Do
+not turn fixture success into a production-profile pass.
 
 The nine mandatory gates retain accepted prerequisites, either the independent
 operator pilot or an accountable-maintainer waiver, integrated real-profile behavior, safety/authorization, reference

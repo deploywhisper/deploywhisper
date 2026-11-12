@@ -27,6 +27,11 @@ The three journeys cover:
 2. Navigation from the same real isolated collection run to its permanent report, with keyboard activation and collected-provenance assertions.
 3. A fresh unredeemed enrollment uses a configured 60-second credential lifetime. The reveal clears, then the test waits beyond the actual published server deadline before proving redemption returns401. No product clock was patched. The UI intentionally clears conservatively slightly before the server deadline.
 
+These journeys do not establish the complete AC4 final-image
+create/run/review/decision/runner/unit/recovery flow or the accepted/unknown
+delivery screenshots. NFR-009 and Packet19.4 remain open until that exact
+candidate journey is executed.
+
 Trace, video, automatic screenshots and credential exports from browser storage are disabled. Deliberate captures occur after secret clearing. The required earlier HTTP-denial lane remains valid; this explicit supplemental TLS lane supplies its missing positive proof.
 
 ## Defects found and repaired

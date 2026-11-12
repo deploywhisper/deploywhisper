@@ -20,6 +20,13 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 
+def require_terminal_collection(current, links):
+    if current["state"] != "succeeded":
+        raise RuntimeError("Actual collection run did not reach succeeded")
+    if not links:
+        raise RuntimeError("Shared analysis report unavailable")
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--fixture", type=Path, required=True)
@@ -184,8 +191,7 @@ def main():
                 if current["state"] in ("failed", "timed_out", "cancelled"):
                     raise RuntimeError("Actual collection run failed")
                 time.sleep(0.5)
-            if not links:
-                raise RuntimeError("Shared analysis report unavailable")
+            require_terminal_collection(current, links)
             report_id = links[0]["report_id"]
             report = api("/api/v1/analyses/" + str(report_id))
             result = {

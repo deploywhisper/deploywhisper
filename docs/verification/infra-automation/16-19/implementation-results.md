@@ -37,7 +37,7 @@ No stable release or human acceptance is claimed.
 | Actual TLS collector | 49 checks passed; one retained report/link |
 | Composed HTTPS browser | 3 journeys,8screenshots,axe0 serious/critical,visual94/pass |
 | Reviews | No remaining actionable code finding after repairs |
-| Reference performance | validation p951.668459ms; claim p9590.855916ms; 1800.138s capacity at10/2/20 with0errors |
+| Reference performance | validation p951.668459ms; claim p9590.855916ms; NFR-007 capacity1800.138s at10/2/20 with0errors; NFR-005 open at250/1000 transitions |
 | Exact local candidate | commit`1adf00f`; app/runner archives, SPDX SBOM/checksums verified; image`sha256:7a6afd...f2323` healthy atv1.5.0 |
 
 See [commands and digests](validation-summary.json), [profile proof](prerequisite-profiles/README.md),

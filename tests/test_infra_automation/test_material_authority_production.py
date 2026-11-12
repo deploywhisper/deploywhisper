@@ -10,9 +10,11 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from infra_automation.collection_contracts import CollectionProvenance
 from infra_automation.decisions import binding_digest
 from infra_automation.material_authority import (
+    MaterialAuthorityCheckpoint,
     MaterialAuthorityDocument,
     MaterialAuthorityLedger,
     MaterialAuthorityRecord,
+    document_digest,
 )
 from infra_automation.lifecycle import LifecycleError
 from infra_automation.preflight_contracts import SyntheticCollectionEnvelope
@@ -191,6 +193,44 @@ class MaterialAuthorityProductionTests(unittest.TestCase):
         with case.credentials(), auth.authorized_session(case.factory) as session:
             run = runs.get_run(session, case.run.id)
             proposed = authority.propose_record(session, run, "decision", generation=11)
+        with case.factory.begin() as db:
+            manifest = db.get(InfraAutomationArtifactManifest, "manifest")
+            valid_collection_digest = manifest.collection_digest
+            manifest.collection_digest = "sha256:" + "0" * 64
+        with case.credentials(), auth.authorized_session(case.factory) as session:
+            run = runs.get_run(session, case.run.id)
+            with self.assertRaises(LifecycleError):
+                authority.propose_record(session, run, "decision", generation=11)
+        with case.factory.begin() as db:
+            manifest = db.get(InfraAutomationArtifactManifest, "manifest")
+            manifest.collection_digest = valid_collection_digest
+            gate = next(
+                item
+                for item in runs.list_attempts(db, run_id=case.run.id)
+                if item.step_id == "gate"
+            )
+            valid_policy_output = gate.output_json
+            valid_policy_output_digest = gate.output_digest
+            gate.output_json = json.dumps(
+                {
+                    "kind": "action_binding",
+                    "reference": "link",
+                    "digest": "sha256:" + "0" * 64,
+                }
+            )
+            gate.output_digest = support.digest(gate.output_json.encode())
+        with case.credentials(), auth.authorized_session(case.factory) as session:
+            run = runs.get_run(session, case.run.id)
+            with self.assertRaises(LifecycleError):
+                authority.propose_record(session, run, "decision", generation=11)
+        with case.factory.begin() as db:
+            gate = next(
+                item
+                for item in runs.list_attempts(db, run_id=case.run.id)
+                if item.step_id == "gate"
+            )
+            gate.output_json = valid_policy_output
+            gate.output_digest = valid_policy_output_digest
         wrong_custody = CoLocatedMaterialAuthority(
             self.ledger_path,
             verification_key=self.public_key,
@@ -243,6 +283,81 @@ class MaterialAuthorityProductionTests(unittest.TestCase):
             witness = authority.witness(session, witness_scope)
         self.assertEqual(witness.source_id, "installation-one:g7")
         self.assertEqual(witness.generations, (11,))
+
+    def test_revoked_records_require_a_monotonic_signed_checkpoint(self):
+        ledger = self.ledger()
+        first = self.record(state="revoked", generation=4)
+        second = self.record(run_id="run-two", step_id="decision-two", generation=5)
+        original = MaterialAuthorityDocument(
+            source_id="installation-one",
+            recovery_generation=7,
+            records=(first, second),
+        )
+        ledger.write(original)
+        checkpoint = MaterialAuthorityCheckpoint(
+            prior_document_digest=document_digest(original),
+            source_id=original.source_id,
+            recovery_generation=original.recovery_generation,
+            max_generation=5,
+            compacted_records=1,
+        )
+        compacted = original.model_copy(
+            update={"checkpoint": checkpoint, "records": (second,)}
+        )
+        ledger.write(compacted)
+        self.assertEqual(ledger.read_any(), compacted)
+        with self.assertRaisesRegex(ValueError, "checkpoint"):
+            ledger.write(
+                compacted.model_copy(
+                    update={
+                        "checkpoint": checkpoint.model_copy(
+                            update={"compacted_records": 2}
+                        )
+                    }
+                )
+            )
+        with self.assertRaisesRegex(ValueError, "retained history"):
+            ledger.write(
+                compacted.model_copy(
+                    update={
+                        "records": (
+                            *compacted.records,
+                            self.record(
+                                run_id="run-three",
+                                step_id="decision-three",
+                                generation=3,
+                            ),
+                        )
+                    }
+                )
+            )
+
+    def test_cli_compacts_revoked_records_before_the_251st_publication(self):
+        from cli.material_authority import _with_record
+
+        records = tuple(
+            self.record(
+                run_id=f"run-{index}",
+                step_id=f"decision-{index}",
+                generation=index + 1,
+                state="revoked",
+            )
+            for index in range(250)
+        )
+        current = MaterialAuthorityDocument(
+            source_id="installation-one",
+            recovery_generation=7,
+            records=records,
+        )
+        proposed = self.record(run_id="run-new", step_id="decision-new", generation=251)
+        compacted = _with_record(current, proposed)
+        self.assertEqual(compacted.records, (proposed,))
+        self.assertEqual(compacted.checkpoint.compacted_records, 250)
+        self.assertEqual(compacted.checkpoint.max_generation, 250)
+        ledger = self.ledger()
+        ledger.write(current)
+        ledger.write(compacted)
+        self.assertEqual(ledger.read_any(), compacted)
 
 
 if __name__ == "__main__":

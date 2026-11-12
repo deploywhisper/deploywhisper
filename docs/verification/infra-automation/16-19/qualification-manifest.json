@@ -29,7 +29,7 @@
       "evidence": [
         {
           "path": "docs/verification/infra-automation/16-19/development-validation.json",
-          "sha256": "dc6c936b1928b759e4f9a49298da0d3cd483929f67fc4581b1ca0dc038d869eb",
+          "sha256": "da9e6d66d4bed60b936b814ca263e478a0231cbeaf3c5a887f5cddf8deb137ba",
           "command": "final local qualification evidence",
           "exit_code": 0,
           "scope": "verified human identity, sessions, membership and separation of duties",
@@ -45,7 +45,7 @@
       "evidence": [
         {
           "path": "docs/verification/infra-automation/16-19/development-validation.json",
-          "sha256": "dc6c936b1928b759e4f9a49298da0d3cd483929f67fc4581b1ca0dc038d869eb",
+          "sha256": "da9e6d66d4bed60b936b814ca263e478a0231cbeaf3c5a887f5cddf8deb137ba",
           "command": "final local qualification evidence",
           "exit_code": 0,
           "scope": "verified human identity, sessions, membership and separation of duties",
@@ -61,7 +61,7 @@
       "evidence": [
         {
           "path": "docs/verification/infra-automation/16-19/development-validation.json",
-          "sha256": "dc6c936b1928b759e4f9a49298da0d3cd483929f67fc4581b1ca0dc038d869eb",
+          "sha256": "da9e6d66d4bed60b936b814ca263e478a0231cbeaf3c5a887f5cddf8deb137ba",
           "command": "final local qualification evidence",
           "exit_code": 0,
           "scope": "verified human identity, sessions, membership and separation of duties",
@@ -77,7 +77,7 @@
       "evidence": [
         {
           "path": "docs/verification/infra-automation/16-19/development-validation.json",
-          "sha256": "dc6c936b1928b759e4f9a49298da0d3cd483929f67fc4581b1ca0dc038d869eb",
+          "sha256": "da9e6d66d4bed60b936b814ca263e478a0231cbeaf3c5a887f5cddf8deb137ba",
           "command": "final local qualification evidence",
           "exit_code": 0,
           "scope": "verified human identity, sessions, membership and separation of duties",
@@ -93,7 +93,7 @@
       "evidence": [
         {
           "path": "docs/verification/infra-automation/16-19/development-validation.json",
-          "sha256": "dc6c936b1928b759e4f9a49298da0d3cd483929f67fc4581b1ca0dc038d869eb",
+          "sha256": "da9e6d66d4bed60b936b814ca263e478a0231cbeaf3c5a887f5cddf8deb137ba",
           "command": "final local qualification evidence",
           "exit_code": 0,
           "scope": "verified human identity, sessions, membership and separation of duties",
@@ -109,7 +109,7 @@
       "evidence": [
         {
           "path": "docs/verification/infra-automation/16-19/development-validation.json",
-          "sha256": "dc6c936b1928b759e4f9a49298da0d3cd483929f67fc4581b1ca0dc038d869eb",
+          "sha256": "da9e6d66d4bed60b936b814ca263e478a0231cbeaf3c5a887f5cddf8deb137ba",
           "command": "final local qualification evidence",
           "exit_code": 0,
           "scope": "verified human identity, sessions, membership and separation of duties",
@@ -125,7 +125,7 @@
       "evidence": [
         {
           "path": "docs/verification/infra-automation/16-19/development-validation.json",
-          "sha256": "dc6c936b1928b759e4f9a49298da0d3cd483929f67fc4581b1ca0dc038d869eb",
+          "sha256": "da9e6d66d4bed60b936b814ca263e478a0231cbeaf3c5a887f5cddf8deb137ba",
           "command": "final local qualification evidence",
           "exit_code": 0,
           "scope": "verified human identity, sessions, membership and separation of duties",
@@ -285,7 +285,7 @@
       "evidence": [
         {
           "path": "docs/verification/infra-automation/16-19/development-validation.json",
-          "sha256": "dc6c936b1928b759e4f9a49298da0d3cd483929f67fc4581b1ca0dc038d869eb",
+          "sha256": "da9e6d66d4bed60b936b814ca263e478a0231cbeaf3c5a887f5cddf8deb137ba",
           "command": "final local qualification evidence",
           "exit_code": 0,
           "scope": "durable fenced engine, retries/cancellation and bounded capacity",
@@ -301,7 +301,7 @@
       "evidence": [
         {
           "path": "docs/verification/infra-automation/16-19/development-validation.json",
-          "sha256": "dc6c936b1928b759e4f9a49298da0d3cd483929f67fc4581b1ca0dc038d869eb",
+          "sha256": "da9e6d66d4bed60b936b814ca263e478a0231cbeaf3c5a887f5cddf8deb137ba",
           "command": "final local qualification evidence",
           "exit_code": 0,
           "scope": "durable fenced engine, retries/cancellation and bounded capacity",
@@ -317,7 +317,7 @@
       "evidence": [
         {
           "path": "docs/verification/infra-automation/16-19/development-validation.json",
-          "sha256": "dc6c936b1928b759e4f9a49298da0d3cd483929f67fc4581b1ca0dc038d869eb",
+          "sha256": "da9e6d66d4bed60b936b814ca263e478a0231cbeaf3c5a887f5cddf8deb137ba",
           "command": "final local qualification evidence",
           "exit_code": 0,
           "scope": "durable fenced engine, retries/cancellation and bounded capacity",
@@ -333,7 +333,7 @@
       "evidence": [
         {
           "path": "docs/verification/infra-automation/16-19/development-validation.json",
-          "sha256": "dc6c936b1928b759e4f9a49298da0d3cd483929f67fc4581b1ca0dc038d869eb",
+          "sha256": "da9e6d66d4bed60b936b814ca263e478a0231cbeaf3c5a887f5cddf8deb137ba",
           "command": "final local qualification evidence",
           "exit_code": 0,
           "scope": "durable fenced engine, retries/cancellation and bounded capacity",
@@ -349,7 +349,7 @@
       "evidence": [
         {
           "path": "docs/verification/infra-automation/16-19/development-validation.json",
-          "sha256": "dc6c936b1928b759e4f9a49298da0d3cd483929f67fc4581b1ca0dc038d869eb",
+          "sha256": "da9e6d66d4bed60b936b814ca263e478a0231cbeaf3c5a887f5cddf8deb137ba",
           "command": "final local qualification evidence",
           "exit_code": 0,
           "scope": "durable fenced engine, retries/cancellation and bounded capacity",
@@ -633,14 +633,14 @@
     },
     {
       "id": "IAU15-FR-040",
-      "status": "passed",
+      "status": "failed",
       "evidence": [
         {
           "path": "docs/verification/infra-automation/16-19/prerequisite-profiles/receiver-faults/component-results.json",
           "sha256": "c316389de6a43c1e5ab7b9780a14227a021b610d1cb452270fd51c907e6e3ca6",
-          "command": "final local qualification evidence",
-          "exit_code": 0,
-          "scope": "targets, exact custody, one-use grants, receiver effect fencing and unknown reconciliation",
+          "command": "2026-11-12 adversarial acceptance audit",
+          "exit_code": 2,
+          "scope": "targets, exact custody, one-use grants, receiver effect fencing and unknown reconciliation | requirement not established by current evidence",
           "verified_by": "story-16.19-local-qualification",
           "source_commit": "1adf00fd9de4223186da4976dd8caad9882e26cd",
           "image_digest": "sha256:7a6afd6fd7b3ce74a672fa6fedda0e2c6d146813bcb3f1009930529e1c5f2323"
@@ -893,7 +893,7 @@
       "evidence": [
         {
           "path": "docs/verification/infra-automation/16-19/development-validation.json",
-          "sha256": "dc6c936b1928b759e4f9a49298da0d3cd483929f67fc4581b1ca0dc038d869eb",
+          "sha256": "da9e6d66d4bed60b936b814ca263e478a0231cbeaf3c5a887f5cddf8deb137ba",
           "command": "final local qualification evidence",
           "exit_code": 0,
           "scope": "declared units, audit, administration, retention and settings",
@@ -909,7 +909,7 @@
       "evidence": [
         {
           "path": "docs/verification/infra-automation/16-19/development-validation.json",
-          "sha256": "dc6c936b1928b759e4f9a49298da0d3cd483929f67fc4581b1ca0dc038d869eb",
+          "sha256": "da9e6d66d4bed60b936b814ca263e478a0231cbeaf3c5a887f5cddf8deb137ba",
           "command": "final local qualification evidence",
           "exit_code": 0,
           "scope": "declared units, audit, administration, retention and settings",
@@ -925,7 +925,7 @@
       "evidence": [
         {
           "path": "docs/verification/infra-automation/16-19/development-validation.json",
-          "sha256": "dc6c936b1928b759e4f9a49298da0d3cd483929f67fc4581b1ca0dc038d869eb",
+          "sha256": "da9e6d66d4bed60b936b814ca263e478a0231cbeaf3c5a887f5cddf8deb137ba",
           "command": "final local qualification evidence",
           "exit_code": 0,
           "scope": "declared units, audit, administration, retention and settings",
@@ -941,7 +941,7 @@
       "evidence": [
         {
           "path": "docs/verification/infra-automation/16-19/development-validation.json",
-          "sha256": "dc6c936b1928b759e4f9a49298da0d3cd483929f67fc4581b1ca0dc038d869eb",
+          "sha256": "da9e6d66d4bed60b936b814ca263e478a0231cbeaf3c5a887f5cddf8deb137ba",
           "command": "final local qualification evidence",
           "exit_code": 0,
           "scope": "declared units, audit, administration, retention and settings",
@@ -957,7 +957,7 @@
       "evidence": [
         {
           "path": "docs/verification/infra-automation/16-19/development-validation.json",
-          "sha256": "dc6c936b1928b759e4f9a49298da0d3cd483929f67fc4581b1ca0dc038d869eb",
+          "sha256": "da9e6d66d4bed60b936b814ca263e478a0231cbeaf3c5a887f5cddf8deb137ba",
           "command": "final local qualification evidence",
           "exit_code": 0,
           "scope": "declared units, audit, administration, retention and settings",
@@ -969,14 +969,14 @@
     },
     {
       "id": "IAU15-NFR-001",
-      "status": "passed",
+      "status": "failed",
       "evidence": [
         {
           "path": "docs/verification/infra-automation/16-19/development-validation.json",
-          "sha256": "dc6c936b1928b759e4f9a49298da0d3cd483929f67fc4581b1ca0dc038d869eb",
-          "command": "final local qualification evidence",
-          "exit_code": 0,
-          "scope": "crash/race, authorization, secret corpus and Evidence Law matrices",
+          "sha256": "da9e6d66d4bed60b936b814ca263e478a0231cbeaf3c5a887f5cddf8deb137ba",
+          "command": "2026-11-12 adversarial acceptance audit",
+          "exit_code": 2,
+          "scope": "crash/race, authorization, secret corpus and Evidence Law matrices | requirement not established by current evidence",
           "verified_by": "story-16.19-local-qualification",
           "source_commit": "1adf00fd9de4223186da4976dd8caad9882e26cd",
           "image_digest": "sha256:7a6afd6fd7b3ce74a672fa6fedda0e2c6d146813bcb3f1009930529e1c5f2323"
@@ -985,14 +985,14 @@
     },
     {
       "id": "IAU15-NFR-002",
-      "status": "passed",
+      "status": "failed",
       "evidence": [
         {
           "path": "docs/verification/infra-automation/16-19/development-validation.json",
-          "sha256": "dc6c936b1928b759e4f9a49298da0d3cd483929f67fc4581b1ca0dc038d869eb",
-          "command": "final local qualification evidence",
-          "exit_code": 0,
-          "scope": "crash/race, authorization, secret corpus and Evidence Law matrices",
+          "sha256": "da9e6d66d4bed60b936b814ca263e478a0231cbeaf3c5a887f5cddf8deb137ba",
+          "command": "2026-11-12 adversarial acceptance audit",
+          "exit_code": 2,
+          "scope": "crash/race, authorization, secret corpus and Evidence Law matrices | requirement not established by current evidence",
           "verified_by": "story-16.19-local-qualification",
           "source_commit": "1adf00fd9de4223186da4976dd8caad9882e26cd",
           "image_digest": "sha256:7a6afd6fd7b3ce74a672fa6fedda0e2c6d146813bcb3f1009930529e1c5f2323"
@@ -1001,14 +1001,14 @@
     },
     {
       "id": "IAU15-NFR-003",
-      "status": "passed",
+      "status": "failed",
       "evidence": [
         {
           "path": "docs/verification/infra-automation/16-19/development-validation.json",
-          "sha256": "dc6c936b1928b759e4f9a49298da0d3cd483929f67fc4581b1ca0dc038d869eb",
-          "command": "final local qualification evidence",
-          "exit_code": 0,
-          "scope": "crash/race, authorization, secret corpus and Evidence Law matrices",
+          "sha256": "da9e6d66d4bed60b936b814ca263e478a0231cbeaf3c5a887f5cddf8deb137ba",
+          "command": "2026-11-12 adversarial acceptance audit",
+          "exit_code": 2,
+          "scope": "crash/race, authorization, secret corpus and Evidence Law matrices | requirement not established by current evidence",
           "verified_by": "story-16.19-local-qualification",
           "source_commit": "1adf00fd9de4223186da4976dd8caad9882e26cd",
           "image_digest": "sha256:7a6afd6fd7b3ce74a672fa6fedda0e2c6d146813bcb3f1009930529e1c5f2323"
@@ -1017,14 +1017,14 @@
     },
     {
       "id": "IAU15-NFR-004",
-      "status": "passed",
+      "status": "failed",
       "evidence": [
         {
           "path": "docs/verification/infra-automation/16-19/development-validation.json",
-          "sha256": "dc6c936b1928b759e4f9a49298da0d3cd483929f67fc4581b1ca0dc038d869eb",
-          "command": "final local qualification evidence",
-          "exit_code": 0,
-          "scope": "crash/race, authorization, secret corpus and Evidence Law matrices",
+          "sha256": "da9e6d66d4bed60b936b814ca263e478a0231cbeaf3c5a887f5cddf8deb137ba",
+          "command": "2026-11-12 adversarial acceptance audit",
+          "exit_code": 2,
+          "scope": "crash/race, authorization, secret corpus and Evidence Law matrices | requirement not established by current evidence",
           "verified_by": "story-16.19-local-qualification",
           "source_commit": "1adf00fd9de4223186da4976dd8caad9882e26cd",
           "image_digest": "sha256:7a6afd6fd7b3ce74a672fa6fedda0e2c6d146813bcb3f1009930529e1c5f2323"
@@ -1033,14 +1033,14 @@
     },
     {
       "id": "IAU15-NFR-005",
-      "status": "passed",
+      "status": "failed",
       "evidence": [
         {
           "path": "docs/verification/infra-automation/16-19/reference-performance/capacity-final/operator-capacity.json",
           "sha256": "f22bb7472bf097715a088c835068b6814837be56e26218adac839b69853eb56d",
-          "command": "final local qualification evidence",
-          "exit_code": 0,
-          "scope": "ready-transition overhead and 30-minute saturation on exact resource profile",
+          "command": "2026-11-12 adversarial acceptance audit",
+          "exit_code": 2,
+          "scope": "ready-transition overhead and 30-minute saturation on exact resource profile | requirement not established by current evidence",
           "verified_by": "story-16.19-local-qualification",
           "source_commit": "1adf00fd9de4223186da4976dd8caad9882e26cd",
           "image_digest": "sha256:7a6afd6fd7b3ce74a672fa6fedda0e2c6d146813bcb3f1009930529e1c5f2323"
@@ -1097,14 +1097,14 @@
     },
     {
       "id": "IAU15-NFR-009",
-      "status": "passed",
+      "status": "failed",
       "evidence": [
         {
           "path": "docs/verification/infra-automation/16-19/prerequisite-profiles/README.md",
-          "sha256": "4d280c168ac5690081159f85e2b2ed8c3456d6dd0e62ac9bf042e8d854bb1c39",
-          "command": "final local qualification evidence",
-          "exit_code": 0,
-          "scope": "composed browser evidence on byte-identical React source, plus exact-current-image health; not a browser rerun",
+          "sha256": "adad8034da12d0eeaf4723018da6670a70d4536ede80b68dcee91abfa6cebdfd",
+          "command": "2026-11-12 adversarial acceptance audit",
+          "exit_code": 2,
+          "scope": "composed browser evidence on byte-identical React source, plus exact-current-image health; not a browser rerun | requirement not established by current evidence",
           "verified_by": "story-16.19-local-qualification",
           "source_commit": "1adf00fd9de4223186da4976dd8caad9882e26cd",
           "image_digest": "sha256:7a6afd6fd7b3ce74a672fa6fedda0e2c6d146813bcb3f1009930529e1c5f2323"
@@ -1134,9 +1134,9 @@
         {
           "path": "docs/verification/infra-automation/16-19/human-pilot-record.md",
           "sha256": "76c05b792dc19bf8d72d95d76a48e75d0a7fb6dbf1d9c4080995cdb91aadbc8b",
-          "command": "external trust gate evaluation",
+          "command": "2026-11-12 adversarial acceptance audit",
           "exit_code": 2,
-          "scope": "maintainer waiver recorded but durable CODEOWNERS approval evidence remains absent",
+          "scope": "maintainer waiver recorded but durable CODEOWNERS approval evidence remains absent | requirement not established by current evidence",
           "verified_by": "story-16.19-local-qualification",
           "source_commit": "1adf00fd9de4223186da4976dd8caad9882e26cd",
           "image_digest": "sha256:7a6afd6fd7b3ce74a672fa6fedda0e2c6d146813bcb3f1009930529e1c5f2323"
@@ -1149,10 +1149,10 @@
       "evidence": [
         {
           "path": "docs/verification/infra-automation/16-19/release-decision.md",
-          "sha256": "1898386239a670381389a716ac4e7eb027f4d0b9b1606c90f9a2cf29f5a0f9f0",
-          "command": "external trust gate evaluation",
+          "sha256": "b6767956593cdb03ce7bd34bdcb9b620c8e3c41da4d26b33dc674564e0d93539",
+          "command": "2026-11-12 adversarial acceptance audit",
           "exit_code": 2,
-          "scope": "exact local artifacts verified but hosted signatures, OCI provenance and publication remain open",
+          "scope": "exact local artifacts verified but hosted signatures, OCI provenance and publication remain open | requirement not established by current evidence",
           "verified_by": "story-16.19-local-qualification",
           "source_commit": "1adf00fd9de4223186da4976dd8caad9882e26cd",
           "image_digest": "sha256:7a6afd6fd7b3ce74a672fa6fedda0e2c6d146813bcb3f1009930529e1c5f2323"
@@ -1167,10 +1167,10 @@
       "evidence": [
         {
           "path": "docs/verification/infra-automation/16-19/release-decision.md",
-          "sha256": "1898386239a670381389a716ac4e7eb027f4d0b9b1606c90f9a2cf29f5a0f9f0",
-          "command": "external gate evaluation",
+          "sha256": "b6767956593cdb03ce7bd34bdcb9b620c8e3c41da4d26b33dc674564e0d93539",
+          "command": "2026-11-12 adversarial gate audit",
           "exit_code": 2,
-          "scope": "Story 16.14 Packet 14.8 external receiver-effect qualification remains open",
+          "scope": "Story 16.14 Packet 14.8 external receiver-effect qualification remains open | mandatory gate remains open",
           "verified_by": "story-16.19-local-qualification",
           "source_commit": "1adf00fd9de4223186da4976dd8caad9882e26cd",
           "image_digest": "sha256:7a6afd6fd7b3ce74a672fa6fedda0e2c6d146813bcb3f1009930529e1c5f2323"
@@ -1184,9 +1184,9 @@
         {
           "path": "docs/verification/infra-automation/16-19/human-pilot-record.md",
           "sha256": "76c05b792dc19bf8d72d95d76a48e75d0a7fb6dbf1d9c4080995cdb91aadbc8b",
-          "command": "external gate evaluation",
+          "command": "2026-11-12 adversarial gate audit",
           "exit_code": 2,
-          "scope": "waiver_kind=accountable-maintainer; approval_evidence=missing-durable-codeowners-review; pilot=not-executed",
+          "scope": "waiver_kind=accountable-maintainer; approval_evidence=missing-durable-codeowners-review; pilot=not-executed | mandatory gate remains open",
           "verified_by": "story-16.19-local-qualification",
           "source_commit": "1adf00fd9de4223186da4976dd8caad9882e26cd",
           "image_digest": "sha256:7a6afd6fd7b3ce74a672fa6fedda0e2c6d146813bcb3f1009930529e1c5f2323"
@@ -1200,9 +1200,9 @@
         {
           "path": "docs/verification/infra-automation/16-19/prerequisite-profiles/receiver-faults/composition-implementation.json",
           "sha256": "836a5a974f44d332136dc7c9fa3b752e6672116f4456b8e067c2de0485c41a3d",
-          "command": "external gate evaluation",
+          "command": "2026-11-12 adversarial gate audit",
           "exit_code": 2,
-          "scope": "local production composition passed; accepted/unknown external carrier effect remains open",
+          "scope": "local production composition passed; accepted/unknown external carrier effect remains open | mandatory gate remains open",
           "verified_by": "story-16.19-local-qualification",
           "source_commit": "1adf00fd9de4223186da4976dd8caad9882e26cd",
           "image_digest": "sha256:7a6afd6fd7b3ce74a672fa6fedda0e2c6d146813bcb3f1009930529e1c5f2323"
@@ -1211,14 +1211,14 @@
     },
     {
       "id": "safety-and-authorization",
-      "status": "passed",
+      "status": "failed",
       "evidence": [
         {
           "path": "docs/verification/infra-automation/16-19/development-validation.json",
-          "sha256": "dc6c936b1928b759e4f9a49298da0d3cd483929f67fc4581b1ca0dc038d869eb",
-          "command": "final local gate verification",
-          "exit_code": 0,
-          "scope": "final-source crash, authorization, redaction and evidence-law suites passed",
+          "sha256": "da9e6d66d4bed60b936b814ca263e478a0231cbeaf3c5a887f5cddf8deb137ba",
+          "command": "2026-11-12 adversarial gate audit",
+          "exit_code": 2,
+          "scope": "final-source crash, authorization, redaction and evidence-law suites passed | mandatory gate remains open",
           "verified_by": "story-16.19-local-qualification",
           "source_commit": "1adf00fd9de4223186da4976dd8caad9882e26cd",
           "image_digest": "sha256:7a6afd6fd7b3ce74a672fa6fedda0e2c6d146813bcb3f1009930529e1c5f2323"
@@ -1227,14 +1227,14 @@
     },
     {
       "id": "reference-performance",
-      "status": "passed",
+      "status": "failed",
       "evidence": [
         {
           "path": "docs/verification/infra-automation/16-19/reference-performance/capacity-final/operator-capacity.json",
           "sha256": "f22bb7472bf097715a088c835068b6814837be56e26218adac839b69853eb56d",
-          "command": "final local gate verification",
-          "exit_code": 0,
-          "scope": "1800-second 10/2/20 capacity and latency thresholds passed",
+          "command": "2026-11-12 adversarial gate audit",
+          "exit_code": 2,
+          "scope": "1800-second 10/2/20 capacity and latency thresholds passed | mandatory gate remains open",
           "verified_by": "story-16.19-local-qualification",
           "source_commit": "1adf00fd9de4223186da4976dd8caad9882e26cd",
           "image_digest": "sha256:7a6afd6fd7b3ce74a672fa6fedda0e2c6d146813bcb3f1009930529e1c5f2323"
@@ -1243,14 +1243,14 @@
     },
     {
       "id": "composed-browser",
-      "status": "passed",
+      "status": "failed",
       "evidence": [
         {
           "path": "docs/verification/infra-automation/16-19/prerequisite-profiles/README.md",
-          "sha256": "4d280c168ac5690081159f85e2b2ed8c3456d6dd0e62ac9bf042e8d854bb1c39",
-          "command": "final local gate verification",
-          "exit_code": 0,
-          "scope": "composed browser proof retained on byte-identical React source; exact current image health passed",
+          "sha256": "adad8034da12d0eeaf4723018da6670a70d4536ede80b68dcee91abfa6cebdfd",
+          "command": "2026-11-12 adversarial gate audit",
+          "exit_code": 2,
+          "scope": "composed browser proof retained on byte-identical React source; exact current image health passed | mandatory gate remains open",
           "verified_by": "story-16.19-local-qualification",
           "source_commit": "1adf00fd9de4223186da4976dd8caad9882e26cd",
           "image_digest": "sha256:7a6afd6fd7b3ce74a672fa6fedda0e2c6d146813bcb3f1009930529e1c5f2323"
@@ -1263,7 +1263,7 @@
       "evidence": [
         {
           "path": "docs/verification/infra-automation/16-19/development-validation.json",
-          "sha256": "dc6c936b1928b759e4f9a49298da0d3cd483929f67fc4581b1ca0dc038d869eb",
+          "sha256": "da9e6d66d4bed60b936b814ca263e478a0231cbeaf3c5a887f5cddf8deb137ba",
           "command": "final local gate verification",
           "exit_code": 0,
           "scope": "operations, restore, docs, link and full-CI evidence passed with bounded waiver disclosure",
@@ -1275,14 +1275,14 @@
     },
     {
       "id": "independent-code-security-review",
-      "status": "passed",
+      "status": "failed",
       "evidence": [
         {
           "path": "docs/verification/infra-automation/16-19/prerequisite-review.json",
-          "sha256": "79e7889548a00e6bcf0c6ea7381e2698d3403af8809d44b731d879b549be1bdf",
-          "command": "final local gate verification",
-          "exit_code": 0,
-          "scope": "blind and security reviews resolved all local source findings",
+          "sha256": "d5de5531fbba0c6352da44acea506b3e2f8b27b551b0c5531facc86682fd3049",
+          "command": "2026-11-12 adversarial gate audit",
+          "exit_code": 2,
+          "scope": "blind and security reviews resolved all local source findings | mandatory gate remains open",
           "verified_by": "story-16.19-local-qualification",
           "source_commit": "1adf00fd9de4223186da4976dd8caad9882e26cd",
           "image_digest": "sha256:7a6afd6fd7b3ce74a672fa6fedda0e2c6d146813bcb3f1009930529e1c5f2323"
@@ -1295,10 +1295,10 @@
       "evidence": [
         {
           "path": "docs/verification/infra-automation/16-19/release-decision.md",
-          "sha256": "1898386239a670381389a716ac4e7eb027f4d0b9b1606c90f9a2cf29f5a0f9f0",
-          "command": "external gate evaluation",
+          "sha256": "b6767956593cdb03ce7bd34bdcb9b620c8e3c41da4d26b33dc674564e0d93539",
+          "command": "2026-11-12 adversarial gate audit",
           "exit_code": 2,
-          "scope": "local app/runner/SBOM/checksums passed; hosted attestations and signed OCI verification not executed",
+          "scope": "local app/runner/SBOM/checksums passed; hosted attestations and signed OCI verification not executed | mandatory gate remains open",
           "verified_by": "story-16.19-local-qualification",
           "source_commit": "1adf00fd9de4223186da4976dd8caad9882e26cd",
           "image_digest": "sha256:7a6afd6fd7b3ce74a672fa6fedda0e2c6d146813bcb3f1009930529e1c5f2323"

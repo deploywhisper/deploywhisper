@@ -9,7 +9,7 @@
   "frontend": "513 tests plus 2 compatibility checks; typecheck and production build passed",
   "static_security": "Ruff lint/format clean for 631 files; Bandit high/high found zero issues",
   "real_profiles": "OpenTofu collection 49 checks; isolated runner 172 checks; actual TLS/browser and runner-fault supplements retained",
-  "reference_performance": "workflow p95 1.668459 ms; runner claim p95 90.855916 ms; capacity 1800.138 s with 10/2/20 and zero errors",
+  "reference_performance": "workflow p95 1.668459 ms; runner claim p95 90.855916 ms; NFR-007 capacity 1800.138 s with 10/2/20 and zero errors; NFR-005 failed sample count because only 250 of 1000 ready transitions were recorded",
   "release_assets": {
     "application_archive_sha256": "87be36a479167b663b80545a21ff7f2e5bf90c755a39c072c80438215a70df80",
     "runner_archive_sha256": "bbbe17d484b915d3e0f02fee3f3a8c40efead9cf914ad76d56b169e55400e8c4",

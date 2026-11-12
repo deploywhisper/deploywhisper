@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import fcntl
+import hashlib
 import os
 from pathlib import Path
 import secrets
@@ -46,10 +47,21 @@ class MaterialAuthorityRecord(ClosedModel):
     state: Literal["active", "revoked"] = "active"
 
 
+class MaterialAuthorityCheckpoint(ClosedModel):
+    """Signed cumulative summary for revoked records removed from the live set."""
+
+    prior_document_digest: Digest
+    source_id: Identifier
+    recovery_generation: Positive
+    max_generation: Annotated[int, Field(strict=True, ge=1, le=SAFE_INTEGER)]
+    compacted_records: Annotated[int, Field(strict=True, ge=1, le=SAFE_INTEGER)]
+
+
 class MaterialAuthorityDocument(ClosedModel):
     version: Literal[1] = 1
     source_id: Identifier
     recovery_generation: Positive
+    checkpoint: MaterialAuthorityCheckpoint | None = None
     records: Annotated[tuple[MaterialAuthorityRecord, ...], Field(max_length=250)] = ()
 
     @model_validator(mode="after")
@@ -88,6 +100,10 @@ def canonical(document: MaterialAuthorityDocument) -> bytes:
         )
         + "\n"
     ).encode()
+
+
+def document_digest(document: MaterialAuthorityDocument) -> str:
+    return "sha256:" + hashlib.sha256(canonical(document)).hexdigest()
 
 
 class MaterialAuthorityLedger:
@@ -228,10 +244,14 @@ class MaterialAuthorityLedger:
                 ):
                     raise ValueError("Material recovery domain rolled back")
                 current = {(row.run_id, row.step_id): row for row in document.records}
+                removed = []
                 for old in previous.records:
                     new = current.get((old.run_id, old.step_id))
                     if new is None:
-                        raise ValueError("Material records cannot disappear")
+                        if old.state != "revoked":
+                            raise ValueError("Active material records cannot disappear")
+                        removed.append(old)
+                        continue
                     changed = old.model_dump(exclude={"generation"}) != new.model_dump(
                         exclude={"generation"}
                     )
@@ -239,6 +259,42 @@ class MaterialAuthorityLedger:
                         changed and new.generation <= old.generation
                     ):
                         raise ValueError("Material generation did not advance")
+                previous_max = max(
+                    (
+                        *(row.generation for row in previous.records),
+                        previous.checkpoint.max_generation
+                        if previous.checkpoint is not None
+                        else 0,
+                    )
+                )
+                previous_count = (
+                    previous.checkpoint.compacted_records
+                    if previous.checkpoint is not None
+                    else 0
+                )
+                if removed:
+                    checkpoint = document.checkpoint
+                    if (
+                        checkpoint is None
+                        or checkpoint.prior_document_digest != document_digest(previous)
+                        or checkpoint.source_id != previous.source_id
+                        or checkpoint.recovery_generation
+                        != previous.recovery_generation
+                        or checkpoint.max_generation != previous_max
+                        or checkpoint.compacted_records != previous_count + len(removed)
+                    ):
+                        raise ValueError("Invalid material compaction checkpoint")
+                elif document.checkpoint != previous.checkpoint:
+                    raise ValueError("Material checkpoint changed without compaction")
+                previous_keys = {(row.run_id, row.step_id) for row in previous.records}
+                for new in document.records:
+                    if (
+                        new.run_id,
+                        new.step_id,
+                    ) not in previous_keys and new.generation <= previous_max:
+                        raise ValueError(
+                            "New material generation must exceed retained history"
+                        )
             descriptor = os.open(
                 temporary,
                 os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
