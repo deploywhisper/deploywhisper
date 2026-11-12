@@ -1,0 +1,27 @@
+{
+  "status": "prototype only; initial25-family coverage NOT frozen",
+  "families": {
+    "aws_instance": {
+      "permission": "ec2:DescribeInstances",
+      "parameter": "InstanceIds",
+      "capability": "identity and instance attributes"
+    },
+    "aws_security_group": {
+      "permission": "ec2:DescribeSecurityGroups",
+      "parameter": "GroupIds",
+      "capability": "group attributes"
+    },
+    "aws_db_instance": {
+      "permission": "rds:DescribeDBInstances",
+      "parameter": "DBInstanceIdentifier",
+      "capability": "database attributes"
+    }
+  },
+  "gaps": [
+    "reverse-hop discovery",
+    "recoverability reads",
+    "remaining resource families",
+    "SDK-model validation",
+    "resource/condition-scoped IAM policy qualification"
+  ]
+}

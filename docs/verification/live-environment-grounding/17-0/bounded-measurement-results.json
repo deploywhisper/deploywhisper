@@ -1,0 +1,835 @@
+{
+  "scope": "disposable controlled-replay feasibility, not live provider latency or production profile qualification",
+  "hardware": {
+    "cpu": "Apple M3 Pro",
+    "model": "Mac15,7",
+    "identity_source": "detected; unavailable values explicitly unknown",
+    "system": "Darwin",
+    "release": "25.6.0",
+    "machine": "arm64",
+    "logical_cpus": 12
+  },
+  "python": "3.13.12",
+  "fixture": {
+    "generator": "measurement/benchmark.py::generate_plan",
+    "provenance": "synthetic AWS-like plan, not Terraform/OpenTofu export",
+    "resources": 1000,
+    "families": 25,
+    "updates": 800,
+    "deletes": 100,
+    "creates": 100,
+    "intended_calls": 900,
+    "bytes": 1504372,
+    "sha256": "1f829480aa26170850c4559bb5cf2b7046add8fd0c513592cedc5688d8687ec7"
+  },
+  "planning_elapsed_seconds": 0.009274999960325658,
+  "sdk_shape_validation": {
+    "validated_requests": 900,
+    "elapsed_seconds": 0.12608575000194833,
+    "provider_calls": 0
+  },
+  "runs": {
+    "normal_50ms": {
+      "issued": 100,
+      "completed": 100,
+      "throttled": 0,
+      "unread": 800,
+      "partial": true,
+      "peak_concurrency": 4,
+      "backoff_events": 0,
+      "elapsed_seconds": 1.3311696659657173,
+      "intended": 900,
+      "budget": 100,
+      "deadline_seconds": 15,
+      "retries": 0
+    },
+    "slow_200ms": {
+      "issued": 100,
+      "completed": 100,
+      "throttled": 0,
+      "unread": 800,
+      "partial": true,
+      "peak_concurrency": 4,
+      "backoff_events": 0,
+      "elapsed_seconds": 5.0984852080000564,
+      "intended": 900,
+      "budget": 100,
+      "deadline_seconds": 15,
+      "retries": 0
+    },
+    "deadline_1000ms": {
+      "issued": 4,
+      "completed": 0,
+      "throttled": 0,
+      "unread": 900,
+      "partial": true,
+      "peak_concurrency": 4,
+      "backoff_events": 0,
+      "elapsed_seconds": 1.0051115829846822,
+      "intended": 900,
+      "budget": 100,
+      "deadline_seconds": 1,
+      "retries": 0
+    },
+    "throttled": {
+      "issued": 100,
+      "completed": 80,
+      "throttled": 20,
+      "unread": 820,
+      "partial": true,
+      "peak_concurrency": 4,
+      "backoff_events": 20,
+      "elapsed_seconds": 0.2386304580140859,
+      "intended": 900,
+      "budget": 100,
+      "deadline_seconds": 15,
+      "retries": 0
+    },
+    "cancelled_before_dispatch": {
+      "issued": 0,
+      "completed": 0,
+      "throttled": 0,
+      "unread": 900,
+      "partial": true,
+      "peak_concurrency": 0,
+      "backoff_events": 0,
+      "elapsed_seconds": 1.4458026271313429e-05,
+      "intended": 900,
+      "budget": 100,
+      "deadline_seconds": 15,
+      "retries": 0
+    }
+  },
+  "defaults": {
+    "total_deadline_seconds": 15,
+    "concurrency": 4,
+    "call_budget": 100,
+    "per_call_timeout_seconds": 2,
+    "hidden_sdk_retries": 0,
+    "reason": "100 calls at200ms with4workers needs approximately5seconds;15seconds provides scheduling and throttling margin.1000ms failure scenario proves partial return at deadline. Large900-call manifests intentionally truncate at100, never imply complete coverage."
+  },
+  "cost_estimate": {
+    "region": "us-east-1",
+    "currency": "USD",
+    "observed_on": "2026-11-12",
+    "estimate_kind": "provider tariffs plus explicitly labelled control-plane meter inferences",
+    "budget": 100,
+    "full_manifest": {
+      "status": "complete_estimate",
+      "intended_calls": 900,
+      "priced_calls": 900,
+      "unknown_actions": [],
+      "estimated_request_usd": 2.88e-05,
+      "known_request_subtotal_usd": 2.88e-05,
+      "per_action": [
+        {
+          "action": "autoscaling:DescribeAutoScalingGroups",
+          "calls": 36,
+          "priced_calls": 36,
+          "unknown_calls": 0,
+          "usd_per_request": 0.0,
+          "classification": "no_additional_charge",
+          "source_ids": [
+            "autoscaling"
+          ],
+          "known_request_subtotal_usd": 0.0,
+          "estimated_request_usd": 0.0
+        },
+        {
+          "action": "dynamodb:DescribeTable",
+          "calls": 36,
+          "priced_calls": 36,
+          "unknown_calls": 0,
+          "usd_per_request": 0.0,
+          "classification": "control_plane_meter_inference",
+          "source_ids": [
+            "dynamodb",
+            "dynamodb_control"
+          ],
+          "known_request_subtotal_usd": 0.0,
+          "estimated_request_usd": 0.0
+        },
+        {
+          "action": "ec2:DescribeInstances",
+          "calls": 36,
+          "priced_calls": 36,
+          "unknown_calls": 0,
+          "usd_per_request": 0.0,
+          "classification": "control_plane_meter_inference",
+          "source_ids": [
+            "ec2"
+          ],
+          "known_request_subtotal_usd": 0.0,
+          "estimated_request_usd": 0.0
+        },
+        {
+          "action": "ec2:DescribeNetworkInterfaces",
+          "calls": 36,
+          "priced_calls": 36,
+          "unknown_calls": 0,
+          "usd_per_request": 0.0,
+          "classification": "control_plane_meter_inference",
+          "source_ids": [
+            "ec2"
+          ],
+          "known_request_subtotal_usd": 0.0,
+          "estimated_request_usd": 0.0
+        },
+        {
+          "action": "ec2:DescribeRouteTables",
+          "calls": 36,
+          "priced_calls": 36,
+          "unknown_calls": 0,
+          "usd_per_request": 0.0,
+          "classification": "control_plane_meter_inference",
+          "source_ids": [
+            "ec2"
+          ],
+          "known_request_subtotal_usd": 0.0,
+          "estimated_request_usd": 0.0
+        },
+        {
+          "action": "ec2:DescribeSecurityGroups",
+          "calls": 36,
+          "priced_calls": 36,
+          "unknown_calls": 0,
+          "usd_per_request": 0.0,
+          "classification": "control_plane_meter_inference",
+          "source_ids": [
+            "ec2"
+          ],
+          "known_request_subtotal_usd": 0.0,
+          "estimated_request_usd": 0.0
+        },
+        {
+          "action": "ec2:DescribeSnapshots",
+          "calls": 36,
+          "priced_calls": 36,
+          "unknown_calls": 0,
+          "usd_per_request": 0.0,
+          "classification": "control_plane_meter_inference",
+          "source_ids": [
+            "ec2"
+          ],
+          "known_request_subtotal_usd": 0.0,
+          "estimated_request_usd": 0.0
+        },
+        {
+          "action": "ec2:DescribeSubnets",
+          "calls": 36,
+          "priced_calls": 36,
+          "unknown_calls": 0,
+          "usd_per_request": 0.0,
+          "classification": "control_plane_meter_inference",
+          "source_ids": [
+            "ec2"
+          ],
+          "known_request_subtotal_usd": 0.0,
+          "estimated_request_usd": 0.0
+        },
+        {
+          "action": "ec2:DescribeVolumes",
+          "calls": 36,
+          "priced_calls": 36,
+          "unknown_calls": 0,
+          "usd_per_request": 0.0,
+          "classification": "control_plane_meter_inference",
+          "source_ids": [
+            "ec2"
+          ],
+          "known_request_subtotal_usd": 0.0,
+          "estimated_request_usd": 0.0
+        },
+        {
+          "action": "ec2:DescribeVpcs",
+          "calls": 36,
+          "priced_calls": 36,
+          "unknown_calls": 0,
+          "usd_per_request": 0.0,
+          "classification": "control_plane_meter_inference",
+          "source_ids": [
+            "ec2"
+          ],
+          "known_request_subtotal_usd": 0.0,
+          "estimated_request_usd": 0.0
+        },
+        {
+          "action": "ecs:DescribeClusters",
+          "calls": 36,
+          "priced_calls": 36,
+          "unknown_calls": 0,
+          "usd_per_request": 0.0,
+          "classification": "control_plane_meter_inference",
+          "source_ids": [
+            "ecs"
+          ],
+          "known_request_subtotal_usd": 0.0,
+          "estimated_request_usd": 0.0
+        },
+        {
+          "action": "ecs:DescribeServices",
+          "calls": 36,
+          "priced_calls": 36,
+          "unknown_calls": 0,
+          "usd_per_request": 0.0,
+          "classification": "control_plane_meter_inference",
+          "source_ids": [
+            "ecs"
+          ],
+          "known_request_subtotal_usd": 0.0,
+          "estimated_request_usd": 0.0
+        },
+        {
+          "action": "eks:DescribeCluster",
+          "calls": 36,
+          "priced_calls": 36,
+          "unknown_calls": 0,
+          "usd_per_request": 0.0,
+          "classification": "control_plane_meter_inference",
+          "source_ids": [
+            "eks"
+          ],
+          "known_request_subtotal_usd": 0.0,
+          "estimated_request_usd": 0.0
+        },
+        {
+          "action": "elbv2:DescribeListeners",
+          "calls": 36,
+          "priced_calls": 36,
+          "unknown_calls": 0,
+          "usd_per_request": 0.0,
+          "classification": "control_plane_meter_inference",
+          "source_ids": [
+            "elbv2"
+          ],
+          "known_request_subtotal_usd": 0.0,
+          "estimated_request_usd": 0.0
+        },
+        {
+          "action": "elbv2:DescribeLoadBalancers",
+          "calls": 36,
+          "priced_calls": 36,
+          "unknown_calls": 0,
+          "usd_per_request": 0.0,
+          "classification": "control_plane_meter_inference",
+          "source_ids": [
+            "elbv2"
+          ],
+          "known_request_subtotal_usd": 0.0,
+          "estimated_request_usd": 0.0
+        },
+        {
+          "action": "elbv2:DescribeTargetGroups",
+          "calls": 36,
+          "priced_calls": 36,
+          "unknown_calls": 0,
+          "usd_per_request": 0.0,
+          "classification": "control_plane_meter_inference",
+          "source_ids": [
+            "elbv2"
+          ],
+          "known_request_subtotal_usd": 0.0,
+          "estimated_request_usd": 0.0
+        },
+        {
+          "action": "iam:GetInstanceProfile",
+          "calls": 36,
+          "priced_calls": 36,
+          "unknown_calls": 0,
+          "usd_per_request": 0.0,
+          "classification": "no_additional_charge",
+          "source_ids": [
+            "iam"
+          ],
+          "known_request_subtotal_usd": 0.0,
+          "estimated_request_usd": 0.0
+        },
+        {
+          "action": "iam:GetRole",
+          "calls": 36,
+          "priced_calls": 36,
+          "unknown_calls": 0,
+          "usd_per_request": 0.0,
+          "classification": "no_additional_charge",
+          "source_ids": [
+            "iam"
+          ],
+          "known_request_subtotal_usd": 0.0,
+          "estimated_request_usd": 0.0
+        },
+        {
+          "action": "lambda:GetFunctionConcurrency",
+          "calls": 36,
+          "priced_calls": 36,
+          "unknown_calls": 0,
+          "usd_per_request": 0.0,
+          "classification": "control_plane_meter_inference",
+          "source_ids": [
+            "lambda"
+          ],
+          "known_request_subtotal_usd": 0.0,
+          "estimated_request_usd": 0.0
+        },
+        {
+          "action": "lambda:ListEventSourceMappings",
+          "calls": 36,
+          "priced_calls": 36,
+          "unknown_calls": 0,
+          "usd_per_request": 0.0,
+          "classification": "control_plane_meter_inference",
+          "source_ids": [
+            "lambda"
+          ],
+          "known_request_subtotal_usd": 0.0,
+          "estimated_request_usd": 0.0
+        },
+        {
+          "action": "rds:DescribeDBClusters",
+          "calls": 36,
+          "priced_calls": 36,
+          "unknown_calls": 0,
+          "usd_per_request": 0.0,
+          "classification": "control_plane_meter_inference",
+          "source_ids": [
+            "rds"
+          ],
+          "known_request_subtotal_usd": 0.0,
+          "estimated_request_usd": 0.0
+        },
+        {
+          "action": "rds:DescribeDBInstances",
+          "calls": 36,
+          "priced_calls": 36,
+          "unknown_calls": 0,
+          "usd_per_request": 0.0,
+          "classification": "control_plane_meter_inference",
+          "source_ids": [
+            "rds"
+          ],
+          "known_request_subtotal_usd": 0.0,
+          "estimated_request_usd": 0.0
+        },
+        {
+          "action": "route53:ListResourceRecordSets",
+          "calls": 36,
+          "priced_calls": 36,
+          "unknown_calls": 0,
+          "usd_per_request": 0.0,
+          "classification": "control_plane_meter_inference",
+          "source_ids": [
+            "route53"
+          ],
+          "known_request_subtotal_usd": 0.0,
+          "estimated_request_usd": 0.0
+        },
+        {
+          "action": "s3:GetBucketVersioning",
+          "calls": 36,
+          "priced_calls": 36,
+          "unknown_calls": 0,
+          "usd_per_request": 4e-07,
+          "classification": "metered_request",
+          "source_ids": [
+            "s3",
+            "s3_tariff",
+            "s3_versioning_api"
+          ],
+          "known_request_subtotal_usd": 1.44e-05,
+          "estimated_request_usd": 1.44e-05
+        },
+        {
+          "action": "sqs:GetQueueAttributes",
+          "calls": 36,
+          "priced_calls": 36,
+          "unknown_calls": 0,
+          "usd_per_request": 4e-07,
+          "classification": "metered_request",
+          "source_ids": [
+            "sqs",
+            "sqs_tariff"
+          ],
+          "known_request_subtotal_usd": 1.44e-05,
+          "estimated_request_usd": 1.44e-05
+        }
+      ]
+    },
+    "budget_prefix": {
+      "status": "complete_estimate",
+      "intended_calls": 100,
+      "priced_calls": 100,
+      "unknown_actions": [],
+      "estimated_request_usd": 3.2e-06,
+      "known_request_subtotal_usd": 3.2e-06,
+      "per_action": [
+        {
+          "action": "autoscaling:DescribeAutoScalingGroups",
+          "calls": 4,
+          "priced_calls": 4,
+          "unknown_calls": 0,
+          "usd_per_request": 0.0,
+          "classification": "no_additional_charge",
+          "source_ids": [
+            "autoscaling"
+          ],
+          "known_request_subtotal_usd": 0.0,
+          "estimated_request_usd": 0.0
+        },
+        {
+          "action": "dynamodb:DescribeTable",
+          "calls": 4,
+          "priced_calls": 4,
+          "unknown_calls": 0,
+          "usd_per_request": 0.0,
+          "classification": "control_plane_meter_inference",
+          "source_ids": [
+            "dynamodb",
+            "dynamodb_control"
+          ],
+          "known_request_subtotal_usd": 0.0,
+          "estimated_request_usd": 0.0
+        },
+        {
+          "action": "ec2:DescribeInstances",
+          "calls": 4,
+          "priced_calls": 4,
+          "unknown_calls": 0,
+          "usd_per_request": 0.0,
+          "classification": "control_plane_meter_inference",
+          "source_ids": [
+            "ec2"
+          ],
+          "known_request_subtotal_usd": 0.0,
+          "estimated_request_usd": 0.0
+        },
+        {
+          "action": "ec2:DescribeNetworkInterfaces",
+          "calls": 4,
+          "priced_calls": 4,
+          "unknown_calls": 0,
+          "usd_per_request": 0.0,
+          "classification": "control_plane_meter_inference",
+          "source_ids": [
+            "ec2"
+          ],
+          "known_request_subtotal_usd": 0.0,
+          "estimated_request_usd": 0.0
+        },
+        {
+          "action": "ec2:DescribeRouteTables",
+          "calls": 4,
+          "priced_calls": 4,
+          "unknown_calls": 0,
+          "usd_per_request": 0.0,
+          "classification": "control_plane_meter_inference",
+          "source_ids": [
+            "ec2"
+          ],
+          "known_request_subtotal_usd": 0.0,
+          "estimated_request_usd": 0.0
+        },
+        {
+          "action": "ec2:DescribeSecurityGroups",
+          "calls": 4,
+          "priced_calls": 4,
+          "unknown_calls": 0,
+          "usd_per_request": 0.0,
+          "classification": "control_plane_meter_inference",
+          "source_ids": [
+            "ec2"
+          ],
+          "known_request_subtotal_usd": 0.0,
+          "estimated_request_usd": 0.0
+        },
+        {
+          "action": "ec2:DescribeSnapshots",
+          "calls": 4,
+          "priced_calls": 4,
+          "unknown_calls": 0,
+          "usd_per_request": 0.0,
+          "classification": "control_plane_meter_inference",
+          "source_ids": [
+            "ec2"
+          ],
+          "known_request_subtotal_usd": 0.0,
+          "estimated_request_usd": 0.0
+        },
+        {
+          "action": "ec2:DescribeSubnets",
+          "calls": 4,
+          "priced_calls": 4,
+          "unknown_calls": 0,
+          "usd_per_request": 0.0,
+          "classification": "control_plane_meter_inference",
+          "source_ids": [
+            "ec2"
+          ],
+          "known_request_subtotal_usd": 0.0,
+          "estimated_request_usd": 0.0
+        },
+        {
+          "action": "ec2:DescribeVolumes",
+          "calls": 4,
+          "priced_calls": 4,
+          "unknown_calls": 0,
+          "usd_per_request": 0.0,
+          "classification": "control_plane_meter_inference",
+          "source_ids": [
+            "ec2"
+          ],
+          "known_request_subtotal_usd": 0.0,
+          "estimated_request_usd": 0.0
+        },
+        {
+          "action": "ec2:DescribeVpcs",
+          "calls": 4,
+          "priced_calls": 4,
+          "unknown_calls": 0,
+          "usd_per_request": 0.0,
+          "classification": "control_plane_meter_inference",
+          "source_ids": [
+            "ec2"
+          ],
+          "known_request_subtotal_usd": 0.0,
+          "estimated_request_usd": 0.0
+        },
+        {
+          "action": "ecs:DescribeClusters",
+          "calls": 4,
+          "priced_calls": 4,
+          "unknown_calls": 0,
+          "usd_per_request": 0.0,
+          "classification": "control_plane_meter_inference",
+          "source_ids": [
+            "ecs"
+          ],
+          "known_request_subtotal_usd": 0.0,
+          "estimated_request_usd": 0.0
+        },
+        {
+          "action": "ecs:DescribeServices",
+          "calls": 4,
+          "priced_calls": 4,
+          "unknown_calls": 0,
+          "usd_per_request": 0.0,
+          "classification": "control_plane_meter_inference",
+          "source_ids": [
+            "ecs"
+          ],
+          "known_request_subtotal_usd": 0.0,
+          "estimated_request_usd": 0.0
+        },
+        {
+          "action": "eks:DescribeCluster",
+          "calls": 4,
+          "priced_calls": 4,
+          "unknown_calls": 0,
+          "usd_per_request": 0.0,
+          "classification": "control_plane_meter_inference",
+          "source_ids": [
+            "eks"
+          ],
+          "known_request_subtotal_usd": 0.0,
+          "estimated_request_usd": 0.0
+        },
+        {
+          "action": "elbv2:DescribeListeners",
+          "calls": 4,
+          "priced_calls": 4,
+          "unknown_calls": 0,
+          "usd_per_request": 0.0,
+          "classification": "control_plane_meter_inference",
+          "source_ids": [
+            "elbv2"
+          ],
+          "known_request_subtotal_usd": 0.0,
+          "estimated_request_usd": 0.0
+        },
+        {
+          "action": "elbv2:DescribeLoadBalancers",
+          "calls": 4,
+          "priced_calls": 4,
+          "unknown_calls": 0,
+          "usd_per_request": 0.0,
+          "classification": "control_plane_meter_inference",
+          "source_ids": [
+            "elbv2"
+          ],
+          "known_request_subtotal_usd": 0.0,
+          "estimated_request_usd": 0.0
+        },
+        {
+          "action": "elbv2:DescribeTargetGroups",
+          "calls": 4,
+          "priced_calls": 4,
+          "unknown_calls": 0,
+          "usd_per_request": 0.0,
+          "classification": "control_plane_meter_inference",
+          "source_ids": [
+            "elbv2"
+          ],
+          "known_request_subtotal_usd": 0.0,
+          "estimated_request_usd": 0.0
+        },
+        {
+          "action": "iam:GetInstanceProfile",
+          "calls": 4,
+          "priced_calls": 4,
+          "unknown_calls": 0,
+          "usd_per_request": 0.0,
+          "classification": "no_additional_charge",
+          "source_ids": [
+            "iam"
+          ],
+          "known_request_subtotal_usd": 0.0,
+          "estimated_request_usd": 0.0
+        },
+        {
+          "action": "iam:GetRole",
+          "calls": 4,
+          "priced_calls": 4,
+          "unknown_calls": 0,
+          "usd_per_request": 0.0,
+          "classification": "no_additional_charge",
+          "source_ids": [
+            "iam"
+          ],
+          "known_request_subtotal_usd": 0.0,
+          "estimated_request_usd": 0.0
+        },
+        {
+          "action": "lambda:GetFunctionConcurrency",
+          "calls": 4,
+          "priced_calls": 4,
+          "unknown_calls": 0,
+          "usd_per_request": 0.0,
+          "classification": "control_plane_meter_inference",
+          "source_ids": [
+            "lambda"
+          ],
+          "known_request_subtotal_usd": 0.0,
+          "estimated_request_usd": 0.0
+        },
+        {
+          "action": "lambda:ListEventSourceMappings",
+          "calls": 4,
+          "priced_calls": 4,
+          "unknown_calls": 0,
+          "usd_per_request": 0.0,
+          "classification": "control_plane_meter_inference",
+          "source_ids": [
+            "lambda"
+          ],
+          "known_request_subtotal_usd": 0.0,
+          "estimated_request_usd": 0.0
+        },
+        {
+          "action": "rds:DescribeDBClusters",
+          "calls": 4,
+          "priced_calls": 4,
+          "unknown_calls": 0,
+          "usd_per_request": 0.0,
+          "classification": "control_plane_meter_inference",
+          "source_ids": [
+            "rds"
+          ],
+          "known_request_subtotal_usd": 0.0,
+          "estimated_request_usd": 0.0
+        },
+        {
+          "action": "rds:DescribeDBInstances",
+          "calls": 4,
+          "priced_calls": 4,
+          "unknown_calls": 0,
+          "usd_per_request": 0.0,
+          "classification": "control_plane_meter_inference",
+          "source_ids": [
+            "rds"
+          ],
+          "known_request_subtotal_usd": 0.0,
+          "estimated_request_usd": 0.0
+        },
+        {
+          "action": "route53:ListResourceRecordSets",
+          "calls": 4,
+          "priced_calls": 4,
+          "unknown_calls": 0,
+          "usd_per_request": 0.0,
+          "classification": "control_plane_meter_inference",
+          "source_ids": [
+            "route53"
+          ],
+          "known_request_subtotal_usd": 0.0,
+          "estimated_request_usd": 0.0
+        },
+        {
+          "action": "s3:GetBucketVersioning",
+          "calls": 4,
+          "priced_calls": 4,
+          "unknown_calls": 0,
+          "usd_per_request": 4e-07,
+          "classification": "metered_request",
+          "source_ids": [
+            "s3",
+            "s3_tariff",
+            "s3_versioning_api"
+          ],
+          "known_request_subtotal_usd": 1.6e-06,
+          "estimated_request_usd": 1.6e-06
+        },
+        {
+          "action": "sqs:GetQueueAttributes",
+          "calls": 4,
+          "priced_calls": 4,
+          "unknown_calls": 0,
+          "usd_per_request": 4e-07,
+          "classification": "metered_request",
+          "source_ids": [
+            "sqs",
+            "sqs_tariff"
+          ],
+          "known_request_subtotal_usd": 1.6e-06,
+          "estimated_request_usd": 1.6e-06
+        }
+      ]
+    },
+    "assumptions": [
+      "Only the frozen33metadata operations; no hidden retries or pagination.",
+      "General-purpose S3 buckets; successful GET metadata calls charged at GET-and-other request rate.",
+      "Standard SQS queue and selected attribute exchange not exceeding64KiB, one unit per call.",
+      "Gross first paid request tier, without free-tier credits or account-volume discounts.",
+      "Zero marginal request fees for selected non-metered control-plane APIs are source-based inferences from published pricing dimensions, not universal free-API guarantees."
+    ],
+    "exclusions": [
+      "data transfer and network/NAT/private-endpoint charges",
+      "taxes, discounts and free tiers",
+      "pre-existing resource-hour/storage/backup/invocation charges",
+      "CloudTrail/logging and operator monitoring charges",
+      "unlisted operations, other regions or changed provider tariffs"
+    ],
+    "actual_provider_calls": 0,
+    "actual_provider_charge_usd": 0
+  },
+  "sensitivity_estimate": {
+    "basis": "explicit qualification planning input, not a provider quote or guaranteed upper bound; apply the command-line rate uniformly as a sensitivity input",
+    "usd_per_1000_calls_input": 0.005,
+    "budget100_estimated_request_usd": 0.0005,
+    "full900_estimated_request_usd": 0.0045,
+    "actual_provider_calls": 0,
+    "actual_provider_charge_usd": 0,
+    "excluded": [
+      "region/service-specific tariffs",
+      "data transfer",
+      "tax",
+      "free tiers"
+    ],
+    "pricing_reference": "https://aws.amazon.com/s3/pricing/",
+    "pricing_note": "AWS documents that request prices differ by request type and service. No claim that the input is the exact tariff of every sampled operation. Product cost estimation remains out of scope."
+  },
+  "limitations": [
+    "Replay latency is an injected scenario, never an AWS performance measurement.",
+    "SDK model validation proves request shape, not IAM authorization or provider response semantics.",
+    "No raw state or real account identifiers are retained; all account components are synthetic000000000000.",
+    "Cooperative replay cancellation is not proof that a real SDK socket stops at a deadline; production implementation must bound actual transport and process lifetime.",
+    "A live AWS operator profile and production security review remain later-story gates, not claims of this feasibility exercise."
+  ]
+}

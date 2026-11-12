@@ -1,0 +1,64 @@
+{
+  "profile": "offline synthetic only; no provider qualification",
+  "hardware": {
+    "system": "Darwin",
+    "release": "25.6.0",
+    "machine": "arm64",
+    "processor": "arm",
+    "logical_cpus": 12,
+    "model": "Mac15,7",
+    "cpu": "Apple M3 Pro",
+    "identification_commands": [
+      "sysctl -n hw.model",
+      "sysctl -n machdep.cpu.brand_string"
+    ]
+  },
+  "python": "3.14.3",
+  "fixture": {
+    "resources": 1000,
+    "bytes": 177937,
+    "sha256": "b52bc75a54d900163aaf7104137d6d274f838bbee9187a285f4745ba77f7c5cd",
+    "provenance": "generated synthetic EC2 update plan; no real tool exports"
+  },
+  "runs": {
+    "bounded": {
+      "issued": 100,
+      "completed": 100,
+      "partial": true,
+      "elapsed_seconds": 0.06434500002069399,
+      "peak_concurrency": 4,
+      "total_intended": 1000
+    },
+    "deadline": {
+      "issued": 8,
+      "completed": 4,
+      "partial": true,
+      "elapsed_seconds": 0.03128220798680559,
+      "peak_concurrency": 4,
+      "total_intended": 1000
+    },
+    "complete": {
+      "issued": 1000,
+      "completed": 1000,
+      "partial": false,
+      "elapsed_seconds": 0.3256732909940183,
+      "peak_concurrency": 8,
+      "total_intended": 1000
+    }
+  },
+  "provider_calls": 0,
+  "actual_provider_cost_usd": 0,
+  "cost_model": {
+    "assumed_usd_per_1000_calls": 0.01,
+    "bounded_estimated_usd": 0.001,
+    "status": "hypothetical sensitivity input, not AWS pricing"
+  },
+  "proposed_defaults": {
+    "total_deadline_seconds": 15,
+    "concurrency": 4,
+    "call_budget": 100,
+    "per_call_timeout_seconds": 2,
+    "status": "candidate only; fake-provider timings cannot establish production defaults"
+  },
+  "record_status": "Historical initial EC2-only scheduling probe; superseded by bounded-measurement-results.json mixed25-family qualification."
+}

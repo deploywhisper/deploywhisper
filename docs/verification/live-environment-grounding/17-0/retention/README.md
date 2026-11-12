@@ -1,0 +1,9 @@
+# Frozen snapshot retention decision
+
+Approved under the maintainer's 2026-11-12 delegation to settle Story17.0 design choices. Default standalone snapshot lifetime: seven days from the observation read-window end. Import time never resets freshness or retention age. An active report reference extends payload retention until that report expires or is explicitly removed. If a report has no automatic expiry, retain its snapshot until explicit report deletion. A future observation time, unknown reference lifetime or invalid clock fails closed against purge.
+
+On expiry with no live reference, purge redacted payload and preserve only the project-bound digest, read window, source kind and purge timestamp. No credentials, account identifiers, resource names or raw responses in tombstones. A later attempt to use purged evidence reports existing freshness `missing`; it cannot present retained digest alone as a retained observation. Project deletion follows the application's existing project deletion and legal retention rules. Backup copies age out under the operator's backup retention policy; a live purge cannot claim to erase offline backups. Snapshots must be screened before entering backups or exports.
+
+This policy complements existing report retention, does not introduce an independent perpetual store and has no dependency on Epic16 retention protocols. Story17.1 implements storage/reference accounting;17.7 applies identical rules to imports. This packet proves the decision table only, not a product database purge implementation.
+
+Command: `./.venv/bin/python -m unittest discover -s docs/verification/live-environment-grounding/17-0/retention -v` — five tests pass. Red phase before the decision module existed failed with ModuleNotFoundError; green covers active/indefinite references, unreferenced expiry, import age and invalid clocks.

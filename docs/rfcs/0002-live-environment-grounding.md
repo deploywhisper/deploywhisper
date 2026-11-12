@@ -240,3 +240,17 @@ Each is owned by Story 17.0 and must be closed by executable evidence, not discu
 Acceptance resolves AC1 of Story 17.0 Packet 0.1. It does **not** resolve the six unresolved questions above, which remain owned by Story 17.0 and must be closed by recorded evidence. In particular, the AWS SDK dependency decision (Packet 0.2) is still open, and no dependency installation is authorized until it is recorded.
 
 **No implementation is authorized by this RFC.** Acceptance of this RFC authorizes Story 17.0 qualification only. Downstream stories require their own dependency evidence, the Story 17.0 feasibility results, an approved dependency decision, and an independent security review before Story 17.3.
+
+### Story 17.0 scope verification — 2026-11-12
+
+The accepted scope agrees with parent PRD advisory/local-first non-goals and architecture §26: observation only; no write, apply, destroy, tag, provision or remediate operations; no account-wide inventory or Epic 16 dependency. `.github/CODEOWNERS` rule `* @pramodksahoo` already covers future `cloud/` paths. No new product modules are introduced by qualification.
+
+Gate remains **NOT READY** until an approved SDK dependency decision, executable feasibility results, closed blocking gaps and independent readiness review are recorded. Existing acceptance is not authority to fabricate a new maintainer approval. See [qualification packet](../verification/live-environment-grounding/17-0/README.md).
+
+### Maintainer continuation decision — 2026-11-12
+
+The maintainer explicitly approved selecting the best dependency and completing the outstanding Story17.0 qualification work. Adopt the optional boto3 extra; qualified versions and lockfile impact are recorded in the [dependency decision](../verification/live-environment-grounding/17-0/dependency-decision.md). No default dependency changes or production cloud calls are authorized by this decision.
+
+### Story17.0 qualification outcomes — 2026-11-12
+
+The six questions above are settled in the [updated readiness assessment](../../_bmad-output/planning-artifacts/implementation-readiness-report-2026-11-12-live-environment-grounding.md): optional boto3 extra approved;25-family action/field/permission contract frozen;15s/4workers/100calls bounds measured by controlled replay; planformat1.2 verified with four real producer versions; reference-bound snapshot retention adopted; initial ambient mechanisms restricted to environment and operator-selected shared credentials. Independent packet review controls the final readiness verdict. Live production AWS/security/release qualification stays with its owning downstream stories.

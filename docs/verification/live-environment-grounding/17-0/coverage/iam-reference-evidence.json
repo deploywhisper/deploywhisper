@@ -1,0 +1,218 @@
+{
+  "autoscaling": {
+    "source": "https://docs.aws.amazon.com/service-authorization/latest/reference/list_autoscaling.html",
+    "read_date": "2026-11-12",
+    "rows": [
+      {
+        "action": "DescribeAutoScalingGroups",
+        "resource_type_first_row": ""
+      }
+    ],
+    "limit": "First resource cell only; service references have additional resource rows. Resource templates in contract include applicable selected types."
+  },
+  "dynamodb": {
+    "source": "https://docs.aws.amazon.com/service-authorization/latest/reference/list_dynamodb.html",
+    "read_date": "2026-11-12",
+    "rows": [
+      {
+        "action": "DescribeContinuousBackups",
+        "resource_type_first_row": "table*"
+      },
+      {
+        "action": "DescribeTable",
+        "resource_type_first_row": "table*"
+      }
+    ],
+    "limit": "First resource cell only; service references have additional resource rows. Resource templates in contract include applicable selected types."
+  },
+  "ec2": {
+    "source": "https://docs.aws.amazon.com/service-authorization/latest/reference/list_ec2.html",
+    "read_date": "2026-11-12",
+    "rows": [
+      {
+        "action": "DescribeInstanceAttribute",
+        "resource_type_first_row": "instance*"
+      },
+      {
+        "action": "DescribeInstances",
+        "resource_type_first_row": ""
+      },
+      {
+        "action": "DescribeNetworkInterfaces",
+        "resource_type_first_row": ""
+      },
+      {
+        "action": "DescribeRouteTables",
+        "resource_type_first_row": ""
+      },
+      {
+        "action": "DescribeSecurityGroups",
+        "resource_type_first_row": ""
+      },
+      {
+        "action": "DescribeSnapshots",
+        "resource_type_first_row": ""
+      },
+      {
+        "action": "DescribeSubnets",
+        "resource_type_first_row": ""
+      },
+      {
+        "action": "DescribeVolumes",
+        "resource_type_first_row": ""
+      },
+      {
+        "action": "DescribeVpcs",
+        "resource_type_first_row": ""
+      }
+    ],
+    "limit": "First resource cell only; service references have additional resource rows. Resource templates in contract include applicable selected types."
+  },
+  "ecs": {
+    "source": "https://docs.aws.amazon.com/service-authorization/latest/reference/list_ecs.html",
+    "read_date": "2026-11-12",
+    "rows": [
+      {
+        "action": "DescribeClusters",
+        "resource_type_first_row": "cluster*"
+      },
+      {
+        "action": "DescribeServices",
+        "resource_type_first_row": "service*"
+      }
+    ],
+    "limit": "First resource cell only; service references have additional resource rows. Resource templates in contract include applicable selected types."
+  },
+  "eks": {
+    "source": "https://docs.aws.amazon.com/service-authorization/latest/reference/list_eks.html",
+    "read_date": "2026-11-12",
+    "rows": [
+      {
+        "action": "DescribeCluster",
+        "resource_type_first_row": "cluster*"
+      }
+    ],
+    "limit": "First resource cell only; service references have additional resource rows. Resource templates in contract include applicable selected types."
+  },
+  "elbv2": {
+    "source": "https://docs.aws.amazon.com/service-authorization/latest/reference/list_elbv2.html",
+    "read_date": "2026-11-12",
+    "rows": [
+      {
+        "action": "DescribeListeners",
+        "resource_type_first_row": ""
+      },
+      {
+        "action": "DescribeLoadBalancerAttributes",
+        "resource_type_first_row": ""
+      },
+      {
+        "action": "DescribeLoadBalancers",
+        "resource_type_first_row": ""
+      },
+      {
+        "action": "DescribeTargetGroups",
+        "resource_type_first_row": ""
+      },
+      {
+        "action": "DescribeTargetHealth",
+        "resource_type_first_row": ""
+      }
+    ],
+    "limit": "First resource cell only; service references have additional resource rows. Resource templates in contract include applicable selected types."
+  },
+  "iam": {
+    "source": "https://docs.aws.amazon.com/service-authorization/latest/reference/list_iam.html",
+    "read_date": "2026-11-12",
+    "rows": [
+      {
+        "action": "GetInstanceProfile",
+        "resource_type_first_row": "instance-profile*"
+      },
+      {
+        "action": "GetRole",
+        "resource_type_first_row": "role*"
+      }
+    ],
+    "limit": "First resource cell only; service references have additional resource rows. Resource templates in contract include applicable selected types."
+  },
+  "lambda": {
+    "source": "https://docs.aws.amazon.com/service-authorization/latest/reference/list_lambda.html",
+    "read_date": "2026-11-12",
+    "rows": [
+      {
+        "action": "GetFunctionConcurrency",
+        "resource_type_first_row": "function*"
+      },
+      {
+        "action": "ListEventSourceMappings",
+        "resource_type_first_row": ""
+      },
+      {
+        "action": "ListTags",
+        "resource_type_first_row": "capacityProvider"
+      }
+    ],
+    "limit": "First resource cell only; service references have additional resource rows. Resource templates in contract include applicable selected types."
+  },
+  "rds": {
+    "source": "https://docs.aws.amazon.com/service-authorization/latest/reference/list_rds.html",
+    "read_date": "2026-11-12",
+    "rows": [
+      {
+        "action": "DescribeDBClusterSnapshots",
+        "resource_type_first_row": "cluster"
+      },
+      {
+        "action": "DescribeDBClusters",
+        "resource_type_first_row": "cluster"
+      },
+      {
+        "action": "DescribeDBInstances",
+        "resource_type_first_row": "db"
+      },
+      {
+        "action": "DescribeDBSnapshots",
+        "resource_type_first_row": "db"
+      }
+    ],
+    "limit": "First resource cell only; service references have additional resource rows. Resource templates in contract include applicable selected types."
+  },
+  "route53": {
+    "source": "https://docs.aws.amazon.com/service-authorization/latest/reference/list_route53.html",
+    "read_date": "2026-11-12",
+    "rows": [
+      {
+        "action": "ListResourceRecordSets",
+        "resource_type_first_row": "hostedzone*"
+      }
+    ],
+    "limit": "First resource cell only; service references have additional resource rows. Resource templates in contract include applicable selected types."
+  },
+  "s3": {
+    "source": "https://docs.aws.amazon.com/service-authorization/latest/reference/list_s3.html",
+    "read_date": "2026-11-12",
+    "rows": [
+      {
+        "action": "GetBucketTagging",
+        "resource_type_first_row": "bucket*"
+      },
+      {
+        "action": "GetBucketVersioning",
+        "resource_type_first_row": "bucket*"
+      }
+    ],
+    "limit": "First resource cell only; service references have additional resource rows. Resource templates in contract include applicable selected types."
+  },
+  "sqs": {
+    "source": "https://docs.aws.amazon.com/service-authorization/latest/reference/list_sqs.html",
+    "read_date": "2026-11-12",
+    "rows": [
+      {
+        "action": "GetQueueAttributes",
+        "resource_type_first_row": "queue*"
+      }
+    ],
+    "limit": "First resource cell only; service references have additional resource rows. Resource templates in contract include applicable selected types."
+  }
+}

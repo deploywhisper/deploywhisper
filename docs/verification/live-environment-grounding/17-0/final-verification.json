@@ -1,0 +1,60 @@
+{
+  "qualification_tests": {
+    "spike": 9,
+    "producer": 3,
+    "sdk": 11,
+    "measurement": 29,
+    "retention": 5,
+    "coverage": 11,
+    "total": 68,
+    "result": "pass"
+  },
+  "static_checks": {
+    "ruff_check": "pass",
+    "ruff_format": "647 files formatted",
+    "bandit_medium_high": "pass;10 low informational findings",
+    "git_diff_check": "pass",
+    "markdown_links": "pass",
+    "compileall": "pass",
+    "python_3_10_syntax": "pass"
+  },
+  "root_unittest": {
+    "command": "./.venv/bin/python -m unittest discover -q",
+    "count": 2128,
+    "skipped": 3,
+    "elapsed_seconds": 1087.846,
+    "result": "pass",
+    "log": "/tmp/story17-0-fixes-unittest.log"
+  },
+  "ci_local": {
+    "command": "bash scripts/ci-local.sh",
+    "result": "pass",
+    "unittest_shards": 10,
+    "unittest_tests": 3603,
+    "skipped": 3,
+    "prompt_injection_pytest": "8 passed,96 subtests",
+    "skill_scenarios": "pass",
+    "dependency_check": "pass",
+    "compileall": "pass",
+    "configured_security_gates": "pass",
+    "log": "/tmp/story17-0-fixes-ci.log"
+  },
+  "ui": "not applicable",
+  "critical_artifact_sha256": {
+    "measurement/large-plan.json": "1f829480aa26170850c4559bb5cf2b7046add8fd0c513592cedc5688d8687ec7",
+    "bounded-measurement-results.json": "e9d461df1c7b70e484488aeae2981a560f1c60a5e11a588456ffdd5cc33c28cb",
+    "measurement/benchmark.py": "b2ff556961a8ac9831270597445a04ee4ff70ff0050b990cb56be9c8190f62dd",
+    "measurement/cost_model.py": "bc7672d84778ef4e2e1732c360e49a7e013fc1cb783258a5e545fd7be760a439",
+    "measurement/cost-rates.json": "5cef6bb2526b49871b35b11224bb6c3eb21a602e7befd545df2bd0fd1cae2277",
+    "measurement/pricing-evidence.json": "cee11af96f50acc8dba26a072222f61e9fa5cc9ec0df2e6c99f61f2adef83346",
+    "coverage/coverage.json": "9c5f828abf2eb4591250696eeb750df1777d5f910ed8bec369b8624a4630afce",
+    "coverage/policy.json": "9b598deed7c8d36203c21ec24a4110fa297e2a976944c03a21994bc220439668",
+    "coverage/validate_contract.py": "820338826db1a6ae6c6725dc51e87d7aee706c083949d5ac3943dc6678f3eaa6",
+    "sdk-requirements.lock": "a585a377bfd37452b81cb5dcd31736ac4af5f2d1623b0e54b613b38f75d91db4"
+  },
+  "review_findings": {
+    "fixed": 8,
+    "remaining": 0,
+    "independent_review": "passed; each original behavior restored in memory made its targeted regression fail"
+  }
+}
