@@ -48,10 +48,13 @@ def main():
         if db.query(IdentityAccount).first():
             raise RuntimeError("Existing identities refused")
     identity = IdentityService(security_profile="https", trusted_origin=ORIGIN)
-    username, password = "tls-proof-" + secrets.token_hex(5), secrets.token_urlsafe(32)
+    username = "tls-proof-" + secrets.token_hex(5)
+    one_time_credential = secrets.token_urlsafe(32)
     setup = identity.issue_setup_credential()
-    admin = identity.bootstrap(setup.token.get_secret_value(), username, password)
-    issued = identity.login(username, password)
+    admin = identity.bootstrap(
+        setup.token.get_secret_value(), username, one_time_credential
+    )
+    issued = identity.login(username, one_time_credential)
     with SessionLocal.begin() as db:
         project = Project(
             project_key="tls-proof",
@@ -124,13 +127,13 @@ def main():
     output = Path("/app/data/browser.json")
     output.write_text(
         json.dumps(
-            dict(
-                origin=ORIGIN,
-                username=username,
-                password=password,
-                project_id=project_id,
-                workspace_id=workspace_id,
-            )
+            {
+                "origin": ORIGIN,
+                "username": username,
+                "password": one_time_credential,
+                "project_id": project_id,
+                "workspace_id": workspace_id,
+            }
         )
     )
     # Observe only bounded public outcome categories; never alter results or
