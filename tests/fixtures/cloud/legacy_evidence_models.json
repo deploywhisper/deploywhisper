@@ -1,0 +1,56 @@
+{
+  "context": {
+    "age_days": null,
+    "confidence": 0.0,
+    "conflicts": [],
+    "freshness_status": "unknown",
+    "last_observed_at": null,
+    "limitations": [],
+    "scope": "project:1",
+    "source_id": "legacy-context",
+    "source_ref": null,
+    "source_type": "topology"
+  },
+  "evidence": {
+    "analysis_id": 0,
+    "artifact": "plan.json",
+    "confidence": 1.0,
+    "context_source": null,
+    "determinism_level": "deterministic",
+    "deterministic": true,
+    "evidence_id": "legacy-evidence",
+    "finding_id": "legacy-finding",
+    "location": "plan.json#aws_instance.example",
+    "operation": "",
+    "project_id": null,
+    "project_key": null,
+    "redaction_status": "none",
+    "related_change_ids": [],
+    "resource": "aws_instance.example",
+    "severity_hint": "low",
+    "source_kind": "artifact",
+    "source_ref": "artifact://plan.json#aws_instance.example",
+    "source_type": "artifact",
+    "summary": "Synthetic retained artifact fact",
+    "workspace_id": null,
+    "workspace_key": null
+  },
+  "finding": {
+    "analysis_id": 0,
+    "category": "compute",
+    "confidence": 1.0,
+    "description": "Known fixture",
+    "deterministic": true,
+    "evidence_classification": "deterministic",
+    "evidence_refs": [
+      "legacy-evidence"
+    ],
+    "explanation": "Known fixture",
+    "finding_id": "legacy-finding",
+    "guidance": [],
+    "severity": "low",
+    "skill_id": null,
+    "title": "Synthetic finding",
+    "uncertainty_note": null
+  }
+}

@@ -1,5 +1,5 @@
 # generated: 2026-05-01
-# last_updated: 2026-11-12
+# last_updated: 2026-11-16
 # project: deploywhisper
 # project_key: NOKEY
 # tracking_system: file-system
@@ -42,7 +42,7 @@
 # - Dev moves story to review, then runs code-review
 
 generated: 2026-05-01
-last_updated: 2026-11-12
+last_updated: 2026-11-16
 project: deploywhisper
 project_key: NOKEY
 tracking_system: file-system
@@ -242,7 +242,7 @@ development_status:
   # until Story 17.0 closes its feasibility gate and the dependency decision is recorded.
   epic-17: in-progress
   17-0-adopt-and-qualify-the-grounding-contract: done
-  17-1-cloud-connector-contract-and-snapshot-evidence: backlog
+  17-1-cloud-connector-contract-and-snapshot-evidence: done
   17-2-aws-read-only-session-allowlist-and-dry-run: backlog
   17-3-plan-directed-reflection-and-bounded-collection: backlog
   17-4-plan-versus-reality-divergence-and-ci-gate: backlog

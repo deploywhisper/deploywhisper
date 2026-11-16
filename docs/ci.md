@@ -13,7 +13,7 @@ required high-priority finding dispositions.
 - `security`: runs dependency audit, Bandit static analysis, and secret-pattern scanning.
 - `frontend`: installs the React SPA workspace, then runs typecheck, Vitest, and the production build.
 - `changed-tests`: on pull requests, runs changed `test_*.py` modules under `tests/`, excluding `tests/fixtures/` and helper scripts, for faster early feedback. Qualification probes stay executable through their owning tests and are never imported as test modules.
-- `test`: runs the Python suite with pytest in five logical shards with `fail-fast: false`.
+- `test`: runs the Python suite with pytest in six logical shards with `fail-fast: false`.
   Services and infrastructure automation run separately, each with a
   25-minute job budget; the other shards retain 15 minutes. On PR #213, all
   1,232 services tests passed in 14m26s, but setup and final cleanup pushed the
@@ -27,6 +27,7 @@ required high-priority finding dispositions.
 - The blocking `tests/test_llm` shard includes the prompt-injection regression
   suite documented in
   [`docs/ai-safety/prompt-injection-testing.md`](./ai-safety/prompt-injection-testing.md).
+- The `cloud-evidence` shard registers `tests/test_cloud`, `tests/test_evidence` and the new snapshot storage tests explicitly. It also runs `scripts/verify_cloud_isolation.py` in a fresh interpreter with provider SDKs, execution-epic imports and network access blocked; the core schema/model qualification boundary remains untouched.
 - `report`: publishes a GitHub Actions summary and downloads any failure artifacts.
 - `notify-failure`: optional Slack notification when `SLACK_WEBHOOK_URL` is configured.
 

@@ -30,6 +30,7 @@ ContextSourceType = Literal[
     "ownership",
     "external_scanner",
     "user_context",
+    "live_state",
 ]
 EvidenceSourceType = Literal[
     "artifact",
@@ -40,6 +41,7 @@ EvidenceSourceType = Literal[
     "skill",
     "external_scanner",
     "user_context",
+    "live_state",
 ]
 EvidenceSourceKind = EvidenceSourceType
 DeterminismLevel = Literal["deterministic", "heuristic", "inferred"]

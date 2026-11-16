@@ -1,0 +1,131 @@
+{
+  "story": "17.1",
+  "date": "2026-11-16",
+  "status": "review",
+  "findings_resolved": 3,
+  "python": "3.14.3",
+  "implementation": [
+    "Reject Session, Connection, root transaction and explicit SQL COMMIT/END before admission validation, including comments, semicolon/BOM prefixes and caught attempts.",
+    "Compare all retained live-state row columns after flush to reject ORM/SQL updates, deletion, relabeling and cross-project edits.",
+    "Normalize integral float/int account facts for masking while preserving booleans, unrelated nonintegral scalars, disabled masking and idempotence."
+  ],
+  "validation": {
+    "focused": {
+      "command": "./.venv/bin/python -m pytest tests/test_cloud tests/test_evidence tests/test_models/test_cloud_snapshot_storage.py tests/test_services/test_cloud_context_service.py tests/test_infra/test_cloud_snapshot_migration.py -q",
+      "result": "125 passed;137 subtests passed",
+      "log": "/tmp/story17-1-fixes-focused.log"
+    },
+    "isolation": {
+      "command": "./.venv/bin/python scripts/verify_cloud_isolation.py",
+      "result": "88 tests passed",
+      "log": "/tmp/story17-1-fixes-isolation.log"
+    },
+    "root": {
+      "command": "./.venv/bin/python -m unittest discover -q",
+      "result": "2228 tests;3 skipped;OK",
+      "log": "/tmp/story17-1-fixes-unittest.log"
+    },
+    "exact_ci_shard": {
+      "command": "./.venv/bin/python -m pytest tests/test_api tests/test_cli tests/test_infra -v --tb=short",
+      "result": "834 passed;1 skipped;2456 subtests passed;501 warnings",
+      "log": "/tmp/story17-1-fixes-shard.log"
+    },
+    "local_ci": {
+      "command": "bash scripts/ci-local.sh",
+      "result": "3728 tests across12targets;3 skipped;OK",
+      "targets": [
+        {
+          "target": "tests/test_cloud",
+          "tests": 37,
+          "seconds": 1.456
+        },
+        {
+          "target": "tests/test_evidence",
+          "tests": 32,
+          "seconds": 2.033
+        },
+        {
+          "target": "tests/test_analysis",
+          "tests": 69,
+          "seconds": 7.288
+        },
+        {
+          "target": "tests/test_api",
+          "tests": 382,
+          "seconds": 154.078
+        },
+        {
+          "target": "tests/test_cli",
+          "tests": 131,
+          "seconds": 47.764
+        },
+        {
+          "target": "tests/test_docs",
+          "tests": 60,
+          "seconds": 0.602
+        },
+        {
+          "target": "tests/test_infra",
+          "tests": 322,
+          "seconds": 100.39
+        },
+        {
+          "target": "tests/test_infra_automation",
+          "tests": 1270,
+          "seconds": 622.152
+        },
+        {
+          "target": "tests/test_llm",
+          "tests": 76,
+          "seconds": 6.731
+        },
+        {
+          "target": "tests/test_models",
+          "tests": 49,
+          "seconds": 5.765
+        },
+        {
+          "target": "tests/test_parsers",
+          "tests": 43,
+          "seconds": 0.044
+        },
+        {
+          "target": "tests/test_services",
+          "tests": 1257,
+          "seconds": 381.57
+        }
+      ],
+      "log": "/tmp/story17-1-fixes-ci.log"
+    },
+    "static": [
+      "./.venv/bin/ruff check .: passed",
+      "./.venv/bin/ruff format --check .:671 files formatted",
+      "CI configured Bandit, pip check and compilation gates:passed",
+      "./.venv/bin/mypy cloud/ services/cloud_context_service.py models/cloud_snapshots.py models/repositories/cloud_snapshots.py --ignore-missing-imports --follow-imports=silent --no-error-summary:passed (informational untyped-body note)",
+      "git diff --check:passed"
+    ]
+  },
+  "test_environment": {
+    "LLM_API_BASE": "http://127.0.0.1:1",
+    "LLM_REQUEST_TIMEOUT_SECONDS": "0.1",
+    "note": "Broad runs were restarted with a closed local LLM endpoint after ambient local generation delayed initial runs. No test or application code was changed to accelerate these runs."
+  },
+  "independent_review": "Original and additional supported SQLAlchemy Connection commit reproductions closed with zero persisted reports; no remaining defect reported in the reviewed fixes.",
+  "limits": [
+    "UI validation not applicable.",
+    "Docker runtime qualification was not rerun for these fixes; original implementation evidence remains separate.",
+    "No live provider or production authorization adapter qualification claimed. Raw driver/database-owner access remains outside the supported admission API contract."
+  ],
+  "changed_files": [
+    "cloud/redaction.py",
+    "services/cloud_context_service.py",
+    "tests/test_cloud/test_redaction.py",
+    "tests/test_services/test_cloud_context_service.py",
+    "tests/test_evidence/test_live_state_admission.py",
+    "docs/live-environment-grounding/connector-contract.md",
+    "docs/verification/live-environment-grounding/17-1/review-record.md",
+    "docs/verification/live-environment-grounding/17-1/review-fixes-2026-11-16.json",
+    "_bmad-output/implementation-artifacts/17-1-cloud-connector-contract-and-snapshot-evidence.md",
+    "_bmad-output/implementation-artifacts/sprint-status.yaml"
+  ]
+}

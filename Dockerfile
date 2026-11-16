@@ -59,6 +59,7 @@ COPY --chown=appuser:appuser app.py config.py logging_config.py alembic.ini ./
 COPY --chown=appuser:appuser api ./api
 COPY --chown=appuser:appuser analysis ./analysis
 COPY --chown=appuser:appuser cli ./cli
+COPY --chown=appuser:appuser cloud ./cloud
 COPY --chown=appuser:appuser evidence ./evidence
 COPY --chown=appuser:appuser integrations ./integrations
 COPY --chown=appuser:appuser infra_automation ./infra_automation
