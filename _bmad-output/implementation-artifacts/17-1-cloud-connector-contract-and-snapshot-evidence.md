@@ -158,6 +158,13 @@ Codex with bounded native implementation and independent read-only interface/sec
 - Closeout evidence: `docs/verification/live-environment-grounding/17-1/git-flow-closeout-2026-11-16.json`. Full validation remains in the review-fixes record. UI validation not applicable; live provider qualification remains outside this story.
 - Generated Bandit/test output files are excluded from the commit.
 
+### PR 222 CodeQL Follow-up — 2026-11-16
+
+- Fixed high-severity `py/redos` alert 127 without suppressing the query: replaced ambiguous repeated comment matching with a linear SQLite prefix scan and a bounded keyword match.
+- The isolated hostile-comment regression failed against the original matcher (10-second timeout), then passed with the fix. Added long-prefix commit rollback, mixed-prefix and comment-only/literal regressions.
+- Focused suite: 127 tests and 145 subtests passed. Isolation: 90 tests passed. Repo-wide Ruff lint/format, scoped mypy and Bandit passed; independent review found no remaining issue.
+- Reproduction and verification: `docs/verification/live-environment-grounding/17-1/codeql-redos-fix-2026-11-16.md`. No dependencies, schemas or external contracts changed; UI validation not applicable. Existing broad qualification remains valid; a fresh root run and remote CodeQL rescan are being checked for this revision.
+
 ### Completion Notes List
 - All six packets and AC1–7 implemented and independently reviewed; status is review, not production provider qualification.
 - Added cloud Protocol/registry, frozen identities/facts/read states and digest-bound snapshots. Default AWS/Azure/GCP slots remain unimplemented; reference provider is never globally selected by default.
@@ -178,6 +185,7 @@ Codex with bounded native implementation and independent read-only interface/sec
 - UI validation not applicable. No existing analysis/scoring/report/API/CLI flow or schema-default fields changed. Live provider IAM/transport, production auth adapters and user-facing surfaces remain owned by later stories.
 
 ### File List
+- `docs/verification/live-environment-grounding/17-1/codeql-redos-fix-2026-11-16.md`
 - `docs/verification/live-environment-grounding/17-1/git-flow-closeout-2026-11-16.json`
 - `docs/verification/live-environment-grounding/17-1/review-fixes-2026-11-16.json`
 - `_bmad-output/planning-artifacts/epics.md`

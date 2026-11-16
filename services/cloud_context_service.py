@@ -454,12 +454,26 @@ class CloudContextService:
                 def reject_sql_commit(
                     conn, cursor, statement, parameters, context, executemany
                 ):
-                    # SQLite accepts END as COMMIT and permits leading comments.
-                    if re.match(
-                        r"(?:[\s;\ufeff]|--[^\r\n]*(?:\r?\n|$)|/\*.*?\*/)*(?:COMMIT|END)\b",
-                        statement,
-                        re.IGNORECASE | re.DOTALL,
-                    ):
+                    # Consume each SQLite prefix once. A repeated comment regex
+                    # can backtrack exponentially when the SQL is not a commit.
+                    index = 0
+                    while index < len(statement):
+                        if statement[index].isspace() or statement[index] in ";\ufeff":
+                            index += 1
+                        elif statement.startswith("--", index):
+                            end = statement.find("\n", index + 2)
+                            if end < 0:
+                                return
+                            index = end + 1
+                        elif statement.startswith("/*", index):
+                            end = statement.find("*/", index + 2)
+                            if end < 0:
+                                return
+                            index = end + 2
+                        else:
+                            break
+                    # SQLite accepts END as COMMIT; only inspect the first token.
+                    if re.match(r"(?:COMMIT|END)\b", statement[index:], re.IGNORECASE):
                         reject_early_commit(conn)
 
                 connection = session.connection()

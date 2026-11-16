@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import subprocess
+import sys
 import unittest
 from datetime import timedelta
 from types import SimpleNamespace
@@ -435,6 +437,43 @@ class LiveStateAdmissionTests(unittest.TestCase):
                     report.workspace_id = 11
         self.assertEqual(self.report_count(), 2)
 
+    def test_sql_comment_contents_do_not_trigger_commit_guard(self):
+        snapshot = self.collect()
+        with self.service.admit_evidence(1, snapshot.digest) as admission:
+            for sql in ("-- COMMIT\rEND", "/* END */", "/* COMMIT", "-- END"):
+                with self.subTest(sql=sql):
+                    admission.session.connection().exec_driver_sql(sql)
+            self.assertEqual(
+                admission.session.connection()
+                .exec_driver_sql("/* COMMIT */ -- END\n SELECT 'COMMIT'")
+                .scalar(),
+                "COMMIT",
+            )
+
+    def test_many_sql_comments_do_not_backtrack_before_a_noncommit(self):
+        # Isolate the former exponential matcher so a regression fails with a
+        # deadline instead of hanging the entire test process.
+        script = """
+from tests.test_evidence.test_live_state_admission import LiveStateAdmissionTests
+fixture = LiveStateAdmissionTests()
+fixture.setUp()
+try:
+    snapshot = fixture.collect()
+    with fixture.service.admit_evidence(1, snapshot.digest) as admission:
+        sql = '/*' + '*//*' * 10000 + '*/ SELECT 1'
+        assert admission.session.connection().exec_driver_sql(sql).scalar() == 1
+finally:
+    fixture.tearDown()
+"""
+        result = subprocess.run(
+            [sys.executable, "-c", script],
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+
     def test_connection_commit_cannot_persist_rejected_claim(self):
         snapshot = self.collect()
         attempts = (
@@ -442,6 +481,12 @@ class LiveStateAdmissionTests(unittest.TestCase):
             lambda connection: connection.get_transaction().commit(),
             lambda connection: connection.exec_driver_sql("COMMIT"),
             lambda connection: connection.exec_driver_sql(";COMMIT"),
+            lambda connection: connection.exec_driver_sql(
+                "/*" + "*//*" * 10000 + "*/ END TRANSACTION"
+            ),
+            lambda connection: connection.exec_driver_sql(
+                ";\ufeff /* first */ -- line\r\n ; END"
+            ),
             lambda connection: connection.exec_driver_sql("\ufeffCOMMIT"),
             lambda connection: connection.exec_driver_sql(
                 "-- comment\n /* comment */ END TRANSACTION"
