@@ -53,7 +53,7 @@ Observations are stored as a redacted, digest-bound snapshot scoped to your proj
 
 ### When it cannot read something
 
-Degradation is fail-safe and explicit. An unreachable, partial, throttled, expired or unauthorized context will **never** lower a severity and **never** raise a confidence score. It triggers `insufficient_context`, and every unreadable resource is listed with the exact permission you would need to grant.
+Degradation is fail-safe and explicit. An unreachable, partial, throttled, expired or unauthorized context will **never** lower a severity and **never** raise a confidence score. It triggers `insufficient_context`, and unreadable resources carry a sanitized cause. Only a confirmed provider authorization denial names a missing permission; credential, transport and request failures do not imply that broader IAM access would help.
 
 Partial coverage is labelled partial. Completeness is never implied from a partial read, and `unknown` is never presented as `match` or as `recoverable`.
 
@@ -196,5 +196,20 @@ Each of the 42 individual request capabilities and exact parameter/resource temp
 
 Dry-run lists intended calls. Cancellation, timeout, budget, permission refusal
 or deadline can reduce actual issued calls; execution never expands the manifest.
-SDK and urllib3 logging is suppressed at source to prevent debug signing records
+SDK payload logging is suppressed at source to prevent debug signing records
 from exposing credentials, including credentials obtained from trusted files.
+Unrelated urllib3 warnings and errors remain enabled.
+
+Each SDK client permits one catalog operation. An operation-specific guard runs
+before parameter construction; another guard terminates redirect/error handling
+before SDK handlers can issue a hidden operation or retry in another region.
+S3 region redirects return a partial unreadable result instead of issuing
+`HeadBucket` or expanding the reviewed manifest.
+
+A successful HTTP status alone does not establish complete metadata. Completion
+checks reject provider item failures, missing or mismatched requested identities,
+and pagination. Filtered relation lists may legitimately be empty. Exact Route53
+record identity checks include the name and type; a leading wildcard DNS label
+(such as `*.example.com.`) identifies one record and does not enable inventory.
+Failure causes use a fixed vocabulary; provider messages and raw payloads are
+never returned. Only verified authorization failures set `missing_permission`.

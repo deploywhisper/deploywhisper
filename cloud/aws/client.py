@@ -16,6 +16,7 @@ import time
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 from cloud.aws.allowlist import _CATALOG, authorize
 from cloud.aws.session import validate_config
+from cloud.aws.response_status import response_complete
 from services.content_security import redact_text, redact_value
 
 
@@ -32,6 +33,21 @@ def _strings(value):
     elif isinstance(value, list):
         for item in value:
             yield from _strings(item)
+
+
+def _dns_selector(value):
+    if not isinstance(value, str) or not 1 <= len(value) <= 254:
+        return False
+    name = value.replace("\\052", "*")
+    if name.endswith("."):
+        name = name[:-1]
+    labels = name.split(".")
+    if labels[0] == "*":
+        labels = labels[1:]
+    return bool(labels) and all(
+        re.fullmatch(r"[A-Za-z0-9_](?:[A-Za-z0-9_-]{0,61}[A-Za-z0-9_])?", label)
+        for label in labels
+    )
 
 
 def _matches(template, value):
@@ -96,7 +112,17 @@ class Call(BaseModel):
         row = _CATALOG["operations"].get(self.capability)
         if (
             row is None
-            or not _matches(row["params"], self.parameters)
+            or not _matches(
+                row["params"],
+                {**self.parameters, "StartRecordName": "validated-dns-name"}
+                if self.capability == "record"
+                and _dns_selector(self.parameters.get("StartRecordName"))
+                else self.parameters,
+            )
+            or (
+                self.capability == "record"
+                and not _dns_selector(self.parameters.get("StartRecordName"))
+            )
             or redact_value(self.parameters) != self.parameters
             or any(redact_text(v) != v for v in _strings(self.parameters))
         ):
@@ -147,6 +173,7 @@ class CallResult:
     capability: str
     status: str
     missing_permission: str | None = None
+    cause: str | None = None
 
 
 @dataclass(frozen=True)
@@ -155,6 +182,60 @@ class ExecutionResult:
     attempts: int
     elapsed_seconds: float
     partial: bool
+
+
+def _failure(error):
+    from cloud.aws.session import SessionError
+
+    if isinstance(error, SessionError):
+        return error.cause, False
+    response = getattr(error, "response", None)
+    if isinstance(response, dict):
+        detail = response.get("Error")
+        code = detail.get("Code") if isinstance(detail, dict) else None
+        if code in (
+            "AccessDenied",
+            "AccessDeniedException",
+            "UnauthorizedOperation",
+            "Forbidden",
+        ):
+            return "permission_denied", True
+        if code in (
+            "Throttling",
+            "ThrottlingException",
+            "RequestLimitExceeded",
+            "SlowDown",
+        ):
+            return "throttled", False
+        return "provider_error", False
+    if type(error).__module__ == "botocore.exceptions" and type(error).__name__ in {
+        "NoCredentialsError",
+        "PartialCredentialsError",
+        "CredentialRetrievalError",
+        "TokenRetrievalError",
+    }:
+        return "credentials_unavailable", False
+    if type(error).__module__ == "botocore.exceptions" and type(error).__name__ in {
+        "EndpointConnectionError",
+        "ConnectTimeoutError",
+        "ReadTimeoutError",
+        "ConnectionClosedError",
+        "ProxyConnectionError",
+        "SSLError",
+        "HTTPClientError",
+    }:
+        return "transport_error", False
+    if type(error).__module__ == "botocore.exceptions" and type(error).__name__ in {
+        "ParamValidationError",
+        "UnknownParameterError",
+        "ValidationError",
+    }:
+        return "invalid_request", False
+    if isinstance(error, (ConnectionError, TimeoutError, OSError)):
+        return "transport_error", False
+    if isinstance(error, (ValueError, TypeError)):
+        return "invalid_request", False
+    return "provider_error", False
 
 
 class AwsReader:
@@ -215,28 +296,23 @@ class AwsReader:
                     response = client._make_api_call(
                         row["operation"], json.loads(json.dumps(call.parameters))
                     )
-                    partial = (
-                        any(
-                            response.get(k)
-                            for k in (
-                                "NextToken",
-                                "NextMarker",
-                                "Marker",
-                                "IsTruncated",
-                                "LastEvaluatedKey",
-                            )
-                        )
-                        if isinstance(response, dict)
-                        else True
-                    )
                     return CallResult(
-                        call.capability, "incomplete" if partial else "recorded"
+                        call.capability,
+                        "recorded"
+                        if response_complete(call.capability, call.parameters, response)
+                        else "incomplete",
                     )
 
                 return authorize(row["iam_action"], construct)
-            except Exception:
-                # Never format provider exception messages or raw payloads.
-                return CallResult(call.capability, "unreadable", row["iam_action"])
+            except Exception as error:
+                # Keep a closed diagnostic vocabulary, never provider messages.
+                cause, denied = _failure(error)
+                return CallResult(
+                    call.capability,
+                    "unreadable",
+                    row["iam_action"] if denied else None,
+                    cause,
+                )
             finally:
                 self._slots.release()
 

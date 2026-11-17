@@ -5,6 +5,9 @@ import os
 import logging
 from pathlib import Path
 import re
+import threading
+
+from cloud.aws.allowlist import _CATALOG
 
 
 def validate_config(config):
@@ -25,7 +28,7 @@ def _silence_sdk_logs():
     # Botocore debug records contain Authorization headers and session tokens.
     # Disable at the SDK logger before record construction, rather than trying
     # to sanitize records after they have reached handlers or capture sinks.
-    for namespace in ("botocore", "boto3", "urllib3"):
+    for namespace in ("botocore", "boto3"):
         logging.getLogger(namespace).setLevel(logging.CRITICAL + 1)
     for name, logger in tuple(logging.Logger.manager.loggerDict.items()):
         if (
@@ -33,8 +36,6 @@ def _silence_sdk_logs():
             or name.startswith("botocore.")
             or name == "boto3"
             or name.startswith("boto3.")
-            or name == "urllib3"
-            or name.startswith("urllib3.")
         ):
             if isinstance(logger, logging.Logger):
                 logger.disabled = True
@@ -76,6 +77,72 @@ def session(*, mechanisms=("env",), credentials_file=None, trusted_profile=None)
     return sdk
 
 
+class SessionError(PermissionError):
+    """A safe session failure with a closed diagnostic category."""
+
+    def __init__(self, cause="session_unavailable"):
+        if cause not in {
+            "sdk_unavailable",
+            "credentials_unavailable",
+            "session_unavailable",
+            "request_refused",
+        }:
+            cause = "session_unavailable"
+        self.cause = cause
+        super().__init__("AWS session unavailable")
+
+
+def _fence_client(client, service):
+    """Permit one approved API operation and never delegate retry decisions.
+
+    Botocore's S3 redirect handler can issue HeadBucket from needs-retry even
+    when normal retry configuration allows one attempt. These guards run before
+    that handler and before any nested operation constructs a request.
+    """
+    from botocore.exceptions import ClientError
+
+    allowed = {
+        row["operation"]
+        for row in _CATALOG["operations"].values()
+        if row["service"] == service
+    }
+    lock = threading.Lock()
+    used = False
+
+    def before_parameters(model, **kwargs):
+        nonlocal used
+        with lock:
+            if used or model.name not in allowed:
+                raise SessionError("request_refused")
+            used = True
+
+    def no_retry(response=None, caught_exception=None, operation=None, **kwargs):
+        if caught_exception is not None:
+            raise caught_exception
+        if response is not None:
+            http_response, parsed = response
+            if http_response.status_code >= 300 or parsed.get("Error"):
+                raise ClientError(parsed, operation.name)
+
+    # Hierarchical events run operation-specific handlers before generic ones,
+    # regardless of register_first. Bind exact operation events so this fence
+    # precedes S3's service-wide redirect/discovery handlers.
+    event_service = client.meta.service_model.service_id.hyphenize()
+    for operation in client.meta.service_model.operation_names:
+        client.meta.events.register_first(
+            f"before-parameter-build.{event_service}.{operation}",
+            before_parameters,
+            unique_id="deploywhisper-single-approved-operation-" + operation,
+        )
+        if operation in allowed:
+            client.meta.events.register_first(
+                f"needs-retry.{event_service}.{operation}",
+                no_retry,
+                unique_id="deploywhisper-no-implicit-retry-" + operation,
+            )
+    return client
+
+
 class AmbientSession:
     """Trusted server-only credential selection; never accept this from requests."""
 
@@ -97,15 +164,22 @@ class AmbientSession:
     def create_client(self, service, config, *, timeout=2.0):
         config = validate_config(config)
         try:
-            from botocore.config import Config
+            try:
+                from botocore.config import Config
+            except ImportError:
+                raise SessionError("sdk_unavailable") from None
 
             sdk = session(
                 mechanisms=self._mechanisms,
                 credentials_file=self._credentials_file,
                 trusted_profile=self._profile,
             )
-            if sdk.get_credentials() is None:
-                raise PermissionError("Ambient credentials unavailable")
+            try:
+                credentials = sdk.get_credentials()
+            except Exception:
+                raise SessionError("credentials_unavailable") from None
+            if credentials is None:
+                raise SessionError("credentials_unavailable")
             client = sdk.create_client(
                 service,
                 region_name=config["region"],
@@ -121,6 +195,8 @@ class AmbientSession:
                 ),
             )
             _silence_sdk_logs()
-            return client
+            return _fence_client(client, service)
+        except SessionError:
+            raise
         except Exception:
-            raise PermissionError("AWS session unavailable") from None
+            raise SessionError("session_unavailable") from None

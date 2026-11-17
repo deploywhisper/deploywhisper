@@ -59,3 +59,7 @@ with patch.dict(os.environ, {'AWS_ACCESS_KEY_ID': 'SYNTHETIC', 'AWS_SECRET_ACCES
     assert 'us-west-2' in requests[-1][1]
 
 ```
+
+## Review-fix resolution — 2026-11-17
+
+All five findings above are resolved by the follow-up implementation. Independent verification found no remaining concrete blocker against these findings. Red/green regressions, operation-specific SDK fences, all42capability completion checks, sanitized causes, unrelated logging preservation and exact wildcard DNS validation are documented in [review-fixes.md](review-fixes.md). Root2,258tests, fullCI3,758tests, API/CLI/infra834tests and pinned SDK11tests passed; runtime SDK tests also passed on Python3.11.17 with networking disabled. Story returned to review; original review evidence above remains historical. No live AWS qualification is claimed.

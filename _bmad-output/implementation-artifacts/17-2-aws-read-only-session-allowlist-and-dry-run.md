@@ -1,6 +1,6 @@
 # Story 17.2: AWS Read-Only Session, Allow-List Enforcement and Dry-Run
 
-Status: in-progress
+Status: review
 Preparation: refined
 Release: v1.6.0 (independent release train) | Priority: P0 within the independent Epic 17 lane
 
@@ -72,11 +72,11 @@ Execute one bounded packet at a time on `feature/17-2-aws-read-only-session`. Ea
 
 ### Review Findings
 
-- [ ] [Review][Patch][P1] Fence SDK-generated S3 redirect/HeadBucket requests before dispatch [cloud/aws/session.py:119]
-- [ ] [Review][Patch][P1] Reject complete metadata for failed/missing/mismatched provider identities [cloud/aws/client.py:218]
-- [ ] [Review][Patch][P2] Preserve safe failure causes and report only confirmed missing permissions [cloud/aws/client.py:237]
-- [ ] [Review][Patch][P2] Keep unrelated HTTP diagnostics enabled when suppressing SDK credential logs [cloud/aws/session.py:25]
-- [ ] [Review][Patch][P2] Accept exact wildcard DNS identities without enabling inventory selectors [cloud/aws/client.py:79]
+- [x] [Review][Patch][P1] Fence SDK-generated S3 redirect/HeadBucket requests before dispatch [cloud/aws/session.py:119]
+- [x] [Review][Patch][P1] Reject complete metadata for failed/missing/mismatched provider identities [cloud/aws/client.py:218]
+- [x] [Review][Patch][P2] Preserve safe failure causes and report only confirmed missing permissions [cloud/aws/client.py:237]
+- [x] [Review][Patch][P2] Keep unrelated HTTP diagnostics enabled when suppressing SDK credential logs [cloud/aws/session.py:25]
+- [x] [Review][Patch][P2] Accept exact wildcard DNS identities without enabling inventory selectors [cloud/aws/client.py:79]
 
 Full evidence: `docs/verification/live-environment-grounding/17-2/code-review.md`.
 
@@ -125,6 +125,7 @@ Full evidence: `docs/verification/live-environment-grounding/17-2/code-review.md
 Codex; native implementation agent and separate read-only boundary reviewer.
 
 ### Debug Log References
+- Review fixes and red/green proofs: `docs/verification/live-environment-grounding/17-2/review-fixes.md`; final logs `/tmp/story17-2-fixes-{root,ci,api-cli-infra,cloud,isolation,sdk-python311,aws-python311}.log`.
 - Reproduction commands and AC mapping: `docs/verification/live-environment-grounding/17-2/README.md`.
 - Optional real-SDK, socket-denied qualification: `docs/verification/live-environment-grounding/17-2/test_sdk.py`.
 - Local validation logs: `/tmp/story17-2-{root-final,api-cli-infra,ci-final,cloud,isolation,protected-source}.log`.
@@ -136,6 +137,10 @@ Codex; native implementation agent and separate read-only boundary reviewer.
 - Review raw SDK signing logs independently, fix discovered leakage at source, then rerun the signing regression and cloud isolation checks.
 
 ### Completion Notes List
+- Resolved all five review findings: fenced operation-specific SDK parameter/retry events before hidden S3 discovery/redirect paths; validated completion across42capabilities; separated safe failure causes from confirmed IAM denials; preserved unrelated HTTP logging; accepted exact wildcard DNS identities with strict record matching.
+- Review-fix regression tests failed on reviewed code before fixes, then passed28focused AWS tests and11pinned SDK tests. Independent read-only verification reproduced the corrected transport/error/DNS behavior and found no remaining concrete blocker against the five findings.
+- Fresh final validation: root2,258tests (3skips); full localCI3,758tests across12shards (3skips), plus118isolation tests/skill/prompt-injection checks; exact API/CLI/infra pytest shard834passed (1skip),2,456subtests; cloud65tests; protected-source guard3tests. Ruff lint/format passed684files; Bandit cloud/aws found zero issues. Python3.10 grammar passed. Python3.11.17 network-disabled existing-image harness passed11SDKtests and28AWStests against current read-only mounted source and pinned botocore1.44.1. Commands, image digest and logs: review-fixes.md.
+- Qualified config.py/model sources/default dependency locks remain unchanged. UI validation not applicable. Existing-image runtime tests do not qualify a rebuilt production image or live AWS; those gates remain in their owning later stories.
 - Implemented33-action deny-by-default authorization,42frozen capabilities, sanitized refusal audit events, exact IAM policy equivalence and per-capability permission map/denial tests.
 - Implemented lazy ambient session construction using packaged SDK models, canonical endpoints and disabled proxy/endpoint overrides. Unqualified credential chains remain refused per architecture26.7.
 - Credential-free dry-run shares a validated manifest with bounded execution. Scheduler defaults:2seconds per call,15seconds total,4concurrent calls and100attempts; cancellation/backoff return labelled partial results. Timed-out daemon calls retain process-global slots and discard late results.
@@ -162,8 +167,15 @@ Codex; native implementation agent and separate read-only boundary reviewer.
 - `tests/test_cloud/aws/test_session.py`
 - `docs/verification/live-environment-grounding/17-2/README.md`
 - `docs/verification/live-environment-grounding/17-2/test_sdk.py`
+- `cloud/aws/response_status.py`
+- `tests/test_cloud/aws/test_completion.py`
+- `tests/test_cloud/aws/test_response_status.py`
+- `docs/verification/live-environment-grounding/17-2/code-review.md`
+- `docs/verification/live-environment-grounding/17-2/review-fixes.md`
 
 ## Change Log
+
+- 2026-11-17: Fixed all five review findings, added failing-then-passing regressions, independently verified fixes and passed fresh full-suite/runtime checks; story returned to review.
 
 - 2026-11-17: BMad three-layer code review requested changes; five patch findings recorded and story returned to in-progress.
 
@@ -172,3 +184,7 @@ Codex; native implementation agent and separate read-only boundary reviewer.
 ## Senior Developer Review (AI)
 
 - 2026-11-17: Changes requested. Three-layer review identified2P1 and3P2 patch findings; no production code modified. Offline pinned-SDK S3 redirect reproduction proves an unallowlisted HeadBucket plus extra region request escapes the budget and dry-run. Focused19tests pass but do not cover these defects. Story/sprint returned to in-progress. See review report for evidence and follow-ups.
+
+### Review Follow-up Verification
+
+2026-11-17: All five review action items resolved. Independent verifier confirmed fixes with28offline AWS tests and11real pinned SDK tests; fresh root/fullCI/API shard passed. See review-fixes.md for exact evidence. Ready for re-review.

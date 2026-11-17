@@ -138,3 +138,192 @@ class SdkTests(unittest.TestCase):
                 self.assertNotIn(value, text)
         finally:
             root.removeHandler(handler)
+
+    def test_redirects_never_add_requests_or_change_region(self):
+        from botocore.awsrequest import AWSResponse
+        from cloud.aws.client import AwsReader, Call, Limits
+
+        class Raw:
+            def stream(self, amt=None, decode_content=False):
+                yield b"<Error><Code>PermanentRedirect</Code></Error>"
+
+        cases = [
+            (status, headers)
+            for status in (301, 302, 307, 308, 500)
+            for headers in ({}, {"x-amz-bucket-region": "us-west-2"})
+        ]
+        for status, headers in cases:
+            with self.subTest(status=status, headers=headers):
+                requests = []
+
+                def send(_transport, request):
+                    requests.append((request.method, request.url))
+                    return AWSResponse(request.url, status, headers, Raw())
+
+                with (
+                    patch.dict(os.environ, ENV, clear=True),
+                    patch.object(
+                        socket,
+                        "socket",
+                        side_effect=AssertionError("network forbidden"),
+                    ),
+                    patch("botocore.httpsession.URLLib3Session.send", send),
+                ):
+                    call = Call(
+                        capability="bucket_versioning",
+                        parameters={
+                            "Bucket": "demo-bucket",
+                            "ExpectedBucketOwner": "000000000000",
+                        },
+                    )
+                    result = AwsReader(AmbientSession()).execute(
+                        [call], limits=Limits(call_budget=1)
+                    )
+                self.assertEqual(len(requests), 1)
+                self.assertEqual(requests[0][0], "GET")
+                self.assertNotIn("us-west-2", requests[0][1])
+                self.assertTrue(result.partial)
+
+    def test_unrelated_urllib3_diagnostics_remain_enabled(self):
+        import logging
+
+        logger = logging.getLogger("urllib3.unrelated-http-client")
+        logger.disabled = False
+        logger.setLevel(logging.WARNING)
+        with patch.dict(os.environ, ENV, clear=True):
+            AmbientSession().create_client("ec2", {"region": "us-east-1"})
+        with self.assertLogs(logger, level="WARNING") as logs:
+            logger.warning("ordinary transport warning")
+        self.assertIn("ordinary transport warning", str(logs.output))
+        self.assertFalse(logger.disabled)
+
+    def test_shared_file_signing_keeps_raw_logs_credential_free(self):
+        import logging
+        from botocore.awsrequest import AWSRequest
+
+        records = []
+
+        class Capture(logging.Handler):
+            def emit(self, record):
+                records.append(record)
+
+        handler = Capture()
+        root = logging.getLogger()
+        root.addHandler(handler)
+        try:
+            with (
+                tempfile.TemporaryDirectory() as temp,
+                patch.dict(os.environ, {}, clear=True),
+            ):
+                path = Path(temp) / "credentials"
+                values = (
+                    "SYNTHETIC-shared-key",
+                    "synthetic-shared-secret",
+                    "synthetic-shared-token",
+                )
+                path.write_text(
+                    "[qualified]\naws_access_key_id = "
+                    + values[0]
+                    + "\naws_secret_access_key = "
+                    + values[1]
+                    + "\naws_session_token = "
+                    + values[2]
+                    + "\n"
+                )
+                logger = logging.getLogger("botocore.auth")
+                logger.disabled = False
+                logger.setLevel(logging.DEBUG)
+                with patch.object(
+                    socket, "socket", side_effect=AssertionError("network forbidden")
+                ):
+                    client = AmbientSession(
+                        mechanisms=("shared-credentials-file",),
+                        credentials_file=str(path),
+                        trusted_profile="qualified",
+                    ).create_client("ec2", {"region": "us-east-1"})
+                    client._request_signer.sign(
+                        "DescribeInstances",
+                        AWSRequest(
+                            method="POST",
+                            url=client.meta.endpoint_url,
+                            data="Action=DescribeInstances",
+                        ),
+                    )
+                text = "\n".join(record.getMessage() for record in records)
+                for value in values:
+                    self.assertNotIn(value, text)
+        finally:
+            root.removeHandler(handler)
+
+    def test_direct_mutation_and_second_operation_are_refused(self):
+        from cloud.aws.session import SessionError
+
+        with (
+            patch.dict(os.environ, ENV, clear=True),
+            patch.object(
+                socket, "socket", side_effect=AssertionError("network forbidden")
+            ),
+        ):
+            client = AmbientSession().create_client("ec2", {"region": "us-east-1"})
+            with self.assertRaises(SessionError):
+                client.terminate_instances(InstanceIds=["i-00000000000000001"])
+            # Refusal consumes no permitted operation.
+            with Stubber(client) as stub:
+                stub.add_response(
+                    "describe_instances",
+                    {"Reservations": []},
+                    {"InstanceIds": ["i-00000000000000001"]},
+                )
+                client.describe_instances(InstanceIds=["i-00000000000000001"])
+            with self.assertRaises(SessionError):
+                client.describe_instances(InstanceIds=["i-00000000000000001"])
+
+    def test_transport_failure_is_never_retried(self):
+        from botocore.exceptions import ConnectTimeoutError
+        from cloud.aws.client import AwsReader, Call, Limits
+
+        requests = []
+
+        def send(_transport, request):
+            requests.append(request.url)
+            raise ConnectTimeoutError(endpoint_url=request.url)
+
+        with (
+            patch.dict(os.environ, ENV, clear=True),
+            patch.object(
+                socket, "socket", side_effect=AssertionError("network forbidden")
+            ),
+            patch("botocore.httpsession.URLLib3Session.send", send),
+        ):
+            result = AwsReader(AmbientSession()).execute(
+                [
+                    Call(
+                        capability="bucket_versioning",
+                        parameters={
+                            "Bucket": "demo-bucket",
+                            "ExpectedBucketOwner": "000000000000",
+                        },
+                    )
+                ],
+                limits=Limits(call_budget=1),
+            )
+        self.assertEqual(len(requests), 1)
+        self.assertTrue(result.partial)
+
+    def test_parsed_error_stops_retry_handlers_even_with_http_200(self):
+        from types import SimpleNamespace
+        from botocore.exceptions import ClientError
+
+        with patch.dict(os.environ, ENV, clear=True):
+            client = AmbientSession().create_client("s3", {"region": "us-east-1"})
+            with self.assertRaises(ClientError):
+                client.meta.events.emit(
+                    "needs-retry.s3.GetBucketVersioning",
+                    response=(
+                        SimpleNamespace(status_code=200),
+                        {"Error": {"Code": "PermanentRedirect"}},
+                    ),
+                    operation=client.meta.service_model.operation_model(
+                        "GetBucketVersioning"
+                    ),
+                )

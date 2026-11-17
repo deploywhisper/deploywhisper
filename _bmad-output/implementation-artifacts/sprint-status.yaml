@@ -243,7 +243,7 @@ development_status:
   epic-17: in-progress
   17-0-adopt-and-qualify-the-grounding-contract: done
   17-1-cloud-connector-contract-and-snapshot-evidence: done
-  17-2-aws-read-only-session-allowlist-and-dry-run: in-progress
+  17-2-aws-read-only-session-allowlist-and-dry-run: review
   17-3-plan-directed-reflection-and-bounded-collection: backlog
   17-4-plan-versus-reality-divergence-and-ci-gate: backlog
   17-5-live-dependency-graph-and-grounded-blast-radius: backlog

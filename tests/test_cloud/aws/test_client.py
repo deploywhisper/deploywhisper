@@ -141,9 +141,11 @@ class ClientTests(unittest.TestCase):
         for capability, row in _CATALOG["operations"].items():
             with self.subTest(capability=capability):
                 source = Mock()
-                source.create_client.return_value._make_api_call.side_effect = (
-                    PermissionError("secret-canary")
-                )
+                source.create_client.return_value._make_api_call.side_effect = type(
+                    "ClientError",
+                    (Exception,),
+                    {"response": {"Error": {"Code": "AccessDenied"}}},
+                )("secret-canary")
                 call = Call(capability=capability, parameters=render(row["params"]))
                 result = AwsReader(source).execute([call])
                 self.assertEqual(result.items[0].missing_permission, row["iam_action"])
