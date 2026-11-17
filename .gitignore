@@ -5,7 +5,8 @@ __pycache__/
 .omx
 # C extensions
 *.so
-
+bandit-report.json
+unused-output.json
 # Distribution / packaging
 .Python
 build/
