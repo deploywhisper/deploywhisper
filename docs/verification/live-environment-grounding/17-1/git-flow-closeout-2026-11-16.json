@@ -1,0 +1,37 @@
+{
+  "story": "17.1",
+  "date": "2026-11-16",
+  "branch": "feature/17-1-connector-contract-and-snapshot",
+  "base": "develop",
+  "review": "All three findings resolved; independent follow-up reproductions closed.",
+  "verification_record": "review-fixes-2026-11-16.json",
+  "refreshed_checks": {
+    "focused": "125 passed;137 subtests passed",
+    "ruff_lint": "passed",
+    "ruff_format": "671 files formatted",
+    "staged_diff_check": "passed",
+    "docker_build": "passed;source-only staged context",
+    "docker_image": "sha256:3f1580d0893b8f00505c1c2e8c807ad155d23b5b6f481399a361ef872c75fa04",
+    "docker_runtime": {
+      "python": "3.11.17",
+      "non_root": true,
+      "no_node": true,
+      "no_provider_sdk": true,
+      "float_masking": true,
+      "default_authorization_closed": true
+    }
+  },
+  "logs": [
+    "/tmp/story17-1-closeout-focused.log",
+    "/tmp/story17-1-closeout-docker.log",
+    "/tmp/story17-1-closeout-runtime.log"
+  ],
+  "limits": [
+    "Reference-only foundation; no live provider or production authorization adapter qualification.",
+    "UI validation not applicable."
+  ],
+  "excluded_generated_outputs": [
+    "bandit-report.json",
+    "unused-output.json"
+  ]
+}

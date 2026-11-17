@@ -1,6 +1,6 @@
 # Cloud Connector Contract — Contributor Guide
 
-> **Status: planned, not implemented.** This guide specifies the contract that Epic 17 will publish so a community contributor can add a cloud provider without maintainer-specific knowledge. The executable conformance suite referenced here is delivered by Story 17.9. Nothing in this document is a capability claim.
+> **Foundation implemented by Story 17.1.** The provider-neutral contract, registry, immutable screened snapshots and network-free reference conformance seed are available. AWS, Azure and GCP remain explicitly unimplemented. Production provider enforcement and the complete conformance suite remain with their owning later stories, including 17.9.
 >
 > Governance: [RFC 0002](../rfcs/0002-live-environment-grounding.md) · Requirements: [feature PRD](../../_bmad-output/planning-artifacts/prd-live-environment-grounding.md) · Architecture: [§26](../../_bmad-output/planning-artifacts/architecture.md)
 
@@ -34,7 +34,7 @@ tests/test_cloud/
 
 ## The contract
 
-A connector implements the `CloudConnector` protocol in `cloud/base.py`. It receives a set of `ResourceIdentity` values derived from the parsed change and returns a `LiveContextSnapshot`.
+A connector implements the `CloudConnector` protocol in `cloud/base.py`. It receives an immutable tuple of `ResourceIdentity` values and keyword-only `project_id` and server-issued opaque `scope_id`, and returns a `LiveContextSnapshot`. The maskable `scope` display is distinct from authorization identity. The digest binds the normalized UTC read window, provider/project/scope identity, sorted resource results, selected scalar facts, action set, completeness and screening status.
 
 ### Hard requirements
 
@@ -116,3 +116,28 @@ A connector defect that could enable a mutating call, credential disclosure or c
 - [Operator guide](README.md)
 - [Minimal AWS read-only policy](aws-read-only-policy.json)
 - [Architecture §26](../../_bmad-output/planning-artifacts/architecture.md)
+
+## Implemented foundation integration
+
+`cloud.base` supplies deeply frozen identities, scalar facts, per-resource read states and snapshots. `build_snapshot` creates a canonical observation; `validate_snapshot` requires and rechecks the retained digest, including tampered model-copy instances. Raw bodies, state, plans, user-data aliases and credential echoes are screened by `cloud.redaction` before persistence. Removed sensitive facts make the read partial. Display account masking never rewrites the opaque authorized scope identity.
+
+`cloud.reference.ReferenceCloudConnector` is a pure pre-seeded fixture provider. It is absent from the default registry and must be injected by trusted server/test code. Its missing observations have explicit causes; it never invents a successful empty response for a nonempty request. Production provider slots remain unimplemented.
+
+`CloudContextService` is an internal integration boundary. Its constructor accepts a server-installed authorization unit-of-work port; absence is unavailable, not default-allow. The port owns an explicit SQLite `BEGIN IMMEDIATE`, commits/rollbacks, and current project/operation authorization. Request objects must never supply a port, role claim, permission boolean, endpoint or credential. Disabled/unconfigured projects return before connector construction. No default analysis hook, UI or provider SDK is added by this foundation.
+
+Enabling a configuration initializes the independently versioned cloud schema under that checked transaction. `models.cloud_snapshots` has its own metadata, and `cloud.schema` checks its own table/guard/version namespace. The core migration head and qualified shared model sources stay unchanged. Schema, marker and project setting creation are atomic; absent, partial or unknown namespace states are not silently adopted. Schema installation requires the real SQLite transaction and foreign-key enforcement.
+
+Use `admit_evidence(project_id, digest)` for publication. It keeps the same authorization transaction open while the caller obtains `evidence_for(resource_address, fact_name, finding_id, ...)` and persists the report through its yielded session with `commit=False`. Evidence summaries derive from retained observed facts. Unreadable, partial, absent, corrupted or purged observations cannot mint a grounded claim. Publication checks private expected values, real report/workspace ownership, all live-state rows and same-report references before the UOW commits. Existing live-state rows must retain their complete stored values throughout admission; edits, deletions and source relabelling are rejected, including rows in other projects. Session and SQLAlchemy Connection commits (including explicit SQL COMMIT/END) are blocked until validation finishes; a caught early-commit error still invalidates the admission. Integral floating-point account facts are masked under the same policy as integer account facts. The current profile admits one snapshot per publication; unrelated artifact evidence can coexist. Direct ORM calls outside this boundary are not cloud evidence admission.
+
+Snapshots expire seven days after observation when unreferenced. Existing retained report/evidence references extend payload lifetime; disabling or rotating current configuration preserves authorized historical inspection. An admission reserved before expiry publishes its report reference atomically. Duplicate observations never reset age, and a purged observation cannot be resurrected or returned as a retained collection result. Lawful expiry clears the body once while keeping nonsecret provenance. Explicit project deletion cascades snapshots and removes the project cloud setting; ID reuse cannot inherit opt-in.
+
+The SQLite snapshot table is `WITHOUT ROWID`, rejects conflicting inserts/REPLACE and arbitrary updates/deletes, and verifies retained canonical payloads/digests on read. Database-owner DDL tampering is outside this application-level admission boundary and causes namespace validation failure when detected.
+
+Reference-profile isolation runs with provider SDK imports, unrelated execution-module imports and networking blocked:
+
+```sh
+./.venv/bin/python scripts/verify_cloud_isolation.py
+./.venv/bin/python -m pytest tests/test_cloud tests/test_evidence tests/test_models/test_cloud_snapshot_storage.py -v --tb=short
+```
+
+Future provider-specific SDK suites need a separate qualification profile; preserve the SDK-free foundation and independent import-graph checks. Production-scale admission metadata scans and live transport/cancellation remain later collector qualification obligations. A new production provider must still satisfy every hard requirement above.

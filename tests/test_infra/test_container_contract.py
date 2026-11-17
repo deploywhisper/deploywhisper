@@ -231,6 +231,7 @@ class ContainerContractTests(unittest.TestCase):
             dockerfile, r"FROM python:3\.11-slim@sha256:[0-9a-f]{64} AS runtime"
         )
         self.assertIn("COPY --from=builder /opt/venv /opt/venv", dockerfile)
+        self.assertIn("COPY --chown=appuser:appuser cloud ./cloud", dockerfile)
         self.assertIn(
             "COPY --chown=appuser:appuser integrations ./integrations", dockerfile
         )

@@ -1,0 +1,1 @@
+"""Cloud connector contract checks."""

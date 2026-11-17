@@ -1,11 +1,11 @@
 ---
 project_name: 'deploywhisper'
 user_name: 'psaho01'
-date: '2026-11-11'
+date: '2026-11-13'
 sections_completed:
   ['technology_stack', 'language_rules', 'framework_rules', 'testing_rules', 'quality_rules', 'workflow_rules', 'anti_patterns']
 status: 'complete'
-rule_count: 56
+rule_count: 64
 optimized_for_llm: true
 ---
 
@@ -154,3 +154,14 @@ Last Updated: 2026-11-11
 - Release source SBOMs describe exact committed Python/npm lock candidates, not installed OS/container contents or operator-supplied tools. Preserve legacy v1.4.0 three-subject verification separately from the new six-subject application/runner/SBOM verification. The qualification manifest validates evidence identity and coverage but always denies publication authorization; waiver and stable publication require durable repository evidence and their actual independent gates.
 - The v1.5.0 material authority is default-off and co-located. The app may receive only the signed nonsecret ledger, Ed25519 public key and live Unix probe socket; it must reject any private signing-key/raw-custody setting. The separate authority/receiver process owns raw custody and verifies actual descriptors/bytes on every nonce-bound probe. Recovery generation participates in witness identity; ledger records never disappear or roll back.
 - Policy evaluation is a fixed trusted worker that cannot mint approval or dispatch authority. Human decision and handoff remain API-driven durable services using one shared production-derived `DecisionService`; missing material, target, recovery, profile, carrier or live custody returns503 without dummy success or blind resend.
+
+## Live environment foundation — Story 17.1
+
+- `cloud/base.py` snapshots are deeply frozen, digest-bound selected metadata. Normalize UTC windows, preserve opaque `scope_id`, and screen/mask display data before computing the retained digest. Revalidate copied or stored models; never log raw Pydantic error inputs.
+- `models/cloud_snapshots.py` owns separate metadata and a direct FK to the released Project column. `cloud/schema.py` owns its versioned namespace. Default-off code must not create cloud objects or alter core Alembic history. Qualified shared model/database source changes belong to their own requalification workstream.
+- Explicit enabled configuration installs namespace/marker/settings atomically in a checked SQLite/FK-enabled physical transaction. Unknown/partial namespace state fails closed; do not adopt or repair it silently.
+- `CloudContextService` requires a constructor-only trusted server UOW with live checks; no adapter means unavailable. Request data cannot provide a principal, role, permission boolean or authorization callback.
+- Publish through `admit_evidence`, its returned factory and session with `commit=False`. The UOW owns commit. Preserve private expected claims, every live-state publication/ref check, and real report/workspace ownership.
+- Reference-held snapshots survive TTL, configuration disablement and rotation. Expired unreferenced or purged observations cannot become successful retained collection results. Duplicate/REPLACE/rowid paths cannot refresh or resurrect them.
+- `live_state` is an additive source Literal, with existing deterministic/freshness vocabularies. Legacy models gain no default fields. The production provider slots remain unimplemented in this foundation; reference observations are server/test-injected only.
+- Run `scripts/verify_cloud_isolation.py` for the SDK-free reference profile and keep optional provider-SDK suites separate. Cloud components must not acquire execution-epic imports or core analysis/scoring/report changes to register a provider.

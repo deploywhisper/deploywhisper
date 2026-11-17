@@ -1,6 +1,6 @@
 # Live Environment Grounding — Operator Guide
 
-> **Status: planned, not implemented.** This guide documents the intended operator contract for Epic 17 so that the security posture can be reviewed before any code exists. No feature described here ships today. Nothing in this document is a test result or a capability claim.
+> **Operator features remain planned.** Story 17.1 implements the SDK-free connector/snapshot/evidence foundation and a network-free reference provider for qualification. AWS/Azure/GCP collection, operator settings, CLI flags and the report UI described below are delivered by later stories. The foundation does not claim live-provider support. See the [implemented connector contract](connector-contract.md).
 >
 > Governance: [RFC 0002](../rfcs/0002-live-environment-grounding.md) (Accepted 2026-10-19; acceptance authorizes Story 17.0 qualification only) · Target release: v1.6.0, independent of Epic 16 after the approved 2026-11-11 cut-back · Requirements: [feature PRD](../../_bmad-output/planning-artifacts/prd-live-environment-grounding.md) · Architecture: [§26](../../_bmad-output/planning-artifacts/architecture.md)
 

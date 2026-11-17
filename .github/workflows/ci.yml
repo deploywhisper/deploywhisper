@@ -81,6 +81,7 @@ jobs:
           mypy \
             api/ \
             analysis/ \
+            cloud/ \
             services/ \
             infra_automation/ \
             parsers/ \
@@ -174,7 +175,7 @@ jobs:
       - name: Static security analysis with Bandit
         run: |
           bandit \
-            -r api/ analysis/ services/ parsers/ llm/ models/ cli/ evidence/ infra_automation/ \
+            -r cloud/ api/ analysis/ services/ parsers/ llm/ models/ cli/ evidence/ infra_automation/ \
             -f json \
             -o bandit-report.json \
             --severity-level medium \
@@ -183,7 +184,7 @@ jobs:
             2>&1 | tee bandit.log || true
           # Review report — fail on high severity
           bandit \
-            -r api/ analysis/ services/ parsers/ llm/ models/ cli/ evidence/ infra_automation/ \
+            -r cloud/ api/ analysis/ services/ parsers/ llm/ models/ cli/ evidence/ infra_automation/ \
             --severity-level high \
             --confidence-level high \
             -x tests/
@@ -324,6 +325,8 @@ jobs:
         include:
           - shard: api-cli-infra
             targets: tests/test_api tests/test_cli tests/test_infra
+          - shard: cloud-evidence
+            targets: tests/test_cloud tests/test_evidence tests/test_models/test_cloud_snapshot_storage.py
           - shard: analysis-parsers
             targets: tests/test_analysis tests/test_parsers
           - shard: services
@@ -377,6 +380,10 @@ jobs:
               2>&1 | tee shard-${{ matrix.shard }}.log
             test ${PIPESTATUS[0]} -eq 0
           fi
+
+      - name: Verify cloud isolation without provider SDKs or other epic modules
+        if: matrix.shard == 'cloud-evidence'
+        run: python scripts/verify_cloud_isolation.py
 
       - name: Upload coverage data
         if: always()

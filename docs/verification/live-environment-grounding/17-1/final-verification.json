@@ -1,0 +1,140 @@
+{
+  "scope": "Story17.1 SDK-free reference foundation; ready for review",
+  "focused": {
+    "tests": 120,
+    "subtests": 121,
+    "result": "pass",
+    "command": "./.venv/bin/python -m pytest tests/test_cloud tests/test_evidence tests/test_services/test_cloud_context_service.py tests/test_models/test_cloud_snapshot_storage.py tests/test_infra/test_cloud_snapshot_migration.py -q --tb=short"
+  },
+  "isolation": {
+    "tests": 84,
+    "result": "pass",
+    "command": "./.venv/bin/python scripts/verify_cloud_isolation.py",
+    "blocked": "provider SDKs, unrelated execution modules and networking"
+  },
+  "root": {
+    "tests": 2224,
+    "skipped": 3,
+    "seconds": 1099.44,
+    "result": "pass",
+    "command": "./.venv/bin/python -m unittest discover -q"
+  },
+  "local_ci": {
+    "shards": [
+      {
+        "target": "tests/test_cloud",
+        "tests": 36,
+        "seconds": 1.793
+      },
+      {
+        "target": "tests/test_evidence",
+        "tests": 29,
+        "seconds": 1.83
+      },
+      {
+        "target": "tests/test_analysis",
+        "tests": 69,
+        "seconds": 328.555
+      },
+      {
+        "target": "tests/test_api",
+        "tests": 382,
+        "seconds": 233.313
+      },
+      {
+        "target": "tests/test_cli",
+        "tests": 131,
+        "seconds": 137.253
+      },
+      {
+        "target": "tests/test_docs",
+        "tests": 60,
+        "seconds": 0.666
+      },
+      {
+        "target": "tests/test_infra",
+        "tests": 322,
+        "seconds": 105.234
+      },
+      {
+        "target": "tests/test_infra_automation",
+        "tests": 1270,
+        "seconds": 639.63
+      },
+      {
+        "target": "tests/test_llm",
+        "tests": 76,
+        "seconds": 7.277
+      },
+      {
+        "target": "tests/test_models",
+        "tests": 49,
+        "seconds": 5.877
+      },
+      {
+        "target": "tests/test_parsers",
+        "tests": 43,
+        "seconds": 0.043
+      },
+      {
+        "target": "tests/test_services",
+        "tests": 1256,
+        "seconds": 385.755
+      }
+    ],
+    "tests": 3723,
+    "skipped": 3,
+    "result": "pass",
+    "command": "bash scripts/ci-local.sh",
+    "additional": "84 isolated tests; skill scenarios;8 prompt-injection tests with96 subtests"
+  },
+  "api_cli_infra": {
+    "passed": 834,
+    "skipped": 1,
+    "subtests": 2456,
+    "result": "pass",
+    "command": "./.venv/bin/python -m pytest tests/test_api tests/test_cli tests/test_infra -v --tb=short"
+  },
+  "static": {
+    "ruff_check": "pass",
+    "ruff_format": "671 files formatted",
+    "mypy": "pass; informational untyped-body note only",
+    "bandit_medium_severity_medium_confidence": "pass;3 medium-severity low-confidence constant-DDL flags reviewed,0 eligible findings",
+    "core_head": "042_add_receiver_recovery; unchanged",
+    "core_sources": {
+      "models/database.py": "c6f7720843eab0354a7eb1e525b43de8995f90c9c9f6080982fccdc33d254000",
+      "models/tables.py": "e9fbc075b8ab25713e8deeaadf57e2dd31aebc73afacd1e02bffb58a26d26e18"
+    }
+  },
+  "ui": "not applicable",
+  "limits": "No live provider/production auth adapter or IAM/transport qualification; wheel build backend absent and not installed.",
+  "sha256": {
+    "cloud/base.py": "4ca7351c02a44f993bf166315dd078b5adae1d59aa083d3258790f1682b14226",
+    "cloud/redaction.py": "6e96357698543268b7f8791399179515b9b237d749e604f72a4c0ed333bd4d28",
+    "cloud/registry.py": "ff13c674abc398dbf27a3086032e8508d3afe95a95bdd246e6c794526fa30ece",
+    "cloud/reference.py": "22b3147f4a65b007b2bbfef52edd032143c468986afe5a06430470fc6c599ea3",
+    "cloud/schema.py": "30713d864aa9641ec75dfeef0e267239a2a075794bfd54e707f979e60724b4c2",
+    "models/cloud_snapshots.py": "42b37171247fef9c84e2c4dc60772cec1556b423cd856cefe62c4d66a7ac1f60",
+    "models/repositories/cloud_snapshots.py": "e224a31491cd82d0db33e5aa0f7467e1e89808dab23db91e2fe529ab7262c645",
+    "services/cloud_context_service.py": "cdad481d23975622d3f0a14c2ad60c869e9dd381b4c8fd07b52247ea5de39304",
+    "scripts/verify_cloud_isolation.py": "5de62a3caf7d25015ba156fa505bd97ab8fcb140a54240defd4d7acb4d1a5b39",
+    "evidence/models.py": "704ea6ee9549864a4b89fcc7d3da998d7759180d0f9f2da2c6f85bb0e50d5982",
+    "Dockerfile": "cbb71450417846ec941724f10e80f9542b5dbf3c14c24e7d90aef2aa98707296",
+    "pyproject.toml": "11848908d6e623630ad669a8d1fd6f77a648c0730592016c2d9d2cd6464147f9",
+    ".github/workflows/ci.yml": "500b011b5e225fb7ebf51a3f95f7bb92fc0788f5ed1fbca607f9415499626fad",
+    "scripts/ci-local.sh": "88015a2c6ccca1ffabe7c555e64df5034cb6755b8cecd7bbbbcff0b59b363b27"
+  },
+  "docker": {
+    "runtime": "non-root Python3.11",
+    "python": "3.11.17 (main, Oct  6 2026, 02:08:45) [GCC 14.2.0]",
+    "provider_sdk_absent": true,
+    "node_absent": true,
+    "default_off_no_ddl": true,
+    "reference_collect_persist_retrieve": true,
+    "disable_preserves_history": true,
+    "core_restart_preserves_namespace": true,
+    "core_head_before": "042_add_receiver_recovery",
+    "core_head_after": "042_add_receiver_recovery",
+    "image_id": "sha256:1dce054748d4055172f442b0a08ed9d00d0912a5e2f984c1950941521b14e09c"
+  }
+}

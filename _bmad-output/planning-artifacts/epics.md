@@ -2837,7 +2837,7 @@ As a maintainer,
 I want a provider-neutral read-only connector contract and an immutable redacted snapshot that enters the existing evidence system,
 So that grounding is governed by Evidence Law from the first line of code and new providers never require core changes.
 
-**Status:** backlog.
+**Status:** review.
 
 **Dedicated context:** [17-1-cloud-connector-contract-and-snapshot-evidence.md](../implementation-artifacts/17-1-cloud-connector-contract-and-snapshot-evidence.md).
 

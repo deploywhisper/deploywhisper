@@ -36,7 +36,7 @@ fi
 "$PYTHON_BIN" -m pip check
 if [ -n "$BANDIT_BIN" ]; then
   "$BANDIT_BIN" \
-    -r api/ analysis/ services/ parsers/ llm/ models/ cli/ evidence/ infra_automation/ \
+    -r cloud/ api/ analysis/ services/ parsers/ llm/ models/ cli/ evidence/ infra_automation/ \
     -f json \
     -o bandit-report.json \
     --severity-level medium \
@@ -44,7 +44,7 @@ if [ -n "$BANDIT_BIN" ]; then
     -x tests/ \
     2>&1 | tee bandit.log || true
   "$BANDIT_BIN" \
-    -r api/ analysis/ services/ parsers/ llm/ models/ cli/ evidence/ infra_automation/ \
+    -r cloud/ api/ analysis/ services/ parsers/ llm/ models/ cli/ evidence/ infra_automation/ \
     --severity-level high \
     --confidence-level high \
     -x tests/
@@ -52,6 +52,7 @@ fi
 "$PYTHON_BIN" -m compileall \
   api \
   analysis \
+  cloud \
   cli \
   evidence \
   infra_automation \
@@ -64,9 +65,12 @@ fi
   cli.py \
   config.py \
   logging_config.py
+"$PYTHON_BIN" scripts/verify_cloud_isolation.py
 "$PYTHON_BIN" cli.py skill test
 "$PYTHON_BIN" -m pytest tests/test_llm/test_prompt_injection.py -q
 PYTHON_BIN="$PYTHON_BIN" bash scripts/run-test-targets.sh \
+  tests/test_cloud \
+  tests/test_evidence \
   tests/test_analysis \
   tests/test_api \
   tests/test_cli \

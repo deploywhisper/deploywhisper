@@ -95,6 +95,10 @@ class SupplyChainRemediationTests(unittest.TestCase):
         }
         self.assertEqual(shards["services"], "tests/test_services")
         self.assertEqual(shards["infra-automation"], "tests/test_infra_automation")
+        self.assertEqual(
+            shards["cloud-evidence"],
+            "tests/test_cloud tests/test_evidence tests/test_models/test_cloud_snapshot_storage.py",
+        )
         test_job = data["jobs"]["test"]
         self.assertEqual(
             test_job["timeout-minutes"], "${{ matrix.timeout_minutes || 15 }}"
@@ -106,6 +110,7 @@ class SupplyChainRemediationTests(unittest.TestCase):
             },
             {
                 "api-cli-infra": "15",
+                "cloud-evidence": "15",
                 "analysis-parsers": "15",
                 "services": "25",
                 "infra-automation": "25",
