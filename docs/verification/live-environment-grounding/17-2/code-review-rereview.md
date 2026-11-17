@@ -78,3 +78,7 @@ print('Unselected routing identity complete:', complete)
 assert complete
 
 ```
+
+## Fix resolution — 2026-11-17
+
+R2-1 through R2-4 are resolved. Region admission and ordinary S3 bucket names are constrained; SDK ARN-region overrides are disabled; unselected routing identities fail closed; worker timestamps and completion drains preserve truthful deadline labels. Independent verification also found and verified fixes for both closely related publication-observation races. All8new boundary regressions passed. Fresh final root2,268tests, fullCI3,768tests, API/CLI/infra834tests and Python3.11runtime52tests (AWS38+SDK14) passed, along with cloud75/isolation128/protected-source3/Ruff/Bandit. Full commands and red/green proofs: [rereview-fixes.md](rereview-fixes.md). Original review evidence above remains historical. Ready for re-review; no live AWS qualification is claimed.

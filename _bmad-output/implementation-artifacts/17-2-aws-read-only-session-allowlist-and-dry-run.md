@@ -1,6 +1,6 @@
 # Story 17.2: AWS Read-Only Session, Allow-List Enforcement and Dry-Run
 
-Status: in-progress
+Status: review
 Preparation: refined
 Release: v1.6.0 (independent release train) | Priority: P0 within the independent Epic 17 lane
 
@@ -82,10 +82,10 @@ Full evidence: `docs/verification/live-environment-grounding/17-2/code-review.md
 
 ### Re-review Findings
 
-- [ ] [Review][Patch][P2][R2-1] Reject noncommercial AWS partitions before client construction [cloud/aws/session.py:19]
-- [ ] [Review][Patch][P2][R2-2] Reject S3 ARN bucket-name targeting and ARN-region endpoint overrides [cloud/aws/client.py:95]
-- [ ] [Review][Patch][P2][R2-3] Require exact Route53 routing identity or mark variant responses incomplete [cloud/aws/response_status.py:155]
-- [ ] [Review][Patch][P2][R2-4] Check completion timestamps before publishing late futures as recorded [cloud/aws/client.py:361]
+- [x] [Review][Patch][P2][R2-1] Reject noncommercial AWS partitions before client construction [cloud/aws/session.py:19]
+- [x] [Review][Patch][P2][R2-2] Reject S3 ARN bucket-name targeting and ARN-region endpoint overrides [cloud/aws/client.py:95]
+- [x] [Review][Patch][P2][R2-3] Require exact Route53 routing identity or mark variant responses incomplete [cloud/aws/response_status.py:155]
+- [x] [Review][Patch][P2][R2-4] Check completion timestamps before publishing late futures as recorded [cloud/aws/client.py:361]
 
 Evidence: `docs/verification/live-environment-grounding/17-2/code-review-rereview.md`. Original five findings remain resolved.
 
@@ -134,6 +134,7 @@ Evidence: `docs/verification/live-environment-grounding/17-2/code-review-rerevie
 Codex; native implementation agent and separate read-only boundary reviewer.
 
 ### Debug Log References
+- Re-review fix evidence: `docs/verification/live-environment-grounding/17-2/rereview-fixes.md`; final logs `/tmp/story17-2-r2fix-{root,ci}-final.log` and `/tmp/story17-2-r2fix-runtime-python311-final.log`.
 - Review fixes and red/green proofs: `docs/verification/live-environment-grounding/17-2/review-fixes.md`; final logs `/tmp/story17-2-fixes-{root,ci,api-cli-infra,cloud,isolation,sdk-python311,aws-python311}.log`.
 - Reproduction commands and AC mapping: `docs/verification/live-environment-grounding/17-2/README.md`.
 - Optional real-SDK, socket-denied qualification: `docs/verification/live-environment-grounding/17-2/test_sdk.py`.
@@ -146,6 +147,10 @@ Codex; native implementation agent and separate read-only boundary reviewer.
 - Review raw SDK signing logs independently, fix discovered leakage at source, then rerun the signing regression and cloud isolation checks.
 
 ### Completion Notes List
+- Resolved R2-1–R2-4: commercial partition admission before credentials; ordinary S3 bucket-name validation plus disabled ARN-region overrides; fail-closed Route53 routing variants; worker completion timestamps and final completion drains for individual/total deadlines. Reused existing validators and the shared result collector; no new dependencies or qualified-core changes.
+- Eight new client boundary regressions and targeted session/SDK regressions failed before fixes and passed afterward. Independent verification confirmed all four fixes and both related concurrent-publication edge cases, with no remaining concrete blocker. All12catalogservices retain one-send failure coverage in the pinned SDK suite.
+- Fresh final checks: root2,268tests (3skips); full localCI3,768tests across12shards (3skips), plus128isolation tests/skills/prompt-injection checks; API/CLI/infra834passed (1skip),2,456subtests; cloud75tests; protected-source guard3tests; AWS38tests and SDK14tests. Network-disabled Python3.11.17 existing-image harness passed the combined52AWS/SDKtests. Ruff lint/format685files, Bandit zero issues and Python3.10 grammar checks passed. Exact commands, image digest, logs and red/green evidence: rereview-fixes.md.
+- UI validation not applicable. Existing-image source-mounted tests qualify these offline runtime regressions, not a rebuilt production image, live AWS account or composed egress. Default locks and qualified config/model source hashes remain unchanged.
 - 2026-11-17 re-review: original five findings verified resolved; four remaining P2 contract/edge gaps recorded. Fresh AWS28, SDK11, cloud65, isolation118 and Ruff checks passed; no production changes during review. Story returned to in-progress.
 - Resolved all five review findings: fenced operation-specific SDK parameter/retry events before hidden S3 discovery/redirect paths; validated completion across42capabilities; separated safe failure causes from confirmed IAM denials; preserved unrelated HTTP logging; accepted exact wildcard DNS identities with strict record matching.
 - Review-fix regression tests failed on reviewed code before fixes, then passed28focused AWS tests and11pinned SDK tests. Independent read-only verification reproduced the corrected transport/error/DNS behavior and found no remaining concrete blocker against the five findings.
@@ -183,8 +188,12 @@ Codex; native implementation agent and separate read-only boundary reviewer.
 - `docs/verification/live-environment-grounding/17-2/code-review.md`
 - `docs/verification/live-environment-grounding/17-2/review-fixes.md`
 - `docs/verification/live-environment-grounding/17-2/code-review-rereview.md`
+- `tests/test_cloud/aws/test_rereview_boundaries.py`
+- `docs/verification/live-environment-grounding/17-2/rereview-fixes.md`
 
 ## Change Log
+
+- 2026-11-17: Resolved all four R2 findings and related timing publication races; independently verified fixes and passed fresh full repository/runtime checks; returned to review.
 
 - 2026-11-17: Re-review confirmed original five fixes, identified four P2 targeting/identity/timeout gaps and returned story to in-progress; no production edits.
 
@@ -205,3 +214,7 @@ Codex; native implementation agent and separate read-only boundary reviewer.
 ### Re-review Outcome
 
 2026-11-17: Changes requested. Three layers completed; four P2 patch items remain open. See code-review-rereview.md. No remote push performed because review follow-up remains open.
+
+### R2 Fix Verification
+
+2026-11-17: All four re-review action items resolved. Independent verification and fresh targeted/runtime/root/fullCI checks passed. See rereview-fixes.md for exact proof. Ready for re-review.

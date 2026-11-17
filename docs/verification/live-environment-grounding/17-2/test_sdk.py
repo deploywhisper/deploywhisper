@@ -327,3 +327,151 @@ class SdkTests(unittest.TestCase):
                         "GetBucketVersioning"
                     ),
                 )
+
+    def test_s3_arn_cannot_override_configured_region_before_send(self):
+        from botocore.exceptions import UnsupportedS3AccesspointConfigurationError
+        from botocore.awsrequest import AWSResponse
+
+        class Raw:
+            def stream(self, amt=None, decode_content=False):
+                yield b'<VersioningConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/"/>'
+
+        def send_response(request):
+            return AWSResponse(request.url, 200, {}, Raw())
+
+        with (
+            patch.dict(
+                os.environ, {**ENV, "AWS_S3_USE_ARN_REGION": "true"}, clear=True
+            ),
+            patch.object(
+                socket, "socket", side_effect=AssertionError("network forbidden")
+            ),
+            patch(
+                "botocore.httpsession.URLLib3Session.send", side_effect=send_response
+            ) as send,
+        ):
+            client = AmbientSession().create_client("s3", {"region": "us-east-1"})
+            with self.assertRaises(UnsupportedS3AccesspointConfigurationError):
+                client.get_bucket_versioning(
+                    Bucket="arn:aws:s3:us-west-2:000000000000:accesspoint/example",
+                    ExpectedBucketOwner="000000000000",
+                )
+            send.assert_not_called()
+
+    def test_s3_regular_bucket_keeps_canonical_region_endpoint(self):
+        from botocore.awsrequest import AWSResponse
+
+        class Raw:
+            def stream(self, amt=None, decode_content=False):
+                yield b'<VersioningConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/"/>'
+
+        requests = []
+
+        def send(_transport, request):
+            requests.append(request.url)
+            return AWSResponse(request.url, 200, {}, Raw())
+
+        with (
+            patch.dict(
+                os.environ, {**ENV, "AWS_S3_USE_ARN_REGION": "true"}, clear=True
+            ),
+            patch.object(
+                socket, "socket", side_effect=AssertionError("network forbidden")
+            ),
+            patch("botocore.httpsession.URLLib3Session.send", send),
+        ):
+            client = AmbientSession().create_client("s3", {"region": "us-west-2"})
+            client.get_bucket_versioning(
+                Bucket="demo-bucket", ExpectedBucketOwner="000000000000"
+            )
+        self.assertEqual(
+            requests, ["https://s3.us-west-2.amazonaws.com/demo-bucket?versioning"]
+        )
+
+    def test_catalog_services_do_not_retry_server_errors(self):
+        from botocore.awsrequest import AWSResponse
+        from cloud.aws.allowlist import _CATALOG
+        from cloud.aws.client import AwsReader, Call, Limits
+
+        class Raw:
+            def __init__(self, content):
+                self.content = content
+
+            def stream(self, amt=None, decode_content=False):
+                yield self.content
+
+        examples = {
+            "instance": {"InstanceIds": ["i-00000000000000001"]},
+            "lb": {
+                "LoadBalancerArns": [
+                    "arn:aws:elasticloadbalancing:us-east-1:000000000000:loadbalancer/app/example/0000000000000000"
+                ]
+            },
+            "asg": {"AutoScalingGroupNames": ["example"], "MaxRecords": 100},
+            "db": {"DBInstanceIdentifier": "example"},
+            "bucket_versioning": {
+                "Bucket": "demo-bucket",
+                "ExpectedBucketOwner": "000000000000",
+            },
+            "role": {"RoleName": "example"},
+            "ecs_cluster": {
+                "clusters": ["arn:aws:ecs:us-east-1:000000000000:cluster/example"],
+                "include": ["STATISTICS", "TAGS"],
+            },
+            "eks_cluster": {"name": "example"},
+            "function_concurrency": {
+                "FunctionName": "arn:aws:lambda:us-east-1:000000000000:function:example"
+            },
+            "table": {"TableName": "example"},
+            "queue": {
+                "QueueUrl": "https://sqs.us-east-1.amazonaws.com/000000000000/example",
+                "AttributeNames": [
+                    "QueueArn",
+                    "ApproximateNumberOfMessages",
+                    "RedrivePolicy",
+                    "MessageRetentionPeriod",
+                    "LastModifiedTimestamp",
+                ],
+            },
+            "record": {
+                "HostedZoneId": "Z123",
+                "StartRecordName": "example.com.",
+                "StartRecordType": "A",
+                "MaxItems": "1",
+            },
+        }
+        self.assertEqual(
+            {_CATALOG["operations"][capability]["service"] for capability in examples},
+            {row["service"] for row in _CATALOG["operations"].values()},
+        )
+        for capability, parameters in examples.items():
+            requests = []
+
+            def send(_transport, request):
+                requests.append(request.url)
+                is_json = request.headers.get("Content-Type", b"")
+                if isinstance(is_json, bytes):
+                    is_json = is_json.decode("ascii")
+                if "json" in is_json:
+                    body = b'{"__type":"InternalFailure","message":"synthetic"}'
+                    headers = {"Content-Type": "application/x-amz-json-1.1"}
+                else:
+                    body = b"<Error><Code>InternalFailure</Code><Message>synthetic</Message></Error>"
+                    headers = {"Content-Type": "application/xml"}
+                return AWSResponse(request.url, 500, headers, Raw(body))
+
+            with (
+                self.subTest(capability=capability),
+                patch.dict(os.environ, ENV, clear=True),
+                patch.object(
+                    socket, "socket", side_effect=AssertionError("network forbidden")
+                ),
+                patch("botocore.httpsession.URLLib3Session.send", send),
+            ):
+                result = AwsReader(AmbientSession()).execute(
+                    [Call(capability=capability, parameters=parameters)],
+                    limits=Limits(call_budget=1),
+                )
+                self.assertEqual(len(requests), 1)
+                self.assertEqual(result.attempts, 1)
+                self.assertTrue(result.partial)

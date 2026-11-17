@@ -84,7 +84,7 @@ def _value(row, path):
 def _dns_name(name):
     return (
         name.replace("\\052", "*").lower().rstrip(".")
-        if isinstance(name, str)
+        if isinstance(name, str) and not name.endswith("..")
         else None
     )
 
@@ -160,6 +160,9 @@ def response_complete(capability, parameters, response):
             and _dns_name(rows[0].get("Name"))
             == _dns_name(parameters["StartRecordName"])
             and rows[0].get("Type") == parameters["StartRecordType"]
+            # The frozen manifest does not carry a selected routing variant.
+            # Even malformed/null variant markers cannot prove exact identity.
+            and "SetIdentifier" not in rows[0]
         )
     if capability == "queue":
         attributes = response.get("Attributes")

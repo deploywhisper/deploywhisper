@@ -132,7 +132,8 @@ provider responses. Later connectors must project selected response fields.
 Deny-by-default action authorization precedes client construction. Refusals log
 a fixed `action_refused` event, never caller text. Unknown parameters, empty
 selectors, pagination overrides and wildcard selectors are refused. Caller
-configuration permits only a canonical commercial-partition region; endpoint,
+configuration permits only a commercial-partition region form; GovCloud, China,
+ISO and sovereign partition forms are refused before SDK/credential resolution. Endpoint,
 host, account, role, profile, proxy, CA and credential overrides are rejected.
 SDK endpoint/model data comes only from the pinned installed package. TLS
 verification is required, configured endpoints/proxies are ignored, and SDK
@@ -204,12 +205,20 @@ Each SDK client permits one catalog operation. An operation-specific guard runs
 before parameter construction; another guard terminates redirect/error handling
 before SDK handlers can issue a hidden operation or retry in another region.
 S3 region redirects return a partial unreadable result instead of issuing
-`HeadBucket` or expanding the reviewed manifest.
+`HeadBucket` or expanding the reviewed manifest. Bucket capabilities accept only
+ordinary DNS-style bucket names; access-point ARNs, URLs, aliases and directory
+bucket forms are outside this profile. SDK ARN-region overrides are disabled so
+a parameter cannot redirect a read outside its configured region.
 
 A successful HTTP status alone does not establish complete metadata. Completion
 checks reject provider item failures, missing or mismatched requested identities,
 and pagination. Filtered relation lists may legitimately be empty. Exact Route53
 record identity checks include the name and type; a leading wildcard DNS label
 (such as `*.example.com.`) identifies one record and does not enable inventory.
+The current manifest cannot select a routing variant: returned `SetIdentifier`
+fields therefore make the result incomplete, even for a single nontruncated row.
+Worker completion timestamps determine whether individual and total deadlines
+were met. Late results cannot become complete reads; timely completed results
+retain their status when scheduler polling is delayed.
 Failure causes use a fixed vocabulary; provider messages and raw payloads are
 never returned. Only verified authorization failures set `missing_permission`.

@@ -16,7 +16,7 @@ def validate_config(config):
         or set(config) != {"region"}
         or not isinstance(config["region"], str)
         or re.fullmatch(
-            r"(?:us|eu|ap|sa|ca|me|af|il|mx)-(?:[a-z]+-)?[a-z]+-[1-9]", config["region"]
+            r"(?:us|eu|ap|sa|ca|me|af|il|mx)-[a-z]+-[1-9]", config["region"]
         )
         is None
     ):
@@ -191,7 +191,7 @@ class AmbientSession:
                     connect_timeout=timeout / 2,
                     read_timeout=timeout / 2,
                     retries={"total_max_attempts": 1},
-                    s3={"addressing_style": "path"},
+                    s3={"addressing_style": "path", "use_arn_region": False},
                 ),
             )
             _silence_sdk_logs()

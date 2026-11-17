@@ -48,3 +48,41 @@ class SessionTests(unittest.TestCase):
                 )
             ),
         )
+
+    def test_noncommercial_regions_fail_before_sdk_or_credentials(self):
+        regions = (
+            "us-gov-west-1",
+            "us-gov-east-1",
+            "us-iso-east-1",
+            "us-isob-east-1",
+            "eu-isoe-west-1",
+            "us-isof-south-1",
+            "cn-north-1",
+            "cn-northwest-1",
+            "eusc-de-east-1",
+            "us-extra-west-1",
+        )
+        with patch(
+            "cloud.aws.session.session",
+            side_effect=AssertionError("credentials forbidden"),
+        ) as resolve:
+            for region in regions:
+                with self.subTest(region=region), self.assertRaises(ValueError):
+                    AmbientSession().create_client("ec2", {"region": region})
+            resolve.assert_not_called()
+
+    def test_commercial_regions_remain_valid_without_sdk(self):
+        for region in (
+            "us-east-1",
+            "us-west-2",
+            "eu-central-1",
+            "ap-southeast-7",
+            "ca-west-1",
+            "mx-central-1",
+            "il-central-1",
+            "af-south-1",
+        ):
+            with self.subTest(region=region):
+                self.assertEqual(
+                    validate_config({"region": region}), {"region": region}
+                )

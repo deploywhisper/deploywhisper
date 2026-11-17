@@ -50,6 +50,20 @@ def _dns_selector(value):
     )
 
 
+def _bucket_name(value):
+    """Only ordinary bucket names belong to the frozen bucket capability."""
+    if not isinstance(value, str) or not 3 <= len(value) <= 63:
+        return False
+    if value.startswith(("xn--", "sthree-", "amzn_s3_demo_")) or value.endswith(
+        ("-s3alias", "--ol-s3", ".mrap", "--x-s3", "--table-s3")
+    ):
+        return False
+    return re.fullmatch(r"[0-9]+(?:\.[0-9]+){3}", value) is None and all(
+        re.fullmatch(r"[a-z0-9](?:[a-z0-9-]*[a-z0-9])?", label)
+        for label in value.split(".")
+    )
+
+
 def _matches(template, value):
     if isinstance(template, dict):
         return (
@@ -122,6 +136,10 @@ class Call(BaseModel):
             or (
                 self.capability == "record"
                 and not _dns_selector(self.parameters.get("StartRecordName"))
+            )
+            or (
+                self.capability in ("bucket_versioning", "bucket_tags")
+                and not _bucket_name(self.parameters.get("Bucket"))
             )
             or redact_value(self.parameters) != self.parameters
             or any(redact_text(v) != v for v in _strings(self.parameters))
@@ -320,18 +338,45 @@ class AwsReader:
             future = Future()
 
             def run():
-                future.set_result(issue(i, call))
+                result = issue(i, call)
+                # Capture completion in the worker, before scheduler wakeup.
+                future.set_result((result, time.monotonic()))
 
             # No executor atexit join: a broken injected transport cannot hold
             # application shutdown hostage. Its slot stays held until return.
             threading.Thread(target=run, daemon=True).start()
             return future
 
+        next_start = start
+
+        def collect(done):
+            nonlocal next_start
+            for future in done:
+                i, began = pending.pop(future)
+                result, completed_at = future.result()
+                if (
+                    completed_at >= began + limits.per_call_timeout
+                    or completed_at >= deadline
+                ):
+                    result = CallResult(calls[i].capability, "timeout")
+                    stop.set()
+                results[i] = result
+                if result.status == "unreadable":
+                    next_start = time.monotonic() + limits.backoff
+
         try:
-            next_start = start
             while index < len(calls) or pending:
+                # Preserve already-completed timely work even if this polling
+                # thread was delayed beyond the collection deadline.
+                collect([future for future in pending if future.done()])
                 now = time.monotonic()
-                if cancel.is_set() or now >= deadline:
+                if cancel.is_set():
+                    break
+                if stop.is_set() or now >= deadline:
+                    # Publication can race the snapshot above. Drain known
+                    # completions once more after observing expiry; timestamps
+                    # still decide whether those results were actually timely.
+                    collect([future for future in pending if future.done()])
                     break
                 while (
                     index < len(calls)
@@ -341,8 +386,9 @@ class AwsReader:
                 ):
                     if not self._slots.acquire(blocking=False):
                         break
+                    began = time.monotonic()
                     f = submit(index, calls[index])
-                    pending[f] = (index, now)
+                    pending[f] = (index, began)
                     index += 1
                 if not pending:
                     if now < next_start:
@@ -358,13 +404,15 @@ class AwsReader:
                     timeout=min(0.005, max(0, deadline - now)),
                     return_when=FIRST_COMPLETED,
                 )
-                for f in done:
-                    i, _ = pending.pop(f)
-                    results[i] = f.result()
-                    if results[i].status == "unreadable":
-                        next_start = time.monotonic() + limits.backoff
+                collect(done)
                 for f, (i, began) in list(pending.items()):
-                    if time.monotonic() - began >= limits.per_call_timeout:
+                    # A future can finish after wait's returned snapshot.
+                    # Its captured completion time remains authoritative.
+                    expired = time.monotonic() - began >= limits.per_call_timeout
+                    if f.done():
+                        collect([f])
+                        continue
+                    if expired:
                         results[i] = CallResult(calls[i].capability, "timeout")
                         # No further dispatch after a timed-out provider call.
                         stop.set()
