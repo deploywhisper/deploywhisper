@@ -113,3 +113,88 @@ Measured defaults are established in Story 17.0 against a realistic large plan o
 - [Feature PRD](../../_bmad-output/planning-artifacts/prd-live-environment-grounding.md)
 - [Architecture §26](../../_bmad-output/planning-artifacts/architecture.md)
 - [Epic 16 / Epic 17 boundary plan](../../_bmad-output/planning-artifacts/epic-16-17-boundary-and-parallelization-plan.md)
+
+
+## AWS access primitives — Story 17.2
+
+The optional `cloud.aws` boundary now enforces the frozen 17.0 catalog (42
+request capabilities, 33 IAM actions). It remains separate from the provider
+registry: a production AWS connector and plan-to-manifest construction belong
+to 17.3. No live account or production profile is qualified by these fixtures.
+
+`Call` accepts one exact frozen capability and parameter shape. `dry_run(calls)`
+returns the exact service, operation, IAM action and parameters of a recorded
+manifest without importing the SDK, resolving credentials or constructing a
+client. It does not parse a raw Terraform plan. `AwsReader.execute` consumes the
+same revalidated manifest and returns only execution metadata; it discards raw
+provider responses. Later connectors must project selected response fields.
+
+Deny-by-default action authorization precedes client construction. Refusals log
+a fixed `action_refused` event, never caller text. Unknown parameters, empty
+selectors, pagination overrides and wildcard selectors are refused. Caller
+configuration permits only a canonical commercial-partition region; endpoint,
+host, account, role, profile, proxy, CA and credential overrides are rejected.
+SDK endpoint/model data comes only from the pinned installed package. TLS
+verification is required, configured endpoints/proxies are ignored, and SDK
+retries are disabled. There is no intermediary egress service.
+
+The approved 17.0 credential disposition is preserved: ambient environment is
+the default, with an explicitly operator-selected shared credentials file/profile
+available only through the trusted server constructor. SSO, IRSA, container and
+instance roles, credential processes and role chains remain refused pending
+separate qualification. Request inputs cannot select a credential mechanism.
+No credential contents are persisted or returned. Missing credentials or the
+optional SDK fails closed. The default application dependency locks are unchanged.
+
+Limits default to 2 seconds per call, 15 seconds total, four concurrent calls,
+and 100 attempted calls. Bounds may only be lowered. Provider failures apply
+bounded interruptible backoff before later calls; this layer does not retry an
+ambiguous call. Cancellation/deadlines stop scheduling and late results are
+ignored. A process-wide four-slot fence retains slots for hung transport calls;
+daemon workers cannot block process exit. Python cannot kill an in-flight thread,
+so cancellation does not promise that an already-issued request stopped. The
+SDK connect/read timeout halves bound normal transport phases; fixtures prove
+scheduler deadlines without claiming live network qualification. Each result
+reports attempted calls, elapsed time and labelled partial/unreadable outcomes.
+
+The [minimal IAM policy](aws-read-only-policy.json) is exactly the approved
+17.0 action/resource template, tested for equality. Substitute the operator's
+actual authorized scope for template variables before use; it is not a ready-to-
+attach production policy. Production IAM qualification remains 17.9.
+
+### Required permissions per capability
+
+| Resource family | Required IAM actions |
+| --- | --- |
+| `aws_instance` | `ec2:DescribeInstanceAttribute`, `ec2:DescribeInstances` |
+| `aws_security_group` | `ec2:DescribeNetworkInterfaces`, `ec2:DescribeSecurityGroups` |
+| `aws_network_interface` | `ec2:DescribeNetworkInterfaces` |
+| `aws_subnet` | `ec2:DescribeNetworkInterfaces`, `ec2:DescribeSubnets` |
+| `aws_vpc` | `ec2:DescribeNetworkInterfaces`, `ec2:DescribeVpcs` |
+| `aws_route_table` | `ec2:DescribeRouteTables` |
+| `aws_ebs_volume` | `ec2:DescribeSnapshots`, `ec2:DescribeVolumes` |
+| `aws_ebs_snapshot` | `ec2:DescribeSnapshots` |
+| `aws_lb` | `elasticloadbalancing:DescribeLoadBalancerAttributes`, `elasticloadbalancing:DescribeLoadBalancers`, `elasticloadbalancing:DescribeTargetGroups` |
+| `aws_lb_target_group` | `elasticloadbalancing:DescribeTargetGroups`, `elasticloadbalancing:DescribeTargetHealth` |
+| `aws_lb_listener` | `elasticloadbalancing:DescribeListeners` |
+| `aws_autoscaling_group` | `autoscaling:DescribeAutoScalingGroups` |
+| `aws_db_instance` | `rds:DescribeDBInstances`, `rds:DescribeDBSnapshots` |
+| `aws_rds_cluster` | `rds:DescribeDBClusterSnapshots`, `rds:DescribeDBClusters` |
+| `aws_s3_bucket` | `s3:GetBucketTagging`, `s3:GetBucketVersioning` |
+| `aws_iam_role` | `iam:GetRole` |
+| `aws_iam_instance_profile` | `iam:GetInstanceProfile` |
+| `aws_ecs_cluster` | `ecs:DescribeClusters` |
+| `aws_ecs_service` | `ecs:DescribeServices` |
+| `aws_eks_cluster` | `eks:DescribeCluster` |
+| `aws_lambda_function` | `lambda:GetFunctionConcurrency`, `lambda:ListEventSourceMappings`, `lambda:ListTags` |
+| `aws_lambda_event_source_mapping` | `lambda:ListEventSourceMappings` |
+| `aws_dynamodb_table` | `dynamodb:DescribeContinuousBackups`, `dynamodb:DescribeTable` |
+| `aws_sqs_queue` | `lambda:ListEventSourceMappings`, `sqs:GetQueueAttributes` |
+| `aws_route53_record` | `route53:ListResourceRecordSets` |
+
+Each of the 42 individual request capabilities and exact parameter/resource templates is recorded in [`cloud/aws/catalog.json`](../../cloud/aws/catalog.json). Tests assert its equality to the approved 17.0 contract and exercise permission failures for every capability.
+
+Dry-run lists intended calls. Cancellation, timeout, budget, permission refusal
+or deadline can reduce actual issued calls; execution never expands the manifest.
+SDK and urllib3 logging is suppressed at source to prevent debug signing records
+from exposing credentials, including credentials obtained from trusted files.

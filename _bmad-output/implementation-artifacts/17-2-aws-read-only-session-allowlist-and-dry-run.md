@@ -1,6 +1,6 @@
 # Story 17.2: AWS Read-Only Session, Allow-List Enforcement and Dry-Run
 
-Status: backlog
+Status: review
 Preparation: refined
 Release: v1.6.0 (independent release train) | Priority: P0 within the independent Epic 17 lane
 
@@ -44,28 +44,28 @@ Coverage intent: delta over the current released baseline. Mapping is an accepta
 
 Execute one bounded packet at a time on `feature/17-2-aws-read-only-session`. Each packet owns the named paths.
 
-- [ ] **Packet 2.1: Allow-list and refusal path — owner: security-focused implementer.**
+- [x] **Packet 2.1: Allow-list and refusal path — owner: security-focused implementer.**
   - Owned write paths: `cloud/aws/allowlist.py`, `tests/test_cloud/aws/`.
   - Output: deny-by-default action allow-list evaluated before call construction; recorded refusals; per-capability permission map.
   - Acceptance proof: AC1, AC6 — refusal tests and permission-map coverage.
-- [ ] **Packet 2.2: Mechanical verb assertion in CI — owner: security-focused implementer.**
+- [x] **Packet 2.2: Mechanical verb assertion in CI — owner: security-focused implementer.**
   - Owned write paths: `tests/test_cloud/aws/`, `scripts/ci-local.sh` registration.
   - Output: a test asserting every allow-list entry matches the provider read-only verb set (`Describe*`, `Get*`, `List*`, `BatchGet*`, `Head*`), plus a deliberate failing case proving the assertion bites.
   - Acceptance proof: AC2 — LEG-NFR-001 evidence including the failing case.
-- [ ] **Packet 2.3: Ambient session resolution and secret absence — owner: implementer.**
+- [x] **Packet 2.3: Ambient session resolution and secret absence — owner: implementer.**
   - Owned write paths: `cloud/aws/session.py`, `config.py` **additive redaction entries only**, `tests/test_cloud/aws/`.
   - Output: ambient-chain-only resolution across profile, SSO, environment, instance role and IRSA; no credential acceptance, persistence, logging or echo.
   - Acceptance proof: AC3 — secret-corpus regression over logs, snapshots, API and CLI.
   - **Shared-file rule:** `config.py` edits are additive redaction entries only; extend the existing AWS redaction set rather than replacing it.
-- [ ] **Packet 2.4: Targeting hardening — owner: security-focused implementer.**
+- [x] **Packet 2.4: Targeting hardening — owner: security-focused implementer.**
   - Owned write paths: `cloud/aws/session.py`, `tests/test_cloud/aws/`.
   - Output: rejection of caller-supplied endpoint, host, role and account targeting; provider-canonical resolution only.
   - Acceptance proof: AC4 — confused-deputy and SSRF configuration corpus.
-- [ ] **Packet 2.5: Bounded execution primitives — owner: implementer.**
+- [x] **Packet 2.5: Bounded execution primitives — owner: implementer.**
   - Owned write paths: `cloud/aws/client.py`, `tests/test_cloud/aws/`.
   - Output: per-call timeout, total deadline, concurrency cap, call budget, backoff and cancellation using the 17.0 measured defaults.
   - Acceptance proof: AC1–AC5 bounded behaviour; LEG-FR-012 evidence.
-- [ ] **Packet 2.6: Dry-run and published policy — owner: implementer and documenter.**
+- [x] **Packet 2.6: Dry-run and published policy — owner: implementer and documenter.**
   - Owned write paths: `cloud/aws/`, `docs/live-environment-grounding/aws-read-only-policy.json`, `docs/live-environment-grounding/README.md`.
   - Output: credential-free dry-run enumerating intended calls; published minimal IAM policy; policy-to-allow-list equivalence test.
   - Acceptance proof: AC5, AC6.
@@ -112,14 +112,47 @@ Execute one bounded packet at a time on `feature/17-2-aws-read-only-session`. Ea
 ## Dev Agent Record
 
 ### Agent Model Used
-Planning preparation only; implementation agent records its model at execution.
+Codex; native implementation agent and separate read-only boundary reviewer.
 
 ### Debug Log References
-Not executed.
+- Reproduction commands and AC mapping: `docs/verification/live-environment-grounding/17-2/README.md`.
+- Optional real-SDK, socket-denied qualification: `docs/verification/live-environment-grounding/17-2/test_sdk.py`.
+- Local validation logs: `/tmp/story17-2-{root-final,api-cli-infra,ci-final,cloud,isolation,protected-source}.log`.
+
+### Implementation Plan
+- Execute the six bounded packets sequentially over the approved 17.0 catalog and SDK trust boundary; keep the default dependency environment SDK-free.
+- Reuse content-security and snapshot storage boundaries, with the existing credential redaction names and explicit sensitive-value screening. Keep the production AWS registry slot unavailable until17.3.
+- Use the approved initial environment/trusted-shared-file profile; refuse unqualified SSO, IRSA and instance-role resolution. No credentials or production account reads are needed for this slice.
+- Review raw SDK signing logs independently, fix discovered leakage at source, then rerun the signing regression and cloud isolation checks.
 
 ### Completion Notes List
-- Story specification prepared; no implementation, security review, qualification or runtime test performed.
-- Commands and proofs above are future obligations, not results.
+- Implemented33-action deny-by-default authorization,42frozen capabilities, sanitized refusal audit events, exact IAM policy equivalence and per-capability permission map/denial tests.
+- Implemented lazy ambient session construction using packaged SDK models, canonical endpoints and disabled proxy/endpoint overrides. Unqualified credential chains remain refused per architecture26.7.
+- Credential-free dry-run shares a validated manifest with bounded execution. Scheduler defaults:2seconds per call,15seconds total,4concurrent calls and100attempts; cancellation/backoff return labelled partial results. Timed-out daemon calls retain process-global slots and discard late results.
+- Independent review reproduced botocore raw DEBUG session-token leakage. Source logger suppression fixed it; independent signing repro then emitted zero SDK log output. No remaining concrete boundary blockers reported.
+- Focused cloud56tests and SDK-free isolation109tests passed. Optional pinned boto3/botocore1.44.1 SDK harness passed5tests with network denied. Deliberate mutating verb exited1 as required. Seven credential-name corpus cases cover logs, result JSON/console streams and actual SQLite snapshot persistence;42capabilities have permission-denial tests.
+- Initial root run discovered a protected config.py source hash; restored config.py byte-for-byte, preserving qualification. Initial red-phase import error is superseded by the final fresh run.
+- Repo-wide Ruff lint/format passed681files. Bandit cloud scan passed the configured medium-severity/medium-confidence gate. Fresh root discovery passed2,249tests (3skips); API/CLI/infra pytest passed834tests (1skip) and2,456subtests. Full localCI passed all12registered test shards (3,749tests,3skips), plus isolation109tests, skill scenarios and prompt-injection checks. Command: `LLM_API_BASE=http://127.0.0.1:1 bash scripts/ci-local.sh`. Root command: `LLM_API_BASE=http://127.0.0.1:1 ./.venv/bin/python -m unittest discover -q`.
+- UI validation not applicable. No new HTTP/CLI adapter or rendered surface ships here; production connector registration, recorded-plan parsing and selected-response projection belong17.3. Live-account/IAM/composed-egress qualification remains unexecuted and owned by17.9. Python3.14.3 local harness is not a Python3.11 production qualification.
 
 ### File List
-- `_bmad-output/implementation-artifacts/17-2-aws-read-only-session-allowlist-and-dry-run.md` (story specification only).
+- `_bmad-output/implementation-artifacts/17-2-aws-read-only-session-allowlist-and-dry-run.md`
+- `_bmad-output/implementation-artifacts/sprint-status.yaml`
+- `docs/live-environment-grounding/README.md`
+- `docs/live-environment-grounding/aws-read-only-policy.json`
+- `cloud/aws/__init__.py`
+- `cloud/aws/allowlist.py`
+- `cloud/aws/catalog.json`
+- `cloud/aws/client.py`
+- `cloud/aws/session.py`
+- `tests/test_cloud/aws/__init__.py`
+- `tests/test_cloud/aws/test_access.py`
+- `tests/test_cloud/aws/test_client.py`
+- `tests/test_cloud/aws/test_secret_surfaces.py`
+- `tests/test_cloud/aws/test_session.py`
+- `docs/verification/live-environment-grounding/17-2/README.md`
+- `docs/verification/live-environment-grounding/17-2/test_sdk.py`
+
+## Change Log
+
+- 2026-11-17: Implemented six bounded AWS read-only access packets, fixture and pinned SDK proofs; independently found and repaired SDK debug credential leakage. Production reads remain later-story gated.
