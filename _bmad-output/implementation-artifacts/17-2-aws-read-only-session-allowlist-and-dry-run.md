@@ -1,6 +1,6 @@
 # Story 17.2: AWS Read-Only Session, Allow-List Enforcement and Dry-Run
 
-Status: review
+Status: in-progress
 Preparation: refined
 Release: v1.6.0 (independent release train) | Priority: P0 within the independent Epic 17 lane
 
@@ -69,6 +69,16 @@ Execute one bounded packet at a time on `feature/17-2-aws-read-only-session`. Ea
   - Owned write paths: `cloud/aws/`, `docs/live-environment-grounding/aws-read-only-policy.json`, `docs/live-environment-grounding/README.md`.
   - Output: credential-free dry-run enumerating intended calls; published minimal IAM policy; policy-to-allow-list equivalence test.
   - Acceptance proof: AC5, AC6.
+
+### Review Findings
+
+- [ ] [Review][Patch][P1] Fence SDK-generated S3 redirect/HeadBucket requests before dispatch [cloud/aws/session.py:119]
+- [ ] [Review][Patch][P1] Reject complete metadata for failed/missing/mismatched provider identities [cloud/aws/client.py:218]
+- [ ] [Review][Patch][P2] Preserve safe failure causes and report only confirmed missing permissions [cloud/aws/client.py:237]
+- [ ] [Review][Patch][P2] Keep unrelated HTTP diagnostics enabled when suppressing SDK credential logs [cloud/aws/session.py:25]
+- [ ] [Review][Patch][P2] Accept exact wildcard DNS identities without enabling inventory selectors [cloud/aws/client.py:79]
+
+Full evidence: `docs/verification/live-environment-grounding/17-2/code-review.md`.
 
 ## Dev Notes
 
@@ -155,4 +165,10 @@ Codex; native implementation agent and separate read-only boundary reviewer.
 
 ## Change Log
 
+- 2026-11-17: BMad three-layer code review requested changes; five patch findings recorded and story returned to in-progress.
+
 - 2026-11-17: Implemented six bounded AWS read-only access packets, fixture and pinned SDK proofs; independently found and repaired SDK debug credential leakage. Production reads remain later-story gated.
+
+## Senior Developer Review (AI)
+
+- 2026-11-17: Changes requested. Three-layer review identified2P1 and3P2 patch findings; no production code modified. Offline pinned-SDK S3 redirect reproduction proves an unallowlisted HeadBucket plus extra region request escapes the budget and dry-run. Focused19tests pass but do not cover these defects. Story/sprint returned to in-progress. See review report for evidence and follow-ups.
