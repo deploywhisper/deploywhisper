@@ -1,6 +1,6 @@
 # Story 17.2: AWS Read-Only Session, Allow-List Enforcement and Dry-Run
 
-Status: review
+Status: in-progress
 Preparation: refined
 Release: v1.6.0 (independent release train) | Priority: P0 within the independent Epic 17 lane
 
@@ -80,6 +80,15 @@ Execute one bounded packet at a time on `feature/17-2-aws-read-only-session`. Ea
 
 Full evidence: `docs/verification/live-environment-grounding/17-2/code-review.md`.
 
+### Re-review Findings
+
+- [ ] [Review][Patch][P2][R2-1] Reject noncommercial AWS partitions before client construction [cloud/aws/session.py:19]
+- [ ] [Review][Patch][P2][R2-2] Reject S3 ARN bucket-name targeting and ARN-region endpoint overrides [cloud/aws/client.py:95]
+- [ ] [Review][Patch][P2][R2-3] Require exact Route53 routing identity or mark variant responses incomplete [cloud/aws/response_status.py:155]
+- [ ] [Review][Patch][P2][R2-4] Check completion timestamps before publishing late futures as recorded [cloud/aws/client.py:361]
+
+Evidence: `docs/verification/live-environment-grounding/17-2/code-review-rereview.md`. Original five findings remain resolved.
+
 ## Dev Notes
 
 - `config.py` already redacts `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN`, `AWS_SECRET_KEY` and `AWS_SECURITY_TOKEN`. Extend that set; do not build a parallel mechanism.
@@ -137,6 +146,7 @@ Codex; native implementation agent and separate read-only boundary reviewer.
 - Review raw SDK signing logs independently, fix discovered leakage at source, then rerun the signing regression and cloud isolation checks.
 
 ### Completion Notes List
+- 2026-11-17 re-review: original five findings verified resolved; four remaining P2 contract/edge gaps recorded. Fresh AWS28, SDK11, cloud65, isolation118 and Ruff checks passed; no production changes during review. Story returned to in-progress.
 - Resolved all five review findings: fenced operation-specific SDK parameter/retry events before hidden S3 discovery/redirect paths; validated completion across42capabilities; separated safe failure causes from confirmed IAM denials; preserved unrelated HTTP logging; accepted exact wildcard DNS identities with strict record matching.
 - Review-fix regression tests failed on reviewed code before fixes, then passed28focused AWS tests and11pinned SDK tests. Independent read-only verification reproduced the corrected transport/error/DNS behavior and found no remaining concrete blocker against the five findings.
 - Fresh final validation: root2,258tests (3skips); full localCI3,758tests across12shards (3skips), plus118isolation tests/skill/prompt-injection checks; exact API/CLI/infra pytest shard834passed (1skip),2,456subtests; cloud65tests; protected-source guard3tests. Ruff lint/format passed684files; Bandit cloud/aws found zero issues. Python3.10 grammar passed. Python3.11.17 network-disabled existing-image harness passed11SDKtests and28AWStests against current read-only mounted source and pinned botocore1.44.1. Commands, image digest and logs: review-fixes.md.
@@ -172,8 +182,11 @@ Codex; native implementation agent and separate read-only boundary reviewer.
 - `tests/test_cloud/aws/test_response_status.py`
 - `docs/verification/live-environment-grounding/17-2/code-review.md`
 - `docs/verification/live-environment-grounding/17-2/review-fixes.md`
+- `docs/verification/live-environment-grounding/17-2/code-review-rereview.md`
 
 ## Change Log
+
+- 2026-11-17: Re-review confirmed original five fixes, identified four P2 targeting/identity/timeout gaps and returned story to in-progress; no production edits.
 
 - 2026-11-17: Fixed all five review findings, added failing-then-passing regressions, independently verified fixes and passed fresh full-suite/runtime checks; story returned to review.
 
@@ -188,3 +201,7 @@ Codex; native implementation agent and separate read-only boundary reviewer.
 ### Review Follow-up Verification
 
 2026-11-17: All five review action items resolved. Independent verifier confirmed fixes with28offline AWS tests and11real pinned SDK tests; fresh root/fullCI/API shard passed. See review-fixes.md for exact evidence. Ready for re-review.
+
+### Re-review Outcome
+
+2026-11-17: Changes requested. Three layers completed; four P2 patch items remain open. See code-review-rereview.md. No remote push performed because review follow-up remains open.
