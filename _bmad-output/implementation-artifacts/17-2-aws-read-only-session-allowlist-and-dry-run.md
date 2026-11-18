@@ -1,6 +1,6 @@
 # Story 17.2: AWS Read-Only Session, Allow-List Enforcement and Dry-Run
 
-Status: review
+Status: done
 Preparation: refined
 Release: v1.6.0 (independent release train) | Priority: P0 within the independent Epic 17 lane
 
@@ -147,6 +147,7 @@ Codex; native implementation agent and separate read-only boundary reviewer.
 - Review raw SDK signing logs independently, fix discovered leakage at source, then rerun the signing regression and cloud isolation checks.
 
 ### Completion Notes List
+- 2026-11-18 closeout: independent final read-only check returned GO; all nine review items resolved. Fresh AWS38/SDK14/isolation128/Ruff checks passed. Rebuilt Docker image and SDK-free non-root dry-run smoke passed. Full regression evidence remains valid for unchanged source8e125a4. Story marked done for its offline primitive scope; Git Flow branch is feature/17-2-aws-read-only-session, PR target develop. See git-closeout.md.
 - Resolved R2-1–R2-4: commercial partition admission before credentials; ordinary S3 bucket-name validation plus disabled ARN-region overrides; fail-closed Route53 routing variants; worker completion timestamps and final completion drains for individual/total deadlines. Reused existing validators and the shared result collector; no new dependencies or qualified-core changes.
 - Eight new client boundary regressions and targeted session/SDK regressions failed before fixes and passed afterward. Independent verification confirmed all four fixes and both related concurrent-publication edge cases, with no remaining concrete blocker. All12catalogservices retain one-send failure coverage in the pinned SDK suite.
 - Fresh final checks: root2,268tests (3skips); full localCI3,768tests across12shards (3skips), plus128isolation tests/skills/prompt-injection checks; API/CLI/infra834passed (1skip),2,456subtests; cloud75tests; protected-source guard3tests; AWS38tests and SDK14tests. Network-disabled Python3.11.17 existing-image harness passed the combined52AWS/SDKtests. Ruff lint/format685files, Bandit zero issues and Python3.10 grammar checks passed. Exact commands, image digest, logs and red/green evidence: rereview-fixes.md.
@@ -190,8 +191,11 @@ Codex; native implementation agent and separate read-only boundary reviewer.
 - `docs/verification/live-environment-grounding/17-2/code-review-rereview.md`
 - `tests/test_cloud/aws/test_rereview_boundaries.py`
 - `docs/verification/live-environment-grounding/17-2/rereview-fixes.md`
+- `docs/verification/live-environment-grounding/17-2/git-closeout.md`
 
 ## Change Log
+
+- 2026-11-18: Final closeout GO, fresh focused/packaging checks passed; marked done and prepared Git Flow commit/push/PR to develop.
 
 - 2026-11-17: Resolved all four R2 findings and related timing publication races; independently verified fixes and passed fresh full repository/runtime checks; returned to review.
 
