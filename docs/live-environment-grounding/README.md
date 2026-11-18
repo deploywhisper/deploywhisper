@@ -222,3 +222,73 @@ were met. Late results cannot become complete reads; timely completed results
 retain their status when scheduler polling is delayed.
 Failure causes use a fixed vocabulary; provider messages and raw payloads are
 never returned. Only verified authorization failures set `missing_permission`.
+
+
+## Plan-directed collection primitives — Story 17.3
+
+`cloud.reflection.extract_resources` accepts the qualified recorded plan 1.2
+shape and embedded prior-state 1.0 shape. It indexes nested recorded resources by
+full address, prefers non-null prior values, then falls back to `change.before`.
+It never uses planned `after` values as an existing physical identity. A pure
+create without a recorded counterpart succeeds as `no_live_counterpart` and
+issues no calls. Missing identifiers and unsupported families remain unknown.
+
+The immutable manifest binds the trusted constructor account/regions to the
+original extracted scope. Every call is regenerated from the frozen 42-capability
+catalog before dispatch. Uploaded SQS URLs are discarded and reconstructed from
+validated name and trusted scope. All reverse calls are static, filtered
+one-hop requests; returned endpoints never seed another request. Endpoint facts
+record the hop, reason and bound. A maximum of 1,000 manifest entries,1,000 changed
+resources and10,000 prior records is enforced; capacity gaps remain explicit.
+
+`CloudContextService.collect_plan` requires its existing trusted authorization
+UOW and an installed constructor-only `plan_collector_factory`. The default port
+is unavailable, and project enablement stays off by default. No request can
+supply a principal, role, endpoint, credential mechanism or authorization callback.
+Snapshot-v1 canonical bytes, namespace and retention rules are unchanged. Scope,
+authority and retained readback are checked before completion.
+
+Selected provider data is bounded and screened inside SDK workers, including
+both AWS tag-pair conventions, cross-field echoes and dynamic dictionary keys.
+Only immutable catalog-selected scalar facts cross that boundary. Whole raw
+responses, scripts and arbitrary policy bodies are unavailable. Output bounds
+include 4,096 facts/1 MiB of selected fact JSON and 4 MiB of identity data; overflow
+is incomplete. Credentials are screened before digesting and retention; account
+masking continues to follow project configuration.
+
+One absolute execution deadline carries through service preparation, manifest
+checks and multi-region reads. Reported elapsed time includes retention and UOW
+finalization. Per-call/total timeout, call budget, concurrency, backoff,
+cancellation and process-wide hung-worker containment reuse the 17.2 reader.
+Already-issued calls cannot be killed by Python thread cancellation; late facts
+cannot become a successful result. Database/UOW timing still depends on the
+trusted installed local port; no production timing profile is qualified here.
+
+The shared analysis core accepts an optional trusted `grounding_outcome`.
+Incomplete, unavailable, expired, denied or cancelled context explicitly triggers
+existing `insufficient_context` handling, with severity/confidence floors against
+the ungrounded baseline. Collection diagnostics are metadata only: report context
+does not acquire a resolvable snapshot evidence reference or retention promise.
+Factual report evidence must still use the existing admission boundary.
+
+API run results, CLI JSON and agent JSON carry optional `cloud_collection` budget
+metadata when that trusted outcome is supplied. Disabled/absent grounding omits
+the field entirely; report-v2 and agent-v1 versions remain unchanged. Fields:
+
+| Field | Meaning |
+| --- | --- |
+| `version` | Budget payload version 1 |
+| `planned_calls` | Valid static intended calls, including capacity-skipped calls |
+| `attempted_calls` | Reserved execution attempts, including client-construction failures |
+| `actual_call_count` | SDK operation invocations after construction/dispatch checks; not confirmed provider executions |
+| `call_budget` | Maximum permitted attempts, at most 100 |
+| `budget_consumed` | Attempts charged against that budget |
+| `elapsed_seconds` | Monotonic service duration including retention/finalization |
+| `cancelled` | Cancellation was requested before completion |
+
+This slice adds the internal collection and serialization contracts. Operator UI,
+CLI enablement flags, production authorization composition and live AWS profile
+qualification remain in their owning later stories. Existing HTTP/CLI flows do
+not automatically install or activate a provider. Fixture and fault-injection
+results do not qualify live AWS support. See the
+[verification packet](../verification/live-environment-grounding/17-3/README.md).

@@ -1,6 +1,6 @@
 # Story 17.3: Plan-Directed Reflection and Bounded Collection
 
-Status: backlog. **Independent security review required before merge.**
+Status: review. **Independent security review required before merge.**
 Preparation: refined
 Release: v1.6.0 (independent release train) | Priority: P0 within the independent Epic 17 lane
 
@@ -42,32 +42,32 @@ Coverage intent: delta over the current released baseline. Mapping is an accepta
 
 Execute one bounded packet at a time on `feature/17-3-plan-directed-reflection`. Each packet owns the named paths.
 
-- [ ] **Packet 3.1: Identity extraction — owner: core implementer.**
+- [x] **Packet 3.1: Identity extraction — owner: core implementer.**
   - Owned write paths: `cloud/reflection.py`, `tests/test_cloud/`.
   - Output: `ResourceIdentity` extraction from parsed artifacts and recorded prior state, issuing no call; `no_live_counterpart` classification for pure creates.
   - Acceptance proof: AC1, AC2 — extraction and pure-create fixture tests.
-- [ ] **Packet 3.2: Scope guard and anti-enumeration conformance — owner: security-focused implementer.**
+- [x] **Packet 3.2: Scope guard and anti-enumeration conformance — owner: security-focused implementer.**
   - Owned write paths: `cloud/reflection.py`, `tests/test_cloud/conformance/`.
   - Output: a scope guard rejecting account-wide or region-wide enumeration, and a conformance test that fails an intentionally enumerating connector.
   - Acceptance proof: AC3 — LEG-FR-015 evidence.
-- [ ] **Packet 3.3: One-hop reverse expansion — owner: core implementer.**
+- [x] **Packet 3.3: One-hop reverse expansion — owner: core implementer.**
   - Owned write paths: `cloud/reflection.py`, `tests/test_cloud/`.
   - Output: exactly one hop of real dependents, with a recorded bound and a reason per expansion.
   - Acceptance proof: AC4.
-- [ ] **Packet 3.4: Bounded collection and fault injection — owner: implementer.**
+- [x] **Packet 3.4: Bounded collection and fault injection — owner: implementer.**
   - Owned write paths: `services/cloud_context_service.py`, `tests/test_services/`.
   - Output: deadline, concurrency, budget and cancellation applied to real collection; partial labelled results returned within the deadline.
   - Acceptance proof: AC5, AC6 — slow-provider and cancellation fault injection.
-- [ ] **Packet 3.5: Fail-safe degradation matrix — owner: analysis implementer.**
+- [x] **Packet 3.5: Fail-safe degradation matrix — owner: analysis implementer.**
   - Owned write paths: `services/cloud_context_service.py`, `analysis/` degradation hooks, `tests/test_analysis/`.
   - Output: enforcement that unreachable, partial, denied, throttled and expired context never lowers severity or raises confidence; `insufficient_context` triggered; unreadable resources carry the exact missing permission.
   - Acceptance proof: AC5 — full degradation matrix.
-- [ ] **Packet 3.6: Budget reporting surface — owner: API and CLI implementer.**
+- [x] **Packet 3.6: Budget reporting surface — owner: API and CLI implementer.**
   - Owned write paths: `api/` additive fields, `cli/` additive output, `tests/test_api/`, `tests/test_cli/`.
   - Output: actual call count, elapsed time and budget consumption on completion and on cancellation.
   - Acceptance proof: AC6 — LEG-NFR-012 assertions.
   - **Shared-file rule:** additive response fields only; do not change existing field semantics or bump the report schema version.
-- [ ] **Packet 3.7: Independent security review — owner: reviewer who did not implement the packets above.**
+- [x] **Packet 3.7: Independent security review — owner: reviewer who did not implement the packets above.**
   - Owned write paths: `docs/verification/live-environment-grounding/17-3/`.
   - Output: recorded review of the read-only boundary, scope guard, degradation and secret absence, with dispositions.
   - Acceptance proof: review record required before merge.
@@ -115,14 +115,56 @@ Reflection logic lives in `cloud/reflection.py`; orchestration stays in `service
 ## Dev Agent Record
 
 ### Agent Model Used
-Planning preparation only; implementation agent records its model at execution.
+Codex with bounded native implementation and independent security review agents.
 
 ### Debug Log References
-Not executed.
+- Prerequisites: Stories17.1/17.2 merged; PR223 merge64ef0fa contains all nine resolved read-only review findings and independent final GO. No live AWS qualification claimed.
+- Implementation branch: `feature/17-3-plan-directed-reflection`, based on current develop64ef0fa.
+
+### Implementation Plan
+- Execute packet3.1–3.3 sequentially in cloud/reflection.py using approved17.0 producer extraction and frozen17.2 request catalog. Never derive new requests from provider responses.
+- Preserve existing snapshot digest/storage/auth-UOW contracts. Add a separate typed plan-aware collection outcome and optional budget metadata rather than changing retained snapshot-v1 bytes.
+- Reuse the17.2 bounded reader/single-request SDK fences; add only immutable selected-field projection at its worker boundary as required for actual observations. Preserve constructor-only trusted account/region/session bindings and default-unavailable authorization.
+- Apply fail-safe degradation through existing context-uncertainty logic with explicit severity/confidence floors. API/CLI changes remain additive budget serialization; operator enablement/flags and rich surfaces stay in their later stories.
+- Keep fixture/fault-injection evidence separate from live-account qualification. No dependency installation or live reads are authorized or needed for this story; independently review before merge.
 
 ### Completion Notes List
-- Story specification prepared; no implementation, security review, qualification or runtime test performed.
+- Implemented all seven packets: qualified recorded-prior extraction and pure-create success; immutable trusted-target/private-source manifests for25families/42capabilities; bounded static one-hop metadata; screened selected projection and actual SDK-call counters; existing uncertainty-policy floors; optional budget-only API/CLI/agent output. Reused the17.2 scheduler/fences and snapshot-v1 retention/admission contracts; no dependency installation or live reads.
+- Independent security review found and verified repairs for twoP1 credential-echo paths (lowercase ECS tag pairs and Lambda dynamic tag names). Added failing-then-passing worker/collector/retained-readback regressions. Final review passed this offline slice with no remainingP1/P2. Legacy SimpleNamespace agent serialization was also repaired; existing compatibility batch138tests/67subtests passed.
+- Final validation: root2,314tests (3existing skips); full localCI3,839tests across12shards (3existing skips), plus172isolation tests/skills/prompt-injection checks; exactAPI/CLI/infra pytest838passed (1skip),2,474subtests. Network-disabled rebuilt Python3.11.17 harness passed71new storytests and16SDKtests (14legacy+2native selected-model tests). Repo-wideRufflint/format701files, Bandit zero findings and Python3.10 grammar passed.
+- Docker build passed:29a37dc08877e952d257f24eaee9fe084c4532f3eae9e2b8999c8d9e534bce2c. Non-root default image remainsSDK/Node-free; purecreate issueszero requests; AWS registry remainsunavailable until trusted host composition. Fresh container healthHTTP200 passed with networking disabled. No rebuilt-production/live AWS/egress qualification is claimed beyond the documented offline runtime proof.
+- Operational report metadata does not create an unheld snapshot evidence reference. Actual collection outcomes remain available at trusted internal ports; user-facing enablement/flags and production authority/profile composition stay in laterstories. UI validation not applicable. Qualified config/model sources, dependency locks, report-v2 and agent-v1 versions remain unchanged.
+- Implementation started after merged prerequisites and approved read-only boundary review. Packet and validation results remain open until verified.
 - Commands and proofs above are future obligations, not results.
 
 ### File List
-- `_bmad-output/implementation-artifacts/17-3-plan-directed-reflection-and-bounded-collection.md` (story specification only).
+- `_bmad-output/implementation-artifacts/17-3-plan-directed-reflection-and-bounded-collection.md`
+- `_bmad-output/implementation-artifacts/sprint-status.yaml`
+- `analysis/cloud_grounding.py`
+- `api/schemas.py`
+- `cloud/aws/client.py`
+- `cloud/aws/projection.py`
+- `cloud/collection.py`
+- `cloud/reflection.py`
+- `docs/live-environment-grounding/README.md`
+- `docs/verification/live-environment-grounding/17-3/README.md`
+- `docs/verification/live-environment-grounding/17-3/security-review.md`
+- `docs/verification/live-environment-grounding/17-3/test_selected_sdk.py`
+- `services/agent_interface_service.py`
+- `services/analysis_service.py`
+- `services/cloud_context_service.py`
+- `tests/test_analysis/test_cloud_grounding.py`
+- `tests/test_api/test_cloud_collection_budget.py`
+- `tests/test_cli/test_cloud_collection_budget.py`
+- `tests/test_cloud/aws/test_projection.py`
+- `tests/test_cloud/conformance/test_reflection_scope.py`
+- `tests/test_cloud/test_collection.py`
+- `tests/test_cloud/test_reflection.py`
+- `tests/test_cloud/test_reflection_expansion.py`
+- `tests/test_cloud/test_reflection_manifest.py`
+- `tests/test_services/test_analysis_cloud_grounding.py`
+- `tests/test_services/test_cloud_plan_collection.py`
+
+## Change Log
+
+- 2026-11-18: Implemented packets3.1–3.7 after merged prerequisites. Added plan-bound collection, fail-safe degradation and additive budget serialization; resolved independent security/compatibility findings and passed fresh full-suite/runtime checks. Story moved to review for the scoped offline primitive implementation.

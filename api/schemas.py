@@ -23,6 +23,7 @@ import json
 from typing import Annotated, Any, Literal
 
 from config import settings
+from cloud.collection import CollectionBudget
 from evidence.models import (
     ContextSourceFreshness,
     ContextSourceType,
@@ -2026,6 +2027,9 @@ class ShareSummaryJsonPayloadData(BaseModel):
 
 
 class AnalysisRunData(BaseModel):
+    cloud_collection: CollectionBudget | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
     intake: PendingAnalysis
     parse_batch: ParseBatchData
     assessment: AssessmentData
@@ -2685,6 +2689,7 @@ def build_analysis_run_data(
             item["name"] = str(artifact["name"])
 
     return AnalysisRunData(
+        cloud_collection=getattr(result, "cloud_collection", None),
         intake=PendingAnalysis.model_validate(public_intake),
         parse_batch=ParseBatchData(
             files=[

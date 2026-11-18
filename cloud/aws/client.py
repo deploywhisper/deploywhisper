@@ -218,6 +218,8 @@ def _failure(error):
             "Forbidden",
         ):
             return "permission_denied", True
+        if code in ("ExpiredToken", "ExpiredTokenException", "RequestExpired"):
+            return "credentials_expired", False
         if code in (
             "Throttling",
             "ThrottlingException",
@@ -256,6 +258,17 @@ def _failure(error):
     return "provider_error", False
 
 
+@dataclass(frozen=True)
+class SelectedCallResult(CallResult):
+    facts: tuple = ()
+
+
+@dataclass(frozen=True)
+class SelectedExecutionResult(ExecutionResult):
+    actual_call_count: int = 0
+    issued_indices: tuple[int, ...] = ()
+
+
 class AwsReader:
     """Server-owned session only; no endpoint/credential inputs from requests."""
 
@@ -271,13 +284,77 @@ class AwsReader:
     dry_run = staticmethod(dry_run)
 
     def execute(self, calls, *, limits=None, cancel=None):
+        return self._execute(calls, limits=limits, cancel=cancel)
+
+    def execute_selected(
+        self,
+        manifest,
+        *,
+        indices,
+        target,
+        resources,
+        limits=None,
+        cancel=None,
+        deadline=None,
+    ):
+        from cloud.reflection import guard_manifest
+
+        started = time.monotonic()
+        limits = Limits.model_validate((limits or Limits()).model_dump())
+        if deadline is not None and (
+            type(deadline) not in (int, float) or not math.isfinite(deadline)
+        ):
+            raise ValueError("invalid_collection_deadline")
+        deadline = (
+            min(started + limits.total_deadline, deadline)
+            if deadline is not None
+            else started + limits.total_deadline
+        )
+        approved = guard_manifest(manifest, target=target, resources=resources)
+        if (
+            not isinstance(indices, tuple)
+            or len(set(indices)) != len(indices)
+            or any(
+                type(i) is not int or not 0 <= i < len(approved.entries)
+                for i in indices
+            )
+        ):
+            raise ValueError("invalid_selected_manifest")
+        entries = tuple(approved.entries[i] for i in indices)
+        if any(entry.region != self._config["region"] for entry in entries):
+            raise ValueError("selected_region_mismatch")
+        return self._execute(
+            [entry.call() for entry in entries],
+            limits=limits,
+            cancel=cancel,
+            selections=entries,
+            projection_scope=(approved, target, tuple(resources)),
+            absolute_deadline=deadline,
+        )
+
+    def _execute(
+        self,
+        calls,
+        *,
+        limits=None,
+        cancel=None,
+        selections=None,
+        projection_scope=None,
+        absolute_deadline=None,
+    ):
         calls = _calls(calls)
         limits = Limits.model_validate((limits or Limits()).model_dump())
         cancel = cancel or threading.Event()
         start = time.monotonic()
-        deadline = start + limits.total_deadline
+        deadline = (
+            min(start + limits.total_deadline, absolute_deadline)
+            if absolute_deadline is not None
+            else start + limits.total_deadline
+        )
         stop = threading.Event()
         attempts = 0
+        actual_calls = 0
+        issued_indices = set()
         results = {}
         pending = {}
         index = 0
@@ -291,7 +368,7 @@ class AwsReader:
                     return CallResult(call.capability, "cancelled")
 
                 def construct():
-                    nonlocal attempts
+                    nonlocal attempts, actual_calls
                     with lock:
                         if (
                             cancel.is_set()
@@ -309,11 +386,36 @@ class AwsReader:
                             max(0.001, deadline - time.monotonic()),
                         ),
                     )
-                    if cancel.is_set() or stop.is_set() or time.monotonic() >= deadline:
-                        return CallResult(call.capability, "cancelled")
+                    with lock:
+                        if (
+                            cancel.is_set()
+                            or stop.is_set()
+                            or time.monotonic() >= deadline
+                        ):
+                            return CallResult(call.capability, "cancelled")
+                        actual_calls += 1
+                        issued_indices.add(i)
                     response = client._make_api_call(
                         row["operation"], json.loads(json.dumps(call.parameters))
                     )
+                    if selections is not None:
+                        from cloud.aws.projection import project_response
+
+                        try:
+                            projected = project_response(
+                                selections[i], response, scope=projection_scope
+                            )
+                        except Exception:
+                            return SelectedCallResult(
+                                call.capability,
+                                "incomplete",
+                                cause="projection_unavailable",
+                            )
+                        return SelectedCallResult(
+                            call.capability,
+                            "recorded" if projected.complete else "incomplete",
+                            facts=projected.facts,
+                        )
                     return CallResult(
                         call.capability,
                         "recorded"
@@ -419,7 +521,10 @@ class AwsReader:
                 if stop.is_set():
                     break
         finally:
-            stop.set()
+            with lock:
+                stop.set()
+                final_attempts, final_actual_calls = attempts, actual_calls
+                final_issued = tuple(sorted(issued_indices))
 
         for i, c in enumerate(calls):
             if i not in results:
@@ -427,9 +532,18 @@ class AwsReader:
                     c.capability, "cancelled" if cancel.is_set() else "bounded"
                 )
         items = tuple(results[i] for i in range(len(calls)))
-        return ExecutionResult(
+        values = (
             items,
-            attempts,
+            final_attempts,
             time.monotonic() - start,
             any(x.status != "recorded" for x in items),
+        )
+        return (
+            SelectedExecutionResult(
+                *values,
+                actual_call_count=final_actual_calls,
+                issued_indices=final_issued,
+            )
+            if selections is not None
+            else ExecutionResult(*values)
         )

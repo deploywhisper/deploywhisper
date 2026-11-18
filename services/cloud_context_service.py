@@ -7,6 +7,7 @@ from datetime import datetime, timedelta, timezone
 import hashlib
 import json
 import re
+import time
 from typing import Callable, ContextManager, Iterator, Literal, Protocol
 from uuid import uuid4
 
@@ -401,10 +402,12 @@ class CloudContextService:
         *,
         unit_of_work: AuthorizedCloudUnitOfWork | None = None,
         connector_factory: Callable = create_connector,
+        plan_collector_factory: Callable | None = None,
         clock: Callable[[], datetime] = lambda: datetime.now(timezone.utc),
     ):
         self._uow = unit_of_work
         self._connector_factory = connector_factory
+        self._plan_collector_factory = plan_collector_factory
         self._clock = clock
 
     def _now(self):
@@ -623,6 +626,150 @@ class CloudContextService:
                 state="snapshot",
                 snapshot=snapshot,
                 context=snapshot_context(snapshot, now=self._now()),
+            )
+
+    def collect_plan(self, project_id, plan, *, limits=None, cancel=None):
+        """Carry one operation deadline and include UOW finalization in elapsed."""
+        started = time.monotonic()
+        from cloud.collection import CollectionBudget, PlanGroundingOutcome
+        from cloud.aws.client import Limits
+
+        limits = Limits.model_validate((limits or Limits()).model_dump())
+        result = self._collect_plan(
+            project_id,
+            plan,
+            limits=limits,
+            cancel=cancel,
+            started=started,
+            deadline=started + limits.total_deadline,
+        )
+        if result.budget is None:
+            return result
+        budget = CollectionBudget.model_validate(
+            {
+                **result.budget.model_dump(),
+                "elapsed_seconds": max(0, time.monotonic() - started),
+            }
+        )
+        return PlanGroundingOutcome.model_validate(
+            {**result.model_dump(), "budget": budget}
+        )
+
+    def _collect_plan(self, project_id, plan, *, limits, cancel, started, deadline):
+        """Collect a recorded plan through a constructor-installed trusted port.
+
+        No public target, principal or authorization callback is accepted. The
+        original plan scope is held privately until screened retention/readback.
+        """
+        from cloud.collection import (
+            CollectionBudget,
+            CollectedPlan,
+            PlanGroundingOutcome,
+        )
+        from cloud.reflection import build_manifest, extract_resources, guard_manifest
+        import threading
+
+        cancel = cancel or threading.Event()
+        with self._transaction(project_id, "collect") as (session, check):
+            config = self._configuration(session, project_id)
+            if not config.enabled:
+                return PlanGroundingOutcome(state="disabled", project_id=project_id)
+            from cloud.schema import require_snapshot_schema, CloudSnapshotSchemaError
+
+            try:
+                require_snapshot_schema(session)
+            except CloudSnapshotSchemaError:
+                raise CloudContextError("snapshot_storage_unavailable") from None
+            check()
+
+            def unavailable():
+                check()
+                return PlanGroundingOutcome(
+                    state="unavailable",
+                    project_id=project_id,
+                    context=snapshot_context(None, now=self._now()),
+                    budget=CollectionBudget(
+                        planned_calls=0,
+                        attempted_calls=0,
+                        actual_call_count=0,
+                        call_budget=limits.call_budget,
+                        budget_consumed=0,
+                        elapsed_seconds=max(0, time.monotonic() - started),
+                        cancelled=cancel.is_set(),
+                    ),
+                )
+
+            if self._plan_collector_factory is None or config.provider != "aws":
+                return unavailable()
+            try:
+                collector = self._plan_collector_factory(
+                    config.provider, project_id, config.scope_id
+                )
+                if collector.provider != config.provider:
+                    raise ValueError("provider mismatch")
+                target = collector.target
+            except Exception:
+                return unavailable()
+            check()
+            try:
+                original = extract_resources(plan, target=target)
+                approved = build_manifest(original, target=target)
+                approved = guard_manifest(approved, target=target, resources=original)
+            except Exception:
+                raise CloudContextError("invalid_reflection_scope") from None
+            check()
+            try:
+                collected = CollectedPlan.model_validate(
+                    collector.collect_manifest(
+                        approved,
+                        resources=original,
+                        project_id=project_id,
+                        scope_id=config.scope_id,
+                        limits=limits,
+                        cancel=cancel,
+                        deadline=deadline,
+                    )
+                )
+                raw = validate_snapshot(collected.snapshot)
+                if (
+                    raw.provider != config.provider
+                    or raw.project_id != project_id
+                    or raw.scope_id != config.scope_id
+                    or raw.scope != target.account_id
+                    or raw.regions != target.regions
+                    or {r.identity.address: r.identity for r in raw.resources}
+                    != {r.identity.address: r.identity for r in original}
+                    or raw.read_window_end > self._now()
+                    or collected.budget.planned_calls != approved.planned_calls
+                    or collected.budget.call_budget != limits.call_budget
+                ):
+                    raise ValueError("observation binding mismatch")
+                snapshot = redact_snapshot(
+                    raw,
+                    mask_accounts=config.mask_accounts,
+                    account_identifiers=(target.account_id,),
+                )
+            except Exception:
+                raise CloudContextError("invalid_observation") from None
+            check()
+            from models.repositories.cloud_snapshots import put_snapshot, get_snapshot
+
+            put_snapshot(
+                session, snapshot, mask_accounts=config.mask_accounts, now=self._now()
+            )
+            check()
+            retained = get_snapshot(
+                session, project_id=project_id, digest=snapshot.digest, now=self._now()
+            )
+            if retained is None or retained.digest != snapshot.digest:
+                raise CloudContextError("snapshot_unavailable")
+            check()
+            return PlanGroundingOutcome(
+                state="snapshot",
+                project_id=project_id,
+                snapshot=retained,
+                context=snapshot_context(retained, now=self._now()),
+                budget=collected.budget,
             )
 
     def get_snapshot(self, project_id, digest):
