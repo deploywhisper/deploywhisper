@@ -1,0 +1,106 @@
+--- a/lib/parse.js
++++ b/lib/parse.js
+@@ -140,25 +140,11 @@
+ };
+ 
+ const hasRepeatedCharPrefixOverlap = branches => {
+-  const values = branches.map(normalizeSimpleBranch).filter(Boolean);
+-
+-  for (let i = 0; i < values.length; i++) {
+-    for (let j = i + 1; j < values.length; j++) {
+-      const a = values[i];
+-      const b = values[j];
+-      const char = a[0];
+-
+-      if (!char || a !== char.repeat(a.length) || b !== char.repeat(b.length)) {
+-        continue;
+-      }
+-
+-      if (a === b || a.startsWith(b) || b.startsWith(a)) {
+-        return true;
+-      }
+-    }
+-  }
+-
+-  return false;
++  // Prefix-free literal alternatives cannot partition the same repeated text
++  // in multiple ways. Sorting bounds this check for large alternative lists.
++  const values = branches.map(normalizeSimpleBranch).filter(Boolean)
++    .map(value => value.toLowerCase()).sort();
++  return values.some((value, index) => index > 0 && value.startsWith(values[index - 1]));
+ };
+ 
+ const parseRepeatedExtglob = (pattern, requireEnd = true) => {
+@@ -285,12 +271,16 @@
+ };
+ 
+ const analyzeRepeatedExtglob = (body, options) => {
+-  if (options.maxExtglobRecursion === false) {
+-    return { risky: false };
+-  }
+-
+-  const max =
+-    typeof options.maxExtglobRecursion === 'number'
++  // Escapes and quotes can change the meaning/length of apparent literals.
++  // Keep repeated bodies ASCII-only so case-folded prefix checks also cover
++  // nocase/flags-i without relying on a partial Unicode regex normalizer.
++  if (/[\\'"]/.test(body) || /[^\x20-\x7e]/.test(body)) {
++    return { risky: true };
++  }
++
++  const max = options.maxExtglobRecursion === false
++    ? Infinity
++    : typeof options.maxExtglobRecursion === 'number'
+       ? options.maxExtglobRecursion
+       : constants.DEFAULT_MAX_EXTGLOB_RECURSION;
+ 
+@@ -341,6 +331,16 @@
+     return combinable
+       ? { risky: true, safeOutput: buildCharClassStar([...new Set(safeChars)]) }
+       : { risky: true };
++  }
++
++  // DeployWhisper security backport for GHSA-fc5q-39xc-vjpf. A wildcard,
++  // bracket or nested nonliteral body can add an unbounded quantifier inside
++  // the outer repeat even with just ONE branch. Reuse upstream's literalization
++  // fallback; the safe character-star flattening above and ordinary literal
++  // alternatives remain available. The security guard cannot be opted out.
++  const literals = branches.map(normalizeSimpleBranch);
++  if (literals.some(branch => !branch || !/^[A-Za-z0-9_./ -]+$/.test(branch))) {
++    return { risky: true };
+   }
+ 
+   return { risky: false };
+--- a/package.json
++++ b/package.json
+@@ -1,6 +1,6 @@
+ {
+-  "name": "picomatch",
+-  "description": "Blazing fast and accurate glob matcher written in JavaScript, with no dependencies and full support for standard and extended Bash glob features, including braces, extglobs, POSIX brackets, and regular expressions.",
++  "name": "@deploywhisper/picomatch",
++  "description": "DeployWhisper local security fork of picomatch 4.0.7; see frontend/vendor provenance",
+   "version": "4.0.7",
+   "homepage": "https://github.com/micromatch/picomatch",
+   "author": "Jon Schlinkert (https://github.com/jonschlinkert)",
+@@ -79,5 +79,11 @@
+       "nanomatch",
+       "picomatch"
+     ]
++  },
++  "private": true,
++  "deploywhisperPatch": {
++    "upstream": "picomatch@4.0.7",
++    "advisory": "GHSA-fc5q-39xc-vjpf",
++    "scope": "literalize unsafe repeated extglob bodies; preserve safe literal branches and flat character-star forms"
+   }
+ }
+--- a/README.md
++++ b/README.md
+@@ -1,3 +1,7 @@
++# DeployWhisper local security fork
++
++This is an explicitly named local fork of picomatch4.0.7, not an upstream patched release. It carries the conservative repeated-extglob guard documented in frontend/vendor/README.md.
++
+ <h1 align="center">Picomatch</h1>
+ 
+ <p align="center">

@@ -1,0 +1,28 @@
+{
+  "fork": {
+    "name": "@deploywhisper/picomatch",
+    "version": "4.0.7"
+  },
+  "upstream": {
+    "name": "picomatch",
+    "version": "4.0.7",
+    "url": "https://registry.npmjs.org/picomatch/-/picomatch-4.0.7.tgz",
+    "integrity": "sha512-qcJu88Q2IWqJsDD529JKMdwGm/dvInW4HvQnRwiH9JtihJvzGOscDtHE3x1pBKeUOTysQ8kVmLnJ2kJu7yhcGA=="
+  },
+  "advisory": "GHSA-fc5q-39xc-vjpf",
+  "archive": "deploywhisper-picomatch-4.0.7-security.3.tgz",
+  "archiveIntegrity": "sha512-N9ujqAZlu3EEaGNGsl678dp1I/7geDFzOVWQ+5EkNlbP9XhT3eonOJ47vwkC0GlJmfmynE8lWbagxAen4VhzYA==",
+  "filesSha256": {
+    "LICENSE": "d0cd141b0c322fded5dfad1d4645bb2fedfc05b7321fe1009469638190d59ef9",
+    "lib/constants.js": "c28f952d2758261fe5428a121add485cc25b03e0193633f649de903dc0e5e222",
+    "index.js": "02ae26406508e28f9ba0865be16cf77f0b33de6c4d4d49c212c4176df1d5625a",
+    "lib/parse.js": "d02a4f39c6ec635ced739fea03f3835d00be9b996f3193b7eb3399843d6bb97f",
+    "lib/picomatch.js": "fdd249d7ffff853f3bb1c77eafc8baa1a437bea85a94c35877b83c6a40d9ca94",
+    "posix.js": "5695ff5dfcd5a338a40630bd506056f2950bcb08fe1cc068519cbbfe60add480",
+    "lib/scan.js": "6457a1764e5c2e543cc3a0c00ce12ebb3764097628868198370b64d4e642aaae",
+    "lib/utils.js": "f04604f70cd1a3f6ace80b84766468674ff38b4bb83818d2ef1d81fc6355f935",
+    "package.json": "15befc9d0d98a41add4483030674354beb8a1457a094248e5db454ae28619da3",
+    "README.md": "469cb4c361eac8d663dc51ffca2c6f4f8165af8161c6dfb0122d0cf8e90a7e63"
+  },
+  "patchSha256": "b385d815f05c4e183fc1000e7b19d89a8a709c903146f09bcd64d44c08ba58fe"
+}

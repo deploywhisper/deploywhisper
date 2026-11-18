@@ -147,6 +147,7 @@ Codex; native implementation agent and separate read-only boundary reviewer.
 - Review raw SDK signing logs independently, fix discovered leakage at source, then rerun the signing regression and cloud isolation checks.
 
 ### Completion Notes List
+- 2026-11-18 PR223 CI repair: frontend audit exposed upstream Picomatch advisory with no fixed release. Added a proven, explicitly named local fork of the existing tool dependency, immutable archive/source provenance and mandatory bounded security/upstream-advisory checks; audit gates remain enabled. Node22/npm10 clean install, audits,22security tests,513frontend tests, typecheck/build and Docker pass. Compiled assets and final runtime image are byte-identical. AWS source/default Python locks are unchanged; see pr-223-ci-repair.md.
 - 2026-11-18 closeout: independent final read-only check returned GO; all nine review items resolved. Fresh AWS38/SDK14/isolation128/Ruff checks passed. Rebuilt Docker image and SDK-free non-root dry-run smoke passed. Full regression evidence remains valid for unchanged source8e125a4. Story marked done for its offline primitive scope; Git Flow branch is feature/17-2-aws-read-only-session, PR target develop. See git-closeout.md.
 - Resolved R2-1–R2-4: commercial partition admission before credentials; ordinary S3 bucket-name validation plus disabled ARN-region overrides; fail-closed Route53 routing variants; worker completion timestamps and final completion drains for individual/total deadlines. Reused existing validators and the shared result collector; no new dependencies or qualified-core changes.
 - Eight new client boundary regressions and targeted session/SDK regressions failed before fixes and passed afterward. Independent verification confirmed all four fixes and both related concurrent-publication edge cases, with no remaining concrete blocker. All12catalogservices retain one-send failure coverage in the pinned SDK suite.
@@ -192,8 +193,23 @@ Codex; native implementation agent and separate read-only boundary reviewer.
 - `tests/test_cloud/aws/test_rereview_boundaries.py`
 - `docs/verification/live-environment-grounding/17-2/rereview-fixes.md`
 - `docs/verification/live-environment-grounding/17-2/git-closeout.md`
+- `.github/workflows/ci.yml`
+- `Dockerfile`
+- `docs/ci.md`
+- `frontend/package.json`
+- `frontend/package-lock.json`
+- `frontend/scripts/check-picomatch-advisories.cjs`
+- `frontend/scripts/test-picomatch-security.cjs`
+- `frontend/vendor/README.md`
+- `frontend/vendor/picomatch-LICENSE`
+- `frontend/vendor/picomatch-provenance.json`
+- `frontend/vendor/picomatch-4.0.7-security.patch`
+- `frontend/vendor/deploywhisper-picomatch-4.0.7-security.3.tgz`
+- `docs/verification/live-environment-grounding/17-2/pr-223-ci-repair.md`
 
 ## Change Log
+
+- 2026-11-18: Repaired PR223 frontend security audit using a verified local patch for existing Picomatch, preserved audit/upstream tracking and validated unchanged compiled application output.
 
 - 2026-11-18: Final closeout GO, fresh focused/packaging checks passed; marked done and prepared Git Flow commit/push/PR to develop.
 

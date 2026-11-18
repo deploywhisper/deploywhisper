@@ -201,6 +201,15 @@ Python security checks audit both runtime and development locks, including audit
 tooling dependencies. Workflow defaults are read-only; container pushes, release
 creation and explicitly requested analytics snapshots receive only their required
 job-scoped writes. Public analytics feeds receive no GitHub bearer credential.
+The frontend currently replaces its existing Picomatch dependency with a local,
+explicitly named security fork because upstream 4.0.7 has no maintained release
+addressing GHSA-fc5q-39xc-vjpf. Normal npm audits remain enabled. Installed-source,
+archive-integrity and deadline-bound exploit checks validate the fork separately;
+an upstream advisory check must reject new, unreviewed findings for the original
+package. See [fork provenance and removal criteria](../frontend/vendor/README.md).
+This affects frontend build/test tooling, not the shipped Node-free application
+runtime.
+
 Third-party actions remain SHA-pinned. See [the remediation
 record](security/remediation-2026-10-07.md) for earlier advisory dispositions.
 
