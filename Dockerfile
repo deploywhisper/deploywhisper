@@ -27,6 +27,7 @@ RUN find "${VIRTUAL_ENV}" -type f \( -name '*.so' -o -name '*.so.*' \) -exec str
 FROM node:26-alpine@sha256:143494b1da2945f061539253adc65e4f1569ddf07da2d384c022c791a9d90a4a AS frontend
 WORKDIR /frontend
 COPY frontend/package.json frontend/package-lock.json ./
+COPY frontend/vendor/ ./vendor/
 RUN npm ci
 COPY frontend/ .
 RUN npm run build            # outputs /frontend/dist

@@ -1,0 +1,1114 @@
+{
+  "contract_version": 1,
+  "status": "frozen qualification contract; not production implementation",
+  "scope": "AWS commercial partition in explicitly operator-authorized account/regions; ambient credentials never accepted as request parameters",
+  "calls": "static manifest from plan identities only; no IDs from responses may create further calls",
+  "partial": "first response only, any continuation token, missing identity, cap or permission failure is incomplete/unknown; never clean success",
+  "response_security": "project selected fields then services/content_security.py before output; tag/policy/map strings remain sensitive and must be redacted; no raw provider payload retained",
+  "operations": {
+    "instance": {
+      "service": "ec2",
+      "operation": "DescribeInstances",
+      "iam_action": "ec2:DescribeInstances",
+      "params": {
+        "InstanceIds": [
+          "${id}"
+        ]
+      },
+      "response_fields": [
+        "Reservations[].Instances[].InstanceId",
+        "Reservations[].Instances[].State.Name",
+        "Reservations[].Instances[].Placement.AvailabilityZone",
+        "Reservations[].Instances[].VpcId",
+        "Reservations[].Instances[].SubnetId",
+        "Reservations[].Instances[].SecurityGroups[].GroupId",
+        "Reservations[].Instances[].BlockDeviceMappings[].Ebs.VolumeId",
+        "Reservations[].Instances[].Tags[].Key",
+        "Reservations[].Instances[].Tags[].Value"
+      ],
+      "iam_resources": [
+        "*"
+      ],
+      "relation": "direct",
+      "pagination": "first page only; any continuation token => incomplete; never follow token"
+    },
+    "termination_protection": {
+      "service": "ec2",
+      "operation": "DescribeInstanceAttribute",
+      "iam_action": "ec2:DescribeInstanceAttribute",
+      "params": {
+        "InstanceId": "${id}",
+        "Attribute": "disableApiTermination"
+      },
+      "response_fields": [
+        "InstanceId",
+        "DisableApiTermination.Value"
+      ],
+      "iam_resources": [
+        "arn:${partition}:ec2:${region}:${account}:instance/${id}"
+      ],
+      "relation": "direct",
+      "pagination": "first page only; any continuation token => incomplete; never follow token"
+    },
+    "security_group": {
+      "service": "ec2",
+      "operation": "DescribeSecurityGroups",
+      "iam_action": "ec2:DescribeSecurityGroups",
+      "params": {
+        "GroupIds": [
+          "${id}"
+        ]
+      },
+      "response_fields": [
+        "SecurityGroups[].GroupId",
+        "SecurityGroups[].VpcId",
+        "SecurityGroups[].IpPermissions[].UserIdGroupPairs[].GroupId",
+        "SecurityGroups[].IpPermissionsEgress[].UserIdGroupPairs[].GroupId",
+        "SecurityGroups[].Tags[].Key",
+        "SecurityGroups[].Tags[].Value"
+      ],
+      "iam_resources": [
+        "*"
+      ],
+      "relation": "direct",
+      "pagination": "first page only; any continuation token => incomplete; never follow token"
+    },
+    "sg_reverse_in": {
+      "service": "ec2",
+      "operation": "DescribeSecurityGroups",
+      "iam_action": "ec2:DescribeSecurityGroups",
+      "params": {
+        "Filters": [
+          {
+            "Name": "ip-permission.group-id",
+            "Values": [
+              "${id}"
+            ]
+          }
+        ],
+        "MaxResults": 100
+      },
+      "response_fields": [
+        "SecurityGroups[].GroupId"
+      ],
+      "iam_resources": [
+        "*"
+      ],
+      "relation": "one-hop incoming security group reference",
+      "pagination": "first page only; any continuation token => incomplete; never follow token"
+    },
+    "sg_reverse_out": {
+      "service": "ec2",
+      "operation": "DescribeSecurityGroups",
+      "iam_action": "ec2:DescribeSecurityGroups",
+      "params": {
+        "Filters": [
+          {
+            "Name": "egress.ip-permission.group-id",
+            "Values": [
+              "${id}"
+            ]
+          }
+        ],
+        "MaxResults": 100
+      },
+      "response_fields": [
+        "SecurityGroups[].GroupId"
+      ],
+      "iam_resources": [
+        "*"
+      ],
+      "relation": "one-hop outgoing-rule security group reference",
+      "pagination": "first page only; any continuation token => incomplete; never follow token"
+    },
+    "eni": {
+      "service": "ec2",
+      "operation": "DescribeNetworkInterfaces",
+      "iam_action": "ec2:DescribeNetworkInterfaces",
+      "params": {
+        "NetworkInterfaceIds": [
+          "${id}"
+        ]
+      },
+      "response_fields": [
+        "NetworkInterfaces[].NetworkInterfaceId",
+        "NetworkInterfaces[].Attachment.InstanceId",
+        "NetworkInterfaces[].Groups[].GroupId",
+        "NetworkInterfaces[].SubnetId",
+        "NetworkInterfaces[].VpcId",
+        "NetworkInterfaces[].Status"
+      ],
+      "iam_resources": [
+        "*"
+      ],
+      "relation": "direct",
+      "pagination": "first page only; any continuation token => incomplete; never follow token"
+    },
+    "sg_eni_reverse": {
+      "service": "ec2",
+      "operation": "DescribeNetworkInterfaces",
+      "iam_action": "ec2:DescribeNetworkInterfaces",
+      "params": {
+        "Filters": [
+          {
+            "Name": "group-id",
+            "Values": [
+              "${id}"
+            ]
+          }
+        ],
+        "MaxResults": 100
+      },
+      "response_fields": [
+        "NetworkInterfaces[].NetworkInterfaceId",
+        "NetworkInterfaces[].Attachment.InstanceId"
+      ],
+      "iam_resources": [
+        "*"
+      ],
+      "relation": "one-hop matching ENI only; no fetched details",
+      "pagination": "first page only; any continuation token => incomplete; never follow token"
+    },
+    "subnet_eni_reverse": {
+      "service": "ec2",
+      "operation": "DescribeNetworkInterfaces",
+      "iam_action": "ec2:DescribeNetworkInterfaces",
+      "params": {
+        "Filters": [
+          {
+            "Name": "subnet-id",
+            "Values": [
+              "${id}"
+            ]
+          }
+        ],
+        "MaxResults": 100
+      },
+      "response_fields": [
+        "NetworkInterfaces[].NetworkInterfaceId",
+        "NetworkInterfaces[].Attachment.InstanceId"
+      ],
+      "iam_resources": [
+        "*"
+      ],
+      "relation": "one-hop matching ENI only; no fetched details",
+      "pagination": "first page only; any continuation token => incomplete; never follow token"
+    },
+    "vpc_eni_reverse": {
+      "service": "ec2",
+      "operation": "DescribeNetworkInterfaces",
+      "iam_action": "ec2:DescribeNetworkInterfaces",
+      "params": {
+        "Filters": [
+          {
+            "Name": "vpc-id",
+            "Values": [
+              "${id}"
+            ]
+          }
+        ],
+        "MaxResults": 100
+      },
+      "response_fields": [
+        "NetworkInterfaces[].NetworkInterfaceId",
+        "NetworkInterfaces[].Attachment.InstanceId"
+      ],
+      "iam_resources": [
+        "*"
+      ],
+      "relation": "one-hop matching ENI only; no fetched details",
+      "pagination": "first page only; any continuation token => incomplete; never follow token"
+    },
+    "subnet": {
+      "service": "ec2",
+      "operation": "DescribeSubnets",
+      "iam_action": "ec2:DescribeSubnets",
+      "params": {
+        "SubnetIds": [
+          "${id}"
+        ]
+      },
+      "response_fields": [
+        "Subnets[].SubnetId",
+        "Subnets[].VpcId",
+        "Subnets[].AvailabilityZone",
+        "Subnets[].AvailableIpAddressCount"
+      ],
+      "iam_resources": [
+        "*"
+      ],
+      "relation": "direct",
+      "pagination": "first page only; any continuation token => incomplete; never follow token"
+    },
+    "vpc": {
+      "service": "ec2",
+      "operation": "DescribeVpcs",
+      "iam_action": "ec2:DescribeVpcs",
+      "params": {
+        "VpcIds": [
+          "${id}"
+        ]
+      },
+      "response_fields": [
+        "Vpcs[].VpcId",
+        "Vpcs[].CidrBlock",
+        "Vpcs[].State"
+      ],
+      "iam_resources": [
+        "*"
+      ],
+      "relation": "direct",
+      "pagination": "first page only; any continuation token => incomplete; never follow token"
+    },
+    "route_table": {
+      "service": "ec2",
+      "operation": "DescribeRouteTables",
+      "iam_action": "ec2:DescribeRouteTables",
+      "params": {
+        "RouteTableIds": [
+          "${id}"
+        ]
+      },
+      "response_fields": [
+        "RouteTables[].RouteTableId",
+        "RouteTables[].VpcId",
+        "RouteTables[].Associations[].SubnetId",
+        "RouteTables[].Routes[].GatewayId",
+        "RouteTables[].Routes[].NatGatewayId"
+      ],
+      "iam_resources": [
+        "*"
+      ],
+      "relation": "direct",
+      "pagination": "first page only; any continuation token => incomplete; never follow token"
+    },
+    "volume": {
+      "service": "ec2",
+      "operation": "DescribeVolumes",
+      "iam_action": "ec2:DescribeVolumes",
+      "params": {
+        "VolumeIds": [
+          "${id}"
+        ]
+      },
+      "response_fields": [
+        "Volumes[].VolumeId",
+        "Volumes[].AvailabilityZone",
+        "Volumes[].Encrypted",
+        "Volumes[].SnapshotId",
+        "Volumes[].State",
+        "Volumes[].Attachments[].InstanceId"
+      ],
+      "iam_resources": [
+        "*"
+      ],
+      "relation": "direct",
+      "pagination": "first page only; any continuation token => incomplete; never follow token"
+    },
+    "volume_snapshots": {
+      "service": "ec2",
+      "operation": "DescribeSnapshots",
+      "iam_action": "ec2:DescribeSnapshots",
+      "params": {
+        "OwnerIds": [
+          "self"
+        ],
+        "Filters": [
+          {
+            "Name": "volume-id",
+            "Values": [
+              "${id}"
+            ]
+          }
+        ],
+        "MaxResults": 100
+      },
+      "response_fields": [
+        "Snapshots[].SnapshotId",
+        "Snapshots[].StartTime",
+        "Snapshots[].State",
+        "Snapshots[].VolumeId"
+      ],
+      "iam_resources": [
+        "*"
+      ],
+      "relation": "parent-ID filtered recovery metadata",
+      "pagination": "first page only; any continuation token => incomplete; never follow token"
+    },
+    "snapshot": {
+      "service": "ec2",
+      "operation": "DescribeSnapshots",
+      "iam_action": "ec2:DescribeSnapshots",
+      "params": {
+        "SnapshotIds": [
+          "${id}"
+        ]
+      },
+      "response_fields": [
+        "Snapshots[].SnapshotId",
+        "Snapshots[].StartTime",
+        "Snapshots[].State",
+        "Snapshots[].VolumeId",
+        "Snapshots[].Encrypted"
+      ],
+      "iam_resources": [
+        "*"
+      ],
+      "relation": "direct",
+      "pagination": "first page only; any continuation token => incomplete; never follow token"
+    },
+    "lb": {
+      "service": "elbv2",
+      "operation": "DescribeLoadBalancers",
+      "iam_action": "elasticloadbalancing:DescribeLoadBalancers",
+      "params": {
+        "LoadBalancerArns": [
+          "${arn}"
+        ]
+      },
+      "response_fields": [
+        "LoadBalancers[].LoadBalancerArn",
+        "LoadBalancers[].State.Code",
+        "LoadBalancers[].AvailabilityZones[].ZoneName",
+        "LoadBalancers[].SecurityGroups",
+        "LoadBalancers[].VpcId"
+      ],
+      "iam_resources": [
+        "*"
+      ],
+      "relation": "direct",
+      "pagination": "first page only; any continuation token => incomplete; never follow token"
+    },
+    "lb_protection": {
+      "service": "elbv2",
+      "operation": "DescribeLoadBalancerAttributes",
+      "iam_action": "elasticloadbalancing:DescribeLoadBalancerAttributes",
+      "params": {
+        "LoadBalancerArn": "${arn}"
+      },
+      "response_fields": [
+        "Attributes[].Key",
+        "Attributes[].Value"
+      ],
+      "iam_resources": [
+        "*"
+      ],
+      "relation": "direct",
+      "pagination": "first page only; any continuation token => incomplete; never follow token",
+      "response_constraint": "Retain Attributes entries only where Key==deletion_protection.enabled; discard other attribute values."
+    },
+    "lb_groups": {
+      "service": "elbv2",
+      "operation": "DescribeTargetGroups",
+      "iam_action": "elasticloadbalancing:DescribeTargetGroups",
+      "params": {
+        "LoadBalancerArn": "${arn}",
+        "PageSize": 100
+      },
+      "response_fields": [
+        "TargetGroups[].TargetGroupArn",
+        "TargetGroups[].LoadBalancerArns"
+      ],
+      "iam_resources": [
+        "*"
+      ],
+      "relation": "one-hop LB target groups only",
+      "pagination": "first page only; any continuation token => incomplete; never follow token"
+    },
+    "target_group": {
+      "service": "elbv2",
+      "operation": "DescribeTargetGroups",
+      "iam_action": "elasticloadbalancing:DescribeTargetGroups",
+      "params": {
+        "TargetGroupArns": [
+          "${arn}"
+        ]
+      },
+      "response_fields": [
+        "TargetGroups[].TargetGroupArn",
+        "TargetGroups[].LoadBalancerArns",
+        "TargetGroups[].VpcId",
+        "TargetGroups[].TargetType"
+      ],
+      "iam_resources": [
+        "*"
+      ],
+      "relation": "direct",
+      "pagination": "first page only; any continuation token => incomplete; never follow token"
+    },
+    "target_health": {
+      "service": "elbv2",
+      "operation": "DescribeTargetHealth",
+      "iam_action": "elasticloadbalancing:DescribeTargetHealth",
+      "params": {
+        "TargetGroupArn": "${arn}"
+      },
+      "response_fields": [
+        "TargetHealthDescriptions[].Target.Id",
+        "TargetHealthDescriptions[].TargetHealth.State"
+      ],
+      "iam_resources": [
+        "*"
+      ],
+      "relation": "direct",
+      "pagination": "first page only; any continuation token => incomplete; never follow token"
+    },
+    "listener": {
+      "service": "elbv2",
+      "operation": "DescribeListeners",
+      "iam_action": "elasticloadbalancing:DescribeListeners",
+      "params": {
+        "ListenerArns": [
+          "${arn}"
+        ]
+      },
+      "response_fields": [
+        "Listeners[].ListenerArn",
+        "Listeners[].LoadBalancerArn",
+        "Listeners[].Port",
+        "Listeners[].Protocol",
+        "Listeners[].DefaultActions[].TargetGroupArn"
+      ],
+      "iam_resources": [
+        "*"
+      ],
+      "relation": "direct",
+      "pagination": "first page only; any continuation token => incomplete; never follow token"
+    },
+    "asg": {
+      "service": "autoscaling",
+      "operation": "DescribeAutoScalingGroups",
+      "iam_action": "autoscaling:DescribeAutoScalingGroups",
+      "params": {
+        "AutoScalingGroupNames": [
+          "${name}"
+        ],
+        "MaxRecords": 100
+      },
+      "response_fields": [
+        "AutoScalingGroups[].AutoScalingGroupName",
+        "AutoScalingGroups[].DesiredCapacity",
+        "AutoScalingGroups[].Instances[].InstanceId",
+        "AutoScalingGroups[].Instances[].AvailabilityZone",
+        "AutoScalingGroups[].Instances[].HealthStatus",
+        "AutoScalingGroups[].TargetGroupARNs"
+      ],
+      "iam_resources": [
+        "*"
+      ],
+      "relation": "direct",
+      "pagination": "first page only; any continuation token => incomplete; never follow token"
+    },
+    "db": {
+      "service": "rds",
+      "operation": "DescribeDBInstances",
+      "iam_action": "rds:DescribeDBInstances",
+      "params": {
+        "DBInstanceIdentifier": "${name}"
+      },
+      "response_fields": [
+        "DBInstances[].DBInstanceIdentifier",
+        "DBInstances[].DBInstanceStatus",
+        "DBInstances[].DeletionProtection",
+        "DBInstances[].BackupRetentionPeriod",
+        "DBInstances[].LatestRestorableTime",
+        "DBInstances[].ReadReplicaDBInstanceIdentifiers",
+        "DBInstances[].ReadReplicaSourceDBInstanceIdentifier",
+        "DBInstances[].MultiAZ",
+        "DBInstances[].AvailabilityZone"
+      ],
+      "iam_resources": [
+        "arn:${partition}:rds:${region}:${account}:db:${name}"
+      ],
+      "relation": "direct",
+      "pagination": "first page only; any continuation token => incomplete; never follow token"
+    },
+    "db_snapshots": {
+      "service": "rds",
+      "operation": "DescribeDBSnapshots",
+      "iam_action": "rds:DescribeDBSnapshots",
+      "params": {
+        "DBInstanceIdentifier": "${name}",
+        "MaxRecords": 100
+      },
+      "response_fields": [
+        "DBSnapshots[].DBSnapshotIdentifier",
+        "DBSnapshots[].SnapshotCreateTime",
+        "DBSnapshots[].Status"
+      ],
+      "iam_resources": [
+        "arn:${partition}:rds:${region}:${account}:db:${name}",
+        "arn:${partition}:rds:${region}:${account}:snapshot:*"
+      ],
+      "relation": "parent-ID filtered recovery metadata",
+      "pagination": "first page only; any continuation token => incomplete; never follow token"
+    },
+    "db_cluster": {
+      "service": "rds",
+      "operation": "DescribeDBClusters",
+      "iam_action": "rds:DescribeDBClusters",
+      "params": {
+        "DBClusterIdentifier": "${name}"
+      },
+      "response_fields": [
+        "DBClusters[].DBClusterIdentifier",
+        "DBClusters[].Status",
+        "DBClusters[].DeletionProtection",
+        "DBClusters[].BackupRetentionPeriod",
+        "DBClusters[].LatestRestorableTime",
+        "DBClusters[].DBClusterMembers[].DBInstanceIdentifier",
+        "DBClusters[].ReadReplicaIdentifiers"
+      ],
+      "iam_resources": [
+        "arn:${partition}:rds:${region}:${account}:cluster:${name}"
+      ],
+      "relation": "direct",
+      "pagination": "first page only; any continuation token => incomplete; never follow token"
+    },
+    "db_cluster_snapshots": {
+      "service": "rds",
+      "operation": "DescribeDBClusterSnapshots",
+      "iam_action": "rds:DescribeDBClusterSnapshots",
+      "params": {
+        "DBClusterIdentifier": "${name}",
+        "MaxRecords": 100
+      },
+      "response_fields": [
+        "DBClusterSnapshots[].DBClusterSnapshotIdentifier",
+        "DBClusterSnapshots[].SnapshotCreateTime",
+        "DBClusterSnapshots[].Status"
+      ],
+      "iam_resources": [
+        "arn:${partition}:rds:${region}:${account}:cluster:${name}",
+        "arn:${partition}:rds:${region}:${account}:cluster-snapshot:*"
+      ],
+      "relation": "parent-ID filtered recovery metadata",
+      "pagination": "first page only; any continuation token => incomplete; never follow token"
+    },
+    "bucket_versioning": {
+      "service": "s3",
+      "operation": "GetBucketVersioning",
+      "iam_action": "s3:GetBucketVersioning",
+      "params": {
+        "Bucket": "${name}",
+        "ExpectedBucketOwner": "${account}"
+      },
+      "response_fields": [
+        "Status",
+        "MFADelete"
+      ],
+      "iam_resources": [
+        "arn:${partition}:s3:::${name}"
+      ],
+      "relation": "direct",
+      "pagination": "first page only; any continuation token => incomplete; never follow token"
+    },
+    "bucket_tags": {
+      "service": "s3",
+      "operation": "GetBucketTagging",
+      "iam_action": "s3:GetBucketTagging",
+      "params": {
+        "Bucket": "${name}",
+        "ExpectedBucketOwner": "${account}"
+      },
+      "response_fields": [
+        "TagSet[].Key",
+        "TagSet[].Value"
+      ],
+      "iam_resources": [
+        "arn:${partition}:s3:::${name}"
+      ],
+      "relation": "direct",
+      "pagination": "first page only; any continuation token => incomplete; never follow token"
+    },
+    "role": {
+      "service": "iam",
+      "operation": "GetRole",
+      "iam_action": "iam:GetRole",
+      "params": {
+        "RoleName": "${name}"
+      },
+      "response_fields": [
+        "Role.RoleName",
+        "Role.Arn",
+        "Role.AssumeRolePolicyDocument",
+        "Role.Tags[].Key",
+        "Role.Tags[].Value"
+      ],
+      "iam_resources": [
+        "arn:${partition}:iam::${account}:role/${path_name}"
+      ],
+      "relation": "direct",
+      "pagination": "first page only; any continuation token => incomplete; never follow token"
+    },
+    "instance_profile": {
+      "service": "iam",
+      "operation": "GetInstanceProfile",
+      "iam_action": "iam:GetInstanceProfile",
+      "params": {
+        "InstanceProfileName": "${name}"
+      },
+      "response_fields": [
+        "InstanceProfile.InstanceProfileName",
+        "InstanceProfile.Arn",
+        "InstanceProfile.Roles[].Arn"
+      ],
+      "iam_resources": [
+        "arn:${partition}:iam::${account}:instance-profile/${path_name}"
+      ],
+      "relation": "direct",
+      "pagination": "first page only; any continuation token => incomplete; never follow token"
+    },
+    "ecs_cluster": {
+      "service": "ecs",
+      "operation": "DescribeClusters",
+      "iam_action": "ecs:DescribeClusters",
+      "params": {
+        "clusters": [
+          "${arn}"
+        ],
+        "include": [
+          "STATISTICS",
+          "TAGS"
+        ]
+      },
+      "response_fields": [
+        "clusters[].clusterArn",
+        "clusters[].status",
+        "clusters[].runningTasksCount",
+        "clusters[].activeServicesCount",
+        "clusters[].tags[].key",
+        "clusters[].tags[].value"
+      ],
+      "iam_resources": [
+        "${arn}"
+      ],
+      "relation": "direct",
+      "pagination": "first page only; any continuation token => incomplete; never follow token"
+    },
+    "ecs_service": {
+      "service": "ecs",
+      "operation": "DescribeServices",
+      "iam_action": "ecs:DescribeServices",
+      "params": {
+        "cluster": "${cluster_arn}",
+        "services": [
+          "${arn}"
+        ],
+        "include": [
+          "TAGS"
+        ]
+      },
+      "response_fields": [
+        "services[].serviceArn",
+        "services[].clusterArn",
+        "services[].status",
+        "services[].desiredCount",
+        "services[].runningCount",
+        "services[].loadBalancers[].targetGroupArn",
+        "services[].networkConfiguration.awsvpcConfiguration.subnets",
+        "services[].networkConfiguration.awsvpcConfiguration.securityGroups"
+      ],
+      "iam_resources": [
+        "${arn}"
+      ],
+      "relation": "direct",
+      "pagination": "first page only; any continuation token => incomplete; never follow token"
+    },
+    "eks_cluster": {
+      "service": "eks",
+      "operation": "DescribeCluster",
+      "iam_action": "eks:DescribeCluster",
+      "params": {
+        "name": "${name}"
+      },
+      "response_fields": [
+        "cluster.arn",
+        "cluster.status",
+        "cluster.resourcesVpcConfig.subnetIds",
+        "cluster.resourcesVpcConfig.securityGroupIds",
+        "cluster.roleArn",
+        "cluster.deletionProtection"
+      ],
+      "iam_resources": [
+        "arn:${partition}:eks:${region}:${account}:cluster/${name}"
+      ],
+      "relation": "direct",
+      "pagination": "first page only; any continuation token => incomplete; never follow token"
+    },
+    "function_concurrency": {
+      "service": "lambda",
+      "operation": "GetFunctionConcurrency",
+      "iam_action": "lambda:GetFunctionConcurrency",
+      "params": {
+        "FunctionName": "${arn}"
+      },
+      "response_fields": [
+        "ReservedConcurrentExecutions"
+      ],
+      "iam_resources": [
+        "${arn}"
+      ],
+      "relation": "direct",
+      "pagination": "first page only; any continuation token => incomplete; never follow token"
+    },
+    "function_tags": {
+      "service": "lambda",
+      "operation": "ListTags",
+      "iam_action": "lambda:ListTags",
+      "params": {
+        "Resource": "${arn}"
+      },
+      "response_fields": [
+        "Tags"
+      ],
+      "iam_resources": [
+        "${arn}"
+      ],
+      "relation": "direct",
+      "pagination": "first page only; any continuation token => incomplete; never follow token"
+    },
+    "function_mappings": {
+      "service": "lambda",
+      "operation": "ListEventSourceMappings",
+      "iam_action": "lambda:ListEventSourceMappings",
+      "params": {
+        "FunctionName": "${arn}",
+        "MaxItems": 100
+      },
+      "response_fields": [
+        "EventSourceMappings[].UUID",
+        "EventSourceMappings[].FunctionArn",
+        "EventSourceMappings[].EventSourceArn",
+        "EventSourceMappings[].State"
+      ],
+      "iam_resources": [
+        "*"
+      ],
+      "relation": "one-hop mappings filtered by touched function",
+      "pagination": "first page only; any continuation token => incomplete; never follow token"
+    },
+    "event_mapping": {
+      "service": "lambda",
+      "operation": "ListEventSourceMappings",
+      "iam_action": "lambda:ListEventSourceMappings",
+      "params": {
+        "FunctionName": "${function_arn}",
+        "EventSourceArn": "${event_source_arn}",
+        "MaxItems": 100
+      },
+      "response_fields": [
+        "EventSourceMappings[].UUID",
+        "EventSourceMappings[].FunctionArn",
+        "EventSourceMappings[].EventSourceArn",
+        "EventSourceMappings[].State"
+      ],
+      "iam_resources": [
+        "*"
+      ],
+      "relation": "known parent IDs from plan required; UUID filter applied locally",
+      "pagination": "first page only; any continuation token => incomplete; never follow token",
+      "postcondition": "Retain only mappings whose UUID exactly matches the touched mapping, after matching supplied plan FunctionArn and EventSourceArn; missing parents => unknown, never unfiltered List."
+    },
+    "table": {
+      "service": "dynamodb",
+      "operation": "DescribeTable",
+      "iam_action": "dynamodb:DescribeTable",
+      "params": {
+        "TableName": "${name}"
+      },
+      "response_fields": [
+        "Table.TableArn",
+        "Table.TableStatus",
+        "Table.DeletionProtectionEnabled",
+        "Table.LatestStreamArn",
+        "Table.Replicas[].RegionName"
+      ],
+      "iam_resources": [
+        "arn:${partition}:dynamodb:${region}:${account}:table/${name}"
+      ],
+      "relation": "direct",
+      "pagination": "first page only; any continuation token => incomplete; never follow token"
+    },
+    "table_recovery": {
+      "service": "dynamodb",
+      "operation": "DescribeContinuousBackups",
+      "iam_action": "dynamodb:DescribeContinuousBackups",
+      "params": {
+        "TableName": "${name}"
+      },
+      "response_fields": [
+        "ContinuousBackupsDescription.PointInTimeRecoveryDescription.PointInTimeRecoveryStatus",
+        "ContinuousBackupsDescription.PointInTimeRecoveryDescription.EarliestRestorableDateTime",
+        "ContinuousBackupsDescription.PointInTimeRecoveryDescription.LatestRestorableDateTime"
+      ],
+      "iam_resources": [
+        "arn:${partition}:dynamodb:${region}:${account}:table/${name}"
+      ],
+      "relation": "direct",
+      "pagination": "first page only; any continuation token => incomplete; never follow token"
+    },
+    "queue": {
+      "service": "sqs",
+      "operation": "GetQueueAttributes",
+      "iam_action": "sqs:GetQueueAttributes",
+      "params": {
+        "QueueUrl": "${canonical_queue_url}",
+        "AttributeNames": [
+          "QueueArn",
+          "ApproximateNumberOfMessages",
+          "RedrivePolicy",
+          "MessageRetentionPeriod",
+          "LastModifiedTimestamp"
+        ]
+      },
+      "response_fields": [
+        "Attributes"
+      ],
+      "iam_resources": [
+        "arn:${partition}:sqs:${region}:${account}:${name}"
+      ],
+      "relation": "direct",
+      "pagination": "first page only; any continuation token => incomplete; never follow token",
+      "identity_requirement": "QueueUrl must be reconstructed from trusted partition endpoint, authorized account and validated exact plan queue name; never forward caller-supplied URL."
+    },
+    "queue_mappings": {
+      "service": "lambda",
+      "operation": "ListEventSourceMappings",
+      "iam_action": "lambda:ListEventSourceMappings",
+      "params": {
+        "EventSourceArn": "${arn}",
+        "MaxItems": 100
+      },
+      "response_fields": [
+        "EventSourceMappings[].UUID",
+        "EventSourceMappings[].FunctionArn",
+        "EventSourceMappings[].EventSourceArn",
+        "EventSourceMappings[].State"
+      ],
+      "iam_resources": [
+        "*"
+      ],
+      "relation": "one-hop mappings filtered by touched queue",
+      "pagination": "first page only; any continuation token => incomplete; never follow token"
+    },
+    "record": {
+      "service": "route53",
+      "operation": "ListResourceRecordSets",
+      "iam_action": "route53:ListResourceRecordSets",
+      "params": {
+        "HostedZoneId": "${zone_id}",
+        "StartRecordName": "${name}",
+        "StartRecordType": "${record_type}",
+        "MaxItems": "1"
+      },
+      "response_fields": [
+        "ResourceRecordSets[].Name",
+        "ResourceRecordSets[].Type",
+        "ResourceRecordSets[].SetIdentifier",
+        "ResourceRecordSets[].AliasTarget.DNSName",
+        "ResourceRecordSets[].AliasTarget.HostedZoneId"
+      ],
+      "iam_resources": [
+        "arn:${partition}:route53:::hostedzone/${zone_id}"
+      ],
+      "relation": "direct",
+      "pagination": "first page only; any continuation token => incomplete; never follow token",
+      "postcondition": "Only accept exact returned Name/Type/SetIdentifier matching plan identity. Lexicographic next record means missing, never substitute. First page at MaxItems=1; additional routing variants incomplete."
+    }
+  },
+  "families": {
+    "aws_instance": {
+      "operations": [
+        "instance",
+        "termination_protection"
+      ],
+      "reverse_hop": "unknown for non-plan-declared reverse relations; no inventory fallback",
+      "recoverability": "derive only from selected protection/recovery facts; missing proof => unknown; no successful restore implied"
+    },
+    "aws_security_group": {
+      "operations": [
+        "security_group",
+        "sg_reverse_in",
+        "sg_reverse_out",
+        "sg_eni_reverse"
+      ],
+      "reverse_hop": "supported bounded filtered reads",
+      "recoverability": "derive only from selected protection/recovery facts; missing proof => unknown; no successful restore implied"
+    },
+    "aws_network_interface": {
+      "operations": [
+        "eni"
+      ],
+      "reverse_hop": "unknown for non-plan-declared reverse relations; no inventory fallback",
+      "recoverability": "derive only from selected protection/recovery facts; missing proof => unknown; no successful restore implied"
+    },
+    "aws_subnet": {
+      "operations": [
+        "subnet",
+        "subnet_eni_reverse"
+      ],
+      "reverse_hop": "supported bounded filtered reads",
+      "recoverability": "derive only from selected protection/recovery facts; missing proof => unknown; no successful restore implied"
+    },
+    "aws_vpc": {
+      "operations": [
+        "vpc",
+        "vpc_eni_reverse"
+      ],
+      "reverse_hop": "supported bounded filtered reads",
+      "recoverability": "derive only from selected protection/recovery facts; missing proof => unknown; no successful restore implied"
+    },
+    "aws_route_table": {
+      "operations": [
+        "route_table"
+      ],
+      "reverse_hop": "unknown for non-plan-declared reverse relations; no inventory fallback",
+      "recoverability": "derive only from selected protection/recovery facts; missing proof => unknown; no successful restore implied"
+    },
+    "aws_ebs_volume": {
+      "operations": [
+        "volume",
+        "volume_snapshots"
+      ],
+      "reverse_hop": "unknown for non-plan-declared reverse relations; no inventory fallback",
+      "recoverability": "derive only from selected protection/recovery facts; missing proof => unknown; no successful restore implied"
+    },
+    "aws_ebs_snapshot": {
+      "operations": [
+        "snapshot"
+      ],
+      "reverse_hop": "unknown for non-plan-declared reverse relations; no inventory fallback",
+      "recoverability": "derive only from selected protection/recovery facts; missing proof => unknown; no successful restore implied"
+    },
+    "aws_lb": {
+      "operations": [
+        "lb",
+        "lb_protection",
+        "lb_groups"
+      ],
+      "reverse_hop": "supported bounded filtered reads",
+      "recoverability": "derive only from selected protection/recovery facts; missing proof => unknown; no successful restore implied"
+    },
+    "aws_lb_target_group": {
+      "operations": [
+        "target_group",
+        "target_health"
+      ],
+      "reverse_hop": "unknown for non-plan-declared reverse relations; no inventory fallback",
+      "recoverability": "derive only from selected protection/recovery facts; missing proof => unknown; no successful restore implied"
+    },
+    "aws_lb_listener": {
+      "operations": [
+        "listener"
+      ],
+      "reverse_hop": "unknown for non-plan-declared reverse relations; no inventory fallback",
+      "recoverability": "derive only from selected protection/recovery facts; missing proof => unknown; no successful restore implied"
+    },
+    "aws_autoscaling_group": {
+      "operations": [
+        "asg"
+      ],
+      "reverse_hop": "unknown for non-plan-declared reverse relations; no inventory fallback",
+      "recoverability": "derive only from selected protection/recovery facts; missing proof => unknown; no successful restore implied"
+    },
+    "aws_db_instance": {
+      "operations": [
+        "db",
+        "db_snapshots"
+      ],
+      "reverse_hop": "unknown for non-plan-declared reverse relations; no inventory fallback",
+      "recoverability": "derive only from selected protection/recovery facts; missing proof => unknown; no successful restore implied"
+    },
+    "aws_rds_cluster": {
+      "operations": [
+        "db_cluster",
+        "db_cluster_snapshots"
+      ],
+      "reverse_hop": "unknown for non-plan-declared reverse relations; no inventory fallback",
+      "recoverability": "derive only from selected protection/recovery facts; missing proof => unknown; no successful restore implied"
+    },
+    "aws_s3_bucket": {
+      "operations": [
+        "bucket_versioning",
+        "bucket_tags"
+      ],
+      "reverse_hop": "unknown for non-plan-declared reverse relations; no inventory fallback",
+      "recoverability": "derive only from selected protection/recovery facts; missing proof => unknown; no successful restore implied"
+    },
+    "aws_iam_role": {
+      "operations": [
+        "role"
+      ],
+      "reverse_hop": "unknown for non-plan-declared reverse relations; no inventory fallback",
+      "recoverability": "derive only from selected protection/recovery facts; missing proof => unknown; no successful restore implied"
+    },
+    "aws_iam_instance_profile": {
+      "operations": [
+        "instance_profile"
+      ],
+      "reverse_hop": "unknown for non-plan-declared reverse relations; no inventory fallback",
+      "recoverability": "derive only from selected protection/recovery facts; missing proof => unknown; no successful restore implied"
+    },
+    "aws_ecs_cluster": {
+      "operations": [
+        "ecs_cluster"
+      ],
+      "reverse_hop": "unknown for non-plan-declared reverse relations; no inventory fallback",
+      "recoverability": "derive only from selected protection/recovery facts; missing proof => unknown; no successful restore implied"
+    },
+    "aws_ecs_service": {
+      "operations": [
+        "ecs_service"
+      ],
+      "reverse_hop": "unknown for non-plan-declared reverse relations; no inventory fallback",
+      "recoverability": "derive only from selected protection/recovery facts; missing proof => unknown; no successful restore implied"
+    },
+    "aws_eks_cluster": {
+      "operations": [
+        "eks_cluster"
+      ],
+      "reverse_hop": "unknown for non-plan-declared reverse relations; no inventory fallback",
+      "recoverability": "derive only from selected protection/recovery facts; missing proof => unknown; no successful restore implied"
+    },
+    "aws_lambda_function": {
+      "operations": [
+        "function_concurrency",
+        "function_tags",
+        "function_mappings"
+      ],
+      "reverse_hop": "supported bounded filtered reads",
+      "recoverability": "derive only from selected protection/recovery facts; missing proof => unknown; no successful restore implied"
+    },
+    "aws_lambda_event_source_mapping": {
+      "operations": [
+        "event_mapping"
+      ],
+      "reverse_hop": "unknown for non-plan-declared reverse relations; no inventory fallback",
+      "recoverability": "derive only from selected protection/recovery facts; missing proof => unknown; no successful restore implied"
+    },
+    "aws_dynamodb_table": {
+      "operations": [
+        "table",
+        "table_recovery"
+      ],
+      "reverse_hop": "unknown for non-plan-declared reverse relations; no inventory fallback",
+      "recoverability": "derive only from selected protection/recovery facts; missing proof => unknown; no successful restore implied"
+    },
+    "aws_sqs_queue": {
+      "operations": [
+        "queue",
+        "queue_mappings"
+      ],
+      "reverse_hop": "supported bounded filtered reads",
+      "recoverability": "derive only from selected protection/recovery facts; missing proof => unknown; no successful restore implied"
+    },
+    "aws_route53_record": {
+      "operations": [
+        "record"
+      ],
+      "reverse_hop": "unknown for non-plan-declared reverse relations; no inventory fallback",
+      "recoverability": "derive only from selected protection/recovery facts; missing proof => unknown; no successful restore implied"
+    }
+  }
+}

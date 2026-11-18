@@ -242,6 +242,7 @@ jobs:
         run: |
           npm audit --audit-level=low
           npm audit --prefix frontend --audit-level=low
+          npm --prefix frontend run audit:picomatch-upstream
 
       - name: Type check frontend
         run: npm run ui:typecheck

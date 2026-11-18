@@ -1,0 +1,1 @@
+"""AWS access contract tests."""
