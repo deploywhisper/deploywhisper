@@ -5,11 +5,12 @@ from __future__ import annotations
 import copy
 import threading
 import time
+from types import SimpleNamespace
 import unittest
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 from cloud.collection import AwsPlanCollector
-from cloud.aws.client import Limits
+from cloud.aws.client import ExecutionProgress, Limits
 from cloud.reflection import (
     ReflectionTarget,
     build_manifest,
@@ -141,8 +142,6 @@ class CollectionTests(unittest.TestCase):
         self.assertTrue(result.snapshot.partial)
 
     def test_global_output_bound_and_unreachable_or_expired_diagnostics(self):
-        from unittest.mock import patch
-
         with patch("cloud.collection._MAX_FACTS", 1):
             result = self.collect()
         self.assertTrue(result.snapshot.partial)
@@ -160,6 +159,21 @@ class CollectionTests(unittest.TestCase):
         self.assertIsNone(result.snapshot.resources[0].missing_permission)
         self.assertNotIn("private-canary", result.model_dump_json())
 
+    def test_denial_uses_the_snapshot_screened_address(self):
+        class Denied(Exception):
+            response = {"Error": {"Code": "AccessDenied"}}
+
+        source = plan()
+        source["resource_changes"][0]["address"] = "aws_instance.example9182736"
+        self.session.create_client.return_value._make_api_call.side_effect = Denied()
+        result = self.collect(source, sensitive_values=("9182736.0",))
+        screened = result.snapshot.resources[0].identity.address
+        self.assertEqual(screened, "aws_instance.example[REDACTED]")
+        self.assertEqual(
+            {item.address for item in result.permission_denials}, {screened}
+        )
+        self.assertNotIn("9182736", result.model_dump_json())
+
     def test_actual_denial_is_exact_but_transport_does_not_invent_permissions(self):
         class Denied(Exception):
             response = {"Error": {"Code": "AccessDenied"}}
@@ -167,9 +181,23 @@ class CollectionTests(unittest.TestCase):
         self.session.create_client.return_value._make_api_call.side_effect = Denied()
         result = self.collect()
         self.assertEqual(result.budget.actual_call_count, 2)
-        self.assertIn(
+        self.assertEqual(
             result.snapshot.resources[0].missing_permission,
-            ("ec2:DescribeInstances", "ec2:DescribeInstanceAttribute"),
+            "ec2:DescribeInstanceAttribute",
+        )
+        self.assertEqual(
+            {
+                (item.address, item.capability, item.action)
+                for item in result.permission_denials
+            },
+            {
+                ("aws_instance.example", "instance", "ec2:DescribeInstances"),
+                (
+                    "aws_instance.example",
+                    "termination_protection",
+                    "ec2:DescribeInstanceAttribute",
+                ),
+            },
         )
         self.session.create_client.return_value._make_api_call.side_effect = (
             ConnectionError("private-transport")
@@ -177,8 +205,15 @@ class CollectionTests(unittest.TestCase):
         result = self.collect()
         self.assertIsNone(result.snapshot.resources[0].missing_permission)
         self.assertEqual(result.snapshot.resources[0].cause, "transport_error")
+        self.assertEqual(result.permission_denials, ())
 
-    def test_multiple_regions_share_one_budget_and_deadline(self):
+        self.session.create_client.side_effect = Denied()
+        result = self.collect()
+        self.assertEqual(result.budget.actual_call_count, 0)
+        self.assertEqual(result.snapshot.resources[0].cause, "credentials_unavailable")
+        self.assertEqual(result.permission_denials, ())
+
+    def collect_multiple_regions(self, **kwargs):
         target = ReflectionTarget(
             account_id="000000000000", regions=("us-east-1", "us-west-2")
         )
@@ -190,18 +225,74 @@ class CollectionTests(unittest.TestCase):
         source["resource_changes"].append(second)
         rows = extract_resources(source, target=target)
         manifest = build_manifest(rows, target=target)
-        result = collector.collect_manifest(
+        return collector.collect_manifest(
             manifest,
             resources=rows,
             project_id=1,
             scope_id="test-scope",
-            limits=Limits(call_budget=1),
+            **kwargs,
         )
+
+    def test_multiple_regions_share_one_budget_and_deadline(self):
+        result = self.collect_multiple_regions(limits=Limits(call_budget=1))
         self.assertEqual(result.budget.actual_call_count, 1)
         self.assertEqual(result.budget.attempted_calls, 1)
         self.assertTrue(result.snapshot.partial)
         self.assertEqual(self.session.create_client.call_count, 1)
         self.assertEqual(result.budget.planned_calls, 4)
+
+    def test_timed_out_worker_does_not_allow_more_dispatch_in_another_region(self):
+        started = threading.Event()
+        release = threading.Event()
+        finished = threading.Event()
+
+        def read(*args):
+            started.set()
+            try:
+                release.wait(1)
+                return {}
+            finally:
+                finished.set()
+
+        self.session.create_client.return_value._make_api_call.side_effect = read
+        try:
+            result = self.collect_multiple_regions(
+                limits=Limits(concurrency=1, per_call_timeout=0.08, total_deadline=0.8)
+            )
+            self.assertTrue(started.is_set())
+            self.assertFalse(finished.is_set())
+            self.assertEqual(result.budget.actual_call_count, 1)
+            self.assertEqual(self.session.create_client.call_count, 1)
+            self.assertTrue(result.snapshot.partial)
+        finally:
+            release.set()
+            self.assertTrue(finished.wait(1))
+
+    def test_backoff_applies_after_denial_at_region_boundary(self):
+        class Denied(Exception):
+            response = {"Error": {"Code": "AccessDenied"}}
+
+        timestamps = {}
+        response = self.session.create_client.return_value._make_api_call.side_effect
+
+        def create(service, config, *, timeout):
+            region = config["region"]
+            timestamps.setdefault(region, time.monotonic())
+
+            def read(operation, parameters):
+                if region == "us-east-1" and operation == "DescribeInstanceAttribute":
+                    timestamps["denial"] = time.monotonic()
+                    raise Denied()
+                return response(operation, parameters)
+
+            return Mock(_make_api_call=Mock(side_effect=read))
+
+        self.session.create_client.side_effect = create
+        result = self.collect_multiple_regions(
+            limits=Limits(concurrency=1, backoff=0.15)
+        )
+        self.assertEqual(result.budget.actual_call_count, 4)
+        self.assertGreaterEqual(timestamps["us-west-2"] - timestamps["denial"], 0.15)
 
     def test_cancel_during_client_creation_consumes_reservation_not_call(self):
         event = threading.Event()
@@ -216,6 +307,72 @@ class CollectionTests(unittest.TestCase):
         self.assertEqual(result.budget.actual_call_count, 0)
         self.assertEqual(result.snapshot.issued_actions, ())
         self.assertTrue(result.budget.cancelled)
+
+    def test_cancel_during_sdk_method_resolution_never_counts_or_invokes_call(self):
+        event = threading.Event()
+        invoke = Mock(return_value={})
+
+        class Client:
+            @property
+            def _make_api_call(self):
+                event.set()
+                return invoke
+
+        self.session.create_client.return_value = Client()
+        result = self.collect(cancel=event, limits=Limits(concurrency=1))
+        invoke.assert_not_called()
+        self.assertEqual(result.budget.attempted_calls, 1)
+        self.assertEqual(result.budget.actual_call_count, 0)
+        self.assertTrue(result.budget.cancelled)
+
+    def test_closing_progress_freezes_accounting_during_client_setup(self):
+        started = threading.Event()
+        release = threading.Event()
+        progress = ExecutionProgress()
+        results = []
+        client = Mock()
+        slots = threading.BoundedSemaphore(1)
+
+        def create(*args, **kwargs):
+            started.set()
+            release.wait(2)
+            return client
+
+        def collect():
+            results.append(
+                self.collect(progress=progress, limits=Limits(concurrency=1))
+            )
+
+        self.session.create_client.side_effect = create
+        thread = threading.Thread(target=collect, daemon=True)
+        with patch("cloud.aws.client._SLOTS", slots):
+            thread.start()
+            try:
+                self.assertTrue(started.wait(1))
+                progress.close()
+                self.assertEqual(progress.counts(), (1, 0))
+                thread.join(1)
+                self.assertFalse(thread.is_alive())
+                self.assertEqual(results[0].budget.actual_call_count, 0)
+                self.assertTrue(results[0].snapshot.partial)
+            finally:
+                release.set()
+                thread.join(1)
+                self.assertTrue(slots.acquire(timeout=1))
+                slots.release()
+        client._make_api_call.assert_not_called()
+        self.assertEqual(progress.counts(), (1, 0))
+
+    def test_missing_identity_is_unknown_before_any_provider_read(self):
+        source = plan()
+        source["resource_changes"][0]["change"]["before"] = None
+        result = self.collect(source)
+        self.session.create_client.assert_not_called()
+        self.assertEqual(result.snapshot.resources[0].status.value, "unknown")
+        self.assertEqual(
+            result.snapshot.resources[0].cause, "recorded_identity_missing"
+        )
+        self.assertEqual(result.permission_denials, ())
 
     def test_reverse_expansion_is_recorded_without_followup_requests(self):
         source = plan("aws_security_group", {"id": "sg-00000000000000001"})
@@ -249,8 +406,6 @@ class CollectionTests(unittest.TestCase):
         self.assertFalse(any("NetworkInterfaceIds" in p for p in params))
 
     def test_collector_guard_time_consumes_original_deadline(self):
-        from types import SimpleNamespace
-        from unittest.mock import patch
         from cloud.reflection import guard_manifest
 
         clock = [0.0]
@@ -271,8 +426,6 @@ class CollectionTests(unittest.TestCase):
         self.assertTrue(result.snapshot.partial)
 
     def test_reader_scope_revalidation_cannot_restart_deadline(self):
-        from types import SimpleNamespace
-        from unittest.mock import patch
         from cloud.reflection import guard_manifest
 
         clock = [0.0]

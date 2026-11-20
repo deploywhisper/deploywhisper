@@ -1,6 +1,6 @@
 # Story 17.3: Plan-Directed Reflection and Bounded Collection
 
-Status: review. **Independent security review required before merge.**
+Status: done. **Independent offline security review passed.**
 Preparation: refined
 Release: v1.6.0 (independent release train) | Priority: P0 within the independent Epic 17 lane
 
@@ -72,6 +72,28 @@ Execute one bounded packet at a time on `feature/17-3-plan-directed-reflection`.
   - Output: recorded review of the read-only boundary, scope guard, degradation and secret absence, with dispositions.
   - Acceptance proof: review record required before merge.
 
+### Review Findings
+
+- [x] [Review][Patch][P1] Exclude ordinary no-op resources from direct and reverse collection (`cloud/reflection.py:349`).
+- [x] [Review][Patch][P1] Screen plan-known private values through provider projection and retention (`cloud/aws/projection.py:94`).
+- [x] [Review][Patch][P1] Enforce the total deadline and account for cancellation through service completion (`services/cloud_context_service.py:638`).
+- [x] [Review][Patch][P2] Share scheduling limits across regions and align call accounting with dispatch (`cloud/collection.py:138`, `cloud/aws/client.py:389`).
+- [x] [Review][Patch][P2] Distinguish current and deposed Terraform objects during extraction (`cloud/reflection.py:336`).
+- [x] [Review][Patch][P2] Keep unsupported identities from blocking supported siblings and label unobserved identities unknown (`cloud/reflection.py:173`, `cloud/collection.py:210`).
+- [x] [Review][Patch][P2] Resolve and reconcile recorded AWS selectors before dispatch (`cloud/reflection.py:188`).
+- [x] [Review][Patch][P2] Extract screened recorded tags as identity metadata (`cloud/reflection.py:250`).
+- [x] [Review][Patch][P2] Treat literal keys in AWS tag maps as tags (`cloud/aws/projection.py:70`).
+- [x] [Review][Patch][P2] Preserve every confirmed missing IAM action in collection diagnostics (`cloud/collection.py:203`).
+- [x] [Review][Patch][P3] Reconcile the completion record and retain reproducible runtime verification commands (`docs/verification/live-environment-grounding/17-3/README.md:36`).
+
+### Closeout review findings
+
+- [x] [Review][Patch][P1] Screen private values consistently before emitting worker facts, including RDS tag lists and equivalent numeric forms (`cloud/aws/projection.py:75`, `cloud/aws/projection.py:266`).
+- [x] [Review][Patch][P1] Apply snapshot address screening to IAM denial diagnostics (`cloud/collection.py:218`, `services/cloud_context_service.py:909`).
+- [x] [Review][Patch][P2] Align actual-call accounting and the cancellation fence with SDK dispatch (`cloud/aws/client.py:435`).
+
+See the [code review record](../../docs/verification/live-environment-grounding/17-3/code-review.md) for the evidence and acceptance criteria.
+
 ## Dev Notes
 
 - The existing failure mode this slice fixes is visible in `analysis/blast_radius.py`, where unmatched resources produce a missing-context warning. Grounding must reduce that set with evidence, never paper over it.
@@ -127,6 +149,7 @@ Codex with bounded native implementation and independent security review agents.
 - Reuse the17.2 bounded reader/single-request SDK fences; add only immutable selected-field projection at its worker boundary as required for actual observations. Preserve constructor-only trusted account/region/session bindings and default-unavailable authorization.
 - Apply fail-safe degradation through existing context-uncertainty logic with explicit severity/confidence floors. API/CLI changes remain additive budget serialization; operator enablement/flags and rich surfaces stay in their later stories.
 - Keep fixture/fault-injection evidence separate from live-account qualification. No dependency installation or live reads are authorized or needed for this story; independently review before merge.
+- Review follow-up keeps plan authority and private values in memory. Use one scheduler and frozen dispatch counters across regions. Supervise the existing authorized transaction through finalization and reserve time to retain timely partial facts. Keep confirmed permission details additive to snapshot-v1.
 
 ### Completion Notes List
 - Implemented all seven packets: qualified recorded-prior extraction and pure-create success; immutable trusted-target/private-source manifests for25families/42capabilities; bounded static one-hop metadata; screened selected projection and actual SDK-call counters; existing uncertainty-policy floors; optional budget-only API/CLI/agent output. Reused the17.2 scheduler/fences and snapshot-v1 retention/admission contracts; no dependency installation or live reads.
@@ -134,8 +157,14 @@ Codex with bounded native implementation and independent security review agents.
 - Final validation: root2,314tests (3existing skips); full localCI3,839tests across12shards (3existing skips), plus172isolation tests/skills/prompt-injection checks; exactAPI/CLI/infra pytest838passed (1skip),2,474subtests. Network-disabled rebuilt Python3.11.17 harness passed71new storytests and16SDKtests (14legacy+2native selected-model tests). Repo-wideRufflint/format701files, Bandit zero findings and Python3.10 grammar passed.
 - Docker build passed:29a37dc08877e952d257f24eaee9fe084c4532f3eae9e2b8999c8d9e534bce2c. Non-root default image remainsSDK/Node-free; purecreate issueszero requests; AWS registry remainsunavailable until trusted host composition. Fresh container healthHTTP200 passed with networking disabled. No rebuilt-production/live AWS/egress qualification is claimed beyond the documented offline runtime proof.
 - Operational report metadata does not create an unheld snapshot evidence reference. Actual collection outcomes remain available at trusted internal ports; user-facing enablement/flags and production authority/profile composition stay in laterstories. UI validation not applicable. Qualified config/model sources, dependency locks, report-v2 and agent-v1 versions remain unchanged.
-- Implementation started after merged prerequisites and approved read-only boundary review. Packet and validation results remain open until verified.
-- Commands and proofs above are future obligations, not results.
+- Review follow-up excludes unchanged no-ops, handles recorded/deposed identity and tag metadata, reconciles region and queue selectors, and leaves unsupported identities unknown. The collector rejects broader manifests before constructing an SDK client.
+- One scheduler applies regional backoff, concurrency and counters. The service preserves timely partial facts, returns a diagnostic budget when no safe retained result is available in time, and fences commits that start after cancellation or expiry.
+- Plan-known private values are screened in SDK projection and retained readback. Typed capability-level IAM denials are available on the internal outcome with account masking. The retained snapshot version and public budget schema remain compatible.
+- Follow-up validation passed with 166 focused tests and 339 subtests, 838 API/CLI/infra tests and 2,474 subtests (1 skip), and 2,331 root tests (3 skips). Local CI passed all 12 shards with 3,859 tests run and 3 skips, plus 189 SDK-free isolation tests, skill scenarios, and prompt-injection tests.
+- The rebuilt network-disabled Python 3.11.17 image passed 162 tests and HTTP 200 health. Ruff lint and repo-wide format, Python 3.10 grammar, and the scoped Bandit scan passed. Initial broad-run recovery failures during host sleep passed in isolation and on the full retries. The optional pinned-SDK suite retains its initial evidence.
+- See the [verification packet](../../docs/verification/live-environment-grounding/17-3/README.md) for the checked-in reproduction commands. UI validation not applicable.
+- Closeout fixes recognize RDS tag lists and use shared numeric screening before worker fact publication. Collector and service diagnostics use the exact screened snapshot addresses with independent approved-scope validation. Native Botocore admits operations inside the existing allow-list fence and rechecks interruption immediately before transport.
+- Closeout validation passed 173 focused tests and 347 subtests, 2,336 root tests with 3 skips, 3,866 local CI tests across 12 shards with 3 skips, and 838 exact API/CLI/infra tests with one skip. The rebuilt Python 3.11.17 image passed 169 SDK-free tests and HTTP 200 health, plus 17 hash-pinned Botocore SDK tests in a separate network-disabled run. Ruff, Bandit and Python 3.10 grammar passed. Independent closeout review passed against the tested runtime source hashes.
 
 ### File List
 - `_bmad-output/implementation-artifacts/17-3-plan-directed-reflection-and-bounded-collection.md`
@@ -144,12 +173,16 @@ Codex with bounded native implementation and independent security review agents.
 - `api/schemas.py`
 - `cloud/aws/client.py`
 - `cloud/aws/projection.py`
+- `cloud/aws/session.py`
 - `cloud/collection.py`
+- `cloud/redaction.py`
 - `cloud/reflection.py`
 - `docs/live-environment-grounding/README.md`
 - `docs/verification/live-environment-grounding/17-3/README.md`
+- `docs/verification/live-environment-grounding/17-3/code-review.md`
 - `docs/verification/live-environment-grounding/17-3/security-review.md`
 - `docs/verification/live-environment-grounding/17-3/test_selected_sdk.py`
+- `docs/verification/live-environment-grounding/17-2/test_sdk.py`
 - `services/agent_interface_service.py`
 - `services/analysis_service.py`
 - `services/cloud_context_service.py`
@@ -157,6 +190,7 @@ Codex with bounded native implementation and independent security review agents.
 - `tests/test_api/test_cloud_collection_budget.py`
 - `tests/test_cli/test_cloud_collection_budget.py`
 - `tests/test_cloud/aws/test_projection.py`
+- `tests/test_cloud/aws/test_dispatch.py`
 - `tests/test_cloud/conformance/test_reflection_scope.py`
 - `tests/test_cloud/test_collection.py`
 - `tests/test_cloud/test_reflection.py`
@@ -168,3 +202,8 @@ Codex with bounded native implementation and independent security review agents.
 ## Change Log
 
 - 2026-11-18: Implemented packets3.1–3.7 after merged prerequisites. Added plan-bound collection, fail-safe degradation and additive budget serialization; resolved independent security/compatibility findings and passed fresh full-suite/runtime checks. Story moved to review for the scoped offline primitive implementation.
+- 2026-11-19: BMad Code Review requested changes. Story and sprint tracking returned to in-progress with eleven review action items for plan scope, screening, collection limits, and acceptance evidence.
+- 2026-11-19: Closed all 11 review action items after offline regression coverage and full verification. Story moved to review.
+- 2026-11-20: Independent closeout review requested changes on screening and dispatch. Story returned to in-progress.
+- 2026-11-20: Fixed and verified all three closeout findings. Story moved back to review.
+- 2026-11-20: Independent closeout review approved the offline slice. Story moved to done for the PR into develop.

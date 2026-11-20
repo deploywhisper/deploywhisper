@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from hashlib import sha256
 import json
 import re
 from typing import Literal, Mapping
@@ -12,10 +13,18 @@ from cloud.base import FrozenModel, ResourceIdentity
 from cloud.aws.allowlist import _CATALOG
 from cloud.aws.client import Call, _bucket_name
 from cloud.aws.session import validate_config
-from services.content_security import redact_text, sensitive_artifact_values
+from cloud.redaction import _numeric_value, _raw_name, _raw_scalar, _screen_numeric_text
+from services.content_security import (
+    redact_text,
+    redact_value,
+    sensitive_artifact_values,
+)
 
 _MAX_RESOURCES = 1000
 _MAX_PRIOR = 10000
+_MAX_PLAN_CHANGES = 10000
+_MAX_TAGS = 50
+_GLOBAL_FAMILIES = {"aws_iam_role", "aws_iam_instance_profile", "aws_route53_record"}
 _SELECTOR_FIELDS = frozenset(
     {
         "id",
@@ -79,9 +88,14 @@ class ReflectedResource(_ReflectionModel):
     source: Literal["prior_state", "change.before", "missing"]
     state: Literal["existing", "unknown", "no_live_counterpart"]
     selectors: tuple[tuple[StrictStr, StrictStr], ...] = ()
-    cause: Literal["recorded_identity_missing", "recorded_identity_invalid"] | None = (
-        None
-    )
+    cause: (
+        Literal[
+            "recorded_identity_missing",
+            "recorded_identity_invalid",
+            "unsupported_family",
+        ]
+        | None
+    ) = None
 
     @model_validator(mode="after")
     def _selected(self):
@@ -154,12 +168,49 @@ def _arn(value, target, service=None, *, allow_bucket=False):
     return value
 
 
-def _resource(address, family, values, source, actions, target):
+def _safe_tags(tags, sensitive=()):
+    if not tags:
+        return ()
+    bounded = {
+        key: value
+        for key, value in tags.items()
+        if isinstance(key, str)
+        and 0 < len(key) <= 128
+        and isinstance(value, str)
+        and len(value) <= 256
+        and all(ord(char) >= 32 for char in key + value)
+        and not _raw_name(key)
+        and not _raw_scalar(value)
+    }
+    screened = redact_value({"metadata": bounded}, sensitive_values=sensitive)[
+        "metadata"
+    ]
+    numeric_secrets = {
+        number for item in sensitive if (number := _numeric_value(item)) is not None
+    }
+    return tuple(
+        (key, value)
+        for key, value in sorted(bounded.items())
+        if screened.get(key) == value
+        and redact_text(key, sensitive_values=sensitive) == key
+        and _screen_numeric_text(key, numeric_secrets) == key
+        and _screen_numeric_text(value, numeric_secrets) == value
+    )[:_MAX_TAGS]
+
+
+def _queue_identity(name, region, account):
+    return (
+        f"https://sqs.{region}.amazonaws.com/{account}/{name}",
+        f"arn:aws:sqs:{region}:{account}:{name}",
+    )
+
+
+def _resource(address, family, values, source, *, pure_create, target, sensitive):
     address, family = _text(address), _text(family)
     if len(family) > 128:
         raise ReflectionError()
     if values is None:
-        state = "no_live_counterpart" if actions == ["create"] else "unknown"
+        state = "no_live_counterpart" if pure_create else "unknown"
         return ReflectedResource(
             identity=ResourceIdentity(address=address, resource_type=family),
             source="missing",
@@ -168,9 +219,25 @@ def _resource(address, family, values, source, actions, target):
             if state == "no_live_counterpart"
             else "recorded_identity_missing",
         )
+    if family not in _FAMILY_SERVICE:
+        # Unqualified resource families cannot authorize AWS selectors.
+        return ReflectedResource(
+            identity=ResourceIdentity(address=address, resource_type=family),
+            source=source,
+            state="unknown",
+            cause="unsupported_family",
+        )
     if not isinstance(values, dict):
         raise ReflectionError("invalid_recorded_values")
-    identifier = _scalar(values, "id", "uuid")
+    if family == "aws_sqs_queue":
+        recorded_id = values.get("id")
+        identifier = (
+            _text(recorded_id)
+            if isinstance(recorded_id, str) and recorded_id.startswith("arn:")
+            else None
+        )
+    else:
+        identifier = _scalar(values, "id", "uuid")
     arn = _scalar(values, "arn")
     if arn is None and identifier and identifier.startswith("arn:"):
         arn = identifier
@@ -182,22 +249,31 @@ def _resource(address, family, values, source, actions, target):
     explicit_region = _scalar(values, "region")
     if explicit_region and explicit_region not in target.regions:
         raise ReflectionError("recorded_target_mismatch")
-    arn_region = arn.split(":")[3] if arn else None
-    if explicit_region and arn_region and explicit_region != arn_region:
-        raise ReflectionError("recorded_target_mismatch")
-    region = (
-        explicit_region
-        or arn_region
-        or (target.regions[0] if len(target.regions) == 1 else None)
-    )
-    if family in {"aws_iam_role", "aws_iam_instance_profile"} and region is None:
-        # IAM is global; the canonical client still needs one allowed region.
-        region = target.regions[0]
     selectors = {}
-    if identifier:
-        selectors["id"] = identifier
-    if arn:
-        selectors["arn"] = arn
+    if family == "aws_ecs_service":
+        parent = _scalar(values, "cluster_arn", "cluster")
+        if parent:
+            selectors["cluster_arn"] = _arn(parent, target, "ecs")
+    if family == "aws_lambda_event_source_mapping":
+        parent = _scalar(values, "function_arn", "function_name")
+        event = _scalar(values, "event_source_arn")
+        if parent:
+            selectors["function_arn"] = _arn(parent, target, "lambda")
+        if event:
+            selectors["event_source_arn"] = _arn(event, target)
+
+    regions = {value.split(":")[3] for value in (arn, *selectors.values()) if value}
+    regions.discard("")
+    if explicit_region:
+        regions.add(explicit_region)
+    if len(regions) > 1:
+        raise ReflectionError("recorded_target_mismatch")
+    region = next(
+        iter(regions),
+        target.regions[0]
+        if len(target.regions) == 1 or family in _GLOBAL_FAMILIES
+        else None,
+    )
     aliases = {
         "aws_autoscaling_group": ("name", "id"),
         "aws_db_instance": ("identifier", "id"),
@@ -211,33 +287,19 @@ def _resource(address, family, values, source, actions, target):
         "aws_route53_record": ("name",),
     }
     name = _scalar(values, *aliases[family]) if family in aliases else None
-    if name:
-        selectors["name"] = name
     if family == "aws_s3_bucket" and arn and arn != "arn:aws:s3:::" + (name or ""):
         raise ReflectionError("recorded_identity_mismatch")
     if family == "aws_sqs_queue":
-        # Never retain or forward an uploaded URL, even a plausible AWS URL.
-        identifier = None
-        selectors.pop("id", None)
+        name = name or (arn.rsplit(":", 1)[1] if arn else None)
         if name and region:
-            identifier = (
-                f"https://sqs.{region}.amazonaws.com/{target.account_id}/{name}"
-            )
-            selectors["id"] = identifier
-    if family == "aws_sqs_queue" and not arn and name and region:
-        arn = f"arn:aws:sqs:{region}:{target.account_id}:{name}"
-        selectors["arn"] = _arn(arn, target, "sqs")
-    if family == "aws_ecs_service":
-        parent = _scalar(values, "cluster_arn", "cluster")
-        if parent:
-            selectors["cluster_arn"] = _arn(parent, target, "ecs")
-    if family == "aws_lambda_event_source_mapping":
-        parent = _scalar(values, "function_arn", "function_name")
-        event = _scalar(values, "event_source_arn")
-        if parent:
-            selectors["function_arn"] = _arn(parent, target, "lambda")
-        if event:
-            selectors["event_source_arn"] = _arn(event, target)
+            # An uploaded queue URL never authorizes or identifies a request.
+            identifier, expected_arn = _queue_identity(name, region, target.account_id)
+            if arn and arn != expected_arn:
+                raise ReflectionError("recorded_identity_mismatch")
+            arn = _arn(expected_arn, target, "sqs")
+    for key, value in (("id", identifier), ("arn", arn), ("name", name)):
+        if value:
+            selectors[key] = value
     if family == "aws_route53_record":
         for key, aliases_ in (
             ("zone_id", ("zone_id",)),
@@ -247,6 +309,10 @@ def _resource(address, family, values, source, actions, target):
             value = _scalar(values, *aliases_)
             if value:
                 selectors[key] = value
+    tags = {}
+    for field in ("tags_all", "tags"):
+        if isinstance(values.get(field), dict):
+            tags.update(values[field])
     identity = ResourceIdentity(
         address=address,
         resource_type=family,
@@ -254,6 +320,7 @@ def _resource(address, family, values, source, actions, target):
         arn=arn,
         name=name,
         region=region,
+        tags=_safe_tags(tags, sensitive),
     )
     if (
         family in _ID_PREFIX
@@ -284,6 +351,13 @@ def extract_resources(
     plan: Mapping, *, target: ReflectionTarget
 ) -> tuple[ReflectedResource, ...]:
     """Select recorded identities without SDK imports, credentials or provider calls."""
+    return prepare_reflection(plan, target=target)[0]
+
+
+def prepare_reflection(
+    plan: Mapping, *, target: ReflectionTarget
+) -> tuple[tuple[ReflectedResource, ...], tuple[str, ...]]:
+    """Return reflected scope and a private, transient provider-screening set."""
     target = _target(target)
     try:
         if not isinstance(plan, dict) or plan.get("format_version") != "1.2":
@@ -293,7 +367,7 @@ def extract_resources(
             raise ReflectionError("reflection_plan_bound")
         sensitive = sensitive_artifact_values(encoded)
         changes = plan.get("resource_changes")
-        if not isinstance(changes, list) or len(changes) > _MAX_RESOURCES:
+        if not isinstance(changes, list) or len(changes) > _MAX_PLAN_CHANGES:
             raise ReflectionError("reflection_resource_bound")
         prior_state = plan.get("prior_state")
         if prior_state is not None and not isinstance(prior_state, dict):
@@ -327,16 +401,12 @@ def extract_resources(
                     raise ReflectionError("duplicate_recorded_identity")
                 prior[address] = resource.get("values")
             stack.extend(children)
-        rows, seen = [], set()
+        rows, seen, observations = [], set(), set()
         for resource in changes:
             if not isinstance(resource, dict) or not isinstance(
                 resource.get("change"), dict
             ):
                 raise ReflectionError()
-            address = _text(resource.get("address"))
-            if address in seen:
-                raise ReflectionError("duplicate_recorded_identity")
-            seen.add(address)
             change = resource["change"]
             actions = change.get("actions")
             if (
@@ -355,20 +425,64 @@ def extract_resources(
                 {"create", "delete"},
             ):
                 raise ReflectionError("invalid_recorded_actions")
-            values, source = prior.get(address), "prior_state"
+            address = resource.get("address")
+            previous = resource.get("previous_address")
+            importing = change.get("importing")
+            if importing is not None and not isinstance(importing, dict):
+                raise ReflectionError("invalid_recorded_import")
+            if actions == ["no-op"] and previous in (None, address) and not importing:
+                continue
+            if len(rows) >= _MAX_RESOURCES:
+                raise ReflectionError("reflection_resource_bound")
+            address = _text(address)
+            deposed = resource.get("deposed")
+            if deposed is not None:
+                deposed = _text(deposed)
+            if (address, deposed) in seen:
+                raise ReflectionError("duplicate_recorded_identity")
+            seen.add((address, deposed))
+
+            observation = address
+            values, source = change.get("before"), "change.before"
+            if deposed is not None:
+                # Snapshot v1 requires a unique address, while Terraform keys a
+                # deposed object by both address and an opaque generation key.
+                digest = sha256(json.dumps([address, deposed]).encode()).hexdigest()
+                suffix = f"#deposed:{digest}"
+                observation = address[: 2048 - len(suffix)] + suffix
+            else:
+                previous = _text(previous) if previous is not None else address
+                # A move's before values describe the object at its new type and
+                # address. The prior state may still use its former address.
+                if previous == address or values is None:
+                    prior_values = prior.get(previous)
+                    if prior_values is None and previous != address:
+                        prior_values = prior.get(address)
+                    if prior_values is not None:
+                        values, source = prior_values, "prior_state"
+            if observation in observations:
+                raise ReflectionError("duplicate_recorded_identity")
+            observations.add(observation)
             if values is None:
-                values = change.get("before")
-                source = "change.before" if values is not None else "missing"
+                source = "missing"
             rows.append(
                 _resource(
-                    address, resource.get("type"), values, source, actions, target
+                    observation,
+                    resource.get("type"),
+                    values,
+                    source,
+                    pure_create=actions == ["create"]
+                    and not importing
+                    and deposed is None,
+                    target=target,
+                    sensitive=sensitive,
                 )
             )
         for row in rows:
             rendered = row.model_dump_json()
             if redact_text(rendered, sensitive_values=sensitive) != rendered:
                 raise ReflectionError("sensitive_recorded_identity")
-        return tuple(sorted(rows, key=lambda row: row.identity.address))
+        return tuple(sorted(rows, key=lambda row: row.identity.address)), sensitive
     except ReflectionError:
         raise
     except (ValueError, TypeError, AttributeError, KeyError, RecursionError):
@@ -468,8 +582,21 @@ def _resources(resources, target):
         ):
             if key in values and values[key] != actual:
                 raise ReflectionError("recorded_identity_mismatch")
-        if row.identity.tags:
+        if row.identity.tags != _safe_tags(dict(row.identity.tags)):
             raise ReflectionError("unexpected_identity_tags")
+        if (
+            row.identity.resource_type == "aws_sqs_queue"
+            and row.identity.name
+            and row.identity.region
+        ):
+            expected_url, expected_arn = _queue_identity(
+                row.identity.name, row.identity.region, target.account_id
+            )
+            if (
+                row.identity.physical_id != expected_url
+                or row.identity.arn != expected_arn
+            ):
+                raise ReflectionError("recorded_identity_mismatch")
         if row.identity.arn:
             _arn(
                 row.identity.arn,
@@ -523,10 +650,7 @@ def build_manifest(
                 issues.append(
                     ReflectionIssue(
                         address=address,
-                        cause=row.cause
-                        if row.cause
-                        in {"recorded_identity_missing", "recorded_identity_invalid"}
-                        else "recorded_identity_missing",
+                        cause=row.cause or "recorded_identity_missing",
                     )
                 )
                 continue
@@ -560,8 +684,8 @@ def build_manifest(
                             )
                         )
                         continue
-                    bindings["canonical_queue_url"] = (
-                        f"https://sqs.{region}.amazonaws.com/{target.account_id}/{name}"
+                    bindings["canonical_queue_url"], _ = _queue_identity(
+                        name, region, target.account_id
                     )
                 expected = ()
                 if family == "aws_lambda_event_source_mapping":

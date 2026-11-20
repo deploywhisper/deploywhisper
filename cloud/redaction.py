@@ -131,6 +131,7 @@ def redact_snapshot(
     mask_accounts: bool = True,
     sensitive_values: Iterable[str] = (),
     account_identifiers: Iterable[str] = (),
+    address_map_out: dict[str, str] | None = None,
 ) -> LiveContextSnapshot:
     """Return a newly validated digest over redacted, account-maskable metadata.
 
@@ -138,6 +139,8 @@ def redact_snapshot(
     retained unchanged; sensitive material in that identity rejects the snapshot.
     Masking supports AWS numeric IDs and explicitly supplied provider account IDs.
     This is a selected-metadata boundary, not general-purpose PII classification.
+    When supplied, the caller's private address map receives the exact mapping
+    after validation, so related diagnostics can use the same screened addresses.
     """
     source = validate_snapshot(snapshot)
     raw = source.model_dump(mode="json", exclude={"digest", "partial"})
@@ -306,4 +309,10 @@ def redact_snapshot(
         if changed or source.redaction_status == "redacted"
         else "none"
     )
-    return build_snapshot(**screened)
+    result = build_snapshot(**screened)
+    if address_map_out is not None:
+        address_map_out.update(
+            (original["identity"]["address"], row["identity"]["address"])
+            for original, row in zip(records, screened["resources"])
+        )
+    return result

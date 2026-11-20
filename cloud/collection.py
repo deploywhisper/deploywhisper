@@ -8,7 +8,14 @@ import time
 import math
 from typing import Literal
 
-from pydantic import ConfigDict, Field, StrictBool, StrictInt, model_validator
+from pydantic import (
+    ConfigDict,
+    Field,
+    StrictBool,
+    StrictInt,
+    StrictStr,
+    model_validator,
+)
 
 from cloud.base import (
     FrozenModel,
@@ -18,7 +25,8 @@ from cloud.base import (
     build_snapshot,
     validate_snapshot,
 )
-from cloud.aws.client import AwsReader, Limits
+from cloud.aws.allowlist import _CATALOG
+from cloud.aws.client import AwsReader, ExecutionProgress, Limits
 from cloud.reflection import ReflectionTarget, guard_manifest
 from cloud.redaction import redact_snapshot
 from evidence.models import ContextSourceMetadata
@@ -50,6 +58,22 @@ class CollectionBudget(FrozenModel):
         return self
 
 
+class PermissionDenial(FrozenModel):
+    """Exact denied capability, independent of legacy snapshot-v1 fields."""
+
+    model_config = ConfigDict(hide_input_in_errors=True)
+    address: StrictStr = Field(min_length=1, max_length=2048)
+    capability: StrictStr
+    action: StrictStr
+
+    @model_validator(mode="after")
+    def _permission(self):
+        row = _CATALOG["operations"].get(self.capability)
+        if row is None or row["iam_action"] != self.action:
+            raise ValueError("invalid_permission_diagnostic")
+        return self
+
+
 class PlanGroundingOutcome(FrozenModel):
     """Service outcome; only its operational budget enters analysis surfaces."""
 
@@ -59,11 +83,12 @@ class PlanGroundingOutcome(FrozenModel):
     snapshot: LiveContextSnapshot | None = None
     context: ContextSourceMetadata | None = None
     budget: CollectionBudget | None = None
+    permission_denials: tuple[PermissionDenial, ...] = Field(default=(), max_length=100)
 
     @model_validator(mode="after")
     def _state(self):
         if self.state == "disabled":
-            if any(
+            if self.permission_denials or any(
                 value is not None
                 for value in (self.snapshot, self.context, self.budget)
             ):
@@ -83,6 +108,7 @@ class PlanGroundingOutcome(FrozenModel):
 class CollectedPlan(FrozenModel):
     snapshot: LiveContextSnapshot
     budget: CollectionBudget
+    permission_denials: tuple[PermissionDenial, ...] = Field(default=(), max_length=100)
 
 
 class AwsPlanCollector:
@@ -109,6 +135,8 @@ class AwsPlanCollector:
         limits=None,
         cancel=None,
         deadline=None,
+        sensitive_values=(),
+        progress: ExecutionProgress | None = None,
     ) -> CollectedPlan:
         started = time.monotonic()
         limits = Limits.model_validate((limits or Limits()).model_dump())
@@ -131,43 +159,35 @@ class AwsPlanCollector:
         ):
             raise ValueError("collection_identity_bound")
         cancel = cancel or threading.Event()
+        sensitive_values = tuple(sensitive_values)
         read_start = self._clock()
-        results = {}
-        attempted = actual = 0
-        issued = set()
-        for region in self._target.regions:
-            indices = tuple(
-                i for i, e in enumerate(approved.entries) if e.region == region
+        indices = tuple(
+            sorted(
+                range(len(approved.entries)), key=lambda i: approved.entries[i].region
             )
-            if not indices:
-                continue
-            remaining = deadline - time.monotonic()
-            if cancel.is_set() or remaining <= 0 or attempted >= limits.call_budget:
-                break
-            batch_limits = Limits(
-                per_call_timeout=limits.per_call_timeout,
-                total_deadline=min(15, remaining),
-                concurrency=limits.concurrency,
-                call_budget=limits.call_budget - attempted,
-                backoff=limits.backoff,
-            )
-            result = AwsReader(
-                self._session, config={"region": region}
-            ).execute_selected(
-                approved,
-                indices=indices,
-                target=self._target,
-                resources=resources,
-                limits=batch_limits,
-                cancel=cancel,
-                deadline=deadline,
-            )
-            attempted += result.attempts
-            actual += result.actual_call_count
-            issued.update(indices[index] for index in result.issued_indices)
-            results.update(zip(indices, result.items))
+        )
+        execution = AwsReader(self._session).execute_selected(
+            approved,
+            indices=indices,
+            target=self._target,
+            resources=resources,
+            limits=limits,
+            cancel=cancel,
+            deadline=deadline,
+            all_regions=True,
+            sensitive_values=sensitive_values,
+            progress=progress,
+        )
+        results_by_address = {}
+        for i, result in zip(indices, execution.items):
+            entry = approved.entries[i]
+            results_by_address.setdefault(entry.address, []).append((entry, result))
+        causes_by_address = {}
+        for issue in approved.issues:
+            causes_by_address.setdefault(issue.address, []).append(issue.cause)
         observations = []
-        actions = {approved.entries[index].capability for index in issued}
+        permission_denials = []
+        actions = {execution.items[i].capability for i in execution.issued_indices}
         fact_count = fact_bytes = 0
         for row in approved.resources:
             if row.state == "no_live_counterpart":
@@ -177,19 +197,12 @@ class AwsPlanCollector:
                     )
                 )
                 continue
-            entries = [
-                (i, e)
-                for i, e in enumerate(approved.entries)
-                if e.address == row.identity.address
-            ]
+            address = row.identity.address
+            entries = results_by_address.get(address, ())
             facts = {}
             missing = []
-            causes = []
-            for i, entry in entries:
-                result = results.get(i)
-                if result is None:
-                    causes.append("cancelled" if cancel.is_set() else "bounded")
-                    continue
+            causes = list(causes_by_address.get(address, ()))
+            for entry, result in entries:
                 for fact in getattr(result, "facts", ()):
                     size = len(fact.model_dump_json().encode())
                     if fact_count >= _MAX_FACTS or fact_bytes + size > _MAX_FACT_BYTES:
@@ -202,18 +215,22 @@ class AwsPlanCollector:
                     causes.append(result.cause or result.status)
                 if result.missing_permission:
                     missing.append(result.missing_permission)
-            causes.extend(
-                issue.cause
-                for issue in approved.issues
-                if issue.address == row.identity.address
-            )
+                    permission_denials.append(
+                        PermissionDenial(
+                            address=address,
+                            capability=entry.capability,
+                            action=result.missing_permission,
+                        )
+                    )
             if row.state == "unknown":
                 causes.append(row.cause or "recorded_identity_missing")
             if not entries and not causes:
                 causes.append("recorded_identity_missing")
             incomplete = bool(causes)
             status = (
-                ReadStatus.PARTIAL
+                ReadStatus.UNKNOWN
+                if not entries
+                else ReadStatus.PARTIAL
                 if incomplete and facts
                 else ReadStatus.UNREADABLE
                 if incomplete
@@ -228,8 +245,6 @@ class AwsPlanCollector:
                     facts=tuple(facts[k] for k in sorted(facts)),
                 )
             )
-        from cloud.aws.allowlist import _CATALOG
-
         snapshot = build_snapshot(
             provider="aws",
             project_id=project_id,
@@ -243,15 +258,25 @@ class AwsPlanCollector:
                 sorted({_CATALOG["operations"][key]["iam_action"] for key in actions})
             ),
         )
-        snapshot = redact_snapshot(snapshot, mask_accounts=False)
+        addresses: dict[str, str] = {}
+        snapshot = redact_snapshot(
+            snapshot,
+            mask_accounts=False,
+            sensitive_values=sensitive_values,
+            address_map_out=addresses,
+        )
         return CollectedPlan(
             snapshot=snapshot,
+            permission_denials=tuple(
+                item.model_copy(update={"address": addresses[item.address]})
+                for item in permission_denials
+            ),
             budget=CollectionBudget(
                 planned_calls=approved.planned_calls,
-                attempted_calls=attempted,
-                actual_call_count=actual,
+                attempted_calls=execution.attempts,
+                actual_call_count=execution.actual_call_count,
                 call_budget=limits.call_budget,
-                budget_consumed=attempted,
+                budget_consumed=execution.attempts,
                 elapsed_seconds=max(0, time.monotonic() - started),
                 cancelled=cancel.is_set(),
             ),

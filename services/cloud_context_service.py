@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+from concurrent.futures import Future, wait
 from contextlib import contextmanager
+from contextvars import copy_context
 from datetime import datetime, timedelta, timezone
 import hashlib
 import json
 import re
+from threading import BoundedSemaphore, Event, Thread
 import time
 from typing import Callable, ContextManager, Iterator, Literal, Protocol
 from uuid import uuid4
@@ -25,7 +28,9 @@ from cloud.base import (
     FrozenModel,
     LiveContextSnapshot,
     ResourceIdentity,
+    ResourceRead,
     ReadStatus,
+    build_snapshot,
     validate_snapshot,
 )
 from cloud.redaction import redact_snapshot
@@ -52,6 +57,8 @@ from models.tables import (
 
 CloudOperation = Literal["configure", "collect", "read", "admit", "purge"]
 
+_PLAN_COLLECTION_SLOTS = BoundedSemaphore(4)
+
 
 class AuthorizedCloudUnitOfWork(Protocol):
     """Installed by trusted server code, never supplied through request parameters.
@@ -76,6 +83,11 @@ class CloudContextError(ValueError):
     def __init__(self, code: str):
         self.code = code
         super().__init__(code)
+
+
+class _PlanCollectionStopped(CloudContextError):
+    def __init__(self):
+        super().__init__("collection_interrupted")
 
 
 class CloudProjectConfiguration(FrozenModel):
@@ -414,7 +426,7 @@ class CloudContextService:
         return _utc(self._clock())
 
     @contextmanager
-    def _transaction(self, project_id, operation):
+    def _transaction(self, project_id, operation, *, before_finalize=None):
         if type(project_id) is not int or not 1 <= project_id <= 2**63 - 1:
             raise CloudContextError("invalid_project_scope")
         if (
@@ -423,6 +435,7 @@ class CloudContextService:
             or not callable(getattr(self._uow, "check", None))
         ):
             raise CloudContextError("authorization_unavailable")
+        finalization_guard = None
         try:
             with self._uow.session(project_id, operation) as session:
                 transaction = session.get_transaction()
@@ -454,7 +467,9 @@ class CloudContextService:
                     early_commit_attempted = True
                     raise CloudContextError("authorization_transaction_changed")
 
-                def reject_sql_commit(
+                finalizing = False
+
+                def guard_sql_commit(
                     conn, cursor, statement, parameters, context, executemany
                 ):
                     # Consume each SQLite prefix once. A repeated comment regex
@@ -477,27 +492,47 @@ class CloudContextService:
                             break
                     # SQLite accepts END as COMMIT; only inspect the first token.
                     if re.match(r"(?:COMMIT|END)\b", statement[index:], re.IGNORECASE):
-                        reject_early_commit(conn)
+                        if finalizing:
+                            before_finalize()
+                        else:
+                            reject_early_commit(conn)
 
                 connection = session.connection()
                 # Connection.commit() does not dispatch Session.before_commit.
                 # Reject it before the DBAPI commit can make publication durable.
                 event.listen(session, "before_commit", reject_early_commit)
                 event.listen(connection, "commit", reject_early_commit)
-                event.listen(connection, "before_cursor_execute", reject_sql_commit)
+                event.listen(connection, "before_cursor_execute", guard_sql_commit)
                 try:
                     yield session, check
                     check()
+                    finalizing = before_finalize is not None
                 finally:
-                    event.remove(connection, "before_cursor_execute", reject_sql_commit)
+                    if not finalizing:
+                        event.remove(
+                            connection, "before_cursor_execute", guard_sql_commit
+                        )
                     event.remove(connection, "commit", reject_early_commit)
                     event.remove(session, "before_commit", reject_early_commit)
+                if finalizing:
+                    # The UOW commits after its yield returns. Keep the deadline
+                    # fence installed through both the ORM flush and DBAPI commit.
+                    def finalization_guard(_owner):
+                        before_finalize()
+
+                    event.listen(session, "before_commit", finalization_guard)
+                    event.listen(connection, "commit", finalization_guard)
         except CloudContextError:
             raise
         except PermissionError:
             raise CloudContextError("authorization_denied") from None
         except Exception:
             raise CloudContextError("cloud_context_unavailable") from None
+        finally:
+            if finalization_guard is not None:
+                event.remove(connection, "before_cursor_execute", guard_sql_commit)
+                event.remove(connection, "commit", finalization_guard)
+                event.remove(session, "before_commit", finalization_guard)
 
     def _configuration(self, session, project_id):
         setting = get_setting(session, f"cloud_context:{project_id}")
@@ -629,96 +664,180 @@ class CloudContextService:
             )
 
     def collect_plan(self, project_id, plan, *, limits=None, cancel=None):
-        """Carry one operation deadline and include UOW finalization in elapsed."""
+        """Bound the caller's wait and fence work that has not begun committing."""
         started = time.monotonic()
+        from cloud.aws.client import ExecutionProgress, Limits
         from cloud.collection import CollectionBudget, PlanGroundingOutcome
-        from cloud.aws.client import Limits
 
+        if type(project_id) is not int or not 1 <= project_id <= 2**63 - 1:
+            raise CloudContextError("invalid_project_scope")
         limits = Limits.model_validate((limits or Limits()).model_dump())
-        result = self._collect_plan(
-            project_id,
-            plan,
-            limits=limits,
-            cancel=cancel,
-            started=started,
-            deadline=started + limits.total_deadline,
-        )
-        if result.budget is None:
+        deadline = started + limits.total_deadline
+        cancel = cancel if cancel is not None else Event()
+        initially_cancelled = cancel.is_set()
+        stopped = Event()
+        progress = ExecutionProgress()
+        planned = 0
+        future = Future()
+
+        def interruption():
+            if cancel.is_set():
+                return "collection_cancelled"
+            if time.monotonic() >= deadline:
+                return "collection_deadline"
+            return None
+
+        def prepared(count):
+            nonlocal planned
+            planned = count
+
+        def guard(*, planning=False):
+            if (
+                stopped.is_set()
+                or time.monotonic() >= deadline
+                or (cancel.is_set() and not (planning and initially_cancelled))
+            ):
+                raise _PlanCollectionStopped()
+
+        def unavailable(reason):
+            stopped.set()
+            progress.close()
+            attempted, actual = progress.counts()
+            context = snapshot_context(None, now=datetime.now(timezone.utc))
+            context.limitations.append(reason)
+            return PlanGroundingOutcome(
+                state="unavailable",
+                project_id=project_id,
+                context=context,
+                budget=CollectionBudget(
+                    planned_calls=planned,
+                    attempted_calls=attempted,
+                    actual_call_count=actual,
+                    call_budget=limits.call_budget,
+                    budget_consumed=attempted,
+                    elapsed_seconds=time.monotonic() - started,
+                    cancelled=cancel.is_set(),
+                ),
+            )
+
+        def work():
+            try:
+                guard(planning=True)
+                result = self._collect_plan(
+                    project_id,
+                    plan,
+                    limits=limits,
+                    cancel=cancel,
+                    deadline=deadline,
+                    progress=progress,
+                    guard=guard,
+                    prepared=prepared,
+                )
+            except BaseException as error:
+                future.set_exception(error)
+            else:
+                future.set_result(result)
+            finally:
+                _PLAN_COLLECTION_SLOTS.release()
+
+        if not _PLAN_COLLECTION_SLOTS.acquire(blocking=False):
+            return unavailable("collection_capacity")
+        try:
+            context = copy_context()
+            Thread(target=context.run, args=(work,), daemon=True).start()
+        except BaseException:
+            _PLAN_COLLECTION_SLOTS.release()
+            raise
+
+        while not future.done():
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                return unavailable("collection_deadline")
+            if cancel.is_set() and not initially_cancelled:
+                return unavailable("collection_cancelled")
+            wait((future,), timeout=min(0.005, remaining))
+
+        try:
+            result = future.result()
+        except _PlanCollectionStopped:
+            return unavailable(interruption() or "collection_deadline")
+        except CloudContextError:
+            reason = interruption()
+            if reason is not None:
+                return unavailable(reason)
+            raise
+        if result is not None and result.state == "disabled":
             return result
-        budget = CollectionBudget.model_validate(
-            {
-                **result.budget.model_dump(),
-                "elapsed_seconds": max(0, time.monotonic() - started),
+        reason = interruption()
+        if reason is not None:
+            return unavailable(reason)
+        if result is None:
+            return unavailable("collector_unavailable")
+        return result.model_copy(
+            update={
+                "budget": result.budget.model_copy(
+                    update={"elapsed_seconds": time.monotonic() - started}
+                )
             }
         )
-        return PlanGroundingOutcome.model_validate(
-            {**result.model_dump(), "budget": budget}
-        )
 
-    def _collect_plan(self, project_id, plan, *, limits, cancel, started, deadline):
-        """Collect a recorded plan through a constructor-installed trusted port.
+    def _collect_plan(
+        self, project_id, plan, *, limits, cancel, deadline, progress, guard, prepared
+    ):
+        """Keep the installed authorization UOW and plan secrets on its worker."""
+        from cloud.collection import CollectedPlan, PlanGroundingOutcome
+        from cloud.reflection import build_manifest, guard_manifest, prepare_reflection
+        from cloud.schema import require_snapshot_schema, CloudSnapshotSchemaError
 
-        No public target, principal or authorization callback is accepted. The
-        original plan scope is held privately until screened retention/readback.
-        """
-        from cloud.collection import (
-            CollectionBudget,
-            CollectedPlan,
-            PlanGroundingOutcome,
-        )
-        from cloud.reflection import build_manifest, extract_resources, guard_manifest
-        import threading
+        publishing = False
 
-        cancel = cancel or threading.Event()
-        with self._transaction(project_id, "collect") as (session, check):
+        def guard_publication():
+            if publishing:
+                guard()
+
+        with self._transaction(
+            project_id, "collect", before_finalize=guard_publication
+        ) as (session, check):
+            guard(planning=True)
             config = self._configuration(session, project_id)
             if not config.enabled:
+                # No snapshot work or authorization side effects have occurred.
                 return PlanGroundingOutcome(state="disabled", project_id=project_id)
-            from cloud.schema import require_snapshot_schema, CloudSnapshotSchemaError
-
             try:
                 require_snapshot_schema(session)
             except CloudSnapshotSchemaError:
                 raise CloudContextError("snapshot_storage_unavailable") from None
             check()
-
-            def unavailable():
-                check()
-                return PlanGroundingOutcome(
-                    state="unavailable",
-                    project_id=project_id,
-                    context=snapshot_context(None, now=self._now()),
-                    budget=CollectionBudget(
-                        planned_calls=0,
-                        attempted_calls=0,
-                        actual_call_count=0,
-                        call_budget=limits.call_budget,
-                        budget_consumed=0,
-                        elapsed_seconds=max(0, time.monotonic() - started),
-                        cancelled=cancel.is_set(),
-                    ),
-                )
-
+            guard(planning=True)
             if self._plan_collector_factory is None or config.provider != "aws":
-                return unavailable()
+                return None
             try:
                 collector = self._plan_collector_factory(
                     config.provider, project_id, config.scope_id
                 )
                 if collector.provider != config.provider:
-                    raise ValueError("provider mismatch")
+                    return None
                 target = collector.target
             except Exception:
-                return unavailable()
+                return None
             check()
+            guard(planning=True)
             try:
-                original = extract_resources(plan, target=target)
+                original, sensitive_values = prepare_reflection(plan, target=target)
+                guard(planning=True)
                 approved = build_manifest(original, target=target)
                 approved = guard_manifest(approved, target=target, resources=original)
+            except _PlanCollectionStopped:
+                raise
             except Exception:
                 raise CloudContextError("invalid_reflection_scope") from None
+            prepared(approved.planned_calls)
             check()
+            guard()
             try:
+                # Leave time for aggregation, retention, and the final authority
+                # check even when a later provider call hangs.
+                provider_cutoff = deadline - min(1.0, limits.total_deadline / 4)
                 collected = CollectedPlan.model_validate(
                     collector.collect_manifest(
                         approved,
@@ -727,49 +846,107 @@ class CloudContextService:
                         scope_id=config.scope_id,
                         limits=limits,
                         cancel=cancel,
-                        deadline=deadline,
+                        deadline=provider_cutoff,
+                        progress=progress,
+                        sensitive_values=sensitive_values,
                     )
                 )
+                guard()
                 raw = validate_snapshot(collected.snapshot)
+                raw_identities = {r.identity.address: r.identity for r in raw.resources}
+                expected_identities = {r.identity.address: r.identity for r in original}
+                approved_addresses = {
+                    address: address for address in expected_identities
+                }
+                if raw_identities != expected_identities:
+                    # Match the collector's privacy pass against the approved
+                    # identities, without trusting a raw address map from it.
+                    identity_snapshot = build_snapshot(
+                        **raw.model_dump(exclude={"digest", "partial", "resources"}),
+                        resources=tuple(
+                            ResourceRead(identity=identity, status=ReadStatus.READ)
+                            for identity in expected_identities.values()
+                        ),
+                    )
+                    screened_identities = redact_snapshot(
+                        identity_snapshot,
+                        mask_accounts=False,
+                        sensitive_values=sensitive_values,
+                        address_map_out=approved_addresses,
+                    )
+                    expected_identities = {
+                        row.identity.address: row.identity
+                        for row in screened_identities.resources
+                    }
+                allowed_denials = {
+                    (approved_addresses[entry.address], entry.capability)
+                    for entry in approved.entries
+                }
+                denials = {
+                    (item.address, item.capability)
+                    for item in collected.permission_denials
+                }
                 if (
                     raw.provider != config.provider
                     or raw.project_id != project_id
                     or raw.scope_id != config.scope_id
                     or raw.scope != target.account_id
                     or raw.regions != target.regions
-                    or {r.identity.address: r.identity for r in raw.resources}
-                    != {r.identity.address: r.identity for r in original}
+                    or raw_identities != expected_identities
                     or raw.read_window_end > self._now()
                     or collected.budget.planned_calls != approved.planned_calls
                     or collected.budget.call_budget != limits.call_budget
+                    or (
+                        collected.budget.attempted_calls,
+                        collected.budget.actual_call_count,
+                    )
+                    != progress.counts()
+                    or not denials <= allowed_denials
+                    or len(denials) != len(collected.permission_denials)
+                    or len(denials) > collected.budget.actual_call_count
                 ):
                     raise ValueError("observation binding mismatch")
+                retained_addresses: dict[str, str] = {}
                 snapshot = redact_snapshot(
                     raw,
                     mask_accounts=config.mask_accounts,
+                    sensitive_values=sensitive_values,
                     account_identifiers=(target.account_id,),
+                    address_map_out=retained_addresses,
                 )
+            except _PlanCollectionStopped:
+                raise
             except Exception:
                 raise CloudContextError("invalid_observation") from None
             check()
+            guard()
             from models.repositories.cloud_snapshots import put_snapshot, get_snapshot
 
+            publishing = True
             put_snapshot(
                 session, snapshot, mask_accounts=config.mask_accounts, now=self._now()
             )
             check()
+            guard()
             retained = get_snapshot(
                 session, project_id=project_id, digest=snapshot.digest, now=self._now()
             )
             if retained is None or retained.digest != snapshot.digest:
                 raise CloudContextError("snapshot_unavailable")
             check()
+            guard()
             return PlanGroundingOutcome(
                 state="snapshot",
                 project_id=project_id,
                 snapshot=retained,
                 context=snapshot_context(retained, now=self._now()),
                 budget=collected.budget,
+                permission_denials=tuple(
+                    item.model_copy(
+                        update={"address": retained_addresses[item.address]}
+                    )
+                    for item in collected.permission_denials
+                ),
             )
 
     def get_snapshot(self, project_id, digest):

@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import unittest
+from unittest.mock import Mock
 
+from cloud.collection import AwsPlanCollector
 from cloud.reflection import (
     ReflectionError,
     ReflectionTarget,
@@ -28,6 +30,16 @@ class ReflectionScopeTests(unittest.TestCase):
             guard_manifest(
                 enumerate_account(expected), target=target, resources=resources
             )
+        session = Mock()
+        collector = AwsPlanCollector(target=target, session=session)
+        with self.assertRaises(ReflectionError):
+            collector.collect_manifest(
+                enumerate_account(expected),
+                resources=resources,
+                project_id=1,
+                scope_id="test-scope",
+            )
+        session.create_client.assert_not_called()
 
     def test_coherent_new_resource_set_does_not_replace_private_scope(self):
         target = ReflectionTarget(account_id="000000000000", regions=("us-east-1",))

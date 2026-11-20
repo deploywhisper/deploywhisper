@@ -265,3 +265,165 @@ class ProjectionTests(unittest.TestCase):
         }
         with self.assertRaises(ValueError):
             project_response(entry, response, scope=(None, self.target, ()))
+
+    def test_catalog_metadata_uses_caller_screening_context(self):
+        arn = "arn:aws:lambda:us-east-1:000000000000:function:example"
+        entry = self.descriptor("function_tags", {"Resource": arn})
+        private = "synthetic-private-value"
+        response = {"Tags": {"owner": private, "purpose": "public-service"}}
+        result = project_response(
+            entry, response, scope=None, sensitive_values=(private,)
+        )
+        self.assertFalse(result.complete)
+        self.assertNotIn(private, repr(result))
+        self.assertIn("public-service", [fact.value for fact in result.facts])
+
+    def test_literal_tag_map_keys_are_not_treated_as_response_structure(self):
+        arn = "arn:aws:lambda:us-east-1:000000000000:function:example"
+        entry = self.descriptor("function_tags", {"Resource": arn})
+        tags = {"tags": "public", "tagset": "local", "key": "team", "value": "web"}
+        result = project_response(entry, {"Tags": tags}, scope=None)
+        self.assertTrue(result.complete)
+        self.assertEqual(
+            {fact.name: fact.value for fact in result.facts},
+            {f"function_tags.Tags.{key}": value for key, value in tags.items()},
+        )
+
+    def test_rds_tag_lists_screen_other_selected_fields(self):
+        private = "synthetic-private-metadata"
+        for capability, container, identifier, replicas in (
+            (
+                "db",
+                "DBInstances",
+                "DBInstanceIdentifier",
+                "ReadReplicaDBInstanceIdentifiers",
+            ),
+            (
+                "db_cluster",
+                "DBClusters",
+                "DBClusterIdentifier",
+                "ReadReplicaIdentifiers",
+            ),
+        ):
+            with self.subTest(capability=capability):
+                entry = self.descriptor(capability, {identifier: "example"})
+                response = {
+                    container: [
+                        {
+                            identifier: "example",
+                            replicas: [private, "public-replica"],
+                            "TagList": [{"Key": "password", "Value": private}],
+                        }
+                    ]
+                }
+                result = project_response(entry, response, scope=None)
+                self.assertFalse(result.complete)
+                self.assertNotIn(private, repr(result))
+                self.assertIn("public-replica", [fact.value for fact in result.facts])
+
+    def test_screening_compares_equivalent_numeric_facts(self):
+        entry = self.descriptor("db", {"DBInstanceIdentifier": "example"})
+        response = {
+            "DBInstances": [
+                {
+                    "DBInstanceIdentifier": "example",
+                    "DBInstanceStatus": "available",
+                    "BackupRetentionPeriod": 37,
+                }
+            ]
+        }
+        result = project_response(
+            entry, response, scope=None, sensitive_values=("37.00",)
+        )
+        self.assertFalse(result.complete)
+        self.assertNotIn(37, [fact.value for fact in result.facts])
+        self.assertIn("available", [fact.value for fact in result.facts])
+
+    def test_screening_compares_equivalent_numeric_tag_keys_and_values(self):
+        arn = "arn:aws:lambda:us-east-1:000000000000:function:example"
+        entry = self.descriptor("function_tags", {"Resource": arn})
+        response = {
+            "Tags": {
+                "037.0": "private-key-sample",
+                "owner": "ticket-0037",
+                "purpose": "public-metadata",
+            }
+        }
+        result = project_response(
+            entry, response, scope=None, sensitive_values=("37.00",)
+        )
+        self.assertFalse(result.complete)
+        self.assertNotIn("037.0", repr(result))
+        self.assertNotIn("0037", repr(result))
+        self.assertIn("public-metadata", [fact.value for fact in result.facts])
+
+    def test_redrive_policy_accepts_selected_scalar_fields(self):
+        entry = self.descriptor(
+            "queue", fixtures.render(_CATALOG["operations"]["queue"]["params"])
+        )
+        dead_letter = "arn:aws:sqs:us-east-1:000000000000:dead-letter"
+        for count in (5, "5"):
+            with self.subTest(count=count):
+                attributes = {
+                    **fixtures.OTHER["queue"]["Attributes"],
+                    "RedrivePolicy": json.dumps(
+                        {"deadLetterTargetArn": dead_letter, "maxReceiveCount": count}
+                    ),
+                }
+                result = project_response(entry, {"Attributes": attributes}, scope=None)
+                self.assertTrue(result.complete)
+                self.assertEqual(
+                    {
+                        fact.name.rsplit(".", 1)[-1]: fact.value
+                        for fact in result.facts
+                        if ".RedrivePolicy." in fact.name
+                    },
+                    {"deadLetterTargetArn": dead_letter, "maxReceiveCount": count},
+                )
+
+    def test_redrive_policy_rejects_non_scalar_and_invalid_count_shapes(self):
+        entry = self.descriptor(
+            "queue", fixtures.render(_CATALOG["operations"]["queue"]["params"])
+        )
+        dead_letter = "arn:aws:sqs:us-east-1:000000000000:dead-letter"
+        for policy in (
+            {"deadLetterTargetArn": dead_letter, "maxReceiveCount": 5},
+            json.dumps({"deadLetterTargetArn": [dead_letter], "maxReceiveCount": 5}),
+            json.dumps({"deadLetterTargetArn": dead_letter, "maxReceiveCount": True}),
+            json.dumps({"deadLetterTargetArn": dead_letter, "maxReceiveCount": "many"}),
+        ):
+            with self.subTest(policy=policy):
+                response = {
+                    "Attributes": {
+                        **fixtures.OTHER["queue"]["Attributes"],
+                        "RedrivePolicy": policy,
+                    }
+                }
+                result = project_response(entry, response, scope=None)
+                self.assertFalse(result.complete)
+                self.assertFalse(
+                    any("RedrivePolicy" in fact.name for fact in result.facts)
+                )
+
+    def test_redrive_policy_preserves_public_leaf_when_private_count_is_screened(self):
+        entry = self.descriptor(
+            "queue", fixtures.render(_CATALOG["operations"]["queue"]["params"])
+        )
+        dead_letter = "arn:aws:sqs:us-east-1:000000000000:dead-letter"
+        for count, private in ((37, "37"), (37, "37.00"), ("037", "37.00")):
+            with self.subTest(count=count, private=private):
+                attributes = {
+                    **fixtures.OTHER["queue"]["Attributes"],
+                    "RedrivePolicy": json.dumps(
+                        {"deadLetterTargetArn": dead_letter, "maxReceiveCount": count}
+                    ),
+                }
+                result = project_response(
+                    entry,
+                    {"Attributes": attributes},
+                    scope=None,
+                    sensitive_values=(private,),
+                )
+                self.assertFalse(result.complete)
+                self.assertIn(dead_letter, [fact.value for fact in result.facts])
+                self.assertNotIn(count, [fact.value for fact in result.facts])

@@ -83,6 +83,127 @@ class ReflectionExtractionTests(unittest.TestCase):
             extract_resources(source, target=self.target)[0].identity.physical_id
         )
 
+    def test_ordinary_no_ops_do_not_count_toward_touched_resource_scope(self):
+        source = plan()
+        unchanged = plan(actions=["no-op"])["resource_changes"][0]
+        source["resource_changes"].extend(
+            dict(unchanged, address=f"aws_instance.unchanged[{index}]")
+            for index in range(1000)
+        )
+        self.assertEqual(
+            [
+                row.identity.address
+                for row in extract_resources(source, target=self.target)
+            ],
+            ["aws_instance.example"],
+        )
+
+    def test_explicit_move_and_import_preserve_touched_scope(self):
+        source = plan(actions=["no-op"])
+        move = source["resource_changes"][0]
+        move["previous_address"] = "aws_instance.old"
+        move["change"]["before"] = None
+        imported = plan(actions=["no-op"])["resource_changes"][0]
+        imported["address"] = "aws_instance.imported"
+        imported["change"]["importing"] = {"id": "i-00000000000000003"}
+        source["resource_changes"].append(imported)
+        source["prior_state"] = {
+            "values": {
+                "root_module": {
+                    "resources": [
+                        {
+                            "address": "aws_instance.old",
+                            "values": {"id": "i-00000000000000002"},
+                        }
+                    ]
+                }
+            }
+        }
+        rows = {
+            row.identity.address: row
+            for row in extract_resources(source, target=self.target)
+        }
+        self.assertEqual(
+            rows["aws_instance.example"].identity.physical_id, "i-00000000000000002"
+        )
+        self.assertEqual(rows["aws_instance.imported"].source, "change.before")
+        move["change"]["before"] = {"id": "i-00000000000000004"}
+        row = extract_resources(source, target=self.target)[0]
+        self.assertEqual(row.source, "change.before")
+        self.assertEqual(row.identity.physical_id, "i-00000000000000004")
+
+    def test_deposed_change_uses_its_own_recorded_identity(self):
+        source = plan()
+        current = source["resource_changes"][0]
+        source["prior_state"] = {
+            "values": {
+                "root_module": {
+                    "resources": [
+                        {
+                            "address": current["address"],
+                            "values": {"id": "i-00000000000000004"},
+                        }
+                    ]
+                }
+            }
+        }
+        deposed = copy.deepcopy(current)
+        deposed["deposed"] = "deadbeef"
+        deposed["change"]["actions"] = ["delete"]
+        deposed["change"]["before"] = {"id": "i-00000000000000002"}
+        source["resource_changes"].append(deposed)
+        rows = extract_resources(source, target=self.target)
+        self.assertEqual(
+            {row.identity.physical_id: row.source for row in rows},
+            {
+                "i-00000000000000004": "prior_state",
+                "i-00000000000000002": "change.before",
+            },
+        )
+        self.assertEqual(len({row.identity.address for row in rows}), 2)
+        source["resource_changes"] = [deposed]
+        self.assertEqual(
+            extract_resources(source, target=self.target)[0].identity.physical_id,
+            "i-00000000000000002",
+        )
+        deposed["change"]["before"] = None
+        row = extract_resources(source, target=self.target)[0]
+        self.assertEqual(row.state, "unknown")
+        self.assertIsNone(row.identity.physical_id)
+
+    def test_unsupported_rows_keep_address_without_evaluating_provider_identity(self):
+        source = plan()
+        unsupported = plan("aws_s3_object", {"arn": "arn:aws:s3:::example-bucket/item"})
+        source["resource_changes"].extend(unsupported["resource_changes"])
+        rows = extract_resources(source, target=self.target)
+        self.assertEqual(len(rows), 2)
+        self.assertEqual(rows[0].state, "existing")
+        self.assertEqual(rows[1].state, "unknown")
+        self.assertEqual(rows[1].cause, "unsupported_family")
+        self.assertIsNone(rows[1].identity.arn)
+
+    def test_recorded_tags_include_safe_metadata_and_drop_sensitive_fields(self):
+        source = plan(
+            values={
+                "id": "i-00000000000000001",
+                "tags": {
+                    "owner": "build-team",
+                    "empty": "",
+                    "password": "private-tag-value",
+                },
+                "tags_all": {"service": "worker", "duplicate": "private-tag-value"},
+            }
+        )
+        from cloud.reflection import prepare_reflection
+
+        rows, private_values = prepare_reflection(source, target=self.target)
+        self.assertIn("private-tag-value", private_values)
+        self.assertEqual(
+            dict(rows[0].identity.tags),
+            {"owner": "build-team", "empty": "", "service": "worker"},
+        )
+        self.assertNotIn("private-tag-value", rows[0].model_dump_json())
+
     def test_real_qualified_producer_exports(self):
         root = Path("docs/verification/live-environment-grounding/17-0/producer")
         for name in (

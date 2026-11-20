@@ -145,6 +145,68 @@ class ReflectionManifestTests(unittest.TestCase):
         result = build_manifest(extract_resources(source, target=target), target=target)
         self.assertEqual({e.region for e in result.entries}, {"us-west-2"})
 
+    def test_multiregion_lambda_mapping_and_global_route53_are_exactly_bound(self):
+        target = ReflectionTarget(
+            account_id="000000000000", regions=("us-west-2", "us-east-1")
+        )
+        mapping = plan(
+            "aws_lambda_event_source_mapping",
+            {
+                "id": "00000000-0000-0000-0000-000000000001",
+                "function_arn": "arn:aws:lambda:us-west-2:000000000000:function:example",
+                "event_source_arn": "arn:aws:sqs:us-west-2:000000000000:queue",
+            },
+        )
+        record = plan(
+            "aws_route53_record",
+            {
+                "id": "Z1_example_A",
+                "zone_id": "Z1",
+                "name": "example.invalid.",
+                "type": "A",
+            },
+        )
+        source = {
+            "format_version": "1.2",
+            "resource_changes": [
+                *mapping["resource_changes"],
+                *record["resource_changes"],
+            ],
+        }
+        result = build_manifest(extract_resources(source, target=target), target=target)
+        self.assertEqual(
+            {entry.capability: entry.region for entry in result.entries},
+            {"event_mapping": "us-west-2", "record": "us-east-1"},
+        )
+        self.assertEqual(result.issues, ())
+
+    def test_queue_arn_agrees_with_canonical_name_in_extraction_and_guard(self):
+        source = plan(
+            "aws_sqs_queue",
+            {"name": "example", "arn": "arn:aws:sqs:us-east-1:000000000000:different"},
+        )
+        with self.assertRaises(ReflectionError):
+            self.manifest(source)
+        before = source["resource_changes"][0]["change"]["before"]
+        before["id"] = before.pop("arn")
+        with self.assertRaises(ReflectionError):
+            self.manifest(source)
+        before.pop("id")
+        before["arn"] = "arn:aws:sqs:us-east-1:000000000000:example"
+        manifest = self.manifest(source)
+        row = manifest.resources[0]
+        different = "arn:aws:sqs:us-east-1:000000000000:different"
+        selectors = dict(row.selectors, arn=different)
+        forged_row = row.model_copy(
+            update={
+                "identity": row.identity.model_copy(update={"arn": different}),
+                "selectors": tuple(selectors.items()),
+            }
+        )
+        forged = manifest.model_copy(update={"resources": (forged_row,)})
+        with self.assertRaises(ReflectionError):
+            guard_manifest(forged, target=self.target, resources=(forged_row,))
+
     def test_call_copies_cannot_change_bound_manifest(self):
         result = self.manifest(plan())
         copy = result.entries[0].call()

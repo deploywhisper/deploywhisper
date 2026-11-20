@@ -11,7 +11,9 @@ import re
 from cloud.base import ResourceIdentity, SnapshotFact
 from cloud.aws.allowlist import _CATALOG
 from cloud.aws.response_status import response_complete, _dns_name, _rows, _value
+from cloud.redaction import _numeric_value, _screen_numeric_text
 from services.content_security import (
+    REDACTED,
     redact_text,
     redact_value,
     sensitive_artifact_values,
@@ -57,22 +59,24 @@ def _tags(value, *, tag_container=False, tag_row=False):
     """
     found = []
     if isinstance(value, dict):
-        keys = [v for k, v in value.items() if k.lower() == "key"]
-        values = [v for k, v in value.items() if k.lower() == "value"]
-        if tag_row or (keys and values):
+        if tag_container:
+            if not all(isinstance(v, str) for v in value.values()):
+                raise ValueError("invalid_tag_shape")
+            return [value]
+        if tag_row:
+            keys = [v for k, v in value.items() if k.lower() == "key"]
+            values = [v for k, v in value.items() if k.lower() == "value"]
             if (
                 len(keys) != 1
                 or len(values) != 1
                 or not all(isinstance(v, str) for v in keys + values)
             ):
                 raise ValueError("invalid_tag_shape")
-            found.append({keys[0]: values[0]})
-        elif tag_container:
-            if not all(isinstance(v, str) for v in value.values()):
-                raise ValueError("invalid_tag_shape")
-            found.append(value)
+            return [{keys[0]: values[0]}]
         for key, child in value.items():
-            found.extend(_tags(child, tag_container=key.lower() in {"tags", "tagset"}))
+            found.extend(
+                _tags(child, tag_container=key.lower() in {"tags", "tagset", "taglist"})
+            )
     elif isinstance(value, list):
         for child in value:
             if tag_container and not isinstance(child, dict):
@@ -84,20 +88,70 @@ def _tags(value, *, tag_container=False, tag_row=False):
 
 
 def _screen_metadata(value, known):
-    # The existing metadata mode also removes numeric echoes of known private
-    # values. Preserve one shared redactor rather than a projection-only list.
+    # The shared metadata mode screens lexical echoes and sensitive fields.
     return redact_value({"metadata": value}, sensitive_values=known)["metadata"]
 
 
-def project_response(entry, response, *, scope) -> Projection:
+def _redrive_policy(value):
+    if not isinstance(value, str):
+        raise ValueError("invalid_redrive_policy")
+    policy = json.loads(value)
+    if not isinstance(policy, dict):
+        raise ValueError("invalid_redrive_policy")
+    arn = policy.get("deadLetterTargetArn")
+    count = policy.get("maxReceiveCount")
+    # AWS models the outer attribute as a string and uses both integer and
+    # decimal-string counts inside the JSON policy.
+    if (
+        not isinstance(arn, str)
+        or not arn
+        or not (
+            (type(count) is int and count > 0)
+            or (
+                isinstance(count, str)
+                and count.isascii()
+                and count.isdecimal()
+                and count.strip("0")
+            )
+        )
+    ):
+        raise ValueError("invalid_redrive_policy")
+    return {"deadLetterTargetArn": arn, "maxReceiveCount": count}
+
+
+def project_response(entry, response, *, scope, sensitive_values=()) -> Projection:
     """Only immutable selected facts leave the SDK worker; no raw body escapes."""
     raw = _bounded(response, [0, 0])
     if not isinstance(raw, dict):
         return Projection((), False)
     screening = _bounded({"response": raw, "tags": _tags(raw)}, [0, 0])
-    known = sensitive_artifact_values(json.dumps(screening).encode())
-    clean = _screen_metadata(raw, known)
-    screened = clean != raw
+    known = tuple(
+        dict.fromkeys(
+            (
+                *sensitive_values,
+                *sensitive_artifact_values(json.dumps(screening).encode()),
+            )
+        )
+    )
+    numeric_secrets = {
+        number for secret in known if (number := _numeric_value(secret)) is not None
+    }
+    projection_input = raw
+    truncated = False
+    if entry.capability == "queue":
+        attributes = raw.get("Attributes")
+        if isinstance(attributes, dict) and "RedrivePolicy" in attributes:
+            # Decode before screening so masking a numeric leaf cannot break
+            # the outer JSON string and discard an unaffected sibling.
+            attributes = dict(attributes)
+            encoded = attributes.pop("RedrivePolicy")
+            try:
+                attributes["RedrivePolicy"] = _redrive_policy(encoded)
+            except (ValueError, RecursionError):
+                truncated = True
+            projection_input = {**raw, "Attributes": attributes}
+    clean = _screen_metadata(projection_input, known)
+    screened = clean != projection_input
     complete = response_complete(entry.capability, entry.call().parameters, raw)
     identity_raw = {
         k: v
@@ -167,7 +221,15 @@ def project_response(entry, response, *, scope) -> Projection:
         return Projection((), False)
     complete = complete and not screened
     facts = []
-    truncated = False
+
+    def screen_numeric(value):
+        if not numeric_secrets:
+            return value
+        if _numeric_value(value) in numeric_secrets:
+            return REDACTED
+        if isinstance(value, str):
+            return _screen_numeric_text(value, numeric_secrets)
+        return value
 
     def scalar(name, value, depth=0):
         nonlocal truncated
@@ -193,6 +255,7 @@ def project_response(entry, response, *, scope) -> Projection:
                 if (
                     not re.fullmatch(r"[A-Za-z0-9_.:-]+", k)
                     or redact_text(k, sensitive_values=known) != k
+                    or screen_numeric(k) != k
                     or redact_value({k: "probe"}).get(k) != "probe"
                 ):
                     truncated = True
@@ -208,32 +271,18 @@ def project_response(entry, response, *, scope) -> Projection:
         if isinstance(value, str) and (
             "\n" in value or "\r" in value or value.lstrip().startswith(("{", "["))
         ):
-            if entry.capability == "queue" and name.endswith(".RedrivePolicy"):
-                try:
-                    policy = json.loads(value)
-                    if not isinstance(policy, dict):
-                        raise ValueError()
-                    scalar(
-                        name,
-                        {
-                            k: v
-                            for k, v in policy.items()
-                            if k in {"deadLetterTargetArn", "maxReceiveCount"}
-                        },
-                        depth + 1,
-                    )
-                except (ValueError, RecursionError):
-                    truncated = True
-            else:
-                truncated = True
+            truncated = True
             return
         if (
             not re.fullmatch(r"[A-Za-z][A-Za-z0-9_.:-]*", name)
             or redact_text(name, sensitive_values=known) != name
+            or screen_numeric(name) != name
         ):
             truncated = True
             return
-        facts.append(SnapshotFact(name=name, value=value))
+        screened_value = screen_numeric(value)
+        truncated |= screened_value != value
+        facts.append(SnapshotFact(name=name, value=screened_value))
 
     def field(value, parts, prefix):
         nonlocal truncated

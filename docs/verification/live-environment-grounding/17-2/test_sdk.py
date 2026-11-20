@@ -24,6 +24,47 @@ ENV = {
 
 
 class SdkTests(unittest.TestCase):
+    def test_reader_fences_cancelled_native_request_before_transport(self):
+        from threading import Event
+        from types import SimpleNamespace
+        from cloud.aws.client import AwsReader, Call
+
+        cancel, finished = Event(), Event()
+        with (
+            patch.dict(os.environ, ENV, clear=True),
+            patch.object(
+                socket, "socket", side_effect=AssertionError("network forbidden")
+            ),
+            patch("botocore.httpsession.URLLib3Session.send") as send,
+        ):
+            client = AmbientSession().create_client("ec2", {"region": "us-east-1"})
+            client.meta.events.register(
+                "before-sign.ec2.DescribeInstances", lambda **_: cancel.set()
+            )
+            original = client._make_api_call
+
+            def invoke(*args):
+                try:
+                    return original(*args)
+                finally:
+                    finished.set()
+
+            reader = AwsReader(SimpleNamespace(create_client=lambda *a, **kw: client))
+            with patch.object(client, "_make_api_call", side_effect=invoke):
+                result = reader.execute(
+                    [
+                        Call(
+                            capability="instance",
+                            parameters={"InstanceIds": ["i-00000000000000001"]},
+                        )
+                    ],
+                    cancel=cancel,
+                )
+                self.assertTrue(finished.wait(2))
+            self.assertEqual(result.attempts, 1)
+            self.assertEqual(result.items[0].status, "cancelled")
+            send.assert_not_called()
+
     def test_real_client_canonical_transport(self):
         with (
             patch.dict(os.environ, ENV, clear=True),

@@ -232,3 +232,7 @@ slice. Production operator composition, AWS profile support, live IAM/transport
 and release-wide qualification remain later-story obligations. No production AWS
 support is claimed. The passed independent security gate applies only to the
 reviewed offline slice and repaired source identified above.
+
+## Closeout disposition
+
+The [final independent review](code-review.md#final-independent-disposition) approved the follow-up runtime source for the offline slice and records its source hashes and native SDK checks.

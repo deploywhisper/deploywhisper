@@ -1,56 +1,133 @@
-# Story17.3 verification packet
+# Story 17.3 verification
 
-Scope:plan-directed identity extraction, static bounded one-hop collection,
-fail-safe degradation and additive budget serialization. Baseline:`64ef0fa`;
-branch:`feature/17-3-plan-directed-reflection`. No dependency installation or
-live provider reads were performed. Production profile qualification stays17.9.
+Story 17.3 covers plan-directed resource selection, bounded AWS reads, fail-safe degradation, and budget reporting. The feature branch is `feature/17-3-plan-directed-reflection`, based on `64ef0fa`. [The first code review](code-review.md) examined `2606d68`. [The independent security review](security-review.md) records the initial implementation and its findings.
 
-## Implementation and acceptance proof
+## Review follow-up coverage
 
-| AC | Implementation/proof |
+| Requirement | Regression proof |
 | --- | --- |
-| AC1 | `cloud/reflection.py`:recursive recorded-prior thenbefore extraction; four qualified Terraform/OpenTofu exports and noSDK/no-call regression |
-| AC2 | Pure creates produce `no_live_counterpart` and zeroSDK calls; replacements/missingbefore remain distinct |
-| AC3 | Authoritative-original manifest regeneration rejects broadened selectors, coherent replacement resource sets, target replay and deliberately enumerating connector requests before construction |
-| AC4 | Static catalog one-hop templates and bounded selected endpoint facts; no response-driven follow-up requests; bounds/reasons stored with facts |
-| AC5 | Provider failure matrix, explicitinsufficiency understrongcontext, cachedstale recomputation and monotonic severity/confidence floors; preciseIAM actions onlyforconfirmeddenials |
-| AC6 | Separate reservations/actualSDK invocation accounting; sharedregionlimits/cancel/deadlines; real service outcomes round-trip through sharedpipeline,HTTP,CLI and agent JSON; legacyNonefieldabsence |
+| AC1 and AC2 | Terraform and OpenTofu fixtures exercise recorded prior state and pure creates. Reflection tests cover ordinary no-ops, moves, imports, deposed objects, unsupported families, recorded tags, and AWS region and SQS identity reconciliation. |
+| AC3 and AC4 | The collector rejects a broadened manifest before client construction. One-hop tests assert selected endpoints, recorded limits and reasons, and zero follow-up requests. |
+| AC5 | Collector and retained-readback tests cover private-value screening, AWS tag maps, typed SQS redrive metadata, unknown identities and every confirmed IAM denial. Analysis tests cover insufficient context and fail-safe severity and confidence. |
+| AC6 | Collector tests verify cross-region concurrency and backoff, frozen dispatch counts and cancellation. Service tests exercise stalled plan preparation, stalled readback, and cancellation during transaction finalization. API and CLI tests verify the existing additive budget contract. |
 
-Retainedsnapshot-v1 JSON/digests and existingreference-provider collect contract
-are unchanged. A separate typed outcome carries operational budgets. The SDK-free
-default still cannot construct a provider without trusted server composition.
-No new HTTP route, CLI flag, UI surface, schema version or credential store ships.
+New deadline regressions failed on the original implementation because the service waited for blocked preparation, readback or commit finalization. A follow-up test established that a stalled provider could also consume the time needed to retain an earlier successful read. The reflection and collection regressions failed before their corresponding fixes. All test data is synthetic or drawn from the checked-in recorded producer fixtures.
 
-## Red/green and independent review
+## Reproduce the local checks
 
-- Reflection packets:`/tmp/story17-3-reflection-packet3{1,2,3}-red.log`, then22tests passed. All25realistic resource families render42frozen capabilities.
-- Collection/service first failing imports and behavior:`/tmp/story17-3-{collection-red,service-collection-red}.log`; added fault, shared-region, capacity, identity and retained-authorization tests.
-- Absolute deadline/finalization regressions:`/tmp/story17-3-service-deadline-red.log`; pre-work consumes the original deadline and reported elapsed includes retention/commit.
-- Degradation hook red missing-module check:`/tmp/story17-3-degradation-red.log`; final8tests coverall5fault classes acrossall4severity levels plus retention-metadata and scope checks.
-- Sharedpipeline/API/CLI red tests:`/tmp/story17-3-budget-{core,surfaces}-red.log`;9tests+18subtests passed. Existingagentfixture AttributeError reproduced and fixed with the optional-field fallback; existing compatibility batch then138passed+67subtests.
-- Independent Packet3.7 review found twoP1 projection leaks: lowercase ECS tag values/echoes and Lambda dynamic tag names. Implementer added failing worker/collector/retention regressions, normalized tag encodings and screened keys/finalpaths. Independent exact reproductions then showed no leak;119cloud and32focused tests passed. See [security-review.md](security-review.md) for initial evidence, dispositions and source hashes. No remainingP1/P2 identified in this offline review scope.
-- Optional pinned SDK model proof in `test_selected_sdk.py`:native ECS lowercase tag model and Lambda dictionary-key canaries are screened beforeselected worker results;2tests passed with sockets forbidden. Existing17.2SDK suite14tests also passed; approved existing SDK environment was reused without installation.
+Run from the repository root with its existing application environment.
 
-## Validation status
+```sh
+export LLM_API_BASE=http://127.0.0.1:1
+./.venv/bin/python -m pytest -q tests/test_cloud \
+  tests/test_analysis/test_cloud_grounding.py \
+  tests/test_services/test_cloud_plan_collection.py \
+  tests/test_services/test_analysis_cloud_grounding.py \
+  tests/test_api/test_cloud_collection_budget.py \
+  tests/test_cli/test_cloud_collection_budget.py
+./.venv/bin/python -m unittest discover -q
+bash scripts/ci-local.sh
+./.venv/bin/python -m pytest tests/test_api tests/test_cli tests/test_infra -v --tb=short
+./.venv/bin/ruff check .
+./.venv/bin/ruff format --check .
+./.venv/bin/bandit -r cloud services/cloud_context_service.py -ll -ii
+git diff --check
+./.venv/bin/python - <<'PY'
+import ast
+from pathlib import Path
 
-- ExactAPI/CLI/infra shard:`LLM_API_BASE=http://127.0.0.1:1 ./.venv/bin/python -m pytest tests/test_api tests/test_cli tests/test_infra -v --tb=short`:838passed,1skipped,2,474subtests. Log:`/tmp/story17-3-api-cli-infra.log`.
-- Repo-wideRufflint/format:passed701Pythonfiles after source stabilization. Root `LLM_API_BASE=http://127.0.0.1:1 ./.venv/bin/python -m unittest discover -q` passed2,314tests (3existing skips). Full localCI `LLM_API_BASE=http://127.0.0.1:1 bash scripts/ci-local.sh` passed3,839tests across12registered shards (3existing skips), plus172SDK-free isolation tests, skill scenarios and prompt-injection checks. Final service shard:1,272passed.
-- Root log:`/tmp/story17-3-root-final.log`; fullCI log:`/tmp/story17-3-ci-final.log`.
-- Docker build `docker build -t deploywhisper:story17-3-validation .` passed; image `sha256:29a37dc08877e952d257f24eaee9fe084c4532f3eae9e2b8999c8d9e534bce2c`. Rebuilt default image is non-root, SDK-free/Node-free, pure-create reflection haszero calls and the AWS registry slot remains unavailable.
-- Network-disabled Python3.11.17 harness using the rebuilt image, current source and already-installed approved SDK packages mounted read-only passed71new storytests and16SDKtests (14legacy+2native selected-model tests). This is offline runtime proof, not a live profile. Logs:`/tmp/story17-3-runtime-{new,sdk}-python311.log`.
-- Changed production modules pass Python3.10 grammar checks. Bandit cloud/newgrounding scan found zero issues. Cloud/evidence shard isolation and the new grounding hook pass with providerSDK/network/execution-epic imports blocked. The existing shared application analysis/transport graph has pre-existing cross-layer schema imports; no claim is made that the entire application can import with those released modules removed.
-- Application smoke:rebuilt container started with networking disabled; `/api/v1/health` returned HTTP200/core_status ok. The container was stopped/removed after the check; no provider connectivity or LLM inference was tested.
-- UIvalidationnotapplicable:no rendered UI code or default rendered behavior changed.
+for name in (
+    'cloud/aws/client.py', 'cloud/aws/projection.py', 'cloud/aws/session.py',
+    'cloud/collection.py', 'cloud/redaction.py', 'cloud/reflection.py',
+    'services/cloud_context_service.py',
+):
+    ast.parse(Path(name).read_text(), filename=name, feature_version=(3, 10))
+PY
+```
+
+## Reproduce the offline Python 3.11 proof
+
+Build the application image, then run the selected suites with networking disabled and the checked-in tests and fixtures mounted read-only.
+
+```sh
+docker build -t deploywhisper:story17-3-closeout-fixes .
+docker run --rm --network none --tmpfs /tmp \
+  -e PYTHONDONTWRITEBYTECODE=1 -e LLM_API_BASE=http://127.0.0.1:1 \
+  --mount "type=bind,source=$PWD/tests,target=/app/tests,readonly" \
+  --mount "type=bind,source=$PWD/docs,target=/app/docs,readonly" \
+  deploywhisper:story17-3-closeout-fixes sh -ec '
+python --version
+python -m unittest discover -s tests/test_cloud -q
+python -m unittest -q tests.test_analysis.test_cloud_grounding tests.test_services.test_cloud_plan_collection tests.test_services.test_analysis_cloud_grounding
+'
+docker run --rm --network none --tmpfs /tmp -i \
+  deploywhisper:story17-3-closeout-fixes python - <<'PY'
+from importlib.util import find_spec
+import os
+import shutil
+from fastapi.testclient import TestClient
+from app import create_app
+
+assert os.getuid() != 0
+assert find_spec("botocore") is None
+assert shutil.which("node") is None
+with TestClient(create_app()) as client:
+    response = client.get("/api/v1/health")
+    assert response.status_code == 200, response.status_code
+    print(f"SDK-free, Node-free, non-root runtime health HTTP {response.status_code}")
+PY
+```
 
 ## Qualification boundaries
 
-Fixtures/fault injection prove only the contracts above. No live-account smoke,
-production AWS profile, provider-independent machine authority or broad IAM/
-egress qualification is claimed. The current HTTP/CLI tests install a trusted
-fixtureUOW and supply real collected outcomes at the internal shared-service
-boundary; they do not claim public operator enablement. SDK calls mean operation
-invocations, not proof AWS received or processed them. Already-issued calls can
-finish after cancellation, but cannot publish late facts or mutate frozen
-returned accounting. Operational metadata does not mint evidence authority.
+The native SDK proof uses boto3 and botocore 1.44.1. The [approved lock](../17-0/sdk-requirements.lock) pins the wheel hashes. Download and unpack the wheels into a disposable directory, then mount them read-only for the network-disabled Python 3.11 test run. The application image and virtual environment stay SDK-free.
 
-Outcome:all seven story packets completed for this scoped fixture/fault-injection implementation; independent security gate passed after fixes. Story is ready for bmad-code-review, not a production AWS qualification. No UI/CLI enablement or public authorization adapter is claimed.
+```sh
+dw_sdk_dir="$(mktemp -d /tmp/dw-17-3-sdk.XXXXXX)"
+./.venv/bin/python -m pip download --require-hashes --only-binary=:all: --no-deps \
+  --dest "$dw_sdk_dir/wheels" -r docs/verification/live-environment-grounding/17-0/sdk-requirements.lock
+./.venv/bin/python - "$dw_sdk_dir" <<'PY'
+from pathlib import Path
+import sys
+from zipfile import ZipFile
+
+root = Path(sys.argv[1])
+wheels = sorted((root / 'wheels').glob('*.whl'))
+assert len(wheels) == 7
+for wheel in wheels:
+    with ZipFile(wheel) as archive:
+        archive.extractall(root / 'packages')
+PY
+docker build -t deploywhisper:story17-3-closeout-fixes .
+docker run --rm --network none --tmpfs /tmp \
+  -e PYTHONDONTWRITEBYTECODE=1 -e PYTHONPATH=/opt/story-sdk -e LLM_API_BASE=http://127.0.0.1:1 \
+  --mount "type=bind,source=$PWD/docs,target=/app/docs,readonly" \
+  --mount "type=bind,source=$dw_sdk_dir/packages,target=/opt/story-sdk,readonly" \
+  deploywhisper:story17-3-closeout-fixes sh -ec '
+python --version
+python -c "import boto3, botocore; assert boto3.__version__ == botocore.__version__ == \"1.44.1\""
+python -m unittest discover -s docs/verification/live-environment-grounding/17-2 -q
+python -m unittest discover -s docs/verification/live-environment-grounding/17-3 -q
+'
+```
+
+The fixtures exercise the existing HTTP and CLI serializers with trusted collection outcomes. Production authority composition and live AWS qualification belong to Story 17.9. UI validation is not applicable to this backend slice.
+
+## Follow-up results
+
+- Python 3.14.3 focused pytest passed with 166 tests and 339 subtests. The exact API/CLI/infra pytest shard passed with 838 tests, 1 skip and 2,474 subtests.
+- Root unittest discovery passed with 2,331 tests run and 3 skips. The host slept during the initial broad runs and two infrastructure recovery tests failed. Both passed in isolation. The broad retries used `caffeinate -i` to inhibit idle sleep.
+- A reviewer who did not implement the authorization service changes independently reran 18 service and analysis tests, including the stalled-provider partial snapshot case.
+- Docker built image `sha256:6747fffa18cd1c69ae2a12712565e7b0c847e622a6ad360c4f9a8ab56a804c13`. Python 3.11.17 ran 136 cloud tests and 26 analysis/service tests with networking disabled. The non-root, SDK-free and Node-free image returned HTTP 200 at `/api/v1/health`.
+- Repo-wide Ruff lint and formatting, Python 3.10 grammar checks for the five changed runtime files, Bandit at the documented threshold and `git diff --check` passed.
+- Local CI passed all 12 shards with 3,859 tests run and 3 skips, plus 189 SDK-free isolation tests, skill scenarios, and prompt-injection tests.
+
+## Closeout-fix verification
+
+- Projection regressions cover RDS instance and cluster tag lists, numeric equivalents in scalar labels and values, and decoded SQS metadata. Six checks failed before the fix. The projection suite then passed 16 tests and 14 subtests.
+- Both denial-address regressions failed before the fix and passed afterward. One covers the collector result and one checks account masking and retained readback through the service. Independent review also verified that a screened-address collision fails before publication.
+- Dispatch regressions cover cancellation before admission and before transport, plus sibling expiry before scheduler polling. The pinned Botocore test verifies that cancellation during signing blocks socket use. Counting at an exact `before-call` handler initially failed native Stubber tests. Admission moved into the existing operation fence and the native suite then passed.
+- The focused suite passed 173 tests and 347 subtests. The SDK-free Python 3.11.17 image ran 169 focused tests and returned HTTP 200 for `/api/v1/health`. The same image ran 17 pinned native SDK tests with the approved wheel files mounted read-only and networking disabled. The image digest is `sha256:237bee53c3151e7d2324b66c37bf933d20a3287b622e133ced7dd5f13df061b1`.
+- Repo-wide Ruff lint and formatting, scoped Bandit, and Python 3.10 grammar checks for the seven changed runtime files passed. Those files matched the tested image by SHA-256.
+- The exact API/CLI/infra pytest shard passed 838 tests and 2,474 subtests with one skip.
+- Root discovery ran 2,336 tests with 3 skips. Full local CI ran 3,866 tests across 12 shards with 3 skips, plus 194 isolation tests, skill scenarios, and prompt-injection tests. Both runs passed.
