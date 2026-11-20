@@ -222,3 +222,84 @@ were met. Late results cannot become complete reads; timely completed results
 retain their status when scheduler polling is delayed.
 Failure causes use a fixed vocabulary; provider messages and raw payloads are
 never returned. Only verified authorization failures set `missing_permission`.
+
+
+## Plan-directed collection primitives — Story 17.3
+
+`cloud.reflection.extract_resources` accepts the qualified recorded plan 1.2
+shape and embedded prior-state 1.0 shape. It indexes nested recorded resources by
+full address. Ordinary no-ops are excluded before manifest generation. Moves
+and imports use recorded evidence. Deposed objects use their own `change.before`
+values and a separate observation address. Planned `after` values never establish
+a live identity. A pure create without a recorded counterpart succeeds as
+`no_live_counterpart` and issues zero calls. Missing identifiers and unsupported
+families remain unknown, and screened recorded tags are display metadata.
+
+The immutable manifest binds the trusted constructor account/regions to the
+original extracted scope. Every call is regenerated from the frozen 42-capability
+catalog before dispatch. SQS URLs are rebuilt from the validated name and trusted
+scope after checking the recorded ARN for consistency. All reverse calls are static, filtered
+one-hop requests; returned endpoints never seed another request. Endpoint facts
+record the hop, reason and bound. Bounds are 1,000 manifest entries, 1,000 touched
+resources, 10,000 plan change entries and 10,000 prior records. Capacity gaps remain
+explicit.
+
+`CloudContextService.collect_plan` requires its existing trusted authorization
+UOW and an installed constructor-only `plan_collector_factory`. The default port
+is unavailable, and project enablement stays off by default. No request can
+supply a principal, role, endpoint, credential mechanism or authorization callback.
+Snapshot-v1 canonical bytes, namespace and retention rules are unchanged. Scope,
+authority and retained readback are checked before completion.
+
+Selected provider data is bounded and screened inside SDK workers, including
+both AWS tag-pair conventions, cross-field echoes and dynamic dictionary keys.
+Plan-derived private values stay in memory and inform both worker screening and
+retention screening. SQS redrive metadata is decoded and type-checked before
+screening. Only immutable catalog-selected scalar facts cross that boundary. Whole raw
+responses, scripts and arbitrary policy bodies are unavailable. Output bounds
+include 4,096 facts/1 MiB of selected fact JSON and 4 MiB of identity data; overflow
+is incomplete. Credentials are screened before digesting and retention; account
+masking continues to follow project configuration.
+
+One absolute deadline bounds the caller's wait through preparation, collection,
+retained readback and UOW finalization. A single scheduler shares call budget,
+concurrency and backoff across regions. The provider cutoff leaves up to one
+second of the overall budget for aggregating and retaining timely results. A timeout or cancellation returns an
+unavailable outcome with frozen counters if a retained result cannot be returned
+in time. The finalization fence rejects a commit that starts after interruption.
+An SDK invocation or database commit already in progress can finish on its worker.
+The interrupted caller receives no snapshot reference from that worker.
+
+Internal outcomes preserve the address, capability and exact IAM action for every
+confirmed denial. Retained snapshot-v1 still has one compatibility permission field
+per resource. Diagnostics use the same screened addresses as the corresponding
+snapshot, including during account masking and retained readback.
+
+The shared analysis core accepts an optional trusted `grounding_outcome`.
+Incomplete, unavailable, expired, denied or cancelled context explicitly triggers
+existing `insufficient_context` handling, with severity/confidence floors against
+the ungrounded baseline. Collection diagnostics are metadata only: report context
+does not acquire a resolvable snapshot evidence reference or retention promise.
+Factual report evidence must still use the existing admission boundary.
+
+API run results, CLI JSON and agent JSON carry optional `cloud_collection` budget
+metadata when that trusted outcome is supplied. Disabled/absent grounding omits
+the field entirely; report-v2 and agent-v1 versions remain unchanged. Fields:
+
+| Field | Meaning |
+| --- | --- |
+| `version` | Budget payload version 1 |
+| `planned_calls` | Valid static intended calls, including capacity-skipped calls |
+| `attempted_calls` | Reserved execution attempts, including client-construction failures |
+| `actual_call_count` | Operations admitted inside the SDK invocation. Transport rechecks cancellation and the deadline before sending. |
+| `call_budget` | Maximum permitted attempts, at most 100 |
+| `budget_consumed` | Attempts charged against that budget |
+| `elapsed_seconds` | Monotonic service duration including retention/finalization |
+| `cancelled` | Cancellation was requested before completion |
+
+This slice adds the internal collection and serialization contracts. Operator UI,
+CLI enablement flags, production authorization composition and live AWS profile
+qualification remain in their owning later stories. Existing HTTP/CLI flows do
+not automatically install or activate a provider. Fixture and fault-injection
+results do not qualify live AWS support. See the
+[verification packet](../verification/live-environment-grounding/17-3/README.md).

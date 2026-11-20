@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from cloud.collection import CollectionBudget
+
 import re
 from typing import Any, Literal
 
@@ -258,6 +260,9 @@ class AgentUncertaintyData(_AgentContractModel):
 
 
 class AgentAnalysisData(_AgentContractModel):
+    cloud_collection: CollectionBudget | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
     schema_version: Literal["v1"] = AGENT_OUTPUT_SCHEMA_VERSION
     report_schema_version: str
     report_id: int
@@ -620,6 +625,7 @@ def build_agent_analysis_data(analysis: AnalysisRunData) -> AgentAnalysisData:
 
     return _sanitize_agent_data(
         AgentAnalysisData(
+            cloud_collection=getattr(analysis, "cloud_collection", None),
             report_schema_version=report.report_schema_version,
             report_id=report.id,
             scope=AgentScopeData(

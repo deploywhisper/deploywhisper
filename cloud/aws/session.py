@@ -6,6 +6,7 @@ import logging
 from pathlib import Path
 import re
 import threading
+from types import FunctionType
 
 from cloud.aws.allowlist import _CATALOG
 
@@ -92,6 +93,20 @@ class SessionError(PermissionError):
         super().__init__("AWS session unavailable")
 
 
+class DispatchInterrupted(Exception):
+    """The reader closed admission before SDK operation or transport handoff."""
+
+
+def bind_dispatch_fence(client, operation, *, admit, permit_send):
+    """Attach operation-specific reader gates to an ambient SDK client."""
+    bind = getattr(client, "_deploywhisper_bind_dispatch", None)
+    if type(bind) is not FunctionType:
+        # Simple injected fixture clients already implement the call boundary.
+        return False
+    bind(operation, admit, permit_send)
+    return True
+
+
 def _fence_client(client, service):
     """Permit one approved API operation and never delegate retry decisions.
 
@@ -108,13 +123,41 @@ def _fence_client(client, service):
     }
     lock = threading.Lock()
     used = False
+    dispatch = None
+    event_service = client.meta.service_model.service_id.hyphenize()
+
+    def bind_dispatch(operation, admit, permit_send):
+        nonlocal dispatch
+        with lock:
+            if used or dispatch is not None or operation not in allowed:
+                raise SessionError("request_refused")
+            dispatch = operation, admit
+
+        def before_send(**_):
+            if not permit_send():
+                raise DispatchInterrupted()
+
+        client.meta.events.register_first(
+            f"before-send.{event_service}.{operation}",
+            before_send,
+            unique_id="deploywhisper-reader-send-" + operation,
+        )
 
     def before_parameters(model, **kwargs):
         nonlocal used
         with lock:
-            if used or model.name not in allowed:
+            admission = dispatch
+            if (
+                used
+                or model.name not in allowed
+                or (admission is not None and model.name != admission[0])
+            ):
                 raise SessionError("request_refused")
             used = True
+        # This event runs inside the SDK method even when Stubber prohibits
+        # transport by returning a response from its later before-call event.
+        if admission is not None and not admission[1]():
+            raise DispatchInterrupted()
 
     def no_retry(response=None, caught_exception=None, operation=None, **kwargs):
         if caught_exception is not None:
@@ -127,7 +170,7 @@ def _fence_client(client, service):
     # Hierarchical events run operation-specific handlers before generic ones,
     # regardless of register_first. Bind exact operation events so this fence
     # precedes S3's service-wide redirect/discovery handlers.
-    event_service = client.meta.service_model.service_id.hyphenize()
+    client._deploywhisper_bind_dispatch = bind_dispatch
     for operation in client.meta.service_model.operation_names:
         client.meta.events.register_first(
             f"before-parameter-build.{event_service}.{operation}",

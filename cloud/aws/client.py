@@ -1,8 +1,4 @@
-"""Credential-free manifests and bounded access to frozen read capabilities.
-
-Response projection and plan parsing belong to the next connector story. This
-primitive intentionally returns only safe execution metadata, never SDK payloads.
-"""
+"""Credential-free manifests and bounded access to frozen read capabilities."""
 
 from __future__ import annotations
 
@@ -15,7 +11,7 @@ import threading
 import time
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 from cloud.aws.allowlist import _CATALOG, authorize
-from cloud.aws.session import validate_config
+from cloud.aws.session import DispatchInterrupted, bind_dispatch_fence, validate_config
 from cloud.aws.response_status import response_complete
 from services.content_security import redact_text, redact_value
 
@@ -218,6 +214,8 @@ def _failure(error):
             "Forbidden",
         ):
             return "permission_denied", True
+        if code in ("ExpiredToken", "ExpiredTokenException", "RequestExpired"):
+            return "credentials_expired", False
         if code in (
             "Throttling",
             "ThrottlingException",
@@ -256,6 +254,85 @@ def _failure(error):
     return "provider_error", False
 
 
+@dataclass(frozen=True)
+class SelectedCallResult(CallResult):
+    facts: tuple = ()
+
+
+@dataclass(frozen=True)
+class SelectedExecutionResult(ExecutionResult):
+    actual_call_count: int = 0
+    issued_indices: tuple[int, ...] = ()
+
+
+class ExecutionProgress:
+    """Single-use accounting shared with the outer collection deadline."""
+
+    def __init__(self):
+        self._lock = threading.Lock()
+        self._closed = threading.Event()
+        self._attempted = 0
+        self._issued: set[int] = set()
+        self._active_deadlines: dict[int, float] = {}
+
+    def close(self) -> None:
+        with self._lock:
+            self._closed.set()
+
+    @property
+    def closed(self) -> bool:
+        return self._closed.is_set()
+
+    def counts(self) -> tuple[int, int]:
+        with self._lock:
+            return self._attempted, len(self._issued)
+
+    def _issued_indices(self) -> tuple[int, ...]:
+        with self._lock:
+            return tuple(sorted(self._issued))
+
+    def _start(self, index, deadline):
+        with self._lock:
+            self._active_deadlines[index] = deadline
+
+    def _complete(self, index, future, result):
+        with self._lock:
+            completed_at = time.monotonic()
+            deadline = self._active_deadlines.pop(index)
+            # Expose the captured result before closing admission. The reader
+            # can still drain completions when it observes a closed progress.
+            future.set_result((result, completed_at))
+            if completed_at >= deadline:
+                self._closed.set()
+
+    def _can_dispatch(self, cancel):
+        if self.closed or cancel.is_set():
+            return False
+        now = time.monotonic()
+        if any(now >= deadline for deadline in self._active_deadlines.values()):
+            self._closed.set()
+            return False
+        return True
+
+    def _reserve(self, *, cancel, budget):
+        with self._lock:
+            if not self._can_dispatch(cancel) or self._attempted >= budget:
+                return False
+            self._attempted += 1
+            return True
+
+    def _admit_dispatch(self, index, *, cancel):
+        with self._lock:
+            if index in self._issued or not self._can_dispatch(cancel):
+                return False
+            self._issued.add(index)
+            return True
+
+    def _permit_send(self, index, *, cancel):
+        with self._lock:
+            return index in self._issued and self._can_dispatch(cancel)
+
+
 class AwsReader:
     """Server-owned session only; no endpoint/credential inputs from requests."""
 
@@ -271,49 +348,146 @@ class AwsReader:
     dry_run = staticmethod(dry_run)
 
     def execute(self, calls, *, limits=None, cancel=None):
+        return self._execute(calls, limits=limits, cancel=cancel)
+
+    def execute_selected(
+        self,
+        manifest,
+        *,
+        indices,
+        target,
+        resources,
+        limits=None,
+        cancel=None,
+        deadline=None,
+        all_regions=False,
+        sensitive_values=(),
+        progress: ExecutionProgress | None = None,
+    ):
+        from cloud.reflection import guard_manifest
+
+        started = time.monotonic()
+        limits = Limits.model_validate((limits or Limits()).model_dump())
+        if deadline is not None and (
+            type(deadline) not in (int, float) or not math.isfinite(deadline)
+        ):
+            raise ValueError("invalid_collection_deadline")
+        deadline = (
+            min(started + limits.total_deadline, deadline)
+            if deadline is not None
+            else started + limits.total_deadline
+        )
+        approved = guard_manifest(manifest, target=target, resources=resources)
+        if (
+            not isinstance(indices, tuple)
+            or len(set(indices)) != len(indices)
+            or any(
+                type(i) is not int or not 0 <= i < len(approved.entries)
+                for i in indices
+            )
+        ):
+            raise ValueError("invalid_selected_manifest")
+        entries = tuple(approved.entries[i] for i in indices)
+        if not all_regions and any(
+            entry.region != self._config["region"] for entry in entries
+        ):
+            raise ValueError("selected_region_mismatch")
+        configs = (
+            tuple(validate_config({"region": entry.region}) for entry in entries)
+            if all_regions
+            else None
+        )
+        return self._execute(
+            [entry.call() for entry in entries],
+            limits=limits,
+            cancel=cancel,
+            selections=entries,
+            projection_scope=(approved, target, tuple(resources)),
+            absolute_deadline=deadline,
+            configs=configs,
+            sensitive_values=tuple(sensitive_values),
+            progress=progress,
+        )
+
+    def _execute(
+        self,
+        calls,
+        *,
+        limits=None,
+        cancel=None,
+        selections=None,
+        projection_scope=None,
+        absolute_deadline=None,
+        configs=None,
+        sensitive_values=(),
+        progress: ExecutionProgress | None = None,
+    ):
         calls = _calls(calls)
         limits = Limits.model_validate((limits or Limits()).model_dump())
         cancel = cancel or threading.Event()
         start = time.monotonic()
-        deadline = start + limits.total_deadline
-        stop = threading.Event()
-        attempts = 0
+        deadline = (
+            min(start + limits.total_deadline, absolute_deadline)
+            if absolute_deadline is not None
+            else start + limits.total_deadline
+        )
+        progress = progress or ExecutionProgress()
         results = {}
         pending = {}
         index = 0
-        lock = threading.Lock()
 
-        def issue(i, call):
-            nonlocal attempts
+        def issue(i, call, call_deadline):
             row = _CATALOG["operations"][call.capability]
+            dispatched = False
             try:
-                if cancel.is_set() or stop.is_set() or time.monotonic() >= deadline:
-                    return CallResult(call.capability, "cancelled")
 
                 def construct():
-                    nonlocal attempts
-                    with lock:
-                        if (
-                            cancel.is_set()
-                            or stop.is_set()
-                            or time.monotonic() >= deadline
-                            or attempts >= limits.call_budget
-                        ):
-                            return CallResult(call.capability, "bounded")
-                        attempts += 1
+                    if not progress._reserve(cancel=cancel, budget=limits.call_budget):
+                        return CallResult(call.capability, "bounded")
                     client = self._session.create_client(
                         row["service"],
-                        self._config,
-                        timeout=min(
-                            limits.per_call_timeout,
-                            max(0.001, deadline - time.monotonic()),
-                        ),
+                        self._config if configs is None else configs[i],
+                        timeout=max(0.001, call_deadline - time.monotonic()),
                     )
-                    if cancel.is_set() or stop.is_set() or time.monotonic() >= deadline:
+                    invoke = client._make_api_call
+                    operation = row["operation"]
+                    parameters = json.loads(json.dumps(call.parameters))
+
+                    def admit():
+                        nonlocal dispatched
+                        dispatched = progress._admit_dispatch(i, cancel=cancel)
+                        return dispatched
+
+                    sdk_fenced = bind_dispatch_fence(
+                        client,
+                        operation,
+                        admit=admit,
+                        permit_send=lambda: progress._permit_send(i, cancel=cancel),
+                    )
+                    if not sdk_fenced and not admit():
                         return CallResult(call.capability, "cancelled")
-                    response = client._make_api_call(
-                        row["operation"], json.loads(json.dumps(call.parameters))
-                    )
+                    response = invoke(operation, parameters)
+                    if selections is not None:
+                        from cloud.aws.projection import project_response
+
+                        try:
+                            projected = project_response(
+                                selections[i],
+                                response,
+                                scope=projection_scope,
+                                sensitive_values=sensitive_values,
+                            )
+                        except Exception:
+                            return SelectedCallResult(
+                                call.capability,
+                                "incomplete",
+                                cause="projection_unavailable",
+                            )
+                        return SelectedCallResult(
+                            call.capability,
+                            "recorded" if projected.complete else "incomplete",
+                            facts=projected.facts,
+                        )
                     return CallResult(
                         call.capability,
                         "recorded"
@@ -322,9 +496,13 @@ class AwsReader:
                     )
 
                 return authorize(row["iam_action"], construct)
+            except DispatchInterrupted:
+                return CallResult(call.capability, "cancelled")
             except Exception as error:
                 # Keep a closed diagnostic vocabulary, never provider messages.
                 cause, denied = _failure(error)
+                if denied and selections is not None and not dispatched:
+                    cause, denied = "credentials_unavailable", False
                 return CallResult(
                     call.capability,
                     "unreadable",
@@ -334,17 +512,22 @@ class AwsReader:
             finally:
                 self._slots.release()
 
-        def submit(i, call):
+        def submit(i, call, began):
             future = Future()
+            call_deadline = min(began + limits.per_call_timeout, deadline)
+            progress._start(i, call_deadline)
 
             def run():
-                result = issue(i, call)
                 # Capture completion in the worker, before scheduler wakeup.
-                future.set_result((result, time.monotonic()))
+                progress._complete(i, future, issue(i, call, call_deadline))
 
             # No executor atexit join: a broken injected transport cannot hold
             # application shutdown hostage. Its slot stays held until return.
-            threading.Thread(target=run, daemon=True).start()
+            try:
+                threading.Thread(target=run, daemon=True).start()
+            except RuntimeError:
+                self._slots.release()
+                raise
             return future
 
         next_start = start
@@ -359,7 +542,7 @@ class AwsReader:
                     or completed_at >= deadline
                 ):
                     result = CallResult(calls[i].capability, "timeout")
-                    stop.set()
+                    progress.close()
                 results[i] = result
                 if result.status == "unreadable":
                     next_start = time.monotonic() + limits.backoff
@@ -372,22 +555,21 @@ class AwsReader:
                 now = time.monotonic()
                 if cancel.is_set():
                     break
-                if stop.is_set() or now >= deadline:
+                if progress.closed or now >= deadline:
                     # Publication can race the snapshot above. Drain known
                     # completions once more after observing expiry; timestamps
                     # still decide whether those results were actually timely.
                     collect([future for future in pending if future.done()])
                     break
                 while (
-                    index < len(calls)
+                    index < min(len(calls), limits.call_budget)
                     and len(pending) < limits.concurrency
-                    and attempts + len(pending) < limits.call_budget
                     and now >= next_start
                 ):
                     if not self._slots.acquire(blocking=False):
                         break
                     began = time.monotonic()
-                    f = submit(index, calls[index])
+                    f = submit(index, calls[index], began)
                     pending[f] = (index, began)
                     index += 1
                 if not pending:
@@ -396,8 +578,6 @@ class AwsReader:
                             min(0.005, next_start - now, max(0, deadline - now))
                         )
                         continue
-                    if index >= len(calls) or attempts >= limits.call_budget:
-                        break
                     break
                 done, _ = wait(
                     pending,
@@ -415,11 +595,11 @@ class AwsReader:
                     if expired:
                         results[i] = CallResult(calls[i].capability, "timeout")
                         # No further dispatch after a timed-out provider call.
-                        stop.set()
-                if stop.is_set():
+                        progress.close()
+                if progress.closed:
                     break
         finally:
-            stop.set()
+            progress.close()
 
         for i, c in enumerate(calls):
             if i not in results:
@@ -427,9 +607,19 @@ class AwsReader:
                     c.capability, "cancelled" if cancel.is_set() else "bounded"
                 )
         items = tuple(results[i] for i in range(len(calls)))
-        return ExecutionResult(
+        final_attempts, final_actual_calls = progress.counts()
+        values = (
             items,
-            attempts,
+            final_attempts,
             time.monotonic() - start,
             any(x.status != "recorded" for x in items),
+        )
+        return (
+            SelectedExecutionResult(
+                *values,
+                actual_call_count=final_actual_calls,
+                issued_indices=progress._issued_indices(),
+            )
+            if selections is not None
+            else ExecutionResult(*values)
         )

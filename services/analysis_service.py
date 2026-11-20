@@ -12,6 +12,8 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 from analysis.blast_radius import BlastRadiusResult, compute_blast_radius
+from analysis.cloud_grounding import apply_grounding_degradation
+from cloud.collection import CollectionBudget, PlanGroundingOutcome
 from analysis.incident_matcher import (
     IncidentMatch,
     find_incident_matches,
@@ -188,6 +190,11 @@ def evaluate_parse_batch(
 
 
 class AnalysisArtifacts(BaseModel):
+    cloud_collection: CollectionBudget | None = Field(
+        default=None,
+        exclude_if=lambda value: value is None,
+        description="Operational metrics from a trusted optional cloud collection",
+    )
     parse_batch: ParseBatchResult = Field(..., description="Per-file parse results")
     submission_manifest: SubmissionManifest = Field(
         default_factory=SubmissionManifest,
@@ -2477,6 +2484,7 @@ def build_analysis_artifacts(
     include_narrative: bool = True,
     allow_llm_assistance: bool = True,
     audit_context: dict[str, Any] | None = None,
+    grounding_outcome: PlanGroundingOutcome | None = None,
 ) -> AnalysisArtifacts:
     """Build all analysis artifacts up to, but not including, persistence."""
     parse_batch = build_parse_batch(files)
@@ -2538,6 +2546,9 @@ def build_analysis_artifacts(
     )
     assessment.context_completeness = context_completeness
     assessment = apply_context_uncertainty(assessment)
+    assessment = apply_grounding_degradation(
+        assessment, grounding_outcome, project_id=project_id
+    )
     findings = build_findings(
         assessment=assessment,
         evidence_items=evidence_items,
@@ -2582,6 +2593,11 @@ def build_analysis_artifacts(
             assessment,
         )
     artifacts = AnalysisArtifacts(
+        cloud_collection=(
+            grounding_outcome.budget
+            if grounding_outcome is not None and grounding_outcome.state != "disabled"
+            else None
+        ),
         parse_batch=parse_batch,
         submission_manifest=submission_manifest,
         evidence_items=evidence_items,
@@ -2680,6 +2696,7 @@ def analyze_uploaded_files(
     workspace_key: str | None = None,
     audit_context: dict | None = None,
     _on_persisted=None,
+    grounding_outcome: PlanGroundingOutcome | None = None,
 ) -> AnalysisRunResult:
     """Run the shared parse -> assess -> persist pipeline."""
     from services.project_service import TrustedAuthorizationError, authorized_session
@@ -2691,6 +2708,13 @@ def analyze_uploaded_files(
         workspace_id=workspace_id,
         workspace_key=workspace_key,
     )
+    # Only trusted server composition supplies a collected outcome. Public
+    # request fields and CLI flags do not install a connector or authority port.
+    grounding_kwargs = (
+        {"grounding_outcome": grounding_outcome}
+        if grounding_outcome is not None
+        else {}
+    )
     artifacts = build_analysis_artifacts(
         files,
         project_id=resolved_project.id,
@@ -2698,6 +2722,7 @@ def analyze_uploaded_files(
         workspace_key=workspace_key,
         completion_client=completion_client,
         audit_context=audit_context,
+        **grounding_kwargs,
     )
     analysis_duration_seconds = max(1, round(perf_counter() - started_at))
     try:
