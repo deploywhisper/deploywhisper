@@ -13,6 +13,7 @@ from pydantic import BaseModel, Field
 
 from analysis.blast_radius import BlastRadiusResult, compute_blast_radius
 from analysis.cloud_grounding import apply_grounding_degradation
+from analysis.divergence import DivergenceAssessment
 from cloud.collection import CollectionBudget, PlanGroundingOutcome
 from analysis.incident_matcher import (
     IncidentMatch,
@@ -22,6 +23,7 @@ from analysis.risk_engine import score_evidence
 from analysis.risk_scorer import (
     RiskAssessment,
     apply_context_uncertainty,
+    apply_divergence_floor,
     score_changes,
 )
 from analysis.rollback_planner import RollbackPlan, generate_rollback_plan
@@ -52,6 +54,14 @@ from services.intake_service import (
     remap_artifact_identities,
 )
 from services.ai_iac_risk_service import label_ai_iac_risk_findings
+from services.divergence_service import (
+    DivergenceRequestError,
+    compare_retained_plan,
+    divergence_admission,
+    divergence_findings,
+    divergence_has_gaps,
+    ensure_comparison_publishable,
+)
 from services.project_service import (
     ProjectResolutionError,
     resolve_project_reference,
@@ -218,6 +228,9 @@ class AnalysisArtifacts(BaseModel):
 
 
 class AnalysisRunResult(AnalysisArtifacts):
+    live_context: DivergenceAssessment | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
     persisted_report: dict = Field(..., description="Persisted report metadata")
 
 
@@ -369,6 +382,8 @@ class ShareSummaryJsonPayload(BaseModel):
 
 _SHARE_SUMMARY_BASE_FINDING_LIMIT = 3
 _SHARE_SUMMARY_EXTERNAL_CONTEXT_EXTRA_LIMIT = 2
+# Reports derive the insufficient-context flag from their stored score (< 0.70).
+_UNVERIFIED_DIVERGENCE_CONTEXT_CAP = 0.69
 
 
 def _collect_changes(parse_batch: ParseBatchResult) -> list[UnifiedChange]:
@@ -2485,9 +2500,11 @@ def build_analysis_artifacts(
     allow_llm_assistance: bool = True,
     audit_context: dict[str, Any] | None = None,
     grounding_outcome: PlanGroundingOutcome | None = None,
+    live_context: DivergenceAssessment | None = None,
+    _parse_batch: ParseBatchResult | None = None,
 ) -> AnalysisArtifacts:
     """Build all analysis artifacts up to, but not including, persistence."""
-    parse_batch = build_parse_batch(files)
+    parse_batch = _parse_batch if _parse_batch is not None else build_parse_batch(files)
     sensitive_values = sensitive_submission_values(files)
     submission_manifest = build_submission_manifest(
         files,
@@ -2549,6 +2566,28 @@ def build_analysis_artifacts(
     assessment = apply_grounding_degradation(
         assessment, grounding_outcome, project_id=project_id
     )
+    if live_context is not None:
+        if divergence_has_gaps(live_context):
+            assessment.partial_context = True
+            assessment.context_completeness.insufficient_context = True
+            assessment.context_completeness.context_score = min(
+                assessment.context_completeness.context_score,
+                _UNVERIFIED_DIVERGENCE_CONTEXT_CAP,
+            )
+            if not assessment.context_completeness.uncertainty:
+                assessment.context_completeness.uncertainty = "Some plan details could not be verified against a current retained observation."
+            confidence = assessment.confidence
+            assessment = apply_context_uncertainty(assessment)
+            assessment.confidence = min(confidence, assessment.confidence)
+        if live_context.observation_status == "stale":
+            assessment.warnings.append("The retained live observation is stale.")
+        if live_context.freshness.status == "stale":
+            assessment.warnings.append(
+                "The recorded plan was stale when live state was observed."
+            )
+        assessment = apply_divergence_floor(
+            assessment, requires_caution=live_context.requires_caution
+        )
     findings = build_findings(
         assessment=assessment,
         evidence_items=evidence_items,
@@ -2579,18 +2618,25 @@ def build_analysis_artifacts(
             workspace_key=workspace_key,
         )
     )
-    if include_narrative:
+    if not include_narrative:
+        narrative = _skipped_narrative(
+            "Narrative skipped for deterministic benchmark profile.", assessment
+        )
+    elif live_context is not None and live_context.requires_caution:
+        # The displayed briefing follows the same floor as the structured verdict.
+        narrative = NarrativeResult(
+            opening_sentence=f"{assessment.recommendation.upper()}. Confirmed plan divergence requires review.",
+            explanation="The retained observation differs on a security-relevant or destructive change.",
+            guidance=["Regenerate the plan and review the refreshed differences."],
+            degraded=False,
+        )
+    else:
         narrative = generate_narrative(
             assessment.model_copy(deep=True),
             [finding.model_copy(deep=True) for finding in findings],
             completion_client=completion_client,
             raw_files=analysis_raw_files,
             sensitive_values=sensitive_values,
-        )
-    else:
-        narrative = _skipped_narrative(
-            "Narrative skipped for deterministic benchmark profile.",
-            assessment,
         )
     artifacts = AnalysisArtifacts(
         cloud_collection=(
@@ -2697,6 +2743,8 @@ def analyze_uploaded_files(
     audit_context: dict | None = None,
     _on_persisted=None,
     grounding_outcome: PlanGroundingOutcome | None = None,
+    snapshot_digest: str | None = None,
+    plan_stale_after_seconds: int | None = None,
 ) -> AnalysisRunResult:
     """Run the shared parse -> assess -> persist pipeline."""
     from services.project_service import TrustedAuthorizationError, authorized_session
@@ -2708,6 +2756,20 @@ def analyze_uploaded_files(
         workspace_id=workspace_id,
         workspace_key=workspace_key,
     )
+    if snapshot_digest is None and plan_stale_after_seconds is not None:
+        raise DivergenceRequestError("invalid_grounding_snapshot")
+    parse_batch = build_parse_batch(files) if snapshot_digest is not None else None
+    comparison = (
+        compare_retained_plan(
+            files,
+            project_id=resolved_project.id,
+            snapshot_digest=snapshot_digest,
+            stale_after_seconds=plan_stale_after_seconds,
+            parse_batch=parse_batch,
+        )
+        if snapshot_digest is not None
+        else None
+    )
     # Only trusted server composition supplies a collected outcome. Public
     # request fields and CLI flags do not install a connector or authority port.
     grounding_kwargs = (
@@ -2715,6 +2777,9 @@ def analyze_uploaded_files(
         if grounding_outcome is not None
         else {}
     )
+    if comparison is not None:
+        grounding_kwargs["live_context"] = comparison
+        grounding_kwargs["_parse_batch"] = parse_batch
     artifacts = build_analysis_artifacts(
         files,
         project_id=resolved_project.id,
@@ -2728,7 +2793,23 @@ def analyze_uploaded_files(
     try:
         # An internal automation adapter may bind report/link/output in the same
         # final operation. Analysis above retains short independent context reads.
-        with authorized_session() if _on_persisted is not None else nullcontext():
+        publication_context = (
+            divergence_admission(
+                resolved_project.id, comparison.snapshot_digest, comparison=comparison
+            )
+            if comparison is not None
+            else authorized_session()
+            if _on_persisted is not None
+            else nullcontext()
+        )
+        with publication_context as admission:
+            publication_kwargs = {}
+            if comparison is not None:
+                ensure_comparison_publishable(comparison, admission.snapshot)
+                findings, evidence = divergence_findings(comparison, admission)
+                artifacts.findings.extend(findings)
+                artifacts.evidence_items.extend(evidence)
+                publication_kwargs["_live_evidence_admission"] = admission
             persisted_report = persist_analysis_report(
                 artifacts.parse_batch,
                 artifacts.assessment,
@@ -2745,13 +2826,20 @@ def analyze_uploaded_files(
                 workspace_key=workspace_key,
                 audit_context=audit_context,
                 analysis_duration_seconds=analysis_duration_seconds,
+                **publication_kwargs,
             )
             if _on_persisted is not None:
                 _on_persisted(persisted_report)
-    except TrustedAuthorizationError:
+    except (
+        TrustedAuthorizationError,
+        DivergenceRequestError,
+        AnalysisPersistenceError,
+    ):
         raise
     except Exception as exc:  # noqa: BLE001
         raise AnalysisPersistenceError(str(exc)) from exc
     return AnalysisRunResult(
-        **artifacts.model_dump(), persisted_report=persisted_report
+        **artifacts.model_dump(),
+        persisted_report=persisted_report,
+        live_context=comparison,
     )

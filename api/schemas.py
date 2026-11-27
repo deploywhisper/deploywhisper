@@ -22,6 +22,7 @@ import math
 import json
 from typing import Annotated, Any, Literal
 
+from analysis.divergence import DivergenceAssessment
 from config import settings
 from cloud.collection import CollectionBudget
 from evidence.models import (
@@ -2030,6 +2031,9 @@ class AnalysisRunData(BaseModel):
     cloud_collection: CollectionBudget | None = Field(
         default=None, exclude_if=lambda value: value is None
     )
+    live_context: DivergenceAssessment | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
     intake: PendingAnalysis
     parse_batch: ParseBatchData
     assessment: AssessmentData
@@ -2690,6 +2694,7 @@ def build_analysis_run_data(
 
     return AnalysisRunData(
         cloud_collection=getattr(result, "cloud_collection", None),
+        live_context=getattr(result, "live_context", None),
         intake=PendingAnalysis.model_validate(public_intake),
         parse_batch=ParseBatchData(
             files=[

@@ -1,0 +1,242 @@
+{
+  "format_version": "1.2",
+  "terraform_version": "1.9.8",
+  "timestamp": "2026-11-20T10:00:00Z",
+  "prior_state": {
+    "format_version": "1.0",
+    "values": {
+      "root_module": {
+        "resources": [
+          {
+            "address": "aws_instance.match",
+            "mode": "managed",
+            "type": "aws_instance",
+            "values": {
+              "id": "i-00000001",
+              "disable_api_termination": true
+            }
+          },
+          {
+            "address": "aws_instance.modified",
+            "mode": "managed",
+            "type": "aws_instance",
+            "values": {
+              "id": "i-00000002",
+              "disable_api_termination": true
+            }
+          },
+          {
+            "address": "aws_instance.deleted",
+            "mode": "managed",
+            "type": "aws_instance",
+            "values": {
+              "id": "i-00000003"
+            }
+          },
+          {
+            "address": "aws_instance.recreated",
+            "mode": "managed",
+            "type": "aws_instance",
+            "values": {
+              "id": "i-00000004"
+            }
+          },
+          {
+            "address": "aws_instance.tag_only",
+            "mode": "managed",
+            "type": "aws_instance",
+            "values": {
+              "id": "i-00000005",
+              "tags": {
+                "team": "platform"
+              }
+            }
+          },
+          {
+            "address": "aws_instance.unknown",
+            "mode": "managed",
+            "type": "aws_instance",
+            "values": {
+              "id": "i-00000006",
+              "disable_api_termination": false
+            }
+          },
+          {
+            "address": "aws_instance.unreadable",
+            "mode": "managed",
+            "type": "aws_instance",
+            "values": {
+              "id": "i-00000007",
+              "disable_api_termination": true
+            }
+          },
+          {
+            "address": "aws_instance.partial",
+            "mode": "managed",
+            "type": "aws_instance",
+            "values": {
+              "id": "i-00000008",
+              "disable_api_termination": true
+            }
+          }
+        ]
+      }
+    }
+  },
+  "resource_changes": [
+    {
+      "address": "aws_instance.match",
+      "mode": "managed",
+      "type": "aws_instance",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "id": "i-00000001",
+          "disable_api_termination": true
+        },
+        "after": {
+          "id": "i-00000001",
+          "disable_api_termination": true
+        }
+      }
+    },
+    {
+      "address": "aws_instance.modified",
+      "mode": "managed",
+      "type": "aws_instance",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "id": "i-00000002",
+          "disable_api_termination": true
+        },
+        "after": {
+          "id": "i-00000002",
+          "disable_api_termination": true
+        }
+      }
+    },
+    {
+      "address": "aws_instance.deleted",
+      "mode": "managed",
+      "type": "aws_instance",
+      "change": {
+        "actions": [
+          "delete"
+        ],
+        "before": {
+          "id": "i-00000003"
+        },
+        "after": null
+      }
+    },
+    {
+      "address": "aws_instance.recreated",
+      "mode": "managed",
+      "type": "aws_instance",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "id": "i-00000004"
+        },
+        "after": {
+          "id": "i-00000004"
+        }
+      }
+    },
+    {
+      "address": "aws_instance.tag_only",
+      "mode": "managed",
+      "type": "aws_instance",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "id": "i-00000005",
+          "tags": {
+            "team": "platform"
+          }
+        },
+        "after": {
+          "id": "i-00000005",
+          "tags": {
+            "team": "review"
+          }
+        }
+      }
+    },
+    {
+      "address": "aws_instance.unknown",
+      "mode": "managed",
+      "type": "aws_instance",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "id": "i-00000006",
+          "disable_api_termination": false
+        },
+        "after": {
+          "id": "i-00000006",
+          "disable_api_termination": false
+        }
+      }
+    },
+    {
+      "address": "aws_instance.unreadable",
+      "mode": "managed",
+      "type": "aws_instance",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "id": "i-00000007",
+          "disable_api_termination": true
+        },
+        "after": {
+          "id": "i-00000007",
+          "disable_api_termination": true
+        }
+      }
+    },
+    {
+      "address": "aws_instance.partial",
+      "mode": "managed",
+      "type": "aws_instance",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "id": "i-00000008",
+          "disable_api_termination": true
+        },
+        "after": {
+          "id": "i-00000008",
+          "disable_api_termination": true
+        }
+      }
+    },
+    {
+      "address": "aws_instance.no_op",
+      "mode": "managed",
+      "type": "aws_instance",
+      "change": {
+        "actions": [
+          "no-op"
+        ],
+        "before": {},
+        "after": {}
+      }
+    }
+  ]
+}

@@ -55,6 +55,10 @@ from services.adapter_output_contract import (
     AdapterMetadata,
     build_adapter_output_contract,
 )
+from services.divergence_service import (
+    DivergenceRequestError,
+    divergence_gate_exit_code,
+)
 from services.intake_service import (
     MAX_TOTAL_UPLOAD_BYTES,
     build_pending_analysis,
@@ -828,6 +832,7 @@ def delete_analyses(
         400: {"model": ErrorResponse},
         403: {"model": ErrorResponse},
         404: {"model": ErrorResponse},
+        409: {"model": ErrorResponse},
         413: {"model": ErrorResponse},
         405: {"model": ErrorResponse},
         422: {"model": ErrorResponse},
@@ -858,6 +863,22 @@ async def create_analysis(
         default=None,
         description="Optional trusted relative artifact path per uploaded file for directory-scoped ownership matching.",
     ),
+    snapshot_digest: Annotated[
+        str | None,
+        Form(
+            description="Digest of a retained live observation for the authorized project."
+        ),
+    ] = None,
+    plan_stale_after_seconds: Annotated[
+        int | None,
+        Form(description="Optional threshold for the plan freshness indicator."),
+    ] = None,
+    fail_on_divergence: Annotated[
+        bool,
+        Form(
+            description="Return HTTP 409 if divergence is confirmed or verification is inconclusive."
+        ),
+    ] = False,
     trigger_type: str | None = Header(
         default=None, alias="X-DeployWhisper-Trigger-Type"
     ),
@@ -870,6 +891,14 @@ async def create_analysis(
             status_code=400,
             code="missing_artifacts",
             message="At least one artifact file is required.",
+        )
+    if snapshot_digest is None and (
+        fail_on_divergence or plan_stale_after_seconds is not None
+    ):
+        raise ApiError(
+            status_code=400,
+            code="snapshot_digest_required",
+            message="A retained snapshot digest is required for divergence options.",
         )
 
     try:
@@ -910,6 +939,12 @@ async def create_analysis(
                 capability="analysis.submit",
                 project_id=resolved_project.id,
             )
+        if snapshot_digest is not None:
+            _require_api_project_permission(
+                authorization=authorization,
+                capability="report.read",
+                project_key=resolved_project.project_key,
+            )
     except PermissionError as exc:
         _raise_authorization_error(exc)
     except ValueError as exc:
@@ -934,6 +969,12 @@ async def create_analysis(
             details={"items": [item.model_dump() for item in pending_analysis.items]},
         )
 
+    grounding_options: dict[str, str | int] = {}
+    if snapshot_digest is not None:
+        grounding_options["snapshot_digest"] = snapshot_digest
+    if plan_stale_after_seconds is not None:
+        grounding_options["plan_stale_after_seconds"] = plan_stale_after_seconds
+
     try:
         result = analyze_uploaded_files(
             raw_files,
@@ -947,7 +988,14 @@ async def create_analysis(
                 "trigger_id": trigger_id,
                 "actor": actor or "api_client",
             },
+            **grounding_options,
         )
+    except DivergenceRequestError as exc:
+        raise ApiError(
+            status_code=404 if exc.code == "grounding_evidence_unavailable" else 400,
+            code=exc.code,
+            message=str(exc),
+        ) from exc
     except AnalysisPersistenceError as exc:
         raise ApiError(
             status_code=500,
@@ -957,6 +1005,29 @@ async def create_analysis(
         ) from exc
     except ValueError as exc:
         raise _project_api_error(exc) from exc
+    live_context = getattr(result, "live_context", None)
+    if fail_on_divergence:
+        gate_exit_code = divergence_gate_exit_code(live_context)
+        if gate_exit_code:
+            confirmed = gate_exit_code == 3
+            raise ApiError(
+                status_code=409,
+                code="plan_reality_divergence"
+                if confirmed
+                else "divergence_unverified",
+                message=(
+                    "The retained observation confirms divergence from the plan."
+                    if confirmed
+                    else "The retained observation could not verify the plan."
+                ),
+                details={
+                    "exit_code": gate_exit_code,
+                    "report_id": result.persisted_report["id"],
+                    "live_context": live_context.model_dump(mode="json")
+                    if live_context is not None
+                    else None,
+                },
+            )
     advisory = _analysis_run_advisory(result)
     share_summary = build_share_summary(result.persisted_report)
     return AnalysisRunResponse(

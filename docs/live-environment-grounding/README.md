@@ -1,6 +1,6 @@
 # Live Environment Grounding — Operator Guide
 
-> **Operator features remain planned.** Story 17.1 implements the SDK-free connector/snapshot/evidence foundation and a network-free reference provider for qualification. AWS/Azure/GCP collection, operator settings, CLI flags and the report UI described below are delivered by later stories. The foundation does not claim live-provider support. See the [implemented connector contract](connector-contract.md).
+> **Available offline.** Story 17.4 adds CLI and API comparison of a recorded plan against a retained project snapshot. The connector foundation, read-only AWS primitives and bounded collection support this path. Operator settings, the report UI and production AWS qualification stay in their respective stories. See the [connector contract](connector-contract.md).
 >
 > Governance: [RFC 0002](../rfcs/0002-live-environment-grounding.md) (Accepted 2026-10-19; acceptance authorizes Story 17.0 qualification only) · Target release: v1.6.0, independent of Epic 16 after the approved 2026-11-11 cut-back · Requirements: [feature PRD](../../_bmad-output/planning-artifacts/prd-live-environment-grounding.md) · Architecture: [§26](../../_bmad-output/planning-artifacts/architecture.md)
 
@@ -67,13 +67,34 @@ Partial coverage is labelled partial. Completeness is never implied from a parti
 
 ## CI usage
 
-The divergence gate is usable from the CLI alone and needs no web UI:
+Select a retained snapshot from the same grounding-enabled project and scope as the plan. The command reads the snapshot by digest and requires project `analysis.submit` and `report.read` access. Snapshot provisioning and production AWS collection are separate workflows.
 
-```
-deploywhisper analyze <plan.json> --ground --fail-on-divergence
+The gate requires exactly one Terraform or OpenTofu JSON plan accepted by shared artifact intake. Excluded files cannot supply comparison evidence, and submitting multiple recognized JSON plans makes the selection ambiguous.
+
+```sh
+deploywhisper analyze --project payments --snapshot-digest "$SNAPSHOT_DIGEST" \
+  --fail-on-divergence path/to/plan.json
 ```
 
-If the plan was computed against stale reality, the command exits with a distinct documented exit code. The exact code is published as part of Story 17.4 and is a stable contract once released.
+When analysis completes, the CLI prints the advisory report with its versioned `live_context` comparison before returning the gate result. `--agent-json` carries the same comparison block. The report's `should_block` remains `false`.
+
+| Exit code | Comparison with `--fail-on-divergence` |
+| --- | --- |
+| `0` | A current observation verifies the planned changes and all comparisons match. |
+| `2` | The comparison could not be verified, such as an uncovered change, an unknown or unreadable resource, an old observation, an undated plan, or invalid input. |
+| `3` | A current observation confirms divergence on at least one resource. |
+
+Use `--snapshot-digest` for an advisory comparison and add `--fail-on-divergence` to enforce the CI gate. `--plan-stale-after-seconds` overrides the default threshold of 3,600 seconds measured from plan generation to the snapshot read. The freshness result flags an old plan separately from confirmed drift. Confirmed tag-only drift triggers the CI gate. Its severity floor applies when the affected resource has a planned destructive change.
+
+The selected observation must be no more than one hour old for a definitive gate result. The recorded timestamps must establish that observation began at or after plan generation. A resource name alone cannot establish an AWS account or region, so missing scope evidence leaves those comparisons unresolved. Incomplete, errored and deferred plans cannot clear the gate.
+
+Plan timestamps with nonzero precision finer than one microsecond leave chronology unresolved. Contradictory no-op rows and duplicate plan change identities are rejected. For a touched AWS security group, a tag or VPC match alone cannot verify recorded ingress or egress rules. The current snapshot projection leaves the rule comparison unresolved, while any independently confirmed drift still triggers exit `3`.
+
+For EC2 instances, the gate compares recorded VPC security group attachments as an unordered set. Confirmed attachment drift triggers exit `3` and raises the report recommendation to at least `caution`. A recorded attachment set stays unresolved when the retained read lacks usable attachment facts.
+
+For CI over HTTP, submit multipart fields `snapshot_digest`, optional `plan_stale_after_seconds`, and `fail_on_divergence=true` with the plan to `POST /api/v1/analyses`. A completed analysis whose comparison fails the gate returns HTTP `409`. The error details provide the report ID and corresponding CLI exit code. The saved report remains advisory.
+
+If an operational database error prevents report publication, the transaction rolls back. The API returns HTTP `500` and the CLI exits `1` with `report_persistence_failed`, including database failures during post-write evidence verification or the final retained-snapshot read.
 
 ## Restricted and air-gapped networks
 
@@ -297,9 +318,8 @@ the field entirely; report-v2 and agent-v1 versions remain unchanged. Fields:
 | `elapsed_seconds` | Monotonic service duration including retention/finalization |
 | `cancelled` | Cancellation was requested before completion |
 
-This slice adds the internal collection and serialization contracts. Operator UI,
-CLI enablement flags, production authorization composition and live AWS profile
-qualification remain in their owning later stories. Existing HTTP/CLI flows do
-not automatically install or activate a provider. Fixture and fault-injection
-results do not qualify live AWS support. See the
+Story 17.3 supplies the internal collection and serialization contracts. Story
+17.4 compares retained snapshots through the same analysis interfaces. Operator
+UI, provider activation and live AWS profile qualification remain in their owning
+later stories. See the
 [verification packet](../verification/live-environment-grounding/17-3/README.md).

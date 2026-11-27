@@ -1,5 +1,5 @@
 # generated: 2026-05-01
-# last_updated: 2026-11-20
+# last_updated: 2026-11-27
 # project: deploywhisper
 # project_key: NOKEY
 # tracking_system: file-system
@@ -42,7 +42,7 @@
 # - Dev moves story to review, then runs code-review
 
 generated: 2026-05-01
-last_updated: 2026-11-20
+last_updated: 2026-11-27
 project: deploywhisper
 project_key: NOKEY
 tracking_system: file-system
@@ -245,7 +245,7 @@ development_status:
   17-1-cloud-connector-contract-and-snapshot-evidence: done
   17-2-aws-read-only-session-allowlist-and-dry-run: done
   17-3-plan-directed-reflection-and-bounded-collection: done
-  17-4-plan-versus-reality-divergence-and-ci-gate: backlog
+  17-4-plan-versus-reality-divergence-and-ci-gate: done
   17-5-live-dependency-graph-and-grounded-blast-radius: backlog
   17-6-grounded-recoverability-and-rollback: backlog
   17-7-snapshot-portability-and-air-gapped-grounding: backlog

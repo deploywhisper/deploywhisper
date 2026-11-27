@@ -2421,6 +2421,9 @@ def _scope_report_entities(
     assessment: RiskAssessment,
     findings: list[Finding] | None,
     evidence_items: list[EvidenceItem] | None,
+    *,
+    preserve_evidence_ids: frozenset[str] = frozenset(),
+    preserve_finding_ids: frozenset[str] = frozenset(),
 ) -> tuple[RiskAssessment, list[Finding] | None, list[EvidenceItem] | None]:
     """Namespace finding/evidence identifiers so repeated scans can persist safely."""
     if not findings and not evidence_items:
@@ -2428,7 +2431,9 @@ def _scope_report_entities(
 
     scope = secrets.token_hex(4)
     finding_id_map = {
-        finding.finding_id: _scoped_identifier(
+        finding.finding_id: finding.finding_id
+        if finding.finding_id in preserve_finding_ids
+        else _scoped_identifier(
             kind="finding",
             original_id=finding.finding_id,
             scope=scope,
@@ -2436,7 +2441,9 @@ def _scope_report_entities(
         for finding in findings or []
     }
     evidence_id_map = {
-        evidence_item.evidence_id: _scoped_identifier(
+        evidence_item.evidence_id: evidence_item.evidence_id
+        if evidence_item.evidence_id in preserve_evidence_ids
+        else _scoped_identifier(
             kind="evidence",
             original_id=evidence_item.evidence_id,
             scope=scope,
@@ -4643,8 +4650,24 @@ def persist_analysis_report(
     audit_context: dict[str, Any] | None = None,
     submitted_artifacts: list[tuple[str, bytes | None]] | None = None,
     analysis_duration_seconds: int | None = None,
+    _live_evidence_admission=None,
 ) -> dict:
     """Persist the completed analysis before the UI treats it as final."""
+    live_items = [
+        item
+        for item in evidence_items or ()
+        if item.source_type == "live_state"
+        or item.source_ref.startswith("live_state://")
+    ]
+    preserve_evidence_ids = preserve_finding_ids = frozenset()
+    if live_items:
+        from services.cloud_context_service import CloudContextError, _EvidenceAdmission
+
+        if not isinstance(_live_evidence_admission, _EvidenceAdmission):
+            raise CloudContextError("invalid_evidence_publication")
+        preserve_evidence_ids, preserve_finding_ids = (
+            _live_evidence_admission.claim_ids_for_publication(live_items)
+        )
     security_inputs = submitted_artifacts or list((artifact_snapshots or {}).items())
     sensitive_values = (
         sensitive_submission_values(security_inputs) + provider_credential_values()
@@ -4783,6 +4806,8 @@ def persist_analysis_report(
         assessment,
         findings,
         evidence_items,
+        preserve_evidence_ids=preserve_evidence_ids,
+        preserve_finding_ids=preserve_finding_ids,
     )
     audit = _build_audit_metadata(parse_batch, audit_context=audit_context)
     audit["llm_provider"] = narrative.provider or audit["llm_provider"]
@@ -4884,6 +4909,8 @@ def persist_analysis_report(
 
     def operation():
         with authorized_session(SessionLocal) as session:
+            if live_items and _live_evidence_admission.session is not session:
+                raise CloudContextError("invalid_evidence_publication")
             trusted_scope = guard_project(
                 session,
                 resolved_project.id,

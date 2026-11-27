@@ -56,6 +56,7 @@ from models.tables import (
 )
 
 CloudOperation = Literal["configure", "collect", "read", "admit", "purge"]
+DEFAULT_SNAPSHOT_STALE_AFTER = timedelta(hours=1)
 
 _PLAN_COLLECTION_SLOTS = BoundedSemaphore(4)
 
@@ -119,7 +120,7 @@ def snapshot_context(
     *,
     now: datetime,
     conflicting: bool = False,
-    stale_after: timedelta = timedelta(hours=1),
+    stale_after: timedelta = DEFAULT_SNAPSHOT_STALE_AFTER,
 ) -> ContextSourceMetadata:
     now = _utc(now)
     if not isinstance(stale_after, timedelta) or stale_after.total_seconds() < 0:
@@ -171,6 +172,24 @@ class _EvidenceAdmission:
         self._nonce = uuid4().hex
         self._before_live_rows = self._live_rows()
         self._before_live_ids = set(self._before_live_rows)
+
+    @property
+    def snapshot(self) -> LiveContextSnapshot:
+        if not self._active:
+            raise CloudContextError("admission_closed")
+        self._check()
+        return self._snapshot
+
+    def claim_ids_for_publication(self, evidence_items):
+        if not self._active:
+            raise CloudContextError("admission_closed")
+        self._check()
+        expected = {item.evidence_id: item for item in evidence_items}
+        if len(expected) != len(evidence_items) or expected != self._minted:
+            raise CloudContextError("invalid_evidence_publication")
+        return frozenset(expected), frozenset(
+            item.finding_id for item in evidence_items
+        )
 
     def _live_rows(self):
         # Read columns, not ORM identities: pending ORM edits and bulk SQL must
@@ -969,8 +988,21 @@ class CloudContextService:
             )
 
     @contextmanager
-    def admit_evidence(self, project_id, digest) -> Iterator[_EvidenceAdmission]:
-        with self._transaction(project_id, "admit") as (session, check):
+    def admit_evidence(
+        self,
+        project_id,
+        digest,
+        *,
+        before_finalize: Callable[[LiveContextSnapshot], None] | None = None,
+    ) -> Iterator[_EvidenceAdmission]:
+        def check_finalization():
+            before_finalize(snapshot)
+
+        with self._transaction(
+            project_id,
+            "admit",
+            before_finalize=check_finalization if before_finalize is not None else None,
+        ) as (session, check):
             config = self._configuration(session, project_id)
             if not config.enabled:
                 raise CloudContextError("grounding_disabled")
@@ -997,5 +1029,7 @@ class CloudContextService:
                 if retained is None or retained.digest != snapshot.digest:
                     raise CloudContextError("snapshot_unavailable")
                 check()
+                if before_finalize is not None:
+                    check_finalization()
             finally:
                 admission._active = False

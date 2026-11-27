@@ -13,7 +13,11 @@ from cloud.base import LiveContextSnapshot, canonical_snapshot_json, validate_sn
 from cloud.redaction import redact_snapshot
 from models.tables import AnalysisReport, EvidenceItem
 from models.cloud_snapshots import CloudContextSnapshot
-from cloud.schema import require_snapshot_schema, snapshot_schema_available
+from cloud.schema import (
+    CloudSnapshotSchemaStorageError,
+    require_snapshot_schema,
+    snapshot_schema_available,
+)
 
 _DIGEST = re.compile(r"[0-9a-f]{64}\Z")
 _RETENTION = timedelta(days=7)
@@ -24,6 +28,10 @@ class CloudSnapshotIntegrityError(ValueError):
 
     def __init__(self):
         super().__init__("Cloud snapshot unavailable.")
+
+
+class CloudSnapshotStorageError(CloudSnapshotIntegrityError):
+    """A database operation failed while reading retained snapshot state."""
 
 
 def _require_transaction(session):
@@ -39,7 +47,7 @@ def _require_transaction(session):
         ):
             raise CloudSnapshotIntegrityError()
     except SQLAlchemyError:
-        raise CloudSnapshotIntegrityError() from None
+        raise CloudSnapshotStorageError() from None
 
 
 def _wall_now(now=None):
@@ -212,7 +220,9 @@ def get_snapshot(session, *, project_id, digest, now: datetime | None = None):
         ):
             return None
         return snapshot
-    except (ValueError, TypeError, SQLAlchemyError):
+    except (SQLAlchemyError, CloudSnapshotSchemaStorageError):
+        raise CloudSnapshotStorageError() from None
+    except (ValueError, TypeError):
         raise CloudSnapshotIntegrityError() from None
 
 
