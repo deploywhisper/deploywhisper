@@ -220,6 +220,18 @@ def project_response(entry, response, *, scope, sensitive_values=()) -> Projecti
     if not identity_complete:
         return Projection((), False)
     complete = complete and not screened
+    if entry.capability == "instance":
+        # Projecting an incomplete group list can hide an attachment at the
+        # last index. Keep the known facts but do not certify the whole read.
+        for instance in _rows(raw, "Reservations[].Instances[]") or ():
+            groups = instance.get("SecurityGroups", [])
+            if not isinstance(groups, list) or any(
+                not isinstance(group, dict)
+                or not isinstance(group.get("GroupId"), str)
+                or not group["GroupId"]
+                for group in groups
+            ):
+                complete = False
     facts = []
 
     def screen_numeric(value):

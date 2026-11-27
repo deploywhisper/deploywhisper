@@ -21,6 +21,10 @@ class CloudSnapshotSchemaError(ValueError):
         super().__init__("Cloud snapshot schema unavailable.")
 
 
+class CloudSnapshotSchemaStorageError(CloudSnapshotSchemaError):
+    """A database operation failed while inspecting the snapshot schema."""
+
+
 TABLE = "cloud_context_snapshots"
 IDENTITY_CHECK = "typeof(project_id)='integer' AND project_id > 0 AND length(digest)=64 AND digest NOT GLOB '*[^0-9a-f]*' AND length(provider) BETWEEN 1 AND 32 AND length(scope_id) BETWEEN 1 AND 128 AND mask_accounts IN (0,1)"
 TIME_CHECK = "julianday(read_window_start) IS NOT NULL AND julianday(read_window_end) IS NOT NULL AND julianday(expires_at) IS NOT NULL AND julianday(created_at) IS NOT NULL AND julianday(read_window_start)<=julianday(read_window_end) AND julianday(created_at)>=julianday(read_window_end) AND julianday(expires_at)=julianday(read_window_end,'+7 days')"
@@ -207,7 +211,7 @@ def _connection(session):
             raise CloudSnapshotSchemaError()
         return connection
     except SQLAlchemyError:
-        raise CloudSnapshotSchemaError() from None
+        raise CloudSnapshotSchemaStorageError() from None
 
 
 def _namespace_objects(connection):
@@ -286,7 +290,9 @@ def snapshot_schema_available(session):
         if not _schema_complete(connection):
             raise CloudSnapshotSchemaError()
         return True
-    except (SQLAlchemyError, RuntimeError, ValueError, TypeError):
+    except SQLAlchemyError:
+        raise CloudSnapshotSchemaStorageError() from None
+    except (RuntimeError, ValueError, TypeError):
         raise CloudSnapshotSchemaError() from None
 
 

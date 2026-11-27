@@ -1,0 +1,116 @@
+{
+  "provider": "aws",
+  "project_id": 1,
+  "scope_id": "fixture-scope",
+  "scope": "000000000000",
+  "regions": [
+    "us-east-1"
+  ],
+  "read_window_start": "2026-11-20T12:00:00Z",
+  "read_window_end": "2026-11-20T12:00:01Z",
+  "resources": [
+    {
+      "identity": {
+        "address": "aws_instance.match",
+        "resource_type": "aws_instance",
+        "physical_id": "i-00000001"
+      },
+      "status": "read",
+      "facts": [
+        {
+          "name": "termination_protection.DisableApiTermination.Value",
+          "value": true
+        }
+      ]
+    },
+    {
+      "identity": {
+        "address": "aws_instance.modified",
+        "resource_type": "aws_instance",
+        "physical_id": "i-00000002"
+      },
+      "status": "read",
+      "facts": [
+        {
+          "name": "termination_protection.DisableApiTermination.Value",
+          "value": false
+        }
+      ]
+    },
+    {
+      "identity": {
+        "address": "aws_instance.deleted",
+        "resource_type": "aws_instance",
+        "physical_id": "i-00000003"
+      },
+      "status": "read",
+      "facts": [
+        {
+          "name": "resource.exists",
+          "value": false
+        }
+      ]
+    },
+    {
+      "identity": {
+        "address": "aws_instance.recreated",
+        "resource_type": "aws_instance",
+        "physical_id": "i-00000004"
+      },
+      "status": "read",
+      "facts": [
+        {
+          "name": "resource.physical_id",
+          "value": "i-00000024"
+        }
+      ]
+    },
+    {
+      "identity": {
+        "address": "aws_instance.tag_only",
+        "resource_type": "aws_instance",
+        "physical_id": "i-00000005"
+      },
+      "status": "read",
+      "facts": [
+        {
+          "name": "instance.Reservations.0.Instances.0.Tags.0.Key",
+          "value": "team"
+        },
+        {
+          "name": "instance.Reservations.0.Instances.0.Tags.0.Value",
+          "value": "operations"
+        }
+      ]
+    },
+    {
+      "identity": {
+        "address": "aws_instance.unreadable",
+        "resource_type": "aws_instance",
+        "physical_id": "i-00000007"
+      },
+      "status": "unreadable",
+      "cause": "permission_denied",
+      "missing_permission": "ec2:DescribeInstances"
+    },
+    {
+      "identity": {
+        "address": "aws_instance.partial",
+        "resource_type": "aws_instance",
+        "physical_id": "i-00000008"
+      },
+      "status": "partial",
+      "facts": [
+        {
+          "name": "termination_protection.DisableApiTermination.Value",
+          "value": true
+        }
+      ],
+      "cause": "deadline"
+    }
+  ],
+  "issued_actions": [
+    "ec2:DescribeInstanceAttribute",
+    "ec2:DescribeInstances"
+  ]
+}

@@ -7,6 +7,7 @@ import contextlib
 import io
 import json
 import os
+import re
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
@@ -537,12 +538,47 @@ def _run_analyze(
     workspace_id: int | None = None,
     workspace_key: str | None = None,
     agent_json: bool = False,
+    snapshot_digest: str | None = None,
+    plan_stale_after_seconds: int | None = None,
+    fail_on_divergence: bool = False,
 ) -> int:
     if not paths:
         _emit_json(
             build_error(
                 code="missing_artifacts",
                 message="At least one artifact file is required.",
+            ),
+            stream=sys.stderr,
+        )
+        return 2
+
+    if snapshot_digest is None and (
+        fail_on_divergence or plan_stale_after_seconds is not None
+    ):
+        _emit_json(
+            build_error(
+                code="snapshot_digest_required",
+                message="Choose a retained snapshot with --snapshot-digest.",
+            ),
+            stream=sys.stderr,
+        )
+        return 2
+    if snapshot_digest is not None and not re.fullmatch(
+        r"[0-9a-f]{64}", snapshot_digest
+    ):
+        _emit_json(
+            build_error(
+                code="invalid_grounding_snapshot",
+                message="The snapshot digest must be 64 lowercase hexadecimal characters.",
+            ),
+            stream=sys.stderr,
+        )
+        return 2
+    if plan_stale_after_seconds is not None and plan_stale_after_seconds <= 0:
+        _emit_json(
+            build_error(
+                code="invalid_plan_staleness",
+                message="The plan staleness threshold must be a positive number of seconds.",
             ),
             stream=sys.stderr,
         )
@@ -567,6 +603,11 @@ def _run_analyze(
             capability="analysis.submit",
             project_key=resolved_project.project_key,
         )
+        if snapshot_digest is not None:
+            _require_cli_project_permission(
+                capability="report.read",
+                project_key=resolved_project.project_key,
+            )
     except PermissionError as exc:
         return _emit_project_authorization_error(exc)
     except ValueError as exc:
@@ -602,6 +643,11 @@ def _run_analyze(
         )
         return 2
 
+    divergence_options: dict[str, str | int] = {}
+    if snapshot_digest is not None:
+        divergence_options["snapshot_digest"] = snapshot_digest
+    if plan_stale_after_seconds is not None:
+        divergence_options["plan_stale_after_seconds"] = plan_stale_after_seconds
     try:
         with (
             contextlib.redirect_stdout(io.StringIO()),
@@ -621,6 +667,7 @@ def _run_analyze(
                     "trigger_id": os.getenv("DEPLOYWHISPER_TRIGGER_ID"),
                     "actor": os.getenv("DEPLOYWHISPER_ACTOR", "cli_local_user"),
                 },
+                **divergence_options,
             )
     except ValueError as exc:
         if _should_mask_cli_scope_reference_error(exc):
@@ -661,9 +708,13 @@ def _run_analyze(
     )
     if agent_json:
         payload = build_agent_analysis_data(analysis_data).model_dump(mode="json")
+        if snapshot_digest is not None and analysis_data.live_context is not None:
+            payload["live_context"] = analysis_data.live_context.model_dump(mode="json")
     else:
         payload = {
-            "data": analysis_data.model_dump(),
+            "data": analysis_data.model_dump(
+                mode="json" if snapshot_digest is not None else "python"
+            ),
             "meta": build_meta(
                 api_version="v1",
                 report_schema_version=REPORT_SCHEMA_VERSION,
@@ -674,6 +725,10 @@ def _run_analyze(
             ),
         }
     _emit_json(payload, stream=sys.stdout)
+    if fail_on_divergence:
+        from services.divergence_service import divergence_gate_exit_code
+
+        return divergence_gate_exit_code(result.live_context)
     return 0
 
 
@@ -1196,6 +1251,20 @@ def build_parser() -> argparse.ArgumentParser:
         help="Emit stable advisory JSON for AI-agent consumption.",
     )
     analyze_parser.add_argument(
+        "--snapshot-digest",
+        help="Compare against a retained live-context snapshot in the selected project.",
+    )
+    analyze_parser.add_argument(
+        "--plan-stale-after-seconds",
+        type=int,
+        help="Flag plans older than this many seconds when the snapshot was read (default 3600).",
+    )
+    analyze_parser.add_argument(
+        "--fail-on-divergence",
+        action="store_true",
+        help="Require a retained snapshot. Exit 3 for divergence or 2 for an inconclusive comparison.",
+    )
+    analyze_parser.add_argument(
         "paths", nargs="*", help="Artifact file paths to analyze."
     )
 
@@ -1564,6 +1633,11 @@ def main() -> None:
                 workspace_id=getattr(args, "workspace_id", None),
                 workspace_key=getattr(args, "workspace_key", None),
                 agent_json=getattr(args, "agent_json", False),
+                snapshot_digest=getattr(args, "snapshot_digest", None),
+                plan_stale_after_seconds=getattr(
+                    args, "plan_stale_after_seconds", None
+                ),
+                fail_on_divergence=getattr(args, "fail_on_divergence", False),
             )
         )
     if args.command == "project" and args.project_command == "create":

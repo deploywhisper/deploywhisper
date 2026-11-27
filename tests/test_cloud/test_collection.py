@@ -69,6 +69,34 @@ class CollectionTests(unittest.TestCase):
         self.assertNotIn("unselected-private", text)
         self.assertEqual(len(result.snapshot.resources), 1)
 
+    def test_ec2_attachment_projection_marks_an_unreported_trailing_group_incomplete(
+        self,
+    ):
+        client = self.session.create_client.return_value
+        original_response = client._make_api_call.side_effect
+
+        def response(operation, parameters):
+            result = original_response(operation, parameters)
+            if operation == "DescribeInstances":
+                instance = result["Reservations"][0]["Instances"][0]
+                instance["SecurityGroups"] = [
+                    {"GroupId": "sg-0123456789abcdef0"},
+                    {"GroupName": "missing-id"},
+                ]
+            return result
+
+        client._make_api_call.side_effect = response
+        (resource,) = self.collect().snapshot.resources
+        self.assertEqual(resource.status.value, "partial")
+        facts = {fact.name: fact.value for fact in resource.facts}
+        self.assertEqual(
+            facts["instance.Reservations.0.Instances.0.SecurityGroups.0.GroupId"],
+            "sg-0123456789abcdef0",
+        )
+        self.assertEqual(
+            facts["instance.Reservations.0.Instances.0.State.Name"], "running"
+        )
+
     def test_create_needs_no_sdk(self):
         source = plan(actions=["create"])
         source["resource_changes"][0]["change"]["before"] = None

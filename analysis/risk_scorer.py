@@ -55,6 +55,10 @@ INSUFFICIENT_CONTEXT_WARNING = (
     "coverage, or incident history requires reviewer verification before treating "
     "this result as low risk."
 )
+DIVERGENCE_FLOOR_WARNING = (
+    "Plan-versus-reality divergence on a security-relevant or destructive "
+    "attribute requires reviewer verification."
+)
 CONTEXT_REGENERATION_TODO = (
     "Re-run analysis after improving topology, parser, evidence, or incident context."
 )
@@ -225,6 +229,23 @@ def _normalize_action(action: str) -> str:
 
 def _severity_max(left: RiskSeverity, right: RiskSeverity) -> RiskSeverity:
     return left if SEVERITY_ORDER[left] >= SEVERITY_ORDER[right] else right
+
+
+def apply_divergence_floor(
+    assessment: RiskAssessment, *, requires_caution: bool
+) -> RiskAssessment:
+    """Apply the advisory floor from a confirmed security or destructive change."""
+    if not requires_caution:
+        return assessment
+
+    result = assessment.model_copy(deep=True)
+    result.severity = _severity_max(result.severity, "medium")
+    result.score = max(result.score, SEVERITY_SCORE["medium"])
+    if result.recommendation == "go":
+        result.recommendation = "caution"
+    if DIVERGENCE_FLOOR_WARNING not in result.warnings:
+        result.warnings.append(DIVERGENCE_FLOOR_WARNING)
+    return result
 
 
 def _raise_severity(level: RiskSeverity, steps: int = 1) -> RiskSeverity:
